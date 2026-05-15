@@ -1,0 +1,17 @@
+.DS_Store
+Thumbs.db
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Temporary archives and local outputs
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+
+# OS and editor noise
+*.swp
+*.swo

@@ -1,0 +1,4 @@
+# Ignore all source documents by default.
+# Remove or adjust rules later if knowledge files should be versioned.
+*
+!.gitignore

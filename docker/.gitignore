@@ -1,0 +1,7 @@
+# Local Docker environment files
+.env
+.env.*
+!.env.example
+
+# Keep generated local-only overrides out of git
+docker-compose.override.yml
