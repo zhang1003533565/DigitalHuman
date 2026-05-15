@@ -18,7 +18,7 @@ type Live2DModel = {
   scale: {
     set: (value: number) => void
   }
-  on: (eventName: string, handler: (...args: any[]) => void) => void
+  on: (eventName: string, handler: (...args: never[]) => void) => void
   speak: (
     audio: string,
     options?: {
@@ -113,7 +113,24 @@ const MODEL_OPTIONS = [
 
 const DEMO_AUDIO_URL = '/live2d/01_kei_zh.wav'
 const DEFAULT_TEXT = '你好，欢迎光临'
-const TTS_ENDPOINT = 'http://127.0.0.1:2020/dealAudio'
+const TTS_ENDPOINT = '/api/tts/synthesize'
+
+const VOICE_OPTIONS = [
+  { id: 'zh-CN-XiaoxiaoNeural', name: '晓晓 (女声)' },
+  { id: 'zh-CN-XiaoyiNeural', name: '小艺 (女声)' },
+  { id: 'zh-CN-YunjianNeural', name: '云渐 (男声)' },
+  { id: 'zh-CN-YunxiNeural', name: '云希 (男声)' },
+  { id: 'zh-CN-YunxiaNeural', name: '云夏 (女声)' },
+  { id: 'zh-CN-YunyangNeural', name: '云扬 (男声)' },
+  { id: 'zh-CN-liaoning-XiaobeiNeural', name: '小北 (东北话)' },
+  { id: 'zh-CN-shaanxi-XiaoniNeural', name: '小妮 (陕西话)' },
+  { id: 'zh-HK-HiuGaaiNeural', name: 'Hiugaai (粤语女声)' },
+  { id: 'zh-HK-HiuMaanNeural', name: 'Hiumaan (粤语女声)' },
+  { id: 'zh-HK-WanLungNeural', name: 'Wanlung (粤语男声)' },
+  { id: 'zh-TW-HsiaoChenNeural', name: '晓珍 (台湾女声)' },
+  { id: 'zh-TW-HsiaoYuNeural', name: '晓瑜 (台湾女声)' },
+  { id: 'zh-TW-YunJheNeural', name: '云哲 (台湾男声)' },
+]
 
 let live2dScriptsPromise: Promise<void> | null = null
 
@@ -189,6 +206,7 @@ function App() {
   const loadIdRef = useRef(0)
   const isMountedRef = useRef(false)
   const [selectedModelId, setSelectedModelId] = useState(MODEL_OPTIONS[0].id)
+  const [selectedVoiceId, setSelectedVoiceId] = useState(VOICE_OPTIONS[0].id)
   const [text, setText] = useState(DEFAULT_TEXT)
   const [status, setStatus] = useState('正在加载 Live2D 模型...')
   const [isReady, setIsReady] = useState(false)
@@ -197,6 +215,10 @@ function App() {
   const selectedModel =
     MODEL_OPTIONS.find((model) => model.id === selectedModelId) ??
     MODEL_OPTIONS[0]
+
+  const selectedVoice =
+    VOICE_OPTIONS.find((voice) => voice.id === selectedVoiceId) ??
+    VOICE_OPTIONS[0]
 
   useEffect(() => {
     isMountedRef.current = true
@@ -354,20 +376,28 @@ function App() {
     setStatus('正在请求后端生成音频...')
 
     try {
-      const response = await axios.get<string>(TTS_ENDPOINT, {
-        params: {
-          file_name: 'test.mp3',
-          voice: 'xiaoxiao',
-          text: content,
-        },
+      const response = await axios.post<{
+        success: boolean
+        fileName?: string
+        filePath?: string
+        message?: string
+        durationMs?: number
+      }>(TTS_ENDPOINT, {
+        text: content,
+        voice: selectedVoice.id,
       })
-      const audioUrl = `${response.data}?v=${Date.now()}`
+
+      if (!response.data.success || !response.data.filePath) {
+        throw new Error(response.data.message || 'Unknown error')
+      }
+
+      const audioUrl = `${response.data.filePath}?v=${Date.now()}`
 
       speak(model, audioUrl)
-      setStatus('音频已生成，正在驱动口型。')
+      setStatus(`音频已生成，正在驱动口型。耗时: ${response.data.durationMs}ms`)
     } catch (error) {
       console.error(error)
-      setStatus('请求 TTS 接口失败，请确认 127.0.0.1:2020 服务已启动。')
+      setStatus(`请求 TTS 接口失败: ${error instanceof Error ? error.message : '请确认后端服务已启动。'}`)
     } finally {
       setIsSpeaking(false)
     }
@@ -397,6 +427,24 @@ function App() {
             {MODEL_OPTIONS.map((model) => (
               <option key={model.id} value={model.id}>
                 {model.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="control-group">
+          <label className="label" htmlFor="voice-select">
+            选择声音
+          </label>
+          <select
+            id="voice-select"
+            value={selectedVoiceId}
+            disabled={isSpeaking}
+            onChange={(event) => setSelectedVoiceId(event.target.value)}
+          >
+            {VOICE_OPTIONS.map((voice) => (
+              <option key={voice.id} value={voice.id}>
+                {voice.name}
               </option>
             ))}
           </select>
