@@ -36,7 +36,10 @@ type Live2DModel = {
 type PixiApplication = {
   stage: {
     addChild: (model: Live2DModel) => void
+    removeChild: (model: Live2DModel) => void
   }
+  start: () => void
+  stop: () => void
   destroy: (removeView?: boolean, options?: { children?: boolean }) => void
 }
 
@@ -167,6 +170,8 @@ function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const modelRef = useRef<Live2DModel | null>(null)
   const appRef = useRef<PixiApplication | null>(null)
+  const loadIdRef = useRef(0)
+  const isMountedRef = useRef(false)
   const [selectedModelId, setSelectedModelId] = useState(MODEL_OPTIONS[0].id)
   const [text, setText] = useState(DEFAULT_TEXT)
   const [status, setStatus] = useState('正在加载 Live2D 模型...')
@@ -178,21 +183,18 @@ function App() {
     MODEL_OPTIONS[0]
 
   useEffect(() => {
-    let isMounted = true
+    isMountedRef.current = true
 
-    async function initLive2d() {
+    async function initPixiApp() {
       const canvas = canvasRef.current
       if (!canvas) {
         return
       }
 
       try {
-        setIsReady(false)
-        setStatus(`正在加载 ${selectedModel.name}...`)
-
         await loadLive2dScripts()
 
-        if (!isMounted || !window.PIXI) {
+        if (!isMountedRef.current || !window.PIXI || appRef.current) {
           return
         }
 
@@ -203,18 +205,74 @@ function App() {
           backgroundAlpha: 0,
           backgroundColor: 0x101820,
         })
+        appRef.current = pixiApp
+      } catch (error) {
+        console.error(error)
+        setStatus('Live2D 运行库加载失败，请检查 public/live2d/js 资源是否完整。')
+      }
+    }
+
+    void initPixiApp()
+
+    return () => {
+      isMountedRef.current = false
+      loadIdRef.current += 1
+      modelRef.current = null
+      appRef.current?.destroy(true, { children: true })
+      appRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    const loadId = loadIdRef.current + 1
+    loadIdRef.current = loadId
+
+    async function loadSelectedModel() {
+      try {
+        setIsReady(false)
+        setStatus(`正在加载 ${selectedModel.name}...`)
+
+        await loadLive2dScripts()
+
+        if (!isMountedRef.current || loadId !== loadIdRef.current || !window.PIXI) {
+          return
+        }
+
+        const canvas = canvasRef.current
+        let app = appRef.current
+
+        if (!app) {
+          if (!canvas) {
+            return
+          }
+
+          app = new window.PIXI.Application({
+            view: canvas,
+            autoStart: true,
+            resizeTo: window,
+            backgroundAlpha: 0,
+            backgroundColor: 0x101820,
+          })
+          appRef.current = app
+        }
+
+        app.stop()
 
         const model = await window.PIXI.live2d.Live2DModel.from(
           selectedModel.url,
         )
 
-        if (!isMounted) {
-          model.destroy?.()
-          pixiApp.destroy(true, { children: true })
+        if (!isMountedRef.current || loadId !== loadIdRef.current) {
           return
         }
 
-        pixiApp.stage.addChild(model)
+        const currentModel = modelRef.current
+        if (currentModel) {
+          app.stage.removeChild(currentModel)
+          modelRef.current = null
+        }
+
+        app.stage.addChild(model)
 
         const scaleX = window.innerWidth / model.width
         const scaleY = window.innerHeight / model.height
@@ -234,23 +292,23 @@ function App() {
           }
         })
 
-        appRef.current = pixiApp
         modelRef.current = model
+        app.start()
         setIsReady(true)
         setStatus(`${selectedModel.name} 已加载，可以测试说话。`)
       } catch (error) {
         console.error(error)
+        appRef.current?.start()
         setStatus(`${selectedModel.name} 加载失败，请检查 public/live2d 资源是否完整。`)
       }
     }
 
-    void initLive2d()
+    void loadSelectedModel()
 
     return () => {
-      isMounted = false
-      modelRef.current = null
-      appRef.current?.destroy(true, { children: true })
-      appRef.current = null
+      if (loadId === loadIdRef.current) {
+        appRef.current?.start()
+      }
     }
   }, [selectedModel.name, selectedModel.url])
 
