@@ -62,6 +62,10 @@ type ModelOption = {
   id: string
   name: string
   url: string
+  scaleMultiplier?: number
+  xOffsetRatio?: number
+  yOffsetRatio?: number
+  bodyMotionGroup?: string
 }
 
 declare global {
@@ -79,19 +83,31 @@ const LIVE2D_SCRIPTS = [
 
 const MODEL_OPTIONS = [
   {
+    id: 'hiyori_pro_zh',
+    name: 'Hiyori 中文模型',
+    url: '/live2d/hiyori_pro_zh/hiyori_pro_t11.model3.json',
+    scaleMultiplier: 0.9,
+    xOffsetRatio: 0,
+    yOffsetRatio: 0.06,
+    bodyMotionGroup: 'Tap@Body',
+  },
+  {
     id: 'kei_vowels_pro',
     name: 'Kei 中文口型模型',
     url: '/live2d/kei_vowels_pro/kei_vowels_pro.model3.json',
   },
   {
-    id: 'chitose',
-    name: 'Chitose',
-    url: '/live2d/chitose/chitose.model3.json',
-  },
-  {
     id: 'haru_greeter_pro_jp',
     name: 'Haru Greeter',
     url: '/live2d/haru_greeter_pro_jp/haru_greeter_t05.model3.json',
+  },
+  {
+    id: 'mark_free_zh',
+    name: 'Mark 中文模型',
+    url: '/live2d/mark_free_zh/mark_free_t04.model3.json',
+    scaleMultiplier: 0.78,
+    xOffsetRatio: 0,
+    yOffsetRatio: 0.14,
   },
 ] satisfies ModelOption[]
 
@@ -276,15 +292,19 @@ function App() {
 
         const scaleX = window.innerWidth / model.width
         const scaleY = window.innerHeight / model.height
-        model.scale.set(Math.min(scaleX, scaleY) * 0.84)
-        model.x = (window.innerWidth - model.width) / 2
-        model.y = window.innerHeight * 0.08
+        const scaleMultiplier = selectedModel.scaleMultiplier ?? 0.84
+        const xOffsetRatio = selectedModel.xOffsetRatio ?? 0
+        const yOffsetRatio = selectedModel.yOffsetRatio ?? 0.08
+
+        model.scale.set(Math.min(scaleX, scaleY) * scaleMultiplier)
+        model.x = (window.innerWidth - model.width) / 2 + window.innerWidth * xOffsetRatio
+        model.y = window.innerHeight * yOffsetRatio
 
         makeDraggable(model)
 
         model.on('hit', (hitAreas: string[]) => {
-          if (hitAreas.includes('Body')) {
-            model.motion('Tap')
+          if (hitAreas.includes('Body') && selectedModel.bodyMotionGroup) {
+            model.motion(selectedModel.bodyMotionGroup)
           }
 
           if (hitAreas.includes('Head')) {
