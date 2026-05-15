@@ -18,7 +18,7 @@ type Live2DModel = {
   scale: {
     set: (value: number) => void
   }
-  on: (eventName: string, handler: (...args: never[]) => void) => void
+  on: (eventName: string, handler: (...args: unknown[]) => void) => void
   speak: (
     audio: string,
     options?: {
