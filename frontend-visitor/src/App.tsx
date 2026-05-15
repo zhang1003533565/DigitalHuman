@@ -55,6 +55,12 @@ type PixiGlobal = {
   }
 }
 
+type ModelOption = {
+  id: string
+  name: string
+  url: string
+}
+
 declare global {
   interface Window {
     PIXI?: PixiGlobal
@@ -68,7 +74,24 @@ const LIVE2D_SCRIPTS = [
   '/live2d/js/cubism4.min.js',
 ]
 
-const MODEL_URL = '/live2d/kei_vowels_pro/kei_vowels_pro.model3.json'
+const MODEL_OPTIONS = [
+  {
+    id: 'kei_vowels_pro',
+    name: 'Kei 中文口型模型',
+    url: '/live2d/kei_vowels_pro/kei_vowels_pro.model3.json',
+  },
+  {
+    id: 'chitose',
+    name: 'Chitose',
+    url: '/live2d/chitose/chitose.model3.json',
+  },
+  {
+    id: 'haru_greeter_pro_jp',
+    name: 'Haru Greeter',
+    url: '/live2d/haru_greeter_pro_jp/haru_greeter_t05.model3.json',
+  },
+] satisfies ModelOption[]
+
 const DEMO_AUDIO_URL = '/live2d/01_kei_zh.wav'
 const DEFAULT_TEXT = '你好，欢迎光临'
 const TTS_ENDPOINT = 'http://127.0.0.1:2020/dealAudio'
@@ -136,8 +159,6 @@ function makeDraggable(model: Live2DModel) {
 function speak(model: Live2DModel, audioUrl: string) {
   model.speak(audioUrl, {
     volume: 1,
-    expression: 8,
-    resetExpression: true,
     crossOrigin: 'anonymous',
   })
 }
@@ -146,10 +167,15 @@ function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const modelRef = useRef<Live2DModel | null>(null)
   const appRef = useRef<PixiApplication | null>(null)
+  const [selectedModelId, setSelectedModelId] = useState(MODEL_OPTIONS[0].id)
   const [text, setText] = useState(DEFAULT_TEXT)
   const [status, setStatus] = useState('正在加载 Live2D 模型...')
   const [isReady, setIsReady] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
+
+  const selectedModel =
+    MODEL_OPTIONS.find((model) => model.id === selectedModelId) ??
+    MODEL_OPTIONS[0]
 
   useEffect(() => {
     let isMounted = true
@@ -161,6 +187,9 @@ function App() {
       }
 
       try {
+        setIsReady(false)
+        setStatus(`正在加载 ${selectedModel.name}...`)
+
         await loadLive2dScripts()
 
         if (!isMounted || !window.PIXI) {
@@ -175,7 +204,9 @@ function App() {
           backgroundColor: 0x101820,
         })
 
-        const model = await window.PIXI.live2d.Live2DModel.from(MODEL_URL)
+        const model = await window.PIXI.live2d.Live2DModel.from(
+          selectedModel.url,
+        )
 
         if (!isMounted) {
           model.destroy?.()
@@ -206,10 +237,10 @@ function App() {
         appRef.current = pixiApp
         modelRef.current = model
         setIsReady(true)
-        setStatus('模型已加载，可以测试说话。')
+        setStatus(`${selectedModel.name} 已加载，可以测试说话。`)
       } catch (error) {
         console.error(error)
-        setStatus('Live2D 加载失败，请检查 public/live2d 资源是否完整。')
+        setStatus(`${selectedModel.name} 加载失败，请检查 public/live2d 资源是否完整。`)
       }
     }
 
@@ -221,7 +252,7 @@ function App() {
       appRef.current?.destroy(true, { children: true })
       appRef.current = null
     }
-  }, [])
+  }, [selectedModel.name, selectedModel.url])
 
   function handlePlayDemo() {
     const model = modelRef.current
@@ -274,6 +305,24 @@ function App() {
         <p className="description">
           当前迁移自 live2dSpeek：文本交给后端生成音频，前端用音频驱动模型口型。
         </p>
+
+        <div className="control-group">
+          <label className="label" htmlFor="model-select">
+            选择模型
+          </label>
+          <select
+            id="model-select"
+            value={selectedModelId}
+            disabled={isSpeaking}
+            onChange={(event) => setSelectedModelId(event.target.value)}
+          >
+            {MODEL_OPTIONS.map((model) => (
+              <option key={model.id} value={model.id}>
+                {model.name}
+              </option>
+            ))}
+          </select>
+        </div>
 
         <div className="control-group">
           <span className="label">1. 本地音频测试</span>
