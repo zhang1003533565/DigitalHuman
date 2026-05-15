@@ -34,7 +34,7 @@ public class TtsController {
     public ResponseEntity<TtsResponse> synthesize(@Valid @RequestBody TtsRequest request) {
         if (!ttsService.isServiceAvailable()) {
             return ResponseEntity.internalServerError()
-                    .body(TtsResponse.error("Edge TTS Python service is not running. Please start edge_tts_service.py first."));
+                    .body(TtsResponse.error("Edge TTS Python service is not running. Please start ai-service/edge_tts_service.py first."));
         }
 
         try {

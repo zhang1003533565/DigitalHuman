@@ -113,7 +113,10 @@ const MODEL_OPTIONS = [
 
 const DEMO_AUDIO_URL = '/live2d/01_kei_zh.wav'
 const DEFAULT_TEXT = '你好，欢迎光临'
-const TTS_ENDPOINT = '/api/tts/synthesize'
+const TTS_ENDPOINT = '/edge-tts/tts'
+const DEFAULT_RATE = 0
+const DEFAULT_VOLUME = 0
+const DEFAULT_PITCH = 0
 
 const VOICE_OPTIONS = [
   { id: 'zh-CN-XiaoxiaoNeural', name: '晓晓 (女声)' },
@@ -199,6 +202,14 @@ function speak(model: Live2DModel, audioUrl: string) {
   })
 }
 
+function formatPercent(value: number) {
+  return `${value >= 0 ? '+' : ''}${value}%`
+}
+
+function formatPitch(value: number) {
+  return `${value >= 0 ? '+' : ''}${value}Hz`
+}
+
 function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const modelRef = useRef<Live2DModel | null>(null)
@@ -208,6 +219,9 @@ function App() {
   const [selectedModelId, setSelectedModelId] = useState(MODEL_OPTIONS[0].id)
   const [selectedVoiceId, setSelectedVoiceId] = useState(VOICE_OPTIONS[0].id)
   const [text, setText] = useState(DEFAULT_TEXT)
+  const [rate, setRate] = useState(DEFAULT_RATE)
+  const [volume, setVolume] = useState(DEFAULT_VOLUME)
+  const [pitch, setPitch] = useState(DEFAULT_PITCH)
   const [status, setStatus] = useState('正在加载 Live2D 模型...')
   const [isReady, setIsReady] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
@@ -376,28 +390,35 @@ function App() {
     setStatus('正在请求后端生成音频...')
 
     try {
-      const response = await axios.post<{
-        success: boolean
-        fileName?: string
-        filePath?: string
-        message?: string
-        durationMs?: number
-      }>(TTS_ENDPOINT, {
+      const startTime = performance.now()
+      const response = await axios.post(TTS_ENDPOINT, {
         text: content,
         voice: selectedVoice.id,
+        rate: formatPercent(rate),
+        volume: formatPercent(volume),
+        pitch: formatPitch(pitch),
+      }, {
+        responseType: 'blob',
       })
 
-      if (!response.data.success || !response.data.filePath) {
-        throw new Error(response.data.message || 'Unknown error')
-      }
-
-      const audioUrl = `${response.data.filePath}?v=${Date.now()}`
+      const audioUrl = URL.createObjectURL(response.data)
+      const durationMs = Math.round(performance.now() - startTime)
 
       speak(model, audioUrl)
-      setStatus(`音频已生成，正在驱动口型。耗时: ${response.data.durationMs}ms`)
+      setStatus(`音频已生成，正在驱动口型。耗时: ${durationMs}ms`)
     } catch (error) {
       console.error(error)
-      setStatus(`请求 TTS 接口失败: ${error instanceof Error ? error.message : '请确认后端服务已启动。'}`)
+      if (axios.isAxiosError(error) && error.response?.data instanceof Blob) {
+        try {
+          const detailText = await error.response.data.text()
+          const detailJson = JSON.parse(detailText) as { detail?: string }
+          setStatus(`请求 TTS 接口失败: ${detailJson.detail || error.message}`)
+        } catch {
+          setStatus(`请求 TTS 接口失败: ${error.message}`)
+        }
+      } else {
+        setStatus(`请求 TTS 接口失败: ${error instanceof Error ? error.message : '请确认 Python TTS 服务已启动。'}`)
+      }
     } finally {
       setIsSpeaking(false)
     }
@@ -466,6 +487,58 @@ function App() {
             value={text}
             onChange={(event) => setText(event.target.value)}
           />
+          <div className="tts-tuning">
+            <div className="slider-group">
+              <label className="slider-label" htmlFor="rate-range">
+                <span>语速</span>
+                <span>{formatPercent(rate)}</span>
+              </label>
+              <input
+                id="rate-range"
+                type="range"
+                min={-50}
+                max={100}
+                step={5}
+                value={rate}
+                disabled={isSpeaking}
+                onChange={(event) => setRate(Number(event.target.value))}
+              />
+            </div>
+
+            <div className="slider-group">
+              <label className="slider-label" htmlFor="volume-range">
+                <span>音量</span>
+                <span>{formatPercent(volume)}</span>
+              </label>
+              <input
+                id="volume-range"
+                type="range"
+                min={-50}
+                max={50}
+                step={5}
+                value={volume}
+                disabled={isSpeaking}
+                onChange={(event) => setVolume(Number(event.target.value))}
+              />
+            </div>
+
+            <div className="slider-group">
+              <label className="slider-label" htmlFor="pitch-range">
+                <span>音高</span>
+                <span>{formatPitch(pitch)}</span>
+              </label>
+              <input
+                id="pitch-range"
+                type="range"
+                min={-50}
+                max={50}
+                step={5}
+                value={pitch}
+                disabled={isSpeaking}
+                onChange={(event) => setPitch(Number(event.target.value))}
+              />
+            </div>
+          </div>
           <button
             type="button"
             disabled={!isReady || isSpeaking}

@@ -9,6 +9,11 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
       },
+      '/edge-tts': {
+        target: 'http://127.0.0.1:18754',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/edge-tts/, ''),
+      },
     },
   },
 })

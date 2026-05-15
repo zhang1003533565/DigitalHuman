@@ -1,7 +1,6 @@
 package com.digitalhuman.backend_java.service;
 
 import com.digitalhuman.backend_java.dto.TtsRequest;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.*;
 import org.slf4j.Logger;
@@ -9,8 +8,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
@@ -25,15 +22,11 @@ public class TtsService {
     @Value("${tts.edge-service-url:http://127.0.0.1:18754}")
     private String edgeServiceUrl;
 
-    @Value("${tts.edge-script-path:edge_tts_service.py}")
-    private String edgeScriptPath;
-
     @Value("${tts.output-dir:tts}")
     private String outputDir;
 
     private final OkHttpClient client;
     private final ObjectMapper objectMapper;
-    private Process pythonProcess;
 
     public TtsService() {
         this.client = new OkHttpClient.Builder()
@@ -42,76 +35,6 @@ public class TtsService {
                 .writeTimeout(30, TimeUnit.SECONDS)
                 .build();
         this.objectMapper = new ObjectMapper();
-    }
-
-    @PostConstruct
-    public void init() {
-        // 延迟启动，等待 Spring Boot 完全启动
-        new Thread(() -> {
-            try {
-                Thread.sleep(2000);
-                startPythonService();
-            } catch (Exception e) {
-                log.error("Failed to start Python TTS service", e);
-            }
-        }).start();
-    }
-
-    @PreDestroy
-    public void cleanup() {
-        if (pythonProcess != null && pythonProcess.isAlive()) {
-            log.info("Stopping Python TTS service...");
-            pythonProcess.destroy();
-            try {
-                pythonProcess.waitFor(5, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-                pythonProcess.destroyForcibly();
-            }
-        }
-    }
-
-    private void startPythonService() {
-        if (isServiceAvailable()) {
-            log.info("Python TTS service is already running");
-            return;
-        }
-
-        try {
-            log.info("Starting Python TTS service from: {}", edgeScriptPath);
-
-            File scriptFile = new File(edgeScriptPath);
-            String workingDir = scriptFile.getParent();
-            if (workingDir == null || workingDir.isEmpty()) {
-                workingDir = System.getProperty("user.dir");
-            }
-
-            ProcessBuilder pb = new ProcessBuilder(
-                    "py", "-3.13", edgeScriptPath
-            );
-            pb.directory(new File(workingDir));
-            pb.redirectErrorStream(true);
-
-            pythonProcess = pb.start();
-
-            // 等待服务启动
-            int retries = 30;
-            while (retries > 0 && !isServiceAvailable()) {
-                Thread.sleep(500);
-                retries--;
-
-                if (!pythonProcess.isAlive()) {
-                    throw new IOException("Python process died unexpectedly");
-                }
-            }
-
-            if (isServiceAvailable()) {
-                log.info("Python TTS service started successfully");
-            } else {
-                log.warn("Python TTS service may not be fully started yet");
-            }
-        } catch (Exception e) {
-            log.error("Failed to start Python TTS service: {}", e.getMessage());
-        }
     }
 
     public String synthesize(TtsRequest request) throws Exception {

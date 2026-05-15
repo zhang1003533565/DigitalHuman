@@ -19,4 +19,4 @@ spring:
 tts:
   output-dir: ${user.dir}/tts
   base-url: ${TTS_BASE_URL:http://localhost:8080}
-  edge-script-path: ${user.dir}/edge_tts_service.py
+  edge-service-url: ${EDGE_TTS_SERVICE_URL:http://127.0.0.1:18754}
