@@ -1,121 +1,108 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
+import { type FormEvent, useState } from 'react'
+import axios from 'axios'
 import './App.css'
 
+type LoginResult = {
+  userId: number
+  username: string
+  displayName: string
+  role: 'ADMIN' | 'USER'
+}
+
 function App() {
-  const [count, setCount] = useState(0)
+  const [username, setUsername] = useState('admin')
+  const [password, setPassword] = useState('admin123')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [result, setResult] = useState<LoginResult | null>(null)
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setLoading(true)
+    setError('')
+
+    try {
+      const response = await axios.post<LoginResult>('http://localhost:8080/api/auth/login', {
+        username,
+        password,
+      })
+
+      setResult(response.data)
+    } catch (submitError) {
+      if (axios.isAxiosError(submitError)) {
+        setError(submitError.response?.data?.message ?? '登录失败，请检查后端服务和账号密码。')
+      } else {
+        setError('登录失败，请稍后重试。')
+      }
+      setResult(null)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
+    <main className="shell">
+      <section className="intro">
+        <p className="eyebrow">DigitalHuman Admin</p>
+        <h1>后台登录</h1>
+        <p className="lead">
+          当前页面接入 Java 登录接口，支持管理员和普通用户两种角色。
+        </p>
+        <div className="account-list">
+          <div>
+            <span>管理员</span>
+            <strong>admin / admin123</strong>
+          </div>
+          <div>
+            <span>普通用户</span>
+            <strong>user / user123</strong>
+          </div>
         </div>
       </section>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      <section className="panel">
+        <form className="login-form" onSubmit={handleSubmit}>
+          <label>
+            用户名
+            <input
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              placeholder="请输入用户名"
+            />
+          </label>
+
+          <label>
+            密码
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="请输入密码"
+            />
+          </label>
+
+          <button type="submit" disabled={loading}>
+            {loading ? '登录中...' : '登录'}
+          </button>
+
+          {error ? <p className="message error">{error}</p> : null}
+        </form>
+
+        <article className="result-card">
+          <p className="result-title">登录结果</p>
+          {result ? (
+            <>
+              <h2>{result.displayName}</h2>
+              <p>用户名：{result.username}</p>
+              <p>角色：{result.role === 'ADMIN' ? '管理员' : '普通用户'}</p>
+              <p>ID：{result.userId}</p>
+            </>
+          ) : (
+            <p className="placeholder">登录成功后会在这里显示用户角色和基本信息。</p>
+          )}
+        </article>
+      </section>
+    </main>
   )
 }
 

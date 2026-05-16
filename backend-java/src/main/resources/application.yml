@@ -1,22 +1,36 @@
 server:
   port: 8080
+  error:
+    include-message: always
 
 spring:
   datasource:
-    url: jdbc:h2:mem:testdb
-    driver-class-name: org.h2.Driver
-    username: sa
-    password:
-  h2:
-    console:
-      enabled: true
+    url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${DB_NAME:digitalhuman}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:123456}
   jpa:
-    database-platform: org.hibernate.dialect.H2Dialect
+    database-platform: org.hibernate.dialect.MySQLDialect
     hibernate:
       ddl-auto: update
     show-sql: false
+  devtools:
+    restart:
+      enabled: true
 
 tts:
   output-dir: ${user.dir}/tts
   base-url: ${TTS_BASE_URL:http://localhost:8080}
   edge-service-url: ${EDGE_TTS_SERVICE_URL:http://127.0.0.1:18754}
+
+app:
+  auth:
+    seed-users:
+      - username: admin
+        password: admin123
+        display-name: System Admin
+        role: ADMIN
+      - username: user
+        password: user123
+        display-name: Visitor User
+        role: USER

@@ -1,5 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
 import axios from 'axios'
+import {
+  Navigate,
+  Outlet,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+  useSearchParams,
+} from 'react-router-dom'
 import './App.css'
 
 type Live2DModel = {
@@ -58,6 +67,15 @@ type PixiGlobal = {
   }
 }
 
+type DragPointerEvent = {
+  data: {
+    global: {
+      x: number
+      y: number
+    }
+  }
+}
+
 type ModelOption = {
   id: string
   name: string
@@ -66,6 +84,10 @@ type ModelOption = {
   xOffsetRatio?: number
   yOffsetRatio?: number
   bodyMotionGroup?: string
+}
+
+type SessionUser = {
+  username: string
 }
 
 declare global {
@@ -111,13 +133,6 @@ const MODEL_OPTIONS = [
   },
 ] satisfies ModelOption[]
 
-const DEMO_AUDIO_URL = '/live2d/01_kei_zh.wav'
-const DEFAULT_TEXT = '你好，欢迎光临'
-const TTS_ENDPOINT = '/edge-tts/tts'
-const DEFAULT_RATE = 0
-const DEFAULT_VOLUME = 0
-const DEFAULT_PITCH = 0
-
 const VOICE_OPTIONS = [
   { id: 'zh-CN-XiaoxiaoNeural', name: '晓晓 (女声)' },
   { id: 'zh-CN-XiaoyiNeural', name: '小艺 (女声)' },
@@ -134,6 +149,16 @@ const VOICE_OPTIONS = [
   { id: 'zh-TW-HsiaoYuNeural', name: '晓瑜 (台湾女声)' },
   { id: 'zh-TW-YunJheNeural', name: '云哲 (台湾男声)' },
 ]
+
+const SESSION_STORAGE_KEY = 'digitalhuman.visitor.user'
+const DEMO_AUDIO_URL = '/live2d/01_kei_zh.wav'
+const DEFAULT_TEXT = '你好，欢迎来到数字人导览模块。'
+const TTS_ENDPOINT = '/edge-tts/tts'
+const DEFAULT_RATE = 0
+const DEFAULT_VOLUME = 0
+const DEFAULT_PITCH = 0
+const DEFAULT_AUTH_REDIRECT = '/home'
+const DIGITAL_HUMAN_ROUTE = '/modules/digital-human'
 
 let live2dScriptsPromise: Promise<void> | null = null
 
@@ -172,9 +197,10 @@ function makeDraggable(model: Live2DModel) {
   model.buttonMode = true
 
   model.on('pointerdown', (event) => {
+    const pointerEvent = event as DragPointerEvent
     model.dragging = true
-    model._pointerX = event.data.global.x - model.x
-    model._pointerY = event.data.global.y - model.y
+    model._pointerX = pointerEvent.data.global.x - model.x
+    model._pointerY = pointerEvent.data.global.y - model.y
   })
 
   model.on('pointermove', (event) => {
@@ -182,8 +208,9 @@ function makeDraggable(model: Live2DModel) {
       return
     }
 
-    model.position.x = event.data.global.x - (model._pointerX ?? 0)
-    model.position.y = event.data.global.y - (model._pointerY ?? 0)
+    const pointerEvent = event as DragPointerEvent
+    model.position.x = pointerEvent.data.global.x - (model._pointerX ?? 0)
+    model.position.y = pointerEvent.data.global.y - (model._pointerY ?? 0)
   })
 
   model.on('pointerupoutside', () => {
@@ -210,7 +237,190 @@ function formatPitch(value: number) {
   return `${value >= 0 ? '+' : ''}${value}Hz`
 }
 
-function App() {
+function getStoredUser() {
+  const rawValue = window.sessionStorage.getItem(SESSION_STORAGE_KEY)
+
+  if (!rawValue) {
+    return null
+  }
+
+  try {
+    return JSON.parse(rawValue) as SessionUser
+  } catch {
+    window.sessionStorage.removeItem(SESSION_STORAGE_KEY)
+    return null
+  }
+}
+
+function saveUser(username: string) {
+  const nextUser = { username }
+  window.sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(nextUser))
+  return nextUser
+}
+
+function clearUser() {
+  window.sessionStorage.removeItem(SESSION_STORAGE_KEY)
+}
+
+function ProtectedRoute({ user }: { user: SessionUser | null }) {
+  const location = useLocation()
+
+  if (!user) {
+    const redirect = `${location.pathname}${location.search}`
+    return <Navigate to={`/login?redirect=${encodeURIComponent(redirect)}`} replace />
+  }
+
+  return <Outlet />
+}
+
+function LoginScreen({
+  user,
+  onLogin,
+}: {
+  user: SessionUser | null
+  onLogin: (username: string) => void
+}) {
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const [username, setUsername] = useState('visitor')
+  const [password, setPassword] = useState('123456')
+  const [error, setError] = useState('')
+  const redirectTarget = searchParams.get('redirect') || DEFAULT_AUTH_REDIRECT
+
+  useEffect(() => {
+    if (user) {
+      navigate(redirectTarget, { replace: true })
+    }
+  }, [navigate, redirectTarget, user])
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (!username.trim()) {
+      setError('请输入用户名。')
+      return
+    }
+
+    if (password !== '123456') {
+      setError('演示密码固定为 123456。')
+      return
+    }
+
+    setError('')
+    onLogin(username.trim())
+    navigate(redirectTarget, { replace: true })
+  }
+
+  return (
+    <main className="auth-screen">
+      <section className="auth-copy">
+        <p className="surface-tag">DigitalHuman Visitor</p>
+        <h1>数字人迎宾入口</h1>
+        <p className="surface-copy">
+          现在使用独立路由组织页面，数字人模块可以被首页或后续其他入口直接跳转进入。
+        </p>
+        <div className="auth-tips">
+          <div>
+            <span>演示账号</span>
+            <strong>visitor / 123456</strong>
+          </div>
+          <div>
+            <span>备用账号</span>
+            <strong>operator / 123456</strong>
+          </div>
+        </div>
+      </section>
+
+      <section className="auth-card">
+        <form className="auth-form" onSubmit={handleSubmit}>
+          <label>
+            用户名
+            <input
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              placeholder="请输入用户名"
+            />
+          </label>
+
+          <label>
+            密码
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="请输入密码"
+            />
+          </label>
+
+          <button type="submit">进入首页</button>
+          {error ? <p className="inline-message">{error}</p> : null}
+        </form>
+      </section>
+    </main>
+  )
+}
+
+function HomeScreen({
+  user,
+  onLogout,
+}: {
+  user: SessionUser
+  onLogout: () => void
+}) {
+  const navigate = useNavigate()
+
+  return (
+    <main className="home-screen">
+      <header className="hero-panel">
+        <div>
+          <p className="surface-tag">Welcome Back</p>
+          <h1>{user.username}，欢迎进入数字人首页</h1>
+          <p className="surface-copy">
+            首页现在只是其中一个入口页。后续景点页、活动页、导览页都可以直接跳到数字人模块。
+          </p>
+        </div>
+        <button className="ghost-button" type="button" onClick={onLogout}>
+          退出登录
+        </button>
+      </header>
+
+      <section className="home-grid">
+        <article className="feature-card feature-card--primary">
+          <p className="card-kicker">核心入口</p>
+          <h2>数字人模块</h2>
+          <p>
+            作为独立功能页存在，负责模型切换、音色切换、本地测试和 TTS 驱动口型。
+          </p>
+          <button type="button" onClick={() => navigate(DIGITAL_HUMAN_ROUTE)}>
+            进入数字人模块
+          </button>
+        </article>
+
+        <article className="feature-card">
+          <p className="card-kicker">后续扩展</p>
+          <h2>多入口接入</h2>
+          <p>后续你可以在景点详情、活动报名、导览咨询等页面直接跳转到这个独立路由。</p>
+          <button type="button" onClick={() => navigate(DIGITAL_HUMAN_ROUTE)}>
+            从这里也能进入
+          </button>
+        </article>
+
+        <article className="feature-card">
+          <p className="card-kicker">当前能力</p>
+          <h2>路由结构</h2>
+          <ul className="feature-list">
+            <li>`/login` 登录页</li>
+            <li>`/home` 首页</li>
+            <li>`/modules/digital-human` 数字人模块页</li>
+          </ul>
+        </article>
+      </section>
+    </main>
+  )
+}
+
+function DigitalHumanModule({ onLogout }: { onLogout: () => void }) {
+  const navigate = useNavigate()
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const modelRef = useRef<Live2DModel | null>(null)
   const appRef = useRef<PixiApplication | null>(null)
@@ -310,9 +520,7 @@ function App() {
 
         app.stop()
 
-        const model = await window.PIXI.live2d.Live2DModel.from(
-          selectedModel.url,
-        )
+        const model = await window.PIXI.live2d.Live2DModel.from(selectedModel.url)
 
         if (!isMountedRef.current || loadId !== loadIdRef.current) {
           return
@@ -338,7 +546,9 @@ function App() {
 
         makeDraggable(model)
 
-        model.on('hit', (hitAreas: string[]) => {
+        model.on('hit', (...args: unknown[]) => {
+          const hitAreas = Array.isArray(args[0]) ? (args[0] as string[]) : []
+
           if (hitAreas.includes('Body') && selectedModel.bodyMotionGroup) {
             model.motion(selectedModel.bodyMotionGroup)
           }
@@ -366,7 +576,14 @@ function App() {
         appRef.current?.start()
       }
     }
-  }, [selectedModel.name, selectedModel.url])
+  }, [
+    selectedModel.name,
+    selectedModel.url,
+    selectedModel.bodyMotionGroup,
+    selectedModel.scaleMultiplier,
+    selectedModel.xOffsetRatio,
+    selectedModel.yOffsetRatio,
+  ])
 
   function handlePlayDemo() {
     const model = modelRef.current
@@ -391,15 +608,19 @@ function App() {
 
     try {
       const startTime = performance.now()
-      const response = await axios.post(TTS_ENDPOINT, {
-        text: content,
-        voice: selectedVoice.id,
-        rate: formatPercent(rate),
-        volume: formatPercent(volume),
-        pitch: formatPitch(pitch),
-      }, {
-        responseType: 'blob',
-      })
+      const response = await axios.post(
+        TTS_ENDPOINT,
+        {
+          text: content,
+          voice: selectedVoice.id,
+          rate: formatPercent(rate),
+          volume: formatPercent(volume),
+          pitch: formatPitch(pitch),
+        },
+        {
+          responseType: 'blob',
+        },
+      )
 
       const audioUrl = URL.createObjectURL(response.data)
       const durationMs = Math.round(performance.now() - startTime)
@@ -417,7 +638,9 @@ function App() {
           setStatus(`请求 TTS 接口失败: ${error.message}`)
         }
       } else {
-        setStatus(`请求 TTS 接口失败: ${error instanceof Error ? error.message : '请确认 Python TTS 服务已启动。'}`)
+        setStatus(
+          `请求 TTS 接口失败: ${error instanceof Error ? error.message : '请确认 Python TTS 服务已启动。'}`,
+        )
       }
     } finally {
       setIsSpeaking(false)
@@ -425,132 +648,184 @@ function App() {
   }
 
   return (
-    <main className="live2d-page">
-      <canvas ref={canvasRef} className="live2d-canvas" />
+    <main className="module-screen">
+      <div className="module-topbar">
+        <button className="ghost-button" type="button" onClick={() => navigate('/home')}>
+          返回首页
+        </button>
+        <button className="ghost-button" type="button" onClick={onLogout}>
+          退出登录
+        </button>
+      </div>
 
-      <section className="control-panel" aria-label="数字人控制面板">
-        <p className="eyebrow">Live2D Voice Demo</p>
-        <h1>数字人口型驱动</h1>
-        <p className="description">
-          当前迁移自 live2dSpeek：文本交给后端生成音频，前端用音频驱动模型口型。
-        </p>
+      <section className="live2d-page">
+        <canvas ref={canvasRef} className="live2d-canvas" />
 
-        <div className="control-group">
-          <label className="label" htmlFor="model-select">
-            选择模型
-          </label>
-          <select
-            id="model-select"
-            value={selectedModelId}
-            disabled={isSpeaking}
-            onChange={(event) => setSelectedModelId(event.target.value)}
-          >
-            {MODEL_OPTIONS.map((model) => (
-              <option key={model.id} value={model.id}>
-                {model.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <section className="control-panel" aria-label="数字人控制面板">
+          <p className="eyebrow">Digital Human Module</p>
+          <h1>数字人口型驱动</h1>
+          <p className="description">
+            当前模块是独立路由页面，后面可以被首页、景点页、活动页或任何其他入口直接跳转进入。
+          </p>
 
-        <div className="control-group">
-          <label className="label" htmlFor="voice-select">
-            选择声音
-          </label>
-          <select
-            id="voice-select"
-            value={selectedVoiceId}
-            disabled={isSpeaking}
-            onChange={(event) => setSelectedVoiceId(event.target.value)}
-          >
-            {VOICE_OPTIONS.map((voice) => (
-              <option key={voice.id} value={voice.id}>
-                {voice.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="control-group">
-          <span className="label">1. 本地音频测试</span>
-          <button type="button" disabled={!isReady} onClick={handlePlayDemo}>
-            测试音频
-          </button>
-        </div>
-
-        <div className="control-group">
-          <label className="label" htmlFor="speech-text">
-            2. 调用接口生成音频
-          </label>
-          <textarea
-            id="speech-text"
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-          />
-          <div className="tts-tuning">
-            <div className="slider-group">
-              <label className="slider-label" htmlFor="rate-range">
-                <span>语速</span>
-                <span>{formatPercent(rate)}</span>
-              </label>
-              <input
-                id="rate-range"
-                type="range"
-                min={-50}
-                max={100}
-                step={5}
-                value={rate}
-                disabled={isSpeaking}
-                onChange={(event) => setRate(Number(event.target.value))}
-              />
-            </div>
-
-            <div className="slider-group">
-              <label className="slider-label" htmlFor="volume-range">
-                <span>音量</span>
-                <span>{formatPercent(volume)}</span>
-              </label>
-              <input
-                id="volume-range"
-                type="range"
-                min={-50}
-                max={50}
-                step={5}
-                value={volume}
-                disabled={isSpeaking}
-                onChange={(event) => setVolume(Number(event.target.value))}
-              />
-            </div>
-
-            <div className="slider-group">
-              <label className="slider-label" htmlFor="pitch-range">
-                <span>音高</span>
-                <span>{formatPitch(pitch)}</span>
-              </label>
-              <input
-                id="pitch-range"
-                type="range"
-                min={-50}
-                max={50}
-                step={5}
-                value={pitch}
-                disabled={isSpeaking}
-                onChange={(event) => setPitch(Number(event.target.value))}
-              />
-            </div>
+          <div className="control-group">
+            <label className="label" htmlFor="model-select">
+              选择模型
+            </label>
+            <select
+              id="model-select"
+              value={selectedModelId}
+              disabled={isSpeaking}
+              onChange={(event) => setSelectedModelId(event.target.value)}
+            >
+              {MODEL_OPTIONS.map((model) => (
+                <option key={model.id} value={model.id}>
+                  {model.name}
+                </option>
+              ))}
+            </select>
           </div>
-          <button
-            type="button"
-            disabled={!isReady || isSpeaking}
-            onClick={handleStartSpeaking}
-          >
-            {isSpeaking ? '生成中...' : '开始说话'}
-          </button>
-        </div>
 
-        <p className="status">{status}</p>
+          <div className="control-group">
+            <label className="label" htmlFor="voice-select">
+              选择声音
+            </label>
+            <select
+              id="voice-select"
+              value={selectedVoiceId}
+              disabled={isSpeaking}
+              onChange={(event) => setSelectedVoiceId(event.target.value)}
+            >
+              {VOICE_OPTIONS.map((voice) => (
+                <option key={voice.id} value={voice.id}>
+                  {voice.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="control-group">
+            <span className="label">1. 本地音频测试</span>
+            <button type="button" disabled={!isReady} onClick={handlePlayDemo}>
+              测试音频
+            </button>
+          </div>
+
+          <div className="control-group">
+            <label className="label" htmlFor="speech-text">
+              2. 调用接口生成音频
+            </label>
+            <textarea
+              id="speech-text"
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+            />
+            <div className="tts-tuning">
+              <div className="slider-group">
+                <label className="slider-label" htmlFor="rate-range">
+                  <span>语速</span>
+                  <span>{formatPercent(rate)}</span>
+                </label>
+                <input
+                  id="rate-range"
+                  type="range"
+                  min={-50}
+                  max={100}
+                  step={5}
+                  value={rate}
+                  disabled={isSpeaking}
+                  onChange={(event) => setRate(Number(event.target.value))}
+                />
+              </div>
+
+              <div className="slider-group">
+                <label className="slider-label" htmlFor="volume-range">
+                  <span>音量</span>
+                  <span>{formatPercent(volume)}</span>
+                </label>
+                <input
+                  id="volume-range"
+                  type="range"
+                  min={-50}
+                  max={50}
+                  step={5}
+                  value={volume}
+                  disabled={isSpeaking}
+                  onChange={(event) => setVolume(Number(event.target.value))}
+                />
+              </div>
+
+              <div className="slider-group">
+                <label className="slider-label" htmlFor="pitch-range">
+                  <span>音高</span>
+                  <span>{formatPitch(pitch)}</span>
+                </label>
+                <input
+                  id="pitch-range"
+                  type="range"
+                  min={-50}
+                  max={50}
+                  step={5}
+                  value={pitch}
+                  disabled={isSpeaking}
+                  onChange={(event) => setPitch(Number(event.target.value))}
+                />
+              </div>
+            </div>
+            <button
+              type="button"
+              disabled={!isReady || isSpeaking}
+              onClick={handleStartSpeaking}
+            >
+              {isSpeaking ? '生成中...' : '开始说话'}
+            </button>
+          </div>
+
+          <p className="status">{status}</p>
+        </section>
       </section>
     </main>
+  )
+}
+
+function App() {
+  const [user, setUser] = useState<SessionUser | null>(null)
+
+  useEffect(() => {
+    setUser(getStoredUser())
+  }, [])
+
+  function handleLogin(username: string) {
+    setUser(saveUser(username))
+  }
+
+  function handleLogout() {
+    clearUser()
+    setUser(null)
+  }
+
+  return (
+    <Routes>
+      <Route
+        path="/"
+        element={<Navigate to={user ? DEFAULT_AUTH_REDIRECT : '/login'} replace />}
+      />
+      <Route
+        path="/login"
+        element={<LoginScreen user={user} onLogin={handleLogin} />}
+      />
+      <Route element={<ProtectedRoute user={user} />}>
+        <Route
+          path="/home"
+          element={<HomeScreen user={user as SessionUser} onLogout={handleLogout} />}
+        />
+        <Route
+          path={DIGITAL_HUMAN_ROUTE}
+          element={<DigitalHumanModule onLogout={handleLogout} />}
+        />
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   )
 }
 
