@@ -95,6 +95,8 @@ type ModelOption = {
   xOffsetRatio?: number
   yOffsetRatio?: number
   bodyMotionGroup?: string
+  dragStartMotionGroup?: string
+  dragEndMotionGroup?: string
 }
 
 type SessionUser = {
@@ -141,6 +143,8 @@ const MODEL_OPTIONS = [
     scaleMultiplier: 0.78,
     xOffsetRatio: 0,
     yOffsetRatio: 0.14,
+    dragStartMotionGroup: 'FlickUp',
+    dragEndMotionGroup: 'FlickDown',
   },
 ] satisfies ModelOption[]
 
@@ -385,9 +389,21 @@ function LoginDigitalHumanEmbed() {
         model.x = homePositionRef.current.x
         model.y = homePositionRef.current.y
         makeDraggable(model, {
-          onDragStart: clearReturnAnimation,
+          onDragStart: () => {
+            clearReturnAnimation()
+
+            if (selectedModel.dragStartMotionGroup) {
+              model.motion(selectedModel.dragStartMotionGroup)
+            }
+          },
           onDragMove: clearReturnAnimation,
-          onDragEnd: scheduleReturnToHome,
+          onDragEnd: () => {
+            if (selectedModel.dragEndMotionGroup) {
+              model.motion(selectedModel.dragEndMotionGroup)
+            }
+
+            scheduleReturnToHome()
+          },
         })
 
         model.on('hit', (...args: unknown[]) => {
