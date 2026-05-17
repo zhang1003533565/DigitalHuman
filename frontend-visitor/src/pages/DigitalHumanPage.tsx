@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import axios from 'axios'
-import { useNavigate } from 'react-router-dom'
 import '../App.css'
 import {
   type Live2DModel,
@@ -19,13 +18,22 @@ import {
   makeDraggable,
   speak,
 } from '../digitalHuman/shared'
+import { AppTopNav } from '../components/AppTopNav'
 
 type DigitalHumanPageProps = {
   onLogout: () => void
 }
 
+type GuideChatResponse = {
+  sessionId: string
+  answerText: string
+  relatedSpots: string[]
+  recommendedRoutes: string[]
+}
+
+const GUIDE_SESSION_KEY = 'digitalhuman.visitor.guideSessionId'
+
 export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
-  const navigate = useNavigate()
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const modelRef = useRef<Live2DModel | null>(null)
   const appRef = useRef<PixiApplication | null>(null)
@@ -40,6 +48,11 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
   const [status, setStatus] = useState('正在加载 Live2D 模型...')
   const [isReady, setIsReady] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
+  const [sessionId, setSessionId] = useState(() => window.sessionStorage.getItem(GUIDE_SESSION_KEY) ?? '')
+  const [answerText, setAnswerText] = useState('')
+  const [relatedSpots, setRelatedSpots] = useState<string[]>([])
+  const [recommendedRoutes, setRecommendedRoutes] = useState<string[]>([])
+  const [feedbackStatus, setFeedbackStatus] = useState('')
 
   const selectedModel =
     MODEL_OPTIONS.find((model) => model.id === selectedModelId) ??
@@ -209,14 +222,26 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     }
 
     setIsSpeaking(true)
-    setStatus('正在请求后端生成音频...')
+    setStatus('正在请求后端导览问答...')
 
     try {
+      const chatResponse = await axios.post<GuideChatResponse>('/api/guide/chat', {
+        sessionId: sessionId || undefined,
+        question: content,
+      })
+
+      const nextSessionId = chatResponse.data.sessionId
+      setSessionId(nextSessionId)
+      window.sessionStorage.setItem(GUIDE_SESSION_KEY, nextSessionId)
+      setAnswerText(chatResponse.data.answerText)
+      setRelatedSpots(chatResponse.data.relatedSpots)
+      setRecommendedRoutes(chatResponse.data.recommendedRoutes)
+
       const startTime = performance.now()
       const response = await axios.post(
         TTS_ENDPOINT,
         {
-          text: content,
+          text: chatResponse.data.answerText,
           voice: selectedVoice.id,
           rate: formatPercent(rate),
           volume: formatPercent(volume),
@@ -231,7 +256,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
       const durationMs = Math.round(performance.now() - startTime)
 
       speak(model, audioUrl)
-      setStatus(`音频已生成，正在驱动口型。耗时: ${durationMs}ms`)
+      setStatus(`导览回答已生成，正在驱动口型。耗时: ${durationMs}ms`)
     } catch (error) {
       console.error(error)
       if (axios.isAxiosError(error) && error.response?.data instanceof Blob) {
@@ -252,16 +277,31 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     }
   }
 
+  async function submitFeedback(helpful: boolean) {
+    if (!sessionId || !text.trim()) {
+      setFeedbackStatus('请先完成一次导览提问。')
+      return
+    }
+
+    try {
+      await axios.post('/api/guide/feedback', {
+        sessionId,
+        question: text.trim(),
+        answer: answerText,
+        helpful,
+        rating: helpful ? 5 : 2,
+        comment: helpful ? '导览回答有帮助' : '需要补充更准确的景点信息',
+      })
+      setFeedbackStatus(helpful ? '已提交正向反馈。' : '已提交待优化反馈。')
+    } catch (error) {
+      console.error(error)
+      setFeedbackStatus('反馈提交失败，请稍后重试。')
+    }
+  }
+
   return (
     <main className="module-screen">
-      <div className="module-topbar">
-        <button className="ghost-button" type="button" onClick={() => navigate('/home')}>
-          返回首页
-        </button>
-        <button className="ghost-button" type="button" onClick={onLogout}>
-          退出登录
-        </button>
-      </div>
+      <AppTopNav onLogout={onLogout} />
 
       <section className="live2d-page">
         <canvas ref={canvasRef} className="live2d-canvas" />
@@ -318,7 +358,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
 
           <div className="control-group">
             <label className="label" htmlFor="speech-text">
-              2. 调用接口生成音频
+              2. 发起导览提问
             </label>
             <textarea
               id="speech-text"
@@ -382,9 +422,31 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
               disabled={!isReady || isSpeaking}
               onClick={handleStartSpeaking}
             >
-              {isSpeaking ? '生成中...' : '开始说话'}
+              {isSpeaking ? '生成中...' : '开始导览'}
             </button>
           </div>
+
+          {answerText ? (
+            <div className="control-group answer-panel">
+              <span className="label">导览回答</span>
+              <p className="answer-text">{answerText}</p>
+              <div className="tag-group">
+                {relatedSpots.map((spot) => (
+                  <span key={spot} className="info-tag">{spot}</span>
+                ))}
+                {recommendedRoutes.map((route) => (
+                  <span key={route} className="info-tag info-tag--warm">{route}</span>
+                ))}
+              </div>
+              <div className="feedback-actions">
+                <button type="button" onClick={() => void submitFeedback(true)}>有帮助</button>
+                <button type="button" className="ghost-button" onClick={() => void submitFeedback(false)}>
+                  待优化
+                </button>
+              </div>
+              {feedbackStatus ? <p className="status">{feedbackStatus}</p> : null}
+            </div>
+          ) : null}
 
           <p className="status">{status}</p>
         </section>

@@ -12,6 +12,10 @@ import { DIGITAL_HUMAN_ROUTE } from './digitalHuman/shared'
 import { HomePage } from './pages/HomePage'
 import { LoginPage } from './pages/LoginPage'
 import { DigitalHumanPage } from './pages/DigitalHumanPage'
+import { RouteRecommendPage } from './pages/RouteRecommendPage'
+import { MapPage } from './pages/MapPage'
+import { FeedbackPage } from './pages/FeedbackPage'
+import { HistoryPage } from './pages/HistoryPage'
 
 function ProtectedRoute({ user }: { user: SessionUser | null }) {
   const location = useLocation()
@@ -59,6 +63,10 @@ function App() {
           path={DIGITAL_HUMAN_ROUTE}
           element={<DigitalHumanPage onLogout={handleLogout} />}
         />
+        <Route path="/routes" element={<RouteRecommendPage onLogout={handleLogout} />} />
+        <Route path="/map" element={<MapPage onLogout={handleLogout} />} />
+        <Route path="/feedback" element={<FeedbackPage onLogout={handleLogout} />} />
+        <Route path="/history" element={<HistoryPage onLogout={handleLogout} />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
