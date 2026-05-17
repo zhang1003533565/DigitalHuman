@@ -3,6 +3,7 @@ import axios from 'axios'
 import '../App.css'
 import {
   type Live2DModel,
+  type MotionOption,
   type PixiApplication,
   DEFAULT_PITCH,
   DEFAULT_RATE,
@@ -33,13 +34,89 @@ type GuideChatResponse = {
 
 const GUIDE_SESSION_KEY = 'digitalhuman.visitor.guideSessionId'
 
+type MotionTabId = 'combo' | 'expression' | 'micro'
+
+type FaceControlState = {
+  eyeOpen: number
+  eyeSmile: number
+  eyeballX: number
+  eyeballY: number
+  mouthOpen: number
+  mouthForm: number
+  blush: number
+  angleX: number
+  angleY: number
+  angleZ: number
+}
+
+const DEFAULT_FACE_CONTROLS: FaceControlState = {
+  eyeOpen: 1,
+  eyeSmile: 0,
+  eyeballX: 0,
+  eyeballY: 0,
+  mouthOpen: 0,
+  mouthForm: 0,
+  blush: 0,
+  angleX: 0,
+  angleY: 0,
+  angleZ: 0,
+}
+
+const FACE_CONTROL_CONFIG: Array<{
+  key: keyof FaceControlState
+  label: string
+  min: number
+  max: number
+  step: number
+}> = [
+  { key: 'eyeOpen', label: '睁眼程度', min: 0, max: 1, step: 0.01 },
+  { key: 'eyeSmile', label: '笑眼程度', min: 0, max: 1, step: 0.01 },
+  { key: 'eyeballX', label: '眼球左右', min: -1, max: 1, step: 0.01 },
+  { key: 'eyeballY', label: '眼球上下', min: -1, max: 1, step: 0.01 },
+  { key: 'mouthOpen', label: '嘴巴开合', min: 0, max: 1, step: 0.01 },
+  { key: 'mouthForm', label: '嘴型变化', min: -1, max: 1, step: 0.01 },
+  { key: 'blush', label: '脸红程度', min: 0, max: 1, step: 0.01 },
+  { key: 'angleX', label: '头部左右', min: -30, max: 30, step: 1 },
+  { key: 'angleY', label: '头部上下', min: -30, max: 30, step: 1 },
+  { key: 'angleZ', label: '头部倾斜', min: -30, max: 30, step: 1 },
+]
+
+function applyFaceControls(model: Live2DModel, controls: FaceControlState) {
+  const coreModel = model.internalModel?.coreModel
+
+  coreModel?.setParameterValueById?.('ParamEyeLOpen', controls.eyeOpen)
+  coreModel?.setParameterValueById?.('ParamEyeROpen', controls.eyeOpen)
+  coreModel?.setParameterValueById?.('ParamEyeLSmile', controls.eyeSmile)
+  coreModel?.setParameterValueById?.('ParamEyeRSmile', controls.eyeSmile)
+  coreModel?.setParameterValueById?.('ParamEyeBallX', controls.eyeballX)
+  coreModel?.setParameterValueById?.('ParamEyeBallY', controls.eyeballY)
+  coreModel?.setParameterValueById?.('ParamMouthOpenY', controls.mouthOpen)
+  coreModel?.setParameterValueById?.('ParamMouthForm', controls.mouthForm)
+  coreModel?.setParameterValueById?.('ParamTere', controls.blush)
+  coreModel?.setParameterValueById?.('ParamAngleX', controls.angleX)
+  coreModel?.setParameterValueById?.('ParamAngleY', controls.angleY)
+  coreModel?.setParameterValueById?.('ParamAngleZ', controls.angleZ)
+}
+
+function formatFaceControlValue(key: keyof FaceControlState, value: number) {
+  if (key.startsWith('angle')) {
+    return `${value > 0 ? '+' : ''}${Math.round(value)}`
+  }
+
+  if (key === 'eyeballX' || key === 'eyeballY' || key === 'mouthForm') {
+    return value.toFixed(2)
+  }
+
+  return `${Math.round(value * 100)}%`
+}
+
 export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const modelRef = useRef<Live2DModel | null>(null)
   const appRef = useRef<PixiApplication | null>(null)
   const loadIdRef = useRef(0)
   const isMountedRef = useRef(false)
-  const [selectedModelId, setSelectedModelId] = useState(MODEL_OPTIONS[0].id)
+  const [selectedModelId, setSelectedModelId] = useState('haru_greeter_pro_jp')
   const [selectedVoiceId, setSelectedVoiceId] = useState(VOICE_OPTIONS[0].id)
   const [text, setText] = useState(DEFAULT_TEXT)
   const [rate, setRate] = useState(DEFAULT_RATE)
@@ -53,14 +130,33 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
   const [relatedSpots, setRelatedSpots] = useState<string[]>([])
   const [recommendedRoutes, setRecommendedRoutes] = useState<string[]>([])
   const [feedbackStatus, setFeedbackStatus] = useState('')
+  const [activeMotionKey, setActiveMotionKey] = useState<string | null>(null)
+  const [activeMotionTab, setActiveMotionTab] = useState<MotionTabId>('combo')
+  const [faceControls, setFaceControls] = useState<FaceControlState>(DEFAULT_FACE_CONTROLS)
 
   const selectedModel =
     MODEL_OPTIONS.find((model) => model.id === selectedModelId) ??
     MODEL_OPTIONS[0]
 
+  const motionOptions = selectedModel.motionOptions ?? []
+  const microMotionOptions = selectedModel.microMotionOptions ?? []
+
+  const motionTabs = [
+    { id: 'combo' as const, label: '组合动作' },
+    { id: 'expression' as const, label: '表情' },
+    { id: 'micro' as const, label: '细微动作' },
+  ]
+
   const selectedVoice =
     VOICE_OPTIONS.find((voice) => voice.id === selectedVoiceId) ??
     VOICE_OPTIONS[0]
+
+  const visibleMotionOptions =
+    activeMotionTab === 'combo'
+      ? motionOptions
+      : activeMotionTab === 'micro'
+        ? microMotionOptions
+        : []
 
   useEffect(() => {
     isMountedRef.current = true
@@ -102,6 +198,32 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
       appRef.current = null
     }
   }, [])
+
+  useEffect(() => {
+    const model = modelRef.current
+
+    if (!model || selectedModel.id !== 'haru_greeter_pro_jp') {
+      return
+    }
+
+    let frameId = 0
+
+    const apply = () => {
+      const currentModel = modelRef.current
+
+      if (currentModel && selectedModel.id === 'haru_greeter_pro_jp') {
+        applyFaceControls(currentModel, faceControls)
+      }
+
+      frameId = window.requestAnimationFrame(apply)
+    }
+
+    apply()
+
+    return () => {
+      window.cancelAnimationFrame(frameId)
+    }
+  }, [faceControls, selectedModel.id, isReady])
 
   useEffect(() => {
     const loadId = loadIdRef.current + 1
@@ -210,6 +332,35 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     }
 
     speak(model, `${DEMO_AUDIO_URL}?v=${Date.now()}`)
+  }
+
+  function getMotionKey(motion: MotionOption) {
+    return `${motion.group}:${motion.index ?? 'random'}`
+  }
+
+  function handlePlayMotion(motion: MotionOption) {
+    const model = modelRef.current
+
+    if (!model) {
+      setStatus('模型还没有加载完成。')
+      return
+    }
+
+    model.motion(motion.group, motion.index)
+    setActiveMotionKey(getMotionKey(motion))
+    setStatus(`正在播放 ${selectedModel.name} 动作：${motion.label}`)
+  }
+
+  function handleFaceControlChange(key: keyof FaceControlState, value: number) {
+    setFaceControls((current) => ({
+      ...current,
+      [key]: value,
+    }))
+  }
+
+  function handleResetFaceControls() {
+    setFaceControls(DEFAULT_FACE_CONTROLS)
+    setStatus('已重置表情和头部参数。')
   }
 
   async function handleStartSpeaking() {
@@ -450,6 +601,109 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
 
           <p className="status">{status}</p>
         </section>
+
+        <aside
+          className="motion-drawer motion-drawer--open"
+          aria-label="动作抽屉"
+        >
+          <div id="motion-drawer-panel" className="motion-drawer__panel">
+            <p className="motion-drawer__eyebrow">Motion Preview</p>
+            <h2>{selectedModel.name} 动作列表</h2>
+            <p className="motion-drawer__description">
+              通过页签切换不同动作层级，直接预览当前模型能播放的动画效果。
+            </p>
+
+            <div className="motion-tabs" role="tablist" aria-label="动作分类">
+              {motionTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeMotionTab === tab.id}
+                  className={`motion-tab ${activeMotionTab === tab.id ? 'motion-tab--active' : ''}`}
+                  onClick={() => setActiveMotionTab(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {activeMotionTab === 'expression' ? (
+              <div className="expression-panel">
+                <p className="motion-drawer__description">
+                  直接调 Haru 的眼睛、嘴、脸红和头部朝向参数，适合做表情调试。
+                </p>
+
+                <div className="expression-panel__grid">
+                  {FACE_CONTROL_CONFIG.map((control) => (
+                    <div key={control.key} className="slider-group">
+                      <label className="slider-label" htmlFor={`face-${control.key}`}>
+                        <span>{control.label}</span>
+                        <span>{formatFaceControlValue(control.key, faceControls[control.key])}</span>
+                      </label>
+                      <input
+                        id={`face-${control.key}`}
+                        type="range"
+                        min={control.min}
+                        max={control.max}
+                        step={control.step}
+                        value={faceControls[control.key]}
+                        disabled={!isReady || selectedModel.id !== 'haru_greeter_pro_jp'}
+                        onChange={(event) =>
+                          handleFaceControlChange(control.key, Number(event.target.value))
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  className="expression-panel__reset"
+                  disabled={!isReady || selectedModel.id !== 'haru_greeter_pro_jp'}
+                  onClick={handleResetFaceControls}
+                >
+                  重置表情参数
+                </button>
+
+                {selectedModel.id !== 'haru_greeter_pro_jp' ? (
+                  <p className="motion-drawer__empty">
+                    当前表情面板先只对 Haru 模型开放。
+                  </p>
+                ) : null}
+              </div>
+            ) : visibleMotionOptions.length > 0 ? (
+              <div className="motion-drawer__grid">
+                {visibleMotionOptions.map((motion) => {
+                  const motionKey = getMotionKey(motion)
+                  const isActive = activeMotionKey === motionKey
+
+                  return (
+                    <button
+                      key={motionKey}
+                      type="button"
+                      className={`motion-chip ${isActive ? 'motion-chip--active' : ''}`}
+                      disabled={!isReady}
+                      onClick={() => handlePlayMotion(motion)}
+                    >
+                      {motion.label}
+                    </button>
+                  )
+                })}
+              </div>
+            ) : (
+              <p className="motion-drawer__empty">
+                当前模型还没有配置可直接预览的动作清单。
+              </p>
+            )}
+
+            {activeMotionTab !== 'expression' && motionOptions.length > 0 && visibleMotionOptions.length === 0 ? (
+              <p className="motion-drawer__empty">
+                这个分类下暂时没有可播放动作。
+              </p>
+            ) : null}
+          </div>
+        </aside>
       </section>
     </main>
   )
