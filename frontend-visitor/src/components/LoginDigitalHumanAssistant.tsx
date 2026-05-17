@@ -1,0 +1,636 @@
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from 'react'
+import {
+  type Live2DModel,
+  type MotionOption,
+  type PixiApplication,
+  MODEL_OPTIONS,
+  loadLive2dScripts,
+  makeDraggable,
+} from '../digitalHuman/shared'
+
+type SpeechMotion = {
+  group: string
+  index?: number
+}
+
+export type DigitalHumanSpeechRequest = {
+  text: string
+  voiceId?: string
+  rate?: number
+  volume?: number
+  pitch?: number
+  motion?: SpeechMotion
+  streamIntervalMs?: number
+}
+
+export type LoginDigitalHumanAssistantHandle = {
+  speak: (request: DigitalHumanSpeechRequest) => Promise<boolean>
+  interrupt: () => void
+  playMotion: (motion: MotionOption | SpeechMotion) => void
+}
+
+type LoginDigitalHumanAssistantProps = {
+  initialSpeech?: DigitalHumanSpeechRequest
+  autoPlayInitialSpeech?: boolean
+}
+
+const DEFAULT_STREAM_INTERVAL = 75
+const LOGIN_DEMO_AUDIO_URL = '/live2d/demo.mp3'
+const MOUTH_OPEN_PARAMETER_ID = 'ParamMouthOpenY'
+const MOUTH_FORM_PARAMETER_ID = 'ParamMouthForm'
+const AUDIO_GESTURE_HINT = '轻点页面即可播放语音。'
+
+function isUserGestureRequired(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false
+  }
+
+  const message = error.message.toLowerCase()
+
+  return (
+    error.name === 'NotAllowedError' ||
+    message.includes("user didn't interact") ||
+    message.includes('user did not interact') ||
+    message.includes('not allowed') ||
+    message.includes('gesture')
+  )
+}
+
+export const LoginDigitalHumanAssistant = forwardRef<
+  LoginDigitalHumanAssistantHandle,
+  LoginDigitalHumanAssistantProps
+>(function LoginDigitalHumanAssistant(
+  { initialSpeech, autoPlayInitialSpeech = false },
+  ref,
+) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const bubbleRef = useRef<HTMLDivElement | null>(null)
+  const modelRef = useRef<Live2DModel | null>(null)
+  const appRef = useRef<PixiApplication | null>(null)
+  const homePositionRef = useRef({ x: 0, y: 0 })
+  const returnTimerRef = useRef<number | null>(null)
+  const returnFrameRef = useRef<number | null>(null)
+  const streamTimerRef = useRef<number | null>(null)
+  const bubbleFrameRef = useRef<number | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const analyserRef = useRef<AnalyserNode | null>(null)
+  const mediaSourceRef = useRef<MediaElementAudioSourceNode | null>(null)
+  const lipSyncFrameRef = useRef<number | null>(null)
+  const playbackTokenRef = useRef(0)
+  const [isReady, setIsReady] = useState(false)
+  const [status, setStatus] = useState('数字人加载中...')
+  const [visibleText, setVisibleText] = useState('')
+
+  const selectedModel = MODEL_OPTIONS.find((model) => model.id === 'haru_greeter_pro_jp') ?? MODEL_OPTIONS[0]
+
+  const syncBubblePosition = useCallback(() => {
+    const bubble = bubbleRef.current
+    const model = modelRef.current
+
+    if (!bubble || !model) {
+      return
+    }
+
+    const anchorX = model.x + model.width * 0.47
+    const anchorY = model.y + model.height * 0.08
+    const minX = 220
+    const maxX = window.innerWidth - 220
+    const bubbleX = Math.min(Math.max(anchorX, minX), maxX)
+    const bubbleY = Math.max(24, anchorY - 160)
+
+    bubble.style.left = `${bubbleX}px`
+    bubble.style.top = `${bubbleY}px`
+  }, [])
+
+  const stopBubbleTracking = useCallback(() => {
+    if (bubbleFrameRef.current !== null) {
+      window.cancelAnimationFrame(bubbleFrameRef.current)
+      bubbleFrameRef.current = null
+    }
+  }, [])
+
+  const startBubbleTracking = useCallback(() => {
+    stopBubbleTracking()
+
+    const tick = () => {
+      syncBubblePosition()
+      bubbleFrameRef.current = window.requestAnimationFrame(tick)
+    }
+
+    tick()
+  }, [stopBubbleTracking, syncBubblePosition])
+
+  const clearReturnAnimation = useCallback(() => {
+    if (returnTimerRef.current !== null) {
+      window.clearTimeout(returnTimerRef.current)
+      returnTimerRef.current = null
+    }
+
+    if (returnFrameRef.current !== null) {
+      window.cancelAnimationFrame(returnFrameRef.current)
+      returnFrameRef.current = null
+    }
+  }, [])
+
+  const clearStreamingText = useCallback(() => {
+    if (streamTimerRef.current !== null) {
+      window.clearTimeout(streamTimerRef.current)
+      streamTimerRef.current = null
+    }
+  }, [])
+
+  const stopLipSync = useCallback(() => {
+    if (lipSyncFrameRef.current !== null) {
+      window.cancelAnimationFrame(lipSyncFrameRef.current)
+      lipSyncFrameRef.current = null
+    }
+  }, [])
+
+  const resetMouth = useCallback(() => {
+    const coreModel = modelRef.current?.internalModel?.coreModel
+    coreModel?.setParameterValueById?.(MOUTH_OPEN_PARAMETER_ID, 0)
+    coreModel?.setParameterValueById?.(MOUTH_FORM_PARAMETER_ID, 0)
+  }, [])
+
+  const ensureAudioElement = useCallback(() => {
+    if (!audioRef.current) {
+      const audio = new Audio()
+      audio.preload = 'auto'
+      audio.setAttribute('playsinline', 'true')
+      audio.src = LOGIN_DEMO_AUDIO_URL
+      audioRef.current = audio
+    }
+
+    return audioRef.current
+  }, [])
+
+  const ensureLipSyncPipeline = useCallback(() => {
+    const audio = ensureAudioElement()
+
+    if (!audioContextRef.current) {
+      const AudioContextCtor = window.AudioContext || (window as Window & {
+        webkitAudioContext?: typeof AudioContext
+      }).webkitAudioContext
+
+      if (!AudioContextCtor) {
+        throw new Error('当前浏览器不支持 Web Audio。')
+      }
+
+      audioContextRef.current = new AudioContextCtor()
+    }
+
+    if (!analyserRef.current && audioContextRef.current) {
+      const analyser = audioContextRef.current.createAnalyser()
+      analyser.fftSize = 256
+      analyser.smoothingTimeConstant = 0.7
+      analyserRef.current = analyser
+    }
+
+    if (
+      !mediaSourceRef.current &&
+      audioContextRef.current &&
+      analyserRef.current
+    ) {
+      const source = audioContextRef.current.createMediaElementSource(audio)
+      source.connect(analyserRef.current)
+      analyserRef.current.connect(audioContextRef.current.destination)
+      mediaSourceRef.current = source
+    }
+  }, [ensureAudioElement])
+
+  const startLipSync = useCallback(() => {
+    const analyser = analyserRef.current
+    const coreModel = modelRef.current?.internalModel?.coreModel
+
+    if (!analyser || !coreModel) {
+      return
+    }
+
+    stopLipSync()
+    const data = new Uint8Array(analyser.frequencyBinCount)
+
+    const tick = () => {
+      const currentAnalyser = analyserRef.current
+      const currentCoreModel = modelRef.current?.internalModel?.coreModel
+      const currentAudio = audioRef.current
+
+      if (!currentAnalyser || !currentCoreModel || !currentAudio || currentAudio.paused || currentAudio.ended) {
+        resetMouth()
+        lipSyncFrameRef.current = null
+        return
+      }
+
+      currentAnalyser.getByteFrequencyData(data)
+
+      let sum = 0
+      for (let index = 0; index < data.length; index += 1) {
+        sum += data[index] ?? 0
+      }
+
+      const average = sum / data.length / 255
+      const mouthOpen = Math.min(1, Math.max(0.03, average * 2.4))
+      const mouthForm = Math.min(0.35, Math.max(-0.2, average * 0.5 - 0.08))
+
+      if (currentCoreModel.addParameterValueById) {
+        currentCoreModel.addParameterValueById(MOUTH_OPEN_PARAMETER_ID, mouthOpen, 0.85)
+        currentCoreModel.addParameterValueById(MOUTH_FORM_PARAMETER_ID, mouthForm, 0.65)
+      } else {
+        currentCoreModel.setParameterValueById?.(MOUTH_OPEN_PARAMETER_ID, mouthOpen)
+        currentCoreModel.setParameterValueById?.(MOUTH_FORM_PARAMETER_ID, mouthForm)
+      }
+
+      lipSyncFrameRef.current = window.requestAnimationFrame(tick)
+    }
+
+    lipSyncFrameRef.current = window.requestAnimationFrame(tick)
+  }, [resetMouth, stopLipSync])
+
+  const stopSpeaking = useCallback(() => {
+    playbackTokenRef.current += 1
+    clearStreamingText()
+    stopLipSync()
+    resetMouth()
+
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
+      audioRef.current.onended = null
+      audioRef.current.onerror = null
+      audioRef.current.oncanplaythrough = null
+    }
+  }, [clearStreamingText, resetMouth, stopLipSync])
+
+  const animateBackToHome = useCallback(() => {
+    const step = () => {
+      const currentModel = modelRef.current
+
+      if (!currentModel || currentModel.dragging) {
+        returnFrameRef.current = null
+        return
+      }
+
+      const dx = homePositionRef.current.x - currentModel.x
+      const dy = homePositionRef.current.y - currentModel.y
+
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) {
+        currentModel.position.x = homePositionRef.current.x
+        currentModel.position.y = homePositionRef.current.y
+        syncBubblePosition()
+        returnFrameRef.current = null
+        return
+      }
+
+      currentModel.position.x += dx * 0.12
+      currentModel.position.y += dy * 0.12
+      syncBubblePosition()
+      returnFrameRef.current = window.requestAnimationFrame(step)
+    }
+
+    returnFrameRef.current = window.requestAnimationFrame(step)
+  }, [])
+
+  const scheduleReturnToHome = useCallback(() => {
+    clearReturnAnimation()
+    returnTimerRef.current = window.setTimeout(() => {
+      animateBackToHome()
+    }, 1800)
+  }, [animateBackToHome, clearReturnAnimation])
+
+  const resizeCanvas = useCallback(() => {
+    const canvas = canvasRef.current
+    const model = modelRef.current
+
+    if (!canvas) {
+      return
+    }
+
+    const width = window.innerWidth
+    const height = window.innerHeight
+
+    canvas.width = width
+    canvas.height = height
+
+    if (!model) {
+      return
+    }
+
+    homePositionRef.current = {
+      x: width * 0.42 - model.width * 0.14,
+      y: Math.max(height * 0.58 - model.height * 0.5, 160),
+    }
+
+    if (!model.dragging) {
+      model.position.x = homePositionRef.current.x
+      model.position.y = homePositionRef.current.y
+    }
+
+    syncBubblePosition()
+  }, [])
+
+  const playMotion = useCallback((motion: MotionOption | SpeechMotion) => {
+    const model = modelRef.current
+
+    if (!model) {
+      return
+    }
+
+    model.motion(motion.group, motion.index)
+  }, [])
+
+  const streamText = useCallback(
+    (text: string, streamIntervalMs: number, token: number) =>
+      new Promise<void>((resolve) => {
+        clearStreamingText()
+        setVisibleText('')
+
+        if (!text) {
+          resolve()
+          return
+        }
+
+        let index = 0
+
+        const tick = () => {
+          if (token !== playbackTokenRef.current) {
+            resolve()
+            return
+          }
+
+          index += 1
+          setVisibleText(text.slice(0, index))
+
+          if (index >= text.length) {
+            streamTimerRef.current = null
+            resolve()
+            return
+          }
+
+          streamTimerRef.current = window.setTimeout(tick, streamIntervalMs)
+        }
+
+        tick()
+      }),
+    [clearStreamingText],
+  )
+
+  const speak = useCallback(
+    async ({
+      text,
+      motion,
+      streamIntervalMs = DEFAULT_STREAM_INTERVAL,
+    }: DigitalHumanSpeechRequest) => {
+      const model = modelRef.current
+      const content = text.trim()
+
+      if (!model || !content) {
+        setStatus(content ? '数字人还没有加载完成。' : '没有可播报的文本。')
+        return false
+      }
+
+      stopSpeaking()
+      const token = playbackTokenRef.current
+      setStatus('准备播报...')
+      setVisibleText('')
+
+      try {
+        if (token !== playbackTokenRef.current) {
+          return false
+        }
+
+        const streamPromise = streamText(content, streamIntervalMs, token)
+
+        if (motion) {
+          playMotion(motion)
+        }
+
+        const audio = ensureAudioElement()
+
+        if (!audio) {
+          throw new Error('演示音频尚未初始化。')
+        }
+
+        audio.currentTime = 0
+
+        audio.onended = () => {
+          if (token !== playbackTokenRef.current) {
+            return
+          }
+
+          stopLipSync()
+          resetMouth()
+          setStatus('播报完成，等待下一条指令。')
+        }
+
+        audio.onerror = () => {
+          if (token !== playbackTokenRef.current) {
+            return
+          }
+
+          stopLipSync()
+          resetMouth()
+          setStatus('语音暂不可用，文字已为你展示。')
+        }
+
+        const playPromise = audio.play()
+        setStatus('数字人播报中...')
+        await playPromise
+
+        try {
+          ensureLipSyncPipeline()
+
+          if (audioContextRef.current?.state === 'suspended') {
+            await audioContextRef.current.resume()
+          }
+
+          startLipSync()
+        } catch (lipSyncError) {
+          console.warn(lipSyncError)
+        }
+
+        await streamPromise
+        return true
+      } catch (error) {
+        if (token !== playbackTokenRef.current) {
+          return false
+        }
+
+        console.error(error)
+        stopLipSync()
+        resetMouth()
+        setStatus(isUserGestureRequired(error) ? AUDIO_GESTURE_HINT : '语音暂不可用，文字已为你展示。')
+        return false
+      }
+    },
+    [ensureAudioElement, ensureLipSyncPipeline, playMotion, resetMouth, startLipSync, stopLipSync, stopSpeaking, streamText],
+  )
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      speak,
+      interrupt: stopSpeaking,
+      playMotion,
+    }),
+    [playMotion, speak, stopSpeaking],
+  )
+
+  useEffect(() => {
+    let mounted = true
+
+    async function initModel() {
+      const canvas = canvasRef.current
+
+      if (!canvas) {
+        return
+      }
+
+      try {
+        await loadLive2dScripts()
+
+        if (!mounted || !window.PIXI) {
+          return
+        }
+
+        const width = window.innerWidth
+        const height = window.innerHeight
+
+        const pixiApp = new window.PIXI.Application({
+          view: canvas,
+          autoStart: true,
+          resizeTo: window,
+          width,
+          height,
+          backgroundAlpha: 0,
+          backgroundColor: 0x000000,
+        })
+
+        appRef.current = pixiApp
+
+        const model = await window.PIXI.live2d.Live2DModel.from(selectedModel.url)
+
+        if (!mounted) {
+          return
+        }
+
+        pixiApp.stage.addChild(model)
+
+        const scaleX = width / model.width
+        const scaleY = height / model.height
+        const scaleMultiplier = (selectedModel.scaleMultiplier ?? 0.84) * 0.74
+
+        model.scale.set(Math.min(scaleX, scaleY) * (scaleMultiplier + 0.1))
+        homePositionRef.current = {
+          x: width * 0.42 - model.width * 0.14,
+          y: Math.max(height * 0.58 - model.height * 0.5, 160),
+        }
+        model.x = homePositionRef.current.x
+        model.y = homePositionRef.current.y
+
+        makeDraggable(model, {
+          onDragStart: () => {
+            clearReturnAnimation()
+
+            if (selectedModel.dragStartMotionGroup) {
+              model.motion(selectedModel.dragStartMotionGroup)
+            }
+          },
+          onDragMove: clearReturnAnimation,
+          onDragEnd: () => {
+            if (selectedModel.dragEndMotionGroup) {
+              model.motion(selectedModel.dragEndMotionGroup)
+            }
+
+            scheduleReturnToHome()
+          },
+        })
+
+        model.on('hit', (...args: unknown[]) => {
+          const hitAreas = Array.isArray(args[0]) ? (args[0] as string[]) : []
+
+          if (hitAreas.includes('Head')) {
+            model.expression()
+            return
+          }
+
+          if (hitAreas.includes('Body') && selectedModel.bodyMotionGroup) {
+            model.motion(selectedModel.bodyMotionGroup)
+          }
+        })
+
+        modelRef.current = model
+        resizeCanvas()
+        syncBubblePosition()
+        startBubbleTracking()
+        window.addEventListener('resize', resizeCanvas)
+        ensureAudioElement().load()
+        setIsReady(true)
+        setStatus('数字人已就绪。')
+      } catch (error) {
+        console.error(error)
+        setStatus('数字人加载失败，请检查 Live2D 资源。')
+      }
+    }
+
+    void initModel()
+
+    return () => {
+      mounted = false
+      stopSpeaking()
+      clearReturnAnimation()
+      stopBubbleTracking()
+      void audioContextRef.current?.close().catch(() => undefined)
+      window.removeEventListener('resize', resizeCanvas)
+      modelRef.current = null
+      appRef.current?.destroy(true, { children: true })
+      appRef.current = null
+    }
+  }, [
+    clearReturnAnimation,
+    ensureAudioElement,
+    resizeCanvas,
+    scheduleReturnToHome,
+    selectedModel.bodyMotionGroup,
+    selectedModel.dragEndMotionGroup,
+    selectedModel.dragStartMotionGroup,
+    selectedModel.scaleMultiplier,
+    selectedModel.url,
+    startBubbleTracking,
+    stopSpeaking,
+    stopBubbleTracking,
+    syncBubblePosition,
+  ])
+
+  useEffect(() => {
+    if (!isReady || !autoPlayInitialSpeech || !initialSpeech) {
+      return
+    }
+
+    void speak(initialSpeech)
+  }, [autoPlayInitialSpeech, initialSpeech, isReady, speak])
+
+  const shouldShowBubble =
+    visibleText.trim().length > 0 ||
+    !['数字人加载中...', '数字人已就绪。'].includes(status)
+
+  return (
+    <section className="login-dh-embed" aria-label="登录页数字人交互区">
+      <div className="login-dh-stage">
+        <canvas ref={canvasRef} className="login-dh-canvas" />
+        {shouldShowBubble ? (
+          <div ref={bubbleRef} className="login-dh-bubble" aria-live="polite">
+            <p className="login-dh-bubble__text">{visibleText}</p>
+            <p className="login-dh-bubble__hint">{status}</p>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  )
+})
