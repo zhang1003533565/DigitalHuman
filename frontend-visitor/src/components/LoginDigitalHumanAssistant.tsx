@@ -45,7 +45,9 @@ const DEFAULT_STREAM_INTERVAL = 75
 const LOGIN_DEMO_AUDIO_URL = '/live2d/demo.mp3'
 const MOUTH_OPEN_PARAMETER_ID = 'ParamMouthOpenY'
 const MOUTH_FORM_PARAMETER_ID = 'ParamMouthForm'
-const AUDIO_GESTURE_HINT = '轻点页面即可播放语音。'
+const IDLE_STATUS = ''
+const LOADING_STATUS = '数字人加载中...'
+const READY_STATUS = '数字人已就绪。'
 
 function isUserGestureRequired(error: unknown) {
   if (!(error instanceof Error)) {
@@ -86,7 +88,7 @@ export const LoginDigitalHumanAssistant = forwardRef<
   const lipSyncFrameRef = useRef<number | null>(null)
   const playbackTokenRef = useRef(0)
   const [isReady, setIsReady] = useState(false)
-  const [status, setStatus] = useState('数字人加载中...')
+  const [status, setStatus] = useState(LOADING_STATUS)
   const [visibleText, setVisibleText] = useState('')
 
   const selectedModel = MODEL_OPTIONS.find((model) => model.id === 'haru_greeter_pro_jp') ?? MODEL_OPTIONS[0]
@@ -99,12 +101,14 @@ export const LoginDigitalHumanAssistant = forwardRef<
       return
     }
 
-    const anchorX = model.x + model.width * 0.47
+    const anchorX = model.x + model.width * 0.47 + 18
     const anchorY = model.y + model.height * 0.08
-    const minX = 220
-    const maxX = window.innerWidth - 220
+    const bubbleHalfWidth = bubble.offsetWidth / 2
+    const viewportPadding = 22
+    const minX = viewportPadding + bubbleHalfWidth
+    const maxX = window.innerWidth - viewportPadding - bubbleHalfWidth
     const bubbleX = Math.min(Math.max(anchorX, minX), maxX)
-    const bubbleY = Math.max(24, anchorY - 160)
+    const bubbleY = Math.max(64, anchorY - 96)
 
     bubble.style.left = `${bubbleX}px`
     bubble.style.top = `${bubbleY}px`
@@ -397,7 +401,7 @@ export const LoginDigitalHumanAssistant = forwardRef<
 
       stopSpeaking()
       const token = playbackTokenRef.current
-      setStatus('准备播报...')
+      setStatus(IDLE_STATUS)
       setVisibleText('')
 
       try {
@@ -426,7 +430,7 @@ export const LoginDigitalHumanAssistant = forwardRef<
 
           stopLipSync()
           resetMouth()
-          setStatus('播报完成，等待下一条指令。')
+          setStatus(IDLE_STATUS)
         }
 
         audio.onerror = () => {
@@ -440,7 +444,6 @@ export const LoginDigitalHumanAssistant = forwardRef<
         }
 
         const playPromise = audio.play()
-        setStatus('数字人播报中...')
         await playPromise
 
         try {
@@ -465,7 +468,7 @@ export const LoginDigitalHumanAssistant = forwardRef<
         console.error(error)
         stopLipSync()
         resetMouth()
-        setStatus(isUserGestureRequired(error) ? AUDIO_GESTURE_HINT : '语音暂不可用，文字已为你展示。')
+        setStatus(isUserGestureRequired(error) ? IDLE_STATUS : '语音暂不可用，文字已为你展示。')
         return false
       }
     },
@@ -572,7 +575,7 @@ export const LoginDigitalHumanAssistant = forwardRef<
         window.addEventListener('resize', resizeCanvas)
         ensureAudioElement().load()
         setIsReady(true)
-        setStatus('数字人已就绪。')
+        setStatus(READY_STATUS)
       } catch (error) {
         console.error(error)
         setStatus('数字人加载失败，请检查 Live2D 资源。')
@@ -616,9 +619,11 @@ export const LoginDigitalHumanAssistant = forwardRef<
     void speak(initialSpeech)
   }, [autoPlayInitialSpeech, initialSpeech, isReady, speak])
 
+  const hasVisibleText = visibleText.trim().length > 0
+  const hasHintStatus = Boolean(status) && ![LOADING_STATUS, READY_STATUS].includes(status)
   const shouldShowBubble =
-    visibleText.trim().length > 0 ||
-    !['数字人加载中...', '数字人已就绪。'].includes(status)
+    hasVisibleText ||
+    hasHintStatus
 
   return (
     <section className="login-dh-embed" aria-label="登录页数字人交互区">
@@ -626,8 +631,8 @@ export const LoginDigitalHumanAssistant = forwardRef<
         <canvas ref={canvasRef} className="login-dh-canvas" />
         {shouldShowBubble ? (
           <div ref={bubbleRef} className="login-dh-bubble" aria-live="polite">
-            <p className="login-dh-bubble__text">{visibleText}</p>
-            <p className="login-dh-bubble__hint">{status}</p>
+            {hasVisibleText ? <p className="login-dh-bubble__text">{visibleText}</p> : null}
+            {hasHintStatus ? <p className="login-dh-bubble__hint">{status}</p> : null}
           </div>
         ) : null}
       </div>
