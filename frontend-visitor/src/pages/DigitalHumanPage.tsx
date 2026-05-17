@@ -90,12 +90,17 @@ function applyFaceControls(model: Live2DModel, controls: FaceControlState) {
   coreModel?.setParameterValueById?.('ParamEyeRSmile', controls.eyeSmile)
   coreModel?.setParameterValueById?.('ParamEyeBallX', controls.eyeballX)
   coreModel?.setParameterValueById?.('ParamEyeBallY', controls.eyeballY)
-  coreModel?.setParameterValueById?.('ParamMouthOpenY', controls.mouthOpen)
-  coreModel?.setParameterValueById?.('ParamMouthForm', controls.mouthForm)
   coreModel?.setParameterValueById?.('ParamTere', controls.blush)
   coreModel?.setParameterValueById?.('ParamAngleX', controls.angleX)
   coreModel?.setParameterValueById?.('ParamAngleY', controls.angleY)
   coreModel?.setParameterValueById?.('ParamAngleZ', controls.angleZ)
+}
+
+function applyMouthControls(model: Live2DModel, controls: FaceControlState) {
+  const coreModel = model.internalModel?.coreModel
+
+  coreModel?.setParameterValueById?.('ParamMouthOpenY', controls.mouthOpen)
+  coreModel?.setParameterValueById?.('ParamMouthForm', controls.mouthForm)
 }
 
 function formatFaceControlValue(key: keyof FaceControlState, value: number) {
@@ -133,6 +138,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
   const [activeMotionKey, setActiveMotionKey] = useState<string | null>(null)
   const [activeMotionTab, setActiveMotionTab] = useState<MotionTabId>('combo')
   const [faceControls, setFaceControls] = useState<FaceControlState>(DEFAULT_FACE_CONTROLS)
+  const [isModelSpeaking, setIsModelSpeaking] = useState(false)
 
   const selectedModel =
     MODEL_OPTIONS.find((model) => model.id === selectedModelId) ??
@@ -224,6 +230,32 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
       window.cancelAnimationFrame(frameId)
     }
   }, [faceControls, selectedModel.id, isReady])
+
+  useEffect(() => {
+    const model = modelRef.current
+
+    if (!model || selectedModel.id !== 'haru_greeter_pro_jp' || isModelSpeaking) {
+      return
+    }
+
+    let frameId = 0
+
+    const apply = () => {
+      const currentModel = modelRef.current
+
+      if (currentModel && selectedModel.id === 'haru_greeter_pro_jp' && !isModelSpeaking) {
+        applyMouthControls(currentModel, faceControls)
+      }
+
+      frameId = window.requestAnimationFrame(apply)
+    }
+
+    apply()
+
+    return () => {
+      window.cancelAnimationFrame(frameId)
+    }
+  }, [faceControls, isModelSpeaking, selectedModel.id, isReady])
 
   useEffect(() => {
     const loadId = loadIdRef.current + 1
@@ -331,7 +363,16 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
       return
     }
 
-    speak(model, `${DEMO_AUDIO_URL}?v=${Date.now()}`)
+    model.stopMotions?.()
+    setIsModelSpeaking(true)
+    speak(model, `${DEMO_AUDIO_URL}?v=${Date.now()}`, {
+      onFinish: () => {
+        setIsModelSpeaking(false)
+      },
+      onError: () => {
+        setIsModelSpeaking(false)
+      },
+    })
   }
 
   function getMotionKey(motion: MotionOption) {
@@ -406,7 +447,18 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
       const audioUrl = URL.createObjectURL(response.data)
       const durationMs = Math.round(performance.now() - startTime)
 
-      speak(model, audioUrl)
+      model.stopMotions?.()
+      setIsModelSpeaking(true)
+      speak(model, audioUrl, {
+        onFinish: () => {
+          setIsModelSpeaking(false)
+          URL.revokeObjectURL(audioUrl)
+        },
+        onError: () => {
+          setIsModelSpeaking(false)
+          URL.revokeObjectURL(audioUrl)
+        },
+      })
       setStatus(`导览回答已生成，正在驱动口型。耗时: ${durationMs}ms`)
     } catch (error) {
       console.error(error)

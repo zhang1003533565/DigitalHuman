@@ -94,7 +94,7 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
       isGreetingPlayingRef.current = true
       void assistant.speak({
         text: '你好，欢迎光临。',
-        motion: { group: 'Action', index: 5 },
+        motion: { group: 'Action', index: 6 },
         streamIntervalMs: 70,
       }).then((didPlay) => {
         hasTriggeredGreetingRef.current = didPlay

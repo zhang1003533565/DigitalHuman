@@ -219,7 +219,7 @@ export const LoginDigitalHumanAssistant = forwardRef<
     }
 
     stopLipSync()
-    const data = new Uint8Array(analyser.frequencyBinCount)
+    const data = new Uint8Array(analyser.fftSize)
 
     const tick = () => {
       const currentAnalyser = analyserRef.current
@@ -232,24 +232,25 @@ export const LoginDigitalHumanAssistant = forwardRef<
         return
       }
 
-      currentAnalyser.getByteFrequencyData(data)
+      currentAnalyser.getByteTimeDomainData(data)
 
-      let sum = 0
+      let sumSquares = 0
       for (let index = 0; index < data.length; index += 1) {
-        sum += data[index] ?? 0
+        const centered = ((data[index] ?? 128) - 128) / 128
+        sumSquares += centered * centered
       }
+      const rms = Math.sqrt(sumSquares / data.length)
+      const gate = 0.03
+      const normalized = Math.max(0, (rms - gate) / (0.22 - gate))
+      const mouthOpen = Math.min(1, Math.max(0, normalized * 1.15))
+      const mouthForm = Math.min(0.25, Math.max(-0.12, normalized * 0.25 - 0.03))
+      const currentOpen = currentCoreModel.getParameterValueById?.(MOUTH_OPEN_PARAMETER_ID) ?? 0
+      const currentForm = currentCoreModel.getParameterValueById?.(MOUTH_FORM_PARAMETER_ID) ?? 0
+      const smoothedOpen = currentOpen + (mouthOpen - currentOpen) * 0.35
+      const smoothedForm = currentForm + (mouthForm - currentForm) * 0.3
 
-      const average = sum / data.length / 255
-      const mouthOpen = Math.min(1, Math.max(0.03, average * 2.4))
-      const mouthForm = Math.min(0.35, Math.max(-0.2, average * 0.5 - 0.08))
-
-      if (currentCoreModel.addParameterValueById) {
-        currentCoreModel.addParameterValueById(MOUTH_OPEN_PARAMETER_ID, mouthOpen, 0.85)
-        currentCoreModel.addParameterValueById(MOUTH_FORM_PARAMETER_ID, mouthForm, 0.65)
-      } else {
-        currentCoreModel.setParameterValueById?.(MOUTH_OPEN_PARAMETER_ID, mouthOpen)
-        currentCoreModel.setParameterValueById?.(MOUTH_FORM_PARAMETER_ID, mouthForm)
-      }
+      currentCoreModel.setParameterValueById?.(MOUTH_OPEN_PARAMETER_ID, smoothedOpen)
+      currentCoreModel.setParameterValueById?.(MOUTH_FORM_PARAMETER_ID, smoothedForm)
 
       lipSyncFrameRef.current = window.requestAnimationFrame(tick)
     }
@@ -343,10 +344,16 @@ export const LoginDigitalHumanAssistant = forwardRef<
     const model = modelRef.current
 
     if (!model) {
-      return
+      return false
     }
 
-    model.motion(motion.group, motion.index)
+    try {
+      model.motion(motion.group, motion.index)
+      return true
+    } catch (error) {
+      console.warn('Play motion failed', motion, error)
+      return false
+    }
   }, [])
 
   const streamText = useCallback(
@@ -412,7 +419,11 @@ export const LoginDigitalHumanAssistant = forwardRef<
         const streamPromise = streamText(content, streamIntervalMs, token)
 
         if (motion) {
-          playMotion(motion)
+          const didPlay = playMotion(motion)
+
+          if (!didPlay) {
+            playMotion({ group: 'Action', index: 6 })
+          }
         }
 
         const audio = ensureAudioElement()

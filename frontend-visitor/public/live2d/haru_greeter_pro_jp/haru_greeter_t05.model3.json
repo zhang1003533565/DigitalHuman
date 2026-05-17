@@ -94,6 +94,11 @@
 				{
 					"File": "motion/haru_g_m26.motion3.json"
 				}
+			],
+			"SpeechAction": [
+				{
+					"File": "motion/haru_g_wave_right_speaking.motion3.json"
+				}
 			]
 		}
 	},

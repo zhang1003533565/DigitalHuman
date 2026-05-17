@@ -301,10 +301,19 @@ export function makeDraggable(model: Live2DModel, options?: DragBehaviorOptions)
   })
 }
 
-export function speak(model: Live2DModel, audioUrl: string) {
+export function speak(
+  model: Live2DModel,
+  audioUrl: string,
+  options?: {
+    onFinish?: () => void
+    onError?: (error: Error) => void
+  },
+) {
   model.speak(audioUrl, {
     volume: 1,
     crossOrigin: 'anonymous',
+    onFinish: options?.onFinish,
+    onError: options?.onError,
   })
 }
 
