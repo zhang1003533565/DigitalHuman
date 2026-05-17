@@ -1,7 +1,8 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import '../App.css'
-import loginBgImage from '../assets/login/ChatGPT Image 2026年5月16日 22_01_11.png'
+import loginBgDayImage from '../assets/login/login.png'
+import loginBgNightImage from '../assets/login/login_night.png'
 import loginTitleImage from '../assets/login/Tittle.png'
 import loginSubtitleImage from '../assets/login/fuTittle.png'
 import { DEFAULT_AUTH_REDIRECT, type SessionUser } from '../auth/session'
@@ -141,11 +142,18 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
     minute: '2-digit',
     hour12: false,
   }).format(now)
+  const currentHour = now.getHours()
+  const isDaytime = currentHour >= 6 && currentHour < 18
+  const loginBgImage = isDaytime ? loginBgDayImage : loginBgNightImage
 
   return (
     <main
-      className="auth-screen auth-screen--tourism"
-      style={{ backgroundImage: `linear-gradient(180deg, rgba(3, 13, 31, 0.18), rgba(2, 8, 22, 0.6)), url(${loginBgImage})` }}
+      className={`auth-screen auth-screen--tourism ${isDaytime ? 'auth-screen--daytime' : 'auth-screen--nighttime'}`}
+      style={{
+        backgroundImage: isDaytime
+          ? `linear-gradient(180deg, rgba(199, 231, 255, 0.18), rgba(103, 171, 224, 0.22) 42%, rgba(7, 24, 49, 0.42)), url(${loginBgImage})`
+          : `linear-gradient(180deg, rgba(3, 13, 31, 0.18), rgba(2, 8, 22, 0.6)), url(${loginBgImage})`,
+      }}
     >
       <div className="auth-frame">
         <div className="auth-top-trim">
