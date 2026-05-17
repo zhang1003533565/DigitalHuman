@@ -820,6 +820,16 @@
   background: rgba(255, 255, 255, 0.04);
 }
 
+.map-placeholder__panel--live {
+  display: block;
+  width: 100%;
+  height: 480px;
+  min-height: 480px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
 .answer-panel {
   padding: 16px;
   border: 1px solid rgba(255, 255, 255, 0.12);
