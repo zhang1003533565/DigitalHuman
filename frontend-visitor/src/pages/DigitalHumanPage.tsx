@@ -225,7 +225,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     setStatus('正在请求后端导览问答...')
 
     try {
-      const chatResponse = await axios.post<GuideChatResponse>('/api/guide/chat', {
+      const chatResponse = await axios.post<GuideChatResponse>('/api/user/guide/chat', {
         sessionId: sessionId || undefined,
         question: content,
       })
@@ -284,7 +284,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     }
 
     try {
-      await axios.post('/api/guide/feedback', {
+      await axios.post('/api/user/guide/feedback', {
         sessionId,
         question: text.trim(),
         answer: answerText,

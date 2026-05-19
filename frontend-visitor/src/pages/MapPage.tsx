@@ -21,7 +21,7 @@ export function MapPage({ onLogout }: Props) {
 
   useEffect(() => {
     async function loadSpots() {
-      const response = await axios.get<ScenicSpot[]>('/api/scenic/spots')
+      const response = await axios.get<ScenicSpot[]>('/api/user/scenic/spots')
       setSpots(response.data)
     }
 

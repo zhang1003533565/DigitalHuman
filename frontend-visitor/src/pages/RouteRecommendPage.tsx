@@ -22,7 +22,7 @@ export function RouteRecommendPage({ onLogout }: Props) {
 
   useEffect(() => {
     async function loadRoutes() {
-      const response = await axios.get<ScenicRoute[]>('/api/scenic/routes/recommend', {
+      const response = await axios.get<ScenicRoute[]>('/api/user/scenic/routes/recommend', {
         params: interest ? { interest } : {},
       })
       setRoutes(response.data)

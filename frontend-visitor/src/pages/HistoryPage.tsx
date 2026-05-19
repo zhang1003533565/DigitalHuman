@@ -25,7 +25,7 @@ export function HistoryPage({ onLogout }: Props) {
         return
       }
 
-      const response = await axios.get<GuideMessage[]>(`/api/guide/session/${sessionId}/messages`)
+      const response = await axios.get<GuideMessage[]>(`/api/user/guide/session/${sessionId}/messages`)
       setMessages(response.data)
     }
 

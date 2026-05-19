@@ -11,12 +11,12 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/scenic")
-public class ScenicController {
+@RequestMapping("/api/user/scenic")
+public class UserScenicController {
 
     private final GuideService guideService;
 
-    public ScenicController(GuideService guideService) {
+    public UserScenicController(GuideService guideService) {
         this.guideService = guideService;
     }
 

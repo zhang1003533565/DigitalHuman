@@ -1,6 +1,5 @@
 package com.digitalhuman.backend_java.controller;
 
-import com.digitalhuman.backend_java.dto.FeedbackRecordDto;
 import com.digitalhuman.backend_java.dto.FeedbackRequest;
 import com.digitalhuman.backend_java.dto.FeedbackResponse;
 import com.digitalhuman.backend_java.dto.GuideChatRequest;
@@ -18,12 +17,12 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/guide")
-public class GuideController {
+@RequestMapping("/api/user/guide")
+public class UserGuideController {
 
     private final GuideService guideService;
 
-    public GuideController(GuideService guideService) {
+    public UserGuideController(GuideService guideService) {
         this.guideService = guideService;
     }
 
@@ -41,10 +40,5 @@ public class GuideController {
     public FeedbackResponse saveFeedback(@Valid @RequestBody FeedbackRequest request) {
         guideService.saveFeedback(request);
         return new FeedbackResponse(true, "反馈已提交");
-    }
-
-    @GetMapping("/feedback")
-    public List<FeedbackRecordDto> getFeedbackRecords() {
-        return guideService.getFeedbackRecords();
     }
 }
