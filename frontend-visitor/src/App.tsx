@@ -35,8 +35,8 @@ function App() {
     setUser(getStoredUser())
   }, [])
 
-  function handleLogin(username: string) {
-    setUser(saveUser(username))
+  function handleLogin(nextUser: SessionUser) {
+    setUser(saveUser(nextUser))
   }
 
   function handleLogout() {

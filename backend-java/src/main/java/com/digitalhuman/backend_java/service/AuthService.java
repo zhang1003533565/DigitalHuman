@@ -14,10 +14,15 @@ public class AuthService {
 
     private final AppUserRepository appUserRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AuthTokenService authTokenService;
 
-    public AuthService(AppUserRepository appUserRepository, PasswordEncoder passwordEncoder) {
+    public AuthService(
+            AppUserRepository appUserRepository,
+            PasswordEncoder passwordEncoder,
+            AuthTokenService authTokenService) {
         this.appUserRepository = appUserRepository;
         this.passwordEncoder = passwordEncoder;
+        this.authTokenService = authTokenService;
     }
 
     public LoginResponse login(LoginRequest request) {
@@ -28,6 +33,13 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "用户名或密码错误");
         }
 
-        return new LoginResponse(user.getId(), user.getUsername(), user.getDisplayName(), user.getRole());
+        String token = authTokenService.createToken(user);
+        return new LoginResponse(user.getId(), user.getUsername(), user.getDisplayName(), user.getRole(), token);
+    }
+
+    public void logout(String token) {
+        if (token != null && !token.isBlank()) {
+            authTokenService.revoke(token);
+        }
     }
 }

@@ -16,12 +16,14 @@ import type { MenuProps, TableColumnsType } from 'antd'
 import './App.css'
 
 const { Header, Sider, Content } = Layout
+const SESSION_STORAGE_KEY = 'digitalhuman.admin.user'
 
 type LoginResult = {
   userId: number
   username: string
   displayName: string
   role: 'ADMIN' | 'USER'
+  token: string
 }
 
 type MenuKey =
@@ -89,6 +91,43 @@ const menuItems: MenuProps['items'] = [
   { key: 'feedback', icon: <CommentOutlined />, label: '游客反馈分析' },
   { key: 'qa', icon: <SearchOutlined />, label: '问答记录查询' },
 ]
+
+function applyAuthToken(token: string | null) {
+  if (token) {
+    axios.defaults.headers.common.Authorization = `Bearer ${token}`
+    return
+  }
+
+  delete axios.defaults.headers.common.Authorization
+}
+
+function getStoredUser() {
+  const rawValue = window.sessionStorage.getItem(SESSION_STORAGE_KEY)
+  if (!rawValue) {
+    applyAuthToken(null)
+    return null
+  }
+
+  try {
+    const user = JSON.parse(rawValue) as LoginResult
+    applyAuthToken(user.token)
+    return user
+  } catch {
+    window.sessionStorage.removeItem(SESSION_STORAGE_KEY)
+    applyAuthToken(null)
+    return null
+  }
+}
+
+function saveUser(user: LoginResult) {
+  window.sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(user))
+  applyAuthToken(user.token)
+}
+
+function clearUser() {
+  window.sessionStorage.removeItem(SESSION_STORAGE_KEY)
+  applyAuthToken(null)
+}
 
 function DashboardPanel() {
   return (
@@ -398,16 +437,28 @@ function App() {
   const [error, setError] = useState('')
   const [user, setUser] = useState<LoginResult | null>(null)
 
+  useEffect(() => {
+    setUser(getStoredUser())
+  }, [])
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setLoading(true)
     setError('')
 
     try {
-      const response = await axios.post<LoginResult>('http://localhost:8080/api/auth/login', {
+      const response = await axios.post<LoginResult>('/api/auth/login', {
         username,
         password,
       })
+
+      if (response.data.role !== 'ADMIN') {
+        setError('当前入口仅允许管理员登录，请使用管理员账号。')
+        setUser(null)
+        return
+      }
+
+      saveUser(response.data)
       setUser(response.data)
     } catch (submitError) {
       if (axios.isAxiosError(submitError)) {
@@ -418,6 +469,17 @@ function App() {
       setUser(null)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleLogout = async () => {
+    try {
+      await axios.delete('/api/auth/logout')
+    } catch {
+      // Ignore logout failures and clear local session anyway.
+    } finally {
+      clearUser()
+      setUser(null)
     }
   }
 
@@ -435,7 +497,7 @@ function App() {
     )
   }
 
-  return <AdminLayout user={user} onLogout={() => setUser(null)} />
+  return <AdminLayout user={user} onLogout={handleLogout} />
 }
 
 export default App

@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react'
+import axios from 'axios'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import '../App.css'
 import loginBgDayImage from '../assets/login/login.png'
@@ -50,7 +51,7 @@ function CloudLineIcon() {
 
 type LoginPageProps = {
   user: SessionUser | null
-  onLogin: (username: string) => void
+  onLogin: (user: SessionUser) => void
 }
 
 export function LoginPage({ user, onLogin }: LoginPageProps) {
@@ -60,6 +61,7 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
   const [now, setNow] = useState(() => new Date())
   const hasTriggeredGreetingRef = useRef(false)
   const isGreetingPlayingRef = useRef(false)
@@ -112,7 +114,7 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
     }
   }, [])
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
     if (!username.trim()) {
@@ -126,8 +128,30 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
     }
 
     setError('')
-    onLogin(username.trim())
-    navigate(redirectTarget, { replace: true })
+    setSubmitting(true)
+
+    try {
+      const response = await axios.post<SessionUser>('/api/auth/login', {
+        username: username.trim(),
+        password,
+      })
+
+      if (response.data.role !== 'USER') {
+        setError('当前入口仅允许游客用户登录，请使用用户账号。')
+        return
+      }
+
+      onLogin(response.data)
+      navigate(redirectTarget, { replace: true })
+    } catch (submitError) {
+      if (axios.isAxiosError(submitError)) {
+        setError(submitError.response?.data?.message ?? '登录失败，请检查账号密码或后端服务。')
+      } else {
+        setError('登录失败，请稍后重试。')
+      }
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const formattedDate = new Intl.DateTimeFormat('zh-CN', {
@@ -236,8 +260,8 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
                 </button>
               </div>
 
-              <button type="submit" className="auth-submit-button">
-                登录
+              <button type="submit" className="auth-submit-button" disabled={submitting}>
+                {submitting ? '登录中...' : '登录'}
               </button>
               {error ? <p className="inline-message">{error}</p> : null}
             </form>

@@ -19,7 +19,7 @@ export function HomePage({ user, onLogout }: HomePageProps) {
         <header className="hero-panel">
           <div>
             <p className="surface-tag">Welcome Back</p>
-            <h1>{user.username}，欢迎进入数字人首页</h1>
+            <h1>{user.displayName || user.username}，欢迎进入数字人首页</h1>
             <p className="surface-copy">
               首页现在只是其中一个入口页。后续景点页、活动页、导览页都可以直接跳到数字人模块。
             </p>

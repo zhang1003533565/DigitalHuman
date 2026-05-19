@@ -1,21 +1,21 @@
-package com.digitalhuman.backend_java.dto;
+package com.digitalhuman.backend_java.model;
 
-import com.digitalhuman.backend_java.model.UserRole;
+import java.time.Instant;
 
-public class LoginResponse {
+public class AuthSession {
 
     private final Long userId;
     private final String username;
     private final String displayName;
     private final UserRole role;
-    private final String token;
+    private final Instant createdAt;
 
-    public LoginResponse(Long userId, String username, String displayName, UserRole role, String token) {
+    public AuthSession(Long userId, String username, String displayName, UserRole role) {
         this.userId = userId;
         this.username = username;
         this.displayName = displayName;
         this.role = role;
-        this.token = token;
+        this.createdAt = Instant.now();
     }
 
     public Long getUserId() {
@@ -34,7 +34,7 @@ public class LoginResponse {
         return role;
     }
 
-    public String getToken() {
-        return token;
+    public Instant getCreatedAt() {
+        return createdAt;
     }
 }
