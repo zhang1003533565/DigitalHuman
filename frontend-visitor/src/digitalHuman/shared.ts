@@ -22,10 +22,22 @@ export type Live2DModel = {
       expression?: number | string
       resetExpression?: boolean
       crossOrigin?: string
+      onFinish?: () => void
+      onError?: (error: Error) => void
     },
   ) => void
-  motion: (name: string) => void
+  stopSpeaking?: () => void
+  motion: (name: string, index?: number) => void
+  stopMotions?: () => void
   expression: () => void
+  focus?: (x: number, y: number, instant?: boolean) => void
+  internalModel?: {
+    coreModel?: {
+      setParameterValueById?: (id: string, value: number, weight?: number) => void
+      addParameterValueById?: (id: string, value: number, weight?: number) => void
+      getParameterValueById?: (id: string) => number
+    }
+  }
   destroy?: () => void
 }
 
@@ -33,6 +45,10 @@ export type PixiApplication = {
   stage: {
     addChild: (model: Live2DModel) => void
     removeChild: (model: Live2DModel) => void
+  }
+  ticker?: {
+    add: (fn: () => void) => void
+    remove: (fn: () => void) => void
   }
   start: () => void
   stop: () => void
@@ -81,6 +97,14 @@ export type ModelOption = {
   bodyMotionGroup?: string
   dragStartMotionGroup?: string
   dragEndMotionGroup?: string
+  motionOptions?: MotionOption[]
+  microMotionOptions?: MotionOption[]
+}
+
+export type MotionOption = {
+  label: string
+  group: string
+  index?: number
 }
 
 declare global {
@@ -96,6 +120,60 @@ export const LIVE2D_SCRIPTS = [
   '/live2d/js/cubism4.min.js',
 ]
 
+const HARU_MOTION_OPTIONS: MotionOption[] = [
+  { label: '待机 Idle', group: 'Idle', index: 0 },
+  { label: 'M01 待机点头', group: 'Action', index: 0 },
+  { label: 'M02 背手点头', group: 'Action', index: 1 },
+  { label: 'M03 抱臂无奈点头', group: 'Action', index: 2 },
+  { label: 'M04 哦，抱臂点头', group: 'Action', index: 3 },
+  { label: 'M05 惊讶点头', group: 'Action', index: 4 },
+  { label: 'M06 微笑左摆手', group: 'Action', index: 5 },
+  { label: 'M07 微笑右摆手', group: 'Action', index: 6 },
+  { label: 'M08 给摸头', group: 'Action', index: 7 },
+  { label: 'M09 前倾点头 / 鞠躬', group: 'Action', index: 8 },
+  { label: 'M10 惊讶被摸头', group: 'Action', index: 9 },
+  { label: 'M11 抱臂摇头', group: 'Action', index: 10 },
+  { label: 'M12 摆手拒绝', group: 'Action', index: 11 },
+  { label: 'M13 惊讶疑问眨眼', group: 'Action', index: 12 },
+  { label: 'M14 惊讶疑问', group: 'Action', index: 13 },
+  { label: 'M15 微笑轻微摇头', group: 'Action', index: 14 },
+  { label: 'M16 抱歉', group: 'Action', index: 15 },
+  { label: 'M17 凑近害羞', group: 'Action', index: 16 },
+  { label: 'M18 害羞脸红', group: 'Action', index: 17 },
+  { label: 'M19 低头害羞', group: 'Action', index: 18 },
+  { label: 'M20 思考', group: 'Action', index: 19 },
+  { label: 'M21 开心地跳起来', group: 'Action', index: 20 },
+  { label: 'M22 害羞开心', group: 'Action', index: 21 },
+  { label: 'M23 开心合手', group: 'Action', index: 22 },
+  { label: 'M24 惊讶生气', group: 'Action', index: 23 },
+  { label: 'M25 惊讶转微笑', group: 'Action', index: 24 },
+  { label: 'M26 愣住转微笑', group: 'Action', index: 25 },
+]
+
+const HARU_MICRO_MOTION_OPTIONS: MotionOption[] = [
+  { label: '招手 左', group: 'Action', index: 5 },
+  { label: '招手 右', group: 'Action', index: 6 },
+  { label: '摸头互动', group: 'Action', index: 7 },
+  { label: '鞠躬', group: 'Action', index: 8 },
+  { label: '拒绝', group: 'Action', index: 11 },
+  { label: '抱歉', group: 'Action', index: 15 },
+  { label: '害羞 凑近', group: 'Action', index: 16 },
+  { label: '害羞 脸红', group: 'Action', index: 17 },
+  { label: '害羞 低头', group: 'Action', index: 18 },
+  { label: '思考', group: 'Action', index: 19 },
+  { label: '跳跃', group: 'Action', index: 20 },
+  { label: '开心合手', group: 'Action', index: 22 },
+]
+
+const HIYORI_MOTION_OPTIONS: MotionOption[] = [
+  { label: '身体点击', group: 'Tap@Body' },
+]
+
+const MARK_MOTION_OPTIONS: MotionOption[] = [
+  { label: '上滑', group: 'FlickUp' },
+  { label: '下滑', group: 'FlickDown' },
+]
+
 export const MODEL_OPTIONS = [
   {
     id: 'hiyori_pro_zh',
@@ -105,6 +183,7 @@ export const MODEL_OPTIONS = [
     xOffsetRatio: 0,
     yOffsetRatio: 0.06,
     bodyMotionGroup: 'Tap@Body',
+    motionOptions: HIYORI_MOTION_OPTIONS,
   },
   {
     id: 'kei_vowels_pro',
@@ -115,6 +194,8 @@ export const MODEL_OPTIONS = [
     id: 'haru_greeter_pro_jp',
     name: 'Haru Greeter',
     url: '/live2d/haru_greeter_pro_jp/haru_greeter_t05.model3.json',
+    motionOptions: HARU_MOTION_OPTIONS,
+    microMotionOptions: HARU_MICRO_MOTION_OPTIONS,
   },
   {
     id: 'mark_free_zh',
@@ -125,6 +206,7 @@ export const MODEL_OPTIONS = [
     yOffsetRatio: 0.14,
     dragStartMotionGroup: 'FlickUp',
     dragEndMotionGroup: 'FlickDown',
+    motionOptions: MARK_MOTION_OPTIONS,
   },
 ] satisfies ModelOption[]
 
@@ -219,10 +301,19 @@ export function makeDraggable(model: Live2DModel, options?: DragBehaviorOptions)
   })
 }
 
-export function speak(model: Live2DModel, audioUrl: string) {
+export function speak(
+  model: Live2DModel,
+  audioUrl: string,
+  options?: {
+    onFinish?: () => void
+    onError?: (error: Error) => void
+  },
+) {
   model.speak(audioUrl, {
     volume: 1,
     crossOrigin: 'anonymous',
+    onFinish: options?.onFinish,
+    onError: options?.onError,
   })
 }
 

@@ -10,10 +10,12 @@
 		"Pose": "haru_greeter_t05.pose3.json",
 		"DisplayInfo": "haru_greeter_t05.cdi3.json",
 		"Motions": {
-			"": [
+			"Idle": [
 				{
 					"File": "motion/haru_g_idle.motion3.json"
-				},
+				}
+			],
+			"Action": [
 				{
 					"File": "motion/haru_g_m01.motion3.json"
 				},
@@ -91,6 +93,11 @@
 				},
 				{
 					"File": "motion/haru_g_m26.motion3.json"
+				}
+			],
+			"SpeechAction": [
+				{
+					"File": "motion/haru_g_wave_right_speaking.motion3.json"
 				}
 			]
 		}
