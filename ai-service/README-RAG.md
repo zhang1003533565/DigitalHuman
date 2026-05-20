@@ -1,0 +1,101 @@
+# RAG Service
+
+This service provides:
+
+- knowledge base ingestion
+- structured chunking
+- Qdrant vector storage
+- BGE-M3 embedding
+- reranking
+- DeepSeek-backed answer generation through an OpenAI-compatible API
+
+## 1. Install dependencies
+
+```bash
+cd ai-service
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+## 2. Configure environment
+
+Copy `.env.example` and fill in your DeepSeek API key:
+
+```bash
+cp .env.example .env
+```
+
+The service auto-loads `ai-service/.env`, so you do not need to manually `export` each variable.
+
+Important settings:
+
+- `RAG_LLM_BASE_URL=https://api.deepseek.com`
+- `RAG_LLM_MODEL=deepseek-v4-pro`
+
+As of May 20, 2026, DeepSeek's official docs show:
+
+- OpenAI-compatible base URL: `https://api.deepseek.com`
+- legacy models `deepseek-chat` and `deepseek-reasoner` will be deprecated on `2026-07-24`
+
+## 3. Start Qdrant
+
+Example with Docker:
+
+```bash
+docker run -p 6333:6333 qdrant/qdrant
+```
+
+## 4. Ingest the local knowledge base
+
+```bash
+python3 scripts/ingest_kb.py
+```
+
+Or call:
+
+```bash
+curl -X POST http://127.0.0.1:18755/kb/ingest \
+  -H 'Content-Type: application/json' \
+  -d '{"recreate_collection": false}'
+```
+
+## 5. Start the RAG API
+
+```bash
+uvicorn app:app --host 127.0.0.1 --port 18755
+```
+
+## 6. Test retrieval and generation
+
+Retrieve only:
+
+```bash
+curl -X POST http://127.0.0.1:18755/rag/retrieve \
+  -H 'Content-Type: application/json' \
+  -d '{"question":"灵山大佛适合什么时候去看？"}'
+```
+
+Generate answer with DeepSeek:
+
+```bash
+curl -X POST http://127.0.0.1:18755/rag/query \
+  -H 'Content-Type: application/json' \
+  -d '{"question":"灵山大佛适合什么时候去看？","interest":"历史文化"}'
+```
+
+## 7. Connect backend-java
+
+The Java backend reads:
+
+```bash
+RAG_SERVICE_URL=http://127.0.0.1:18755
+```
+
+Then `/api/user/guide/chat` will call the RAG service automatically.
+
+## Notes
+
+- If DeepSeek is not configured or unavailable, `/rag/query` falls back to a retrieval-only summary.
+- The current implementation uses OpenAI-compatible `/chat/completions`.
+- If you prefer a reasoning model later, update only `RAG_LLM_MODEL`.

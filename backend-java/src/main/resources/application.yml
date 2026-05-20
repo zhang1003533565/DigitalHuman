@@ -23,6 +23,9 @@ tts:
   base-url: ${TTS_BASE_URL:http://localhost:8080}
   edge-service-url: ${EDGE_TTS_SERVICE_URL:http://127.0.0.1:18754}
 
+rag:
+  service-url: ${RAG_SERVICE_URL:http://127.0.0.1:18755}
+
 app:
   auth:
     seed-users:

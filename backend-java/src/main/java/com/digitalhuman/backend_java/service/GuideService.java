@@ -5,19 +5,38 @@ import com.digitalhuman.backend_java.dto.FeedbackRequest;
 import com.digitalhuman.backend_java.dto.GuideChatRequest;
 import com.digitalhuman.backend_java.dto.GuideChatResponse;
 import com.digitalhuman.backend_java.dto.GuideMessageDto;
+import com.digitalhuman.backend_java.dto.RagQueryRequest;
+import com.digitalhuman.backend_java.dto.RagQueryResponse;
 import com.digitalhuman.backend_java.dto.ScenicRouteDto;
 import com.digitalhuman.backend_java.dto.ScenicSpotDto;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class GuideService {
+
+    private static final Logger log = LoggerFactory.getLogger(GuideService.class);
+    private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
+
+    @Value("${rag.service-url:http://127.0.0.1:18755}")
+    private String ragServiceUrl;
 
     private final List<ScenicSpotDto> spots = List.of(
             new ScenicSpotDto("spot-1", "灵山胜境", "灵山大佛", "景区核心地标，适合了解整体文化背景。", "08:00-17:00", List.of("历史文化", "地标", "热门")),
@@ -33,6 +52,17 @@ public class GuideService {
 
     private final Map<String, List<GuideMessageDto>> sessions = new ConcurrentHashMap<>();
     private final List<FeedbackRecordDto> feedbackRecords = new ArrayList<>();
+    private final OkHttpClient httpClient;
+    private final ObjectMapper objectMapper;
+
+    public GuideService() {
+        this.httpClient = new OkHttpClient.Builder()
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(60, TimeUnit.SECONDS)
+                .writeTimeout(30, TimeUnit.SECONDS)
+                .build();
+        this.objectMapper = new ObjectMapper();
+    }
 
     public List<ScenicSpotDto> getAllSpots() {
         return spots;
@@ -54,8 +84,13 @@ public class GuideService {
             sessionId = "session-" + UUID.randomUUID();
         }
 
-        String answerText = buildAnswer(request.getQuestion(), request.getInterest());
-        List<String> relatedSpots = spots.stream().map(ScenicSpotDto::getName).limit(2).toList();
+        RagQueryResponse ragResponse = queryRag(request);
+        String answerText = ragResponse != null && ragResponse.getAnswer() != null && !ragResponse.getAnswer().isBlank()
+                ? ragResponse.getAnswer()
+                : buildAnswer(request.getQuestion(), request.getInterest());
+        List<String> relatedSpots = ragResponse != null && ragResponse.getRelatedSpots() != null && !ragResponse.getRelatedSpots().isEmpty()
+                ? ragResponse.getRelatedSpots()
+                : spots.stream().map(ScenicSpotDto::getName).limit(2).toList();
         List<String> recommendedRoutes = recommendRoutes(request.getInterest()).stream()
                 .map(ScenicRouteDto::getName)
                 .toList();
@@ -88,6 +123,30 @@ public class GuideService {
         return feedbackRecords.stream()
                 .sorted(Comparator.comparingLong(FeedbackRecordDto::getTimestamp).reversed())
                 .toList();
+    }
+
+    private RagQueryResponse queryRag(GuideChatRequest request) {
+        try {
+            String url = ragServiceUrl + "/rag/query";
+            String json = objectMapper.writeValueAsString(new RagQueryRequest(request.getQuestion(), request.getInterest(), 5));
+            Request httpRequest = new Request.Builder()
+                    .url(url)
+                    .post(RequestBody.create(json, JSON))
+                    .build();
+
+            try (Response response = httpClient.newCall(httpRequest).execute()) {
+                if (!response.isSuccessful()) {
+                    throw new IOException("RAG request failed: " + response.code());
+                }
+                if (response.body() == null) {
+                    throw new IOException("RAG response body is empty");
+                }
+                return objectMapper.readValue(response.body().string(), RagQueryResponse.class);
+            }
+        } catch (Exception exception) {
+            log.warn("Falling back to local guide answer because RAG service is unavailable", exception);
+            return null;
+        }
     }
 
     private String buildAnswer(String question, String interest) {
