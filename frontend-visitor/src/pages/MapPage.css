@@ -128,117 +128,13 @@
   font-size: 14px;
 }
 
-/* 推荐路线浮卡 */
-.map-route-card {
-  position: absolute;
-  bottom: 76px;
-  left: 18px;
-  z-index: 4;
-  width: 296px;
-  padding: 16px 18px;
-  border-radius: 18px;
-  background: rgba(8, 22, 38, 0.88);
-  border: var(--tech-border);
-  color: #f8fbff;
-  backdrop-filter: blur(12px);
-  box-shadow: var(--tech-glow-strong);
-}
-
-.map-route-card__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-  font-size: 14px;
-  font-weight: 700;
-}
-
+/* 推荐路线浮卡（已移除），仅保留其他区块复用的 .map-route-card__more 样式 */
 .map-route-card__more {
   color: #8ed0ff;
   font-size: 12px;
   cursor: pointer;
   background: transparent;
   border: 0;
-}
-
-.map-route-card__body {
-  padding: 12px;
-  border-radius: 12px;
-  background: rgba(8, 22, 38, 0.4);
-  border: var(--tech-border);
-  box-shadow: var(--tech-glow);
-}
-
-.map-route-card__title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 16px;
-  font-weight: 800;
-  margin-bottom: 4px;
-}
-
-.map-route-card__pill {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  color: #08121a;
-  background: linear-gradient(135deg, #ffd36a, #ff9d6a);
-}
-
-.map-route-card__desc {
-  margin: 6px 0 10px;
-  color: rgba(215, 228, 242, 0.78);
-  font-size: 12px;
-}
-
-.map-route-card__meta {
-  display: flex;
-  gap: 16px;
-  color: rgba(215, 228, 242, 0.88);
-  font-size: 12px;
-  margin-bottom: 10px;
-}
-
-.map-route-card__chain {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 6px;
-  margin-bottom: 12px;
-  font-size: 12px;
-}
-
-.map-route-card__chain span {
-  padding: 3px 8px;
-  border-radius: 6px;
-  color: #cfe9ff;
-  background: rgba(33, 119, 153, 0.18);
-  border: 1px solid rgba(33, 119, 153, 0.5);
-  box-shadow: 0 0 8px rgba(33, 119, 153, 0.28);
-}
-
-.map-route-card__chain em {
-  color: rgba(159, 215, 255, 0.7);
-  font-style: normal;
-}
-
-.map-route-card__cta {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  padding: 10px;
-  border: 0;
-  border-radius: 12px;
-  color: #08121a;
-  font-weight: 800;
-  cursor: pointer;
-  background: linear-gradient(90deg, #2ed6ff, #2ca9ff 55%, #3bffd1);
-  box-shadow: 0 8px 20px rgba(45, 176, 255, 0.32);
 }
 
 /* 右侧浮动控件 */

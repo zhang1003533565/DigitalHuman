@@ -21,9 +21,6 @@ const AMAP_KEY = '5b01b946c26d0f94f7d2ddb9d09ff26f'
 const AMAP_SECURITY_KEY = '692196a068ef6c9cad53a55fc9e47ad7'
 // 灵山胜境景区中心坐标 [lng, lat]
 const LINGSHAN_CENTER: [number, number] = [120.1009, 31.4259]
-// 景区边界：西南角、东北角
-const LINGSHAN_SW: [number, number] = [120.09, 31.41]
-const LINGSHAN_NE: [number, number] = [120.115, 31.44]
 
 declare global {
   interface Window {
@@ -80,6 +77,14 @@ export function MapPage({ onLogout }: Props) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapInstanceRef = useRef<any>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const geolocationRef = useRef<any>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const userMarkerRef = useRef<any>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const placeSearchRef = useRef<any>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const searchMarkersRef = useRef<any[]>([])
 
   useEffect(() => {
     async function loadSpots() {
@@ -101,25 +106,56 @@ export function MapPage({ onLogout }: Props) {
     loadAMap()
       .then((AMap) => {
         if (cancelled || !mapContainerRef.current) return
-        const sw = new AMap.LngLat(LINGSHAN_SW[0], LINGSHAN_SW[1])
-        const ne = new AMap.LngLat(LINGSHAN_NE[0], LINGSHAN_NE[1])
-        const bounds = new AMap.Bounds(sw, ne)
 
         const map = new AMap.Map(mapContainerRef.current, {
           zoom: 15,
           center: LINGSHAN_CENTER,
           viewMode: '2D',
-          zooms: [14, 19],
         })
         mapInstanceRef.current = map
-
-        map.setBounds(bounds)
-        map.setLimitBounds(bounds)
 
         new AMap.Marker({
           position: LINGSHAN_CENTER,
           title: '灵山胜境',
           map,
+        })
+
+        // 加载定位插件并在页面渲染后自动定位
+        AMap.plugin(['AMap.Geolocation', 'AMap.PlaceSearch'], () => {
+          if (cancelled) return
+          const geolocation = new AMap.Geolocation({
+            enableHighAccuracy: true,
+            timeout: 10000,
+            buttonPosition: 'RB',
+            showButton: false, // 使用页面自定义按钮
+            showMarker: true,
+            showCircle: true,
+            panToLocation: true,
+            zoomToAccuracy: true,
+          })
+          map.addControl(geolocation)
+          geolocationRef.current = geolocation
+          // 自动定位
+          geolocation.getCurrentPosition(
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (status: string, result: any) => {
+              if (cancelled) return
+              if (status === 'complete' && result?.position) {
+                map.setCenter(result.position)
+              } else {
+                console.warn('定位失败', result?.message ?? result)
+              }
+            },
+          )
+
+          // 初始化 POI 搜索插件
+          const placeSearch = new AMap.PlaceSearch({
+            map,
+            pageSize: 10,
+            pageIndex: 1,
+            autoFitView: true,
+          })
+          placeSearchRef.current = placeSearch
         })
       })
       .catch((err) => {
@@ -132,6 +168,10 @@ export function MapPage({ onLogout }: Props) {
         mapInstanceRef.current.destroy?.()
         mapInstanceRef.current = null
       }
+      geolocationRef.current = null
+      userMarkerRef.current = null
+      placeSearchRef.current = null
+      searchMarkersRef.current = []
     }
   }, [])
 
@@ -143,7 +183,59 @@ export function MapPage({ onLogout }: Props) {
   }
 
   const handleLocate = () => {
-    mapInstanceRef.current?.setCenter?.(LINGSHAN_CENTER)
+    const map = mapInstanceRef.current
+    const geolocation = geolocationRef.current
+    if (!map) return
+    if (geolocation) {
+      geolocation.getCurrentPosition(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (status: string, result: any) => {
+          if (status === 'complete' && result?.position) {
+            map.setCenter(result.position)
+          } else {
+            console.warn('定位失败', result?.message ?? result)
+            map.setCenter?.(LINGSHAN_CENTER)
+          }
+        },
+      )
+    } else {
+      map.setCenter?.(LINGSHAN_CENTER)
+    }
+  }
+
+  const handleSearch = () => {
+    const map = mapInstanceRef.current
+    const placeSearch = placeSearchRef.current
+    const query = keyword.trim()
+    if (!map || !placeSearch || !query) return
+
+    // 清除上一次搜索的插针与面板
+    placeSearch.clear?.()
+    if (searchMarkersRef.current.length) {
+      map.remove?.(searchMarkersRef.current)
+      searchMarkersRef.current = []
+    }
+
+    placeSearch.search(
+      query,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (status: string, result: any) => {
+        if (status !== 'complete') {
+          console.warn('搜索失败', result)
+          return
+        }
+        const pois = result?.poiList?.pois ?? []
+        if (!pois.length) {
+          console.warn('未找到相关结果')
+          return
+        }
+        const first = pois[0]
+        if (first?.location) {
+          map.setCenter([first.location.lng, first.location.lat])
+          map.setZoom?.(16)
+        }
+      },
+    )
   }
 
   // 保留 spots 状态以供后续插针使用
@@ -183,44 +275,22 @@ export function MapPage({ onLogout }: Props) {
               <input
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleSearch()
+                  }
+                }}
                 placeholder="搜索景点、服务、路线"
               />
-              <button type="button" className="map-search__btn" aria-label="搜索">
+              <button
+                type="button"
+                className="map-search__btn"
+                aria-label="搜索"
+                onClick={handleSearch}
+              >
                 🔍
               </button>
-            </div>
-
-            {/* 推荐路线浮卡 */}
-            <div className="map-route-card">
-              <div className="map-route-card__head">
-                <span>推荐路线</span>
-                <button type="button" className="map-route-card__more">
-                  更多路线 ›
-                </button>
-              </div>
-              <div className="map-route-card__body">
-                <div className="map-route-card__title">
-                  文化经典线
-                  <span className="map-route-card__pill">推荐</span>
-                </div>
-                <p className="map-route-card__desc">探寻佛教文化精髓，感受灵山人文底蕴</p>
-                <div className="map-route-card__meta">
-                  <span>⏱ 约2.5小时</span>
-                  <span>📍 约3.8公里</span>
-                </div>
-                <div className="map-route-card__chain">
-                  <span>景区入口</span>
-                  <em>›</em>
-                  <span>大照壁</span>
-                  <em>›</em>
-                  <span>五明桥</span>
-                  <em>›</em>
-                  <span>灵山大佛</span>
-                </div>
-                <button type="button" className="map-route-card__cta">
-                  查看路线详情 →
-                </button>
-              </div>
             </div>
 
             {/* 右侧浮动控件 */}
