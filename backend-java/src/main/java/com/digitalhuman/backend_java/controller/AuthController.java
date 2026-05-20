@@ -2,6 +2,7 @@ package com.digitalhuman.backend_java.controller;
 
 import com.digitalhuman.backend_java.dto.LoginRequest;
 import com.digitalhuman.backend_java.dto.LoginResponse;
+import com.digitalhuman.backend_java.dto.RegisterRequest;
 import com.digitalhuman.backend_java.service.AuthService;
 import org.springframework.http.ResponseEntity;
 import jakarta.validation.Valid;
@@ -25,6 +26,11 @@ public class AuthController {
     @PostMapping("/login")
     public LoginResponse login(@Valid @RequestBody LoginRequest request) {
         return authService.login(request);
+    }
+
+    @PostMapping("/register")
+    public LoginResponse register(@Valid @RequestBody RegisterRequest request) {
+        return authService.register(request);
     }
 
     @DeleteMapping("/logout")

@@ -58,8 +58,11 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
   const navigate = useNavigate()
   const assistantRef = useRef<LoginDigitalHumanAssistantHandle | null>(null)
   const [searchParams] = useSearchParams()
+  const [mode, setMode] = useState<'login' | 'register'>('login')
   const [username, setUsername] = useState('')
+  const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [now, setNow] = useState(() => new Date())
@@ -122,8 +125,23 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
       return
     }
 
+    if (mode === 'register' && !displayName.trim()) {
+      setError('请输入昵称。')
+      return
+    }
+
     if (!password.trim()) {
       setError('请输入密码。')
+      return
+    }
+
+    if (mode === 'register' && password.trim().length < 6) {
+      setError('密码至少需要 6 位。')
+      return
+    }
+
+    if (mode === 'register' && password !== confirmPassword) {
+      setError('两次输入的密码不一致。')
       return
     }
 
@@ -131,13 +149,22 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
     setSubmitting(true)
 
     try {
-      const response = await axios.post<SessionUser>('/api/auth/login', {
-        username: username.trim(),
-        password,
-      })
+      const response = await axios.post<SessionUser>(
+        mode === 'login' ? '/api/auth/login' : '/api/auth/register',
+        mode === 'login'
+          ? {
+              username: username.trim(),
+              password,
+            }
+          : {
+              username: username.trim(),
+              password,
+              displayName: displayName.trim(),
+            },
+      )
 
       if (response.data.role !== 'USER') {
-        setError('当前入口仅允许游客用户登录，请使用用户账号。')
+        setError(mode === 'login' ? '当前入口仅允许游客用户登录，请使用用户账号。' : '当前入口仅支持注册游客用户。')
         return
       }
 
@@ -223,11 +250,34 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
             <div className="auth-card-top">
               <div className="auth-card-title-line">
                 <span></span>
-                <p className="panel-label">用户登录</p>
+                <p className="panel-label">{mode === 'login' ? '用户登录' : '用户注册'}</p>
                 <span></span>
               </div>
             </div>
             <form className="auth-form" onSubmit={handleSubmit}>
+              <div className="auth-mode-switch" role="tablist" aria-label="登录注册切换">
+                <button
+                  type="button"
+                  className={`auth-mode-switch__button ${mode === 'login' ? 'is-active' : ''}`}
+                  onClick={() => {
+                    setMode('login')
+                    setError('')
+                  }}
+                >
+                  登录
+                </button>
+                <button
+                  type="button"
+                  className={`auth-mode-switch__button ${mode === 'register' ? 'is-active' : ''}`}
+                  onClick={() => {
+                    setMode('register')
+                    setError('')
+                  }}
+                >
+                  注册
+                </button>
+              </div>
+
               <label className="auth-input">
                 <span className="sr-only">用户名</span>
                 <span className="auth-input__icon"><UserLineIcon /></span>
@@ -237,6 +287,18 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
                   placeholder="请输入用户名"
                 />
               </label>
+
+              {mode === 'register' ? (
+                <label className="auth-input">
+                  <span className="sr-only">昵称</span>
+                  <span className="auth-input__icon"><UserLineIcon /></span>
+                  <input
+                    value={displayName}
+                    onChange={(event) => setDisplayName(event.target.value)}
+                    placeholder="请输入昵称"
+                  />
+                </label>
+              ) : null}
 
               <label className="auth-input">
                 <span className="sr-only">密码</span>
@@ -250,18 +312,57 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
                 <span className="auth-input__suffix"><EyeOffLineIcon /></span>
               </label>
 
-              <div className="auth-actions">
-                <label className="auth-checkbox">
-                  <input type="checkbox" />
-                  <span>记住我</span>
+              {mode === 'register' ? (
+                <label className="auth-input">
+                  <span className="sr-only">确认密码</span>
+                  <span className="auth-input__icon"><LockLineIcon /></span>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    placeholder="请再次输入密码"
+                  />
+                  <span className="auth-input__suffix"><EyeOffLineIcon /></span>
                 </label>
-                <button type="button" className="auth-link-button">
-                  忘记密码?
-                </button>
+              ) : null}
+
+              <div className="auth-actions">
+                {mode === 'login' ? (
+                  <>
+                    <label className="auth-checkbox">
+                      <input type="checkbox" />
+                      <span>记住我</span>
+                    </label>
+                    <button
+                      type="button"
+                      className="auth-link-button"
+                      onClick={() => {
+                        setMode('register')
+                        setError('')
+                      }}
+                    >
+                      没有账号？去注册
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="auth-register-hint">注册成功后将自动登录</span>
+                    <button
+                      type="button"
+                      className="auth-link-button"
+                      onClick={() => {
+                        setMode('login')
+                        setError('')
+                      }}
+                    >
+                      已有账号？去登录
+                    </button>
+                  </>
+                )}
               </div>
 
               <button type="submit" className="auth-submit-button" disabled={submitting}>
-                {submitting ? '登录中...' : '登录'}
+                {submitting ? (mode === 'login' ? '登录中...' : '注册中...') : (mode === 'login' ? '登录' : '注册并进入')}
               </button>
               {error ? <p className="inline-message">{error}</p> : null}
             </form>
