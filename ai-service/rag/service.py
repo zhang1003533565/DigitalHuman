@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from datetime import datetime
 
 from fastapi import HTTPException
 
@@ -12,7 +13,8 @@ from rag.parser import parse_document
 from rag.prompts import build_grounded_answer
 from rag.reranker import BgeReranker
 from rag.retriever import Retriever
-from rag.schemas import IngestRequest, IngestResponse, QueryRequest, QueryResponse, RetrieveRequest, RetrieveResponse
+from rag.schemas import IngestRequest, IngestResponse, KnowledgeDocumentInfo, QueryRequest, QueryResponse, RetrieveRequest, RetrieveResponse, UploadKnowledgeResponse
+from rag.storage import ensure_directory, is_supported_file_name, save_uploaded_file
 from rag.vectordb import QdrantVectorStore
 
 
@@ -52,6 +54,9 @@ class RagService:
             for path in source_dir.glob(request.glob)
             if path.is_file() and path.suffix.lower() in {".docx", ".pdf", ".txt"}
         )
+        return self.ingest_files(files, recreate_collection=request.recreate_collection)
+
+    def ingest_files(self, files: list[Path], recreate_collection: bool) -> IngestResponse:
         all_chunks = []
         chunking = ChunkingConfig(
             chunk_size=self.settings.chunk_size,
@@ -78,7 +83,7 @@ class RagService:
             )
 
         vectors = self.embedder.embed_documents([chunk.text for chunk in all_chunks])
-        if request.recreate_collection:
+        if recreate_collection:
             self.vector_store.recreate_collection(len(vectors[0]))
         else:
             self.vector_store.ensure_collection(len(vectors[0]))
@@ -90,6 +95,31 @@ class RagService:
             chunks_indexed=len(all_chunks),
             collection=self.settings.qdrant_collection,
         )
+
+    def list_documents(self) -> list[KnowledgeDocumentInfo]:
+        ensure_directory(self.settings.knowledge_base_dir)
+        documents: list[KnowledgeDocumentInfo] = []
+        for path in sorted(self.settings.knowledge_base_dir.iterdir()):
+            if not path.is_file():
+                continue
+            stat = path.stat()
+            documents.append(
+                KnowledgeDocumentInfo(
+                    file_name=path.name,
+                    size_bytes=stat.st_size,
+                    updated_at=datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    supported=is_supported_file_name(path.name),
+                )
+            )
+        return documents
+
+    def upload_document(self, file_name: str, file_obj) -> UploadKnowledgeResponse:
+        if not is_supported_file_name(file_name):
+            raise HTTPException(status_code=400, detail="仅支持上传 docx、pdf、txt 文件")
+
+        saved_path = save_uploaded_file(self.settings.knowledge_base_dir, file_name, file_obj)
+        ingest_result = self.ingest_files([saved_path], recreate_collection=False)
+        return UploadKnowledgeResponse(file_name=saved_path.name, ingest=ingest_result)
 
     def retrieve(self, request: RetrieveRequest) -> RetrieveResponse:
         chunks = self.retriever.retrieve(request.question, top_k=request.top_k)

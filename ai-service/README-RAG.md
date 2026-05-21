@@ -46,18 +46,17 @@ Example with Docker:
 docker run -p 6333:6333 qdrant/qdrant
 ```
 
-## 4. Ingest the local knowledge base
+## 4. Upload documents and ingest through the API
 
 ```bash
-python3 scripts/ingest_kb.py
+curl -X POST http://127.0.0.1:18755/kb/documents/upload \
+  -F "file=@../knowledge-base/灵山胜境：历史、文化、景点特色与个性化游览指南.docx"
 ```
 
-Or call:
+List uploaded documents:
 
 ```bash
-curl -X POST http://127.0.0.1:18755/kb/ingest \
-  -H 'Content-Type: application/json' \
-  -d '{"recreate_collection": false}'
+curl http://127.0.0.1:18755/kb/documents
 ```
 
 ## 5. Start the RAG API

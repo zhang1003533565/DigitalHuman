@@ -35,6 +35,18 @@ class IngestResponse(BaseModel):
     collection: str
 
 
+class KnowledgeDocumentInfo(BaseModel):
+    file_name: str
+    size_bytes: int
+    updated_at: str
+    supported: bool
+
+
+class UploadKnowledgeResponse(BaseModel):
+    file_name: str
+    ingest: IngestResponse
+
+
 class RetrieveRequest(BaseModel):
     question: str = Field(..., min_length=1)
     interest: str | None = None

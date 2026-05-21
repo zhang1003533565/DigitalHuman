@@ -1,10 +1,12 @@
 package com.digitalhuman.backend_java.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 public class RagQueryResponse {
 
     private String answer;
+    @JsonProperty("related_spots")
     private List<String> relatedSpots;
     private List<RagSourceDto> sources;
 

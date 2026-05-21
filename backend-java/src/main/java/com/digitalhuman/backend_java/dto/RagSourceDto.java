@@ -1,17 +1,25 @@
 package com.digitalhuman.backend_java.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 public class RagSourceDto {
 
+    @JsonProperty("doc_id")
     private String docId;
+    @JsonProperty("source_file")
     private String sourceFile;
     private String title;
+    @JsonProperty("section_path")
     private List<String> sectionPath;
+    @JsonProperty("chunk_index")
     private Integer chunkIndex;
     private List<String> tags;
+    @JsonProperty("spot_name")
     private String spotName;
+    @JsonProperty("content_type")
     private String contentType;
+    @JsonProperty("updated_at")
     private String updatedAt;
 
     public String getDocId() {

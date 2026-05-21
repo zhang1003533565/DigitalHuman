@@ -193,6 +193,10 @@
   gap: 16px;
 }
 
+.admin-form-grid .ant-table-wrapper {
+  margin-top: 4px;
+}
+
 .admin-inline-meta {
   display: flex;
   flex-wrap: wrap;

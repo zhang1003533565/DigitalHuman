@@ -11,7 +11,8 @@ import {
   SearchOutlined,
   UserOutlined,
 } from '@ant-design/icons'
-import { Layout, Menu, Button, Card, Form, Input, Table, Tag, Statistic, Row, Col, Upload, Select } from 'antd'
+import { Layout, Menu, Button, Card, Form, Input, Table, Tag, Statistic, Row, Col, Upload, Select, message } from 'antd'
+import type { UploadProps } from 'antd'
 import type { MenuProps, TableColumnsType } from 'antd'
 import './App.css'
 
@@ -58,6 +59,14 @@ type FeedbackRow = {
   comment: string
 }
 
+type KnowledgeDocumentRow = {
+  key: string
+  fileName: string
+  sizeText: string
+  updatedAt: string
+  supported: boolean
+}
+
 const spotColumns: TableColumnsType<SpotRow> = [
   { title: '景点名称', dataIndex: 'name' },
   { title: '所属园区', dataIndex: 'area' },
@@ -80,6 +89,19 @@ const feedbackColumns: TableColumnsType<FeedbackRow> = [
   { title: '帮助情况', dataIndex: 'helpful' },
   { title: '评分', dataIndex: 'rating' },
   { title: '意见', dataIndex: 'comment' },
+]
+
+const knowledgeColumns: TableColumnsType<KnowledgeDocumentRow> = [
+  { title: '文件名', dataIndex: 'fileName' },
+  { title: '大小', dataIndex: 'sizeText' },
+  { title: '更新时间', dataIndex: 'updatedAt' },
+  {
+    title: '状态',
+    dataIndex: 'supported',
+    render: (supported: boolean) => (
+      <Tag color={supported ? 'green' : 'red'}>{supported ? '可用' : '格式不支持'}</Tag>
+    ),
+  },
 ]
 
 const menuItems: MenuProps['items'] = [
@@ -162,17 +184,71 @@ function DashboardPanel() {
 }
 
 function KnowledgePanel() {
+  const [documents, setDocuments] = useState<KnowledgeDocumentRow[]>([])
+  const [uploading, setUploading] = useState(false)
+
+  async function loadDocuments() {
+    const response = await axios.get('/api/admin/knowledge/documents')
+    setDocuments(
+      response.data.map((item: { fileName: string; sizeBytes: number; updatedAt: string; supported: boolean }) => ({
+        key: item.fileName,
+        fileName: item.fileName,
+        sizeText: formatBytes(item.sizeBytes),
+        updatedAt: new Date(item.updatedAt).toLocaleString('zh-CN'),
+        supported: item.supported,
+      })),
+    )
+  }
+
+  useEffect(() => {
+    void loadDocuments()
+  }, [])
+
+  const uploadProps: UploadProps = {
+    accept: '.docx,.pdf,.txt',
+    showUploadList: false,
+    customRequest: async ({ file, onSuccess, onError }) => {
+      setUploading(true)
+      try {
+        const formData = new FormData()
+        formData.append('file', file as File)
+        const response = await axios.post('/api/admin/knowledge/documents/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        })
+        message.success(`上传成功，已新增 ${response.data.ingest.chunksIndexed} 个知识块`)
+        await loadDocuments()
+        onSuccess?.(response.data)
+      } catch (error) {
+        const description = axios.isAxiosError(error)
+          ? error.response?.data?.message ?? '上传失败，请检查知识库服务。'
+          : '上传失败，请稍后重试。'
+        message.error(description)
+        onError?.(error as Error)
+      } finally {
+        setUploading(false)
+      }
+    },
+  }
+
   return (
-    <Card title="知识库管理" extra={<Button type="primary">上传文档</Button>}>
+    <Card
+      title="知识库管理"
+      extra={(
+        <Upload {...uploadProps}>
+          <Button type="primary" loading={uploading}>上传文档并构建</Button>
+        </Upload>
+      )}
+    >
       <div className="admin-form-grid">
-        <Upload>
-          <Button icon={<DatabaseOutlined />}>选择景区资料</Button>
+        <Upload {...uploadProps}>
+          <Button icon={<DatabaseOutlined />} loading={uploading}>选择景区资料</Button>
         </Upload>
         <div className="admin-inline-meta">
-          <Tag color="blue">主知识库 docx</Tag>
-          <Tag color="gold">结构化数据 docx</Tag>
-          <Tag color="purple">行为分析 xlsx</Tag>
+          <Tag color="blue">支持 docx</Tag>
+          <Tag color="gold">支持 pdf</Tag>
+          <Tag color="purple">支持 txt</Tag>
         </div>
+        <Table columns={knowledgeColumns} dataSource={documents} pagination={false} />
       </div>
     </Card>
   )
@@ -501,3 +577,13 @@ function App() {
 }
 
 export default App
+
+function formatBytes(sizeBytes: number) {
+  if (sizeBytes < 1024) {
+    return `${sizeBytes} B`
+  }
+  if (sizeBytes < 1024 * 1024) {
+    return `${(sizeBytes / 1024).toFixed(1)} KB`
+  }
+  return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`
+}
