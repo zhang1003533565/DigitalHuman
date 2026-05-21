@@ -24,7 +24,7 @@ public class KnowledgeBaseService {
 
     private static final MediaType OCTET_STREAM = MediaType.get("application/octet-stream");
 
-    @Value("${rag.service-url:http://127.0.0.1:18755}")
+    @Value("${rag.service-url}")
     private String ragServiceUrl;
 
     private final OkHttpClient httpClient;

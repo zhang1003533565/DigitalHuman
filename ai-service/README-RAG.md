@@ -40,13 +40,55 @@ As of May 20, 2026, DeepSeek's official docs show:
 
 ## 3. Start Qdrant
 
+If you want one-command startup for the unified AI layer (`Qdrant + ai-service`), use the repository root `docker-compose.yml`:
+
+```bash
+docker compose up -d --build
+```
+
+Then verify:
+
+```bash
+curl http://127.0.0.1:18755/health
+curl http://127.0.0.1:6333/healthz
+```
+
+The same `ai-service` process now serves both RAG endpoints and TTS endpoints such as `/tts` and `/voices`.
+
+Shared endpoint and model defaults live in:
+
+[`config/application-shared.properties`](/Users/zhangzesheng/Desktop/zzs/github/DigitalHuman/config/application-shared.properties:1)
+
+To stop:
+
+```bash
+docker compose down
+```
+
+## 3.1 Start Qdrant manually
+
 Example with Docker:
 
 ```bash
-docker run -p 6333:6333 qdrant/qdrant
+docker run -p 6333:6333 -p 6334:6334 \
+  -v $(pwd)/../storage/qdrant:/qdrant/storage \
+  qdrant/qdrant
 ```
 
-## 4. Upload documents and ingest through the API
+## 4. Start the RAG API
+
+```bash
+cd ai-service
+uvicorn app:app --host 127.0.0.1 --port 18755
+```
+
+Health check:
+
+```bash
+curl http://127.0.0.1:18755/health
+```
+
+## 5. Upload documents and ingest through the API
 
 ```bash
 curl -X POST http://127.0.0.1:18755/kb/documents/upload \
@@ -59,11 +101,15 @@ List uploaded documents:
 curl http://127.0.0.1:18755/kb/documents
 ```
 
-## 5. Start the RAG API
+If you want to index the existing repository knowledge base in one shot instead of uploading files one by one:
 
 ```bash
-uvicorn app:app --host 127.0.0.1 --port 18755
+curl -X POST http://127.0.0.1:18755/kb/ingest \
+  -H 'Content-Type: application/json' \
+  -d '{"recreate_collection":true}'
 ```
+
+`RAG_KNOWLEDGE_BASE_DIR` defaults to `../knowledge-base`, which matches this repository layout.
 
 ## 6. Test retrieval and generation
 
@@ -85,13 +131,14 @@ curl -X POST http://127.0.0.1:18755/rag/query \
 
 ## 7. Connect backend-java
 
-The Java backend reads:
+The Java backend reads the shared config and resolves:
 
 ```bash
 RAG_SERVICE_URL=http://127.0.0.1:18755
 ```
 
 Then `/api/user/guide/chat` will call the RAG service automatically.
+The admin upload endpoint `/api/admin/knowledge/documents/upload` also proxies files into the RAG service and ingests them immediately.
 
 ## Notes
 

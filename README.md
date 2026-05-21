@@ -153,10 +153,38 @@ cd ai-service
 cp .env.example .env
 ```
 
+如果你想一键启动统一 AI 服务（`Qdrant + ai-service`），直接在仓库根目录执行：
+
+```bash
+docker compose up -d --build
+```
+
+停止：
+
+```bash
+docker compose down
+```
+
+统一服务地址配置放在：
+
+[`config/application-shared.properties`](/Users/zhangzesheng/Desktop/zzs/github/DigitalHuman/config/application-shared.properties:1)
+
+例如：
+
+```properties
+app.backend-base-url=http://127.0.0.1:8080
+app.ai-service-url=http://127.0.0.1:18755
+app.qdrant-url=http://127.0.0.1:6333
+```
+
+`backend-java` 和 `ai-service` 都会读取这份共享配置；`ai-service/.env` 只保留本地覆盖项。
+
 如果你需要完整的向量检索能力，还要先启动 Qdrant：
 
 ```bash
-docker run -p 6333:6333 qdrant/qdrant
+docker run -p 6333:6333 -p 6334:6334 \
+  -v $(pwd)/storage/qdrant:/qdrant/storage \
+  qdrant/qdrant
 ```
 
 然后启动 FastAPI 服务：
@@ -164,20 +192,31 @@ docker run -p 6333:6333 qdrant/qdrant
 ```bash
 cd ai-service
 source .venv/bin/activate
-python -m uvicorn app:app --host 0.0.0.0 --port 8001 --reload
+python -m uvicorn app:app --host 127.0.0.1 --port 18755 --reload
 ```
 
 默认端口：
 
 ```text
-http://localhost:8001
+http://127.0.0.1:18755
 ```
 
 可用下面命令检查服务是否启动成功：
 
 ```bash
-curl http://127.0.0.1:8001/health
+curl http://127.0.0.1:18755/health
 ```
+
+首次把仓库内 `knowledge-base/` 的资料导入 Qdrant：
+
+```bash
+curl -X POST http://127.0.0.1:18755/kb/ingest \
+  -H 'Content-Type: application/json' \
+  -d '{"recreate_collection":true}'
+```
+
+后台上传知识库文件时，Java 后端会转发到 `ai-service` 的 `/kb/documents/upload`，保存后立即执行入库，不需要你再手动单独构建。
+TTS 也已经并入同一个 `ai-service` 入口，Java 后端默认改为调用 `http://127.0.0.1:18755/tts`。
 
 ## 当前状态
 

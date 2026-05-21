@@ -4,6 +4,10 @@ server:
     include-message: always
 
 spring:
+  config:
+    import:
+      - optional:file:./config/application-shared.properties
+      - optional:file:../config/application-shared.properties
   datasource:
     url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${DB_NAME:digitalhuman}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -20,11 +24,11 @@ spring:
 
 tts:
   output-dir: ${user.dir}/tts
-  base-url: ${TTS_BASE_URL:http://localhost:8080}
-  edge-service-url: ${EDGE_TTS_SERVICE_URL:http://127.0.0.1:18754}
+  base-url: ${TTS_BASE_URL:${tts.base-url:${app.backend-base-url:http://localhost:8080}}}
+  edge-service-url: ${EDGE_TTS_SERVICE_URL:${app.ai-service-url:http://127.0.0.1:18755}}
 
 rag:
-  service-url: ${RAG_SERVICE_URL:http://127.0.0.1:18755}
+  service-url: ${RAG_SERVICE_URL:${app.ai-service-url:http://127.0.0.1:18755}}
 
 app:
   auth:

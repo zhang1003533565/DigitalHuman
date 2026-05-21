@@ -19,7 +19,7 @@ public class TtsService {
 
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
-    @Value("${tts.edge-service-url:http://127.0.0.1:18754}")
+    @Value("${tts.edge-service-url}")
     private String edgeServiceUrl;
 
     @Value("${tts.output-dir:tts}")

@@ -7,10 +7,12 @@ from fastapi import FastAPI, File, UploadFile
 
 from rag.schemas import IngestRequest, IngestResponse, KnowledgeDocumentInfo, QueryRequest, QueryResponse, RetrieveRequest, RetrieveResponse, UploadKnowledgeResponse
 from rag.service import RagService
+from tts import router as tts_router
 
 
 app = FastAPI(title="DigitalHuman RAG Service")
 rag_service = RagService()
+app.include_router(tts_router)
 
 
 @app.get("/health")

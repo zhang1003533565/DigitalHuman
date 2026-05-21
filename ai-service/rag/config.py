@@ -8,27 +8,32 @@ from dotenv import load_dotenv
 
 
 AI_SERVICE_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = AI_SERVICE_ROOT.parent
+SHARED_CONFIG_PATH = PROJECT_ROOT / "config" / "application-shared.properties"
+load_dotenv(SHARED_CONFIG_PATH)
 load_dotenv(AI_SERVICE_ROOT / ".env")
 
 
 @dataclass(frozen=True)
 class RagSettings:
     knowledge_base_dir: Path = Path(
-        os.getenv("RAG_KNOWLEDGE_BASE_DIR", Path(__file__).resolve().parents[2] / "knowledge-base")
+        os.getenv("RAG_KNOWLEDGE_BASE_DIR")
+        or os.getenv("rag.knowledge-base-dir")
+        or Path(__file__).resolve().parents[2] / "knowledge-base"
     )
-    qdrant_url: str = os.getenv("QDRANT_URL", "http://127.0.0.1:6333")
+    qdrant_url: str = os.getenv("QDRANT_URL") or os.getenv("qdrant.url", "http://127.0.0.1:6333")
     qdrant_api_key: str | None = os.getenv("QDRANT_API_KEY")
-    qdrant_collection: str = os.getenv("QDRANT_COLLECTION", "scenic_kb")
-    embedding_model_name: str = os.getenv("RAG_EMBEDDING_MODEL", "BAAI/bge-m3")
-    reranker_model_name: str = os.getenv("RAG_RERANKER_MODEL", "BAAI/bge-reranker-v2-m3")
-    llm_base_url: str | None = os.getenv("RAG_LLM_BASE_URL")
-    llm_api_key: str | None = os.getenv("RAG_LLM_API_KEY")
-    llm_model: str | None = os.getenv("RAG_LLM_MODEL")
-    llm_timeout_seconds: int = int(os.getenv("RAG_LLM_TIMEOUT_SECONDS", "90"))
-    chunk_size: int = int(os.getenv("RAG_CHUNK_SIZE", "420"))
-    chunk_overlap: int = int(os.getenv("RAG_CHUNK_OVERLAP", "90"))
-    retrieve_limit: int = int(os.getenv("RAG_RETRIEVE_LIMIT", "12"))
-    rerank_limit: int = int(os.getenv("RAG_RERANK_LIMIT", "5"))
+    qdrant_collection: str = os.getenv("QDRANT_COLLECTION") or os.getenv("qdrant.collection", "scenic_kb")
+    embedding_model_name: str = os.getenv("RAG_EMBEDDING_MODEL") or os.getenv("rag.embedding-model", "BAAI/bge-m3")
+    reranker_model_name: str = os.getenv("RAG_RERANKER_MODEL") or os.getenv("rag.reranker-model", "BAAI/bge-reranker-v2-m3")
+    llm_base_url: str | None = os.getenv("RAG_LLM_BASE_URL") or os.getenv("rag.llm.base-url")
+    llm_api_key: str | None = os.getenv("RAG_LLM_API_KEY") or os.getenv("rag.llm.api-key")
+    llm_model: str | None = os.getenv("RAG_LLM_MODEL") or os.getenv("rag.llm.model")
+    llm_timeout_seconds: int = int(os.getenv("RAG_LLM_TIMEOUT_SECONDS") or os.getenv("rag.llm.timeout-seconds", "90"))
+    chunk_size: int = int(os.getenv("RAG_CHUNK_SIZE") or os.getenv("rag.chunk-size", "420"))
+    chunk_overlap: int = int(os.getenv("RAG_CHUNK_OVERLAP") or os.getenv("rag.chunk-overlap", "90"))
+    retrieve_limit: int = int(os.getenv("RAG_RETRIEVE_LIMIT") or os.getenv("rag.retrieve-limit", "12"))
+    rerank_limit: int = int(os.getenv("RAG_RERANK_LIMIT") or os.getenv("rag.rerank-limit", "5"))
     score_threshold: float = float(os.getenv("RAG_SCORE_THRESHOLD", "0.15"))
 
 

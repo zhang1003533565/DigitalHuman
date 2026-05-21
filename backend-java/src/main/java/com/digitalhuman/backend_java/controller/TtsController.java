@@ -27,14 +27,14 @@ public class TtsController {
     @Value("${tts.output-dir:tts}")
     private String outputDir;
 
-    @Value("${tts.base-url:http://localhost:8080}")
+    @Value("${tts.base-url}")
     private String baseUrl;
 
     @PostMapping("/synthesize")
     public ResponseEntity<TtsResponse> synthesize(@Valid @RequestBody TtsRequest request) {
         if (!ttsService.isServiceAvailable()) {
             return ResponseEntity.internalServerError()
-                    .body(TtsResponse.error("Edge TTS Python service is not running. Please start ai-service/edge_tts_service.py first."));
+                    .body(TtsResponse.error("AI service is not running. Please start the unified ai-service first."));
         }
 
         try {
@@ -103,7 +103,7 @@ public class TtsController {
         boolean edgeServiceRunning = ttsService.isServiceAvailable();
         status.put("status", edgeServiceRunning ? "ok" : "degraded");
         status.put("edge_tts_service", edgeServiceRunning ? "running" : "not_running");
-        status.put("message", edgeServiceRunning ? "All services healthy" : "Edge TTS Python service needs to be started");
+        status.put("message", edgeServiceRunning ? "All services healthy" : "Unified ai-service needs to be started");
         return ResponseEntity.ok(status);
     }
 }

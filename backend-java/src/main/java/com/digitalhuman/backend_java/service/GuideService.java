@@ -35,7 +35,7 @@ public class GuideService {
     private static final Logger log = LoggerFactory.getLogger(GuideService.class);
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
-    @Value("${rag.service-url:http://127.0.0.1:18755}")
+    @Value("${rag.service-url}")
     private String ragServiceUrl;
 
     private final List<ScenicSpotDto> spots = List.of(
