@@ -6,7 +6,11 @@ public class KnowledgeUploadResponse {
 
     @JsonProperty("file_name")
     private String fileName;
-    private IngestResultDto ingest;
+    @JsonProperty("size_bytes")
+    private Long sizeBytes;
+    @JsonProperty("updated_at")
+    private String updatedAt;
+    private Boolean supported;
 
     public String getFileName() {
         return fileName;
@@ -16,53 +20,27 @@ public class KnowledgeUploadResponse {
         this.fileName = fileName;
     }
 
-    public IngestResultDto getIngest() {
-        return ingest;
+    public Long getSizeBytes() {
+        return sizeBytes;
     }
 
-    public void setIngest(IngestResultDto ingest) {
-        this.ingest = ingest;
+    public void setSizeBytes(Long sizeBytes) {
+        this.sizeBytes = sizeBytes;
     }
 
-    public static class IngestResultDto {
-        @JsonProperty("files_seen")
-        private Integer filesSeen;
-        @JsonProperty("files_indexed")
-        private Integer filesIndexed;
-        @JsonProperty("chunks_indexed")
-        private Integer chunksIndexed;
-        private String collection;
+    public String getUpdatedAt() {
+        return updatedAt;
+    }
 
-        public Integer getFilesSeen() {
-            return filesSeen;
-        }
+    public void setUpdatedAt(String updatedAt) {
+        this.updatedAt = updatedAt;
+    }
 
-        public void setFilesSeen(Integer filesSeen) {
-            this.filesSeen = filesSeen;
-        }
+    public Boolean getSupported() {
+        return supported;
+    }
 
-        public Integer getFilesIndexed() {
-            return filesIndexed;
-        }
-
-        public void setFilesIndexed(Integer filesIndexed) {
-            this.filesIndexed = filesIndexed;
-        }
-
-        public Integer getChunksIndexed() {
-            return chunksIndexed;
-        }
-
-        public void setChunksIndexed(Integer chunksIndexed) {
-            this.chunksIndexed = chunksIndexed;
-        }
-
-        public String getCollection() {
-            return collection;
-        }
-
-        public void setCollection(String collection) {
-            this.collection = collection;
-        }
+    public void setSupported(Boolean supported) {
+        this.supported = supported;
     }
 }

@@ -203,6 +203,28 @@
   gap: 10px;
 }
 
+.admin-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.admin-build-summary {
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(12, 111, 125, 0.08), rgba(27, 63, 115, 0.08));
+  color: #24415f;
+}
+
+.admin-build-summary__time {
+  margin-top: 8px;
+  color: #5d7391;
+  font-size: 13px;
+}
+
+.admin-build-summary--muted {
+  color: #5c6f88;
+}
+
 .admin-filter-row {
   display: flex;
   flex-wrap: wrap;

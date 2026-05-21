@@ -118,8 +118,13 @@ class RagService:
             raise HTTPException(status_code=400, detail="仅支持上传 docx、pdf、txt 文件")
 
         saved_path = save_uploaded_file(self.settings.knowledge_base_dir, file_name, file_obj)
-        ingest_result = self.ingest_files([saved_path], recreate_collection=False)
-        return UploadKnowledgeResponse(file_name=saved_path.name, ingest=ingest_result)
+        stat = saved_path.stat()
+        return UploadKnowledgeResponse(
+            file_name=saved_path.name,
+            size_bytes=stat.st_size,
+            updated_at=datetime.fromtimestamp(stat.st_mtime).isoformat(),
+            supported=True,
+        )
 
     def retrieve(self, request: RetrieveRequest) -> RetrieveResponse:
         chunks = self.retriever.retrieve(request.question, top_k=request.top_k)

@@ -44,7 +44,9 @@ class KnowledgeDocumentInfo(BaseModel):
 
 class UploadKnowledgeResponse(BaseModel):
     file_name: str
-    ingest: IngestResponse
+    size_bytes: int
+    updated_at: str
+    supported: bool
 
 
 class RetrieveRequest(BaseModel):

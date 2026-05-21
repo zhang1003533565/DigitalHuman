@@ -1,38 +1,63 @@
 # DigitalHuman
 
-景区数字人项目初始化仓库，当前采用以下技术栈：
+景区数字人项目，当前由 4 个主要模块组成：
 
-- `frontend-visitor`：React + Vite + TypeScript
-- `frontend-admin`：React + Vite + TypeScript
-- `backend-java`：Spring Boot
-- `ai-service`：FastAPI
+- `frontend-visitor`：游客端，React + Vite + TypeScript
+- `frontend-admin`：管理后台，React + Vite + TypeScript
+- `backend-java`：业务后端，Spring Boot
+- `ai-service`：统一 AI 服务，FastAPI
 
-当前仓库已经完成基础目录和项目初始化，适合作为后续开发起点。
+当前 AI 层已经统一到一个 `FastAPI` 入口中，包含：
 
-## 目录说明
+- RAG 文档上传与构建
+- 向量检索与问答
+- TTS 语音合成
+
+## 目录结构
 
 ```text
 DigitalHuman/
-├─ frontend-visitor/      # 游客端前端
-├─ frontend-admin/        # 管理后台前端
-├─ backend-java/          # Spring Boot 后端
-├─ ai-service/            # FastAPI AI 服务
-├─ knowledge-base/        # 知识库原始资料
-├─ storage/               # 本地上传、音频、临时文件
-└─ docker/                # Docker 配置
+├─ frontend-visitor/
+├─ frontend-admin/
+├─ backend-java/
+├─ ai-service/
+├─ config/
+│  └─ application-shared.properties
+├─ knowledge-base/
+├─ storage/
+└─ docker-compose.yml
 ```
 
-## 环境要求
+## 统一配置
 
-建议本地环境：
+统一服务地址和模块默认配置放在：
+
+[config/application-shared.properties](/Users/zhangzesheng/Desktop/zzs/github/DigitalHuman/config/application-shared.properties:1)
+
+关键配置：
+
+```properties
+app.backend-base-url=http://127.0.0.1:8080
+app.ai-service-url=http://127.0.0.1:18755
+app.qdrant-url=http://127.0.0.1:6333
+```
+
+说明：
+
+- `backend-java` 会导入这份配置
+- `ai-service` 会先读取这份配置，再读取 `ai-service/.env`
+- `ai-service/.env` 只建议放本地覆盖项，例如模型密钥
+
+## 环境要求
 
 - Node.js 20+
 - pnpm 9+ 或 npm 10+
 - JDK 17
 - Maven 3.9+
 - Python 3.11
+- Docker（如果你要跑 Qdrant 或 `docker compose`）
 
-可先检查：
+检查命令：
 
 ```bash
 node -v
@@ -41,11 +66,14 @@ npm -v
 java -version
 mvn -v
 python3 --version
+docker --version
 ```
 
 ## 首次安装
 
-### 1. 游客端
+### 前端依赖
+
+游客端：
 
 ```bash
 cd frontend-visitor
@@ -53,15 +81,7 @@ pnpm install
 cd ..
 ```
 
-如果你使用 `npm`：
-
-```bash
-cd frontend-visitor
-npm install
-cd ..
-```
-
-### 2. 管理后台
+管理后台：
 
 ```bash
 cd frontend-admin
@@ -69,9 +89,7 @@ npm install
 cd ..
 ```
 
-如果你想统一成 `pnpm`，可以删除 `package-lock.json` 后重新安装。
-
-### 3. AI 服务
+### Python 依赖
 
 ```bash
 cd ai-service
@@ -79,10 +97,11 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
+cp .env.example .env
 cd ..
 ```
 
-### 4. Spring Boot 后端
+### Java 依赖
 
 ```bash
 cd backend-java
@@ -90,70 +109,102 @@ cd backend-java
 cd ..
 ```
 
-如果你本机没有给数据库做配置，`mvn test` 或 `mvn clean install` 可能会因为数据源未配置失败，这属于当前初始化阶段的正常现象。
+如果你本机还没准备 MySQL，`backend-java` 的测试或启动可能会因为数据源问题失败，这属于环境未配齐，不是这次知识库功能的代码问题。
 
-## 启动步骤
+## 推荐启动方式
 
-建议按下面顺序启动：
+推荐按下面顺序启动：
 
-### 1. 启动游客端
+1. Qdrant
+2. `ai-service`
+3. `backend-java`
+4. `frontend-admin`
+5. `frontend-visitor`
 
-```bash
-cd frontend-visitor
-pnpm dev
-```
+### 1. 启动 Qdrant
 
-默认开发地址通常是：
-
-```text
-http://localhost:5173
-```
-
-### 2. 启动管理后台
+如果你只想启动向量库：
 
 ```bash
-cd frontend-admin
-npm run dev
+docker run -p 6333:6333 -p 6334:6334 \
+  -v $(pwd)/storage/qdrant:/qdrant/storage \
+  qdrant/qdrant
 ```
 
-默认开发地址通常是：
+健康检查：
 
-```text
-http://localhost:5174
+```bash
+curl http://127.0.0.1:6333/healthz
 ```
 
-如果端口被占用，Vite 会自动顺延端口。
+### 2. 启动统一 AI 服务
 
-### 3. 启动 Spring Boot 后端
+`ai-service` 是统一入口，启动一次即可，不需要分别启动 `RAG`、`TTS` 等脚本。
+
+```bash
+cd ai-service
+source .venv/bin/activate
+python -m uvicorn app:app --host 127.0.0.1 --port 18755 --reload
+```
+
+健康检查：
+
+```bash
+curl http://127.0.0.1:18755/health
+```
+
+当前统一 AI 服务对外提供的核心接口包括：
+
+- `POST /kb/documents/upload`
+- `GET /kb/documents`
+- `POST /kb/ingest`
+- `POST /rag/retrieve`
+- `POST /rag/query`
+- `POST /tts`
+- `GET /voices`
+
+### 3. 启动 Java 后端
 
 ```bash
 cd backend-java
 ./mvnw spring-boot:run
 ```
 
-默认端口通常是：
+默认地址：
 
 ```text
-http://localhost:8080
+http://127.0.0.1:8080
 ```
 
-说明：
-
-- 当前后端还是初始化骨架
-- 后续如果接入 MySQL，需要补充 `application.properties` 或 `application.yml`
-
-### 4. 启动 FastAPI AI 服务
-
-`ai-service` 的入口文件是 `app.py`，不是 `main.py`。
-
-首次启动前，先准备环境变量：
+### 4. 启动管理后台
 
 ```bash
-cd ai-service
-cp .env.example .env
+cd frontend-admin
+npm run dev
 ```
 
-如果你想一键启动统一 AI 服务（`Qdrant + ai-service`），直接在仓库根目录执行：
+默认地址通常是：
+
+```text
+http://localhost:5174
+```
+
+### 5. 启动游客端
+
+```bash
+cd frontend-visitor
+pnpm dev
+```
+
+默认地址通常是：
+
+```text
+http://localhost:5173
+```
+
+## Docker Compose
+
+如果你想一键启动 `Qdrant + ai-service`：
 
 ```bash
 docker compose up -d --build
@@ -165,49 +216,60 @@ docker compose up -d --build
 docker compose down
 ```
 
-统一服务地址配置放在：
+注意：当前 `docker-compose.yml` 只编排了：
 
-[`config/application-shared.properties`](/Users/zhangzesheng/Desktop/zzs/github/DigitalHuman/config/application-shared.properties:1)
+- `qdrant`
+- `ai-service`
 
-例如：
+还没有把 `backend-java`、`frontend-admin`、`frontend-visitor` 一起编排进去。
 
-```properties
-app.backend-base-url=http://127.0.0.1:8080
-app.ai-service-url=http://127.0.0.1:18755
-app.qdrant-url=http://127.0.0.1:6333
+## 知识库管理流程
+
+现在知识库是你要求的两步式流程，不是上传即构建。
+
+### 后台管理流程
+
+1. 在管理后台上传文件
+2. 文件保存到知识库目录
+3. 点击“开始构建”
+4. `backend-java` 调用 `ai-service`
+5. `ai-service` 执行：
+   - 文档解析
+   - 片段拆分
+   - Embedding
+   - 写入 Qdrant
+
+### 管理后台接口
+
+- `POST /api/admin/knowledge/documents/upload`
+  - 只上传，不构建
+- `GET /api/admin/knowledge/documents`
+  - 查看已上传文件
+- `POST /api/admin/knowledge/build`
+  - 开始构建知识库
+
+普通构建请求：
+
+```json
+{}
 ```
 
-`backend-java` 和 `ai-service` 都会读取这份共享配置；`ai-service/.env` 只保留本地覆盖项。
+全量重建请求：
 
-如果你需要完整的向量检索能力，还要先启动 Qdrant：
-
-```bash
-docker run -p 6333:6333 -p 6334:6334 \
-  -v $(pwd)/storage/qdrant:/qdrant/storage \
-  qdrant/qdrant
+```json
+{
+  "recreateCollection": true
+}
 ```
 
-然后启动 FastAPI 服务：
+### AI 服务对应接口
 
-```bash
-cd ai-service
-source .venv/bin/activate
-python -m uvicorn app:app --host 127.0.0.1 --port 18755 --reload
-```
+- `POST /kb/documents/upload`
+  - 只保存文件
+- `POST /kb/ingest`
+  - 对当前知识库目录执行构建
 
-默认端口：
-
-```text
-http://127.0.0.1:18755
-```
-
-可用下面命令检查服务是否启动成功：
-
-```bash
-curl http://127.0.0.1:18755/health
-```
-
-首次把仓库内 `knowledge-base/` 的资料导入 Qdrant：
+手动触发全量重建示例：
 
 ```bash
 curl -X POST http://127.0.0.1:18755/kb/ingest \
@@ -215,30 +277,58 @@ curl -X POST http://127.0.0.1:18755/kb/ingest \
   -d '{"recreate_collection":true}'
 ```
 
-后台上传知识库文件时，Java 后端会转发到 `ai-service` 的 `/kb/documents/upload`，保存后立即执行入库，不需要你再手动单独构建。
-TTS 也已经并入同一个 `ai-service` 入口，Java 后端默认改为调用 `http://127.0.0.1:18755/tts`。
+## 管理后台页面
 
-## 当前状态
+当前管理后台知识库页已经接好：
 
-当前已经完成：
+- 上传文件
+- 开始构建
+- 全量重建
+- 文件列表
+- 最近一次构建结果统计
 
-- React 游客端初始化
-- React 管理后台初始化
-- Spring Boot 项目初始化
-- FastAPI 服务入口与 RAG API
-- 各目录 `.gitignore` 配置
+页面入口：
 
-当前还未完成：
+[frontend-admin/src/App.tsx](/Users/zhangzesheng/Desktop/zzs/github/DigitalHuman/frontend-admin/src/App.tsx:1)
 
-- `backend-java` 数据库配置
-- 前后端接口联调
-- Docker 编排文件
+## 重要说明
 
-## 推荐下一步
+- `ai-service/edge_tts_service.py` 仍然保留在仓库里，但已经不是主入口
+- 统一 AI 服务入口是 `ai-service/app.py`
+- TTS 已并入 `ai-service`
+- 前端游客端代理也已经从旧的 `18754` 切到统一的 `18755`
 
-建议下一步按这个顺序继续：
+## 目前未完成项
 
-1. 完成 `ai-service/.env` 中的模型与密钥配置
-2. 在 `backend-java` 增加基础健康检查接口
-3. 前端接一个最小测试页面
-4. 再做前后端联调
+- `backend-java` 数据库环境的完整落地
+- 全链路运行验证
+- `backend-java` 进入 `docker-compose`
+- 更细的知识库构建状态持久化
+
+## 常用检查
+
+检查 Qdrant：
+
+```bash
+curl http://127.0.0.1:6333/healthz
+```
+
+检查 AI 服务：
+
+```bash
+curl http://127.0.0.1:18755/health
+```
+
+查看知识库文件：
+
+```bash
+curl http://127.0.0.1:18755/kb/documents
+```
+
+手动构建知识库：
+
+```bash
+curl -X POST http://127.0.0.1:18755/kb/ingest \
+  -H 'Content-Type: application/json' \
+  -d '{}'
+```

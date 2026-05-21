@@ -1,10 +1,13 @@
 package com.digitalhuman.backend_java.controller;
 
 import com.digitalhuman.backend_java.dto.KnowledgeDocumentDto;
+import com.digitalhuman.backend_java.dto.KnowledgeBuildRequest;
+import com.digitalhuman.backend_java.dto.KnowledgeBuildResponse;
 import com.digitalhuman.backend_java.dto.KnowledgeUploadResponse;
 import com.digitalhuman.backend_java.service.KnowledgeBaseService;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -29,5 +32,10 @@ public class AdminKnowledgeController {
     @PostMapping("/documents/upload")
     public KnowledgeUploadResponse uploadDocument(@RequestParam("file") MultipartFile file) {
         return knowledgeBaseService.uploadDocument(file);
+    }
+
+    @PostMapping("/build")
+    public KnowledgeBuildResponse buildKnowledgeBase(@RequestBody(required = false) KnowledgeBuildRequest request) {
+        return knowledgeBaseService.buildKnowledgeBase(request);
     }
 }

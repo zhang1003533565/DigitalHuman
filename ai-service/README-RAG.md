@@ -95,6 +95,8 @@ curl -X POST http://127.0.0.1:18755/kb/documents/upload \
   -F "file=@../knowledge-base/灵山胜境：历史、文化、景点特色与个性化游览指南.docx"
 ```
 
+The upload endpoint only saves the file. It does not build embeddings immediately.
+
 List uploaded documents:
 
 ```bash
@@ -138,7 +140,8 @@ RAG_SERVICE_URL=http://127.0.0.1:18755
 ```
 
 Then `/api/user/guide/chat` will call the RAG service automatically.
-The admin upload endpoint `/api/admin/knowledge/documents/upload` also proxies files into the RAG service and ingests them immediately.
+The admin upload endpoint `/api/admin/knowledge/documents/upload` only saves files.
+Use `/api/admin/knowledge/build` to trigger chunking, embedding, and vector indexing.
 
 ## Notes
 

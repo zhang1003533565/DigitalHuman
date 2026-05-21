@@ -1,6 +1,8 @@
 package com.digitalhuman.backend_java.service;
 
 import com.digitalhuman.backend_java.dto.KnowledgeDocumentDto;
+import com.digitalhuman.backend_java.dto.KnowledgeBuildRequest;
+import com.digitalhuman.backend_java.dto.KnowledgeBuildResponse;
 import com.digitalhuman.backend_java.dto.KnowledgeUploadResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -81,6 +83,26 @@ public class KnowledgeBaseService {
             throw exception;
         } catch (Exception exception) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "知识库上传失败", exception);
+        }
+    }
+
+    public KnowledgeBuildResponse buildKnowledgeBase(KnowledgeBuildRequest requestPayload) {
+        try {
+            KnowledgeBuildRequest payload = requestPayload != null ? requestPayload : new KnowledgeBuildRequest();
+            String json = objectMapper.writeValueAsString(payload);
+            Request request = new Request.Builder()
+                    .url(ragServiceUrl + "/kb/ingest")
+                    .post(RequestBody.create(json, MediaType.get("application/json; charset=utf-8")))
+                    .build();
+
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful() || response.body() == null) {
+                    throw new IOException("RAG knowledge build request failed: " + response.code());
+                }
+                return objectMapper.readValue(response.body().string(), KnowledgeBuildResponse.class);
+            }
+        } catch (Exception exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "知识库构建失败", exception);
         }
     }
 }

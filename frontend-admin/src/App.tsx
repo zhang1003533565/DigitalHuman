@@ -3,6 +3,7 @@ import axios from 'axios'
 import {
   BarChartOutlined,
   BookOutlined,
+  BuildOutlined,
   CommentOutlined,
   DatabaseOutlined,
   EnvironmentOutlined,
@@ -65,6 +66,14 @@ type KnowledgeDocumentRow = {
   sizeText: string
   updatedAt: string
   supported: boolean
+}
+
+type KnowledgeBuildResult = {
+  filesSeen: number
+  filesIndexed: number
+  chunksIndexed: number
+  collection: string
+  builtAt: string
 }
 
 const spotColumns: TableColumnsType<SpotRow> = [
@@ -186,6 +195,8 @@ function DashboardPanel() {
 function KnowledgePanel() {
   const [documents, setDocuments] = useState<KnowledgeDocumentRow[]>([])
   const [uploading, setUploading] = useState(false)
+  const [building, setBuilding] = useState(false)
+  const [lastBuildResult, setLastBuildResult] = useState<KnowledgeBuildResult | null>(null)
 
   async function loadDocuments() {
     const response = await axios.get('/api/admin/knowledge/documents')
@@ -198,6 +209,36 @@ function KnowledgePanel() {
         supported: item.supported,
       })),
     )
+  }
+
+  async function buildKnowledgeBase(recreateCollection: boolean) {
+    setBuilding(true)
+    try {
+      const response = await axios.post('/api/admin/knowledge/build', {
+        recreateCollection,
+      })
+      const result: KnowledgeBuildResult = {
+        filesSeen: response.data.filesSeen,
+        filesIndexed: response.data.filesIndexed,
+        chunksIndexed: response.data.chunksIndexed,
+        collection: response.data.collection,
+        builtAt: new Date().toISOString(),
+      }
+      setLastBuildResult(result)
+      message.success(
+        recreateCollection
+          ? `全量重建完成，已写入 ${result.chunksIndexed} 个知识块`
+          : `知识库构建完成，已写入 ${result.chunksIndexed} 个知识块`,
+      )
+      await loadDocuments()
+    } catch (error) {
+      const description = axios.isAxiosError(error)
+        ? error.response?.data?.message ?? '知识库构建失败，请检查 AI 服务。'
+        : '知识库构建失败，请稍后重试。'
+      message.error(description)
+    } finally {
+      setBuilding(false)
+    }
   }
 
   useEffect(() => {
@@ -215,7 +256,7 @@ function KnowledgePanel() {
         const response = await axios.post('/api/admin/knowledge/documents/upload', formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
         })
-        message.success(`上传成功，已新增 ${response.data.ingest.chunksIndexed} 个知识块`)
+        message.success(`上传成功，文件 ${response.data.fileName} 已加入待构建列表`)
         await loadDocuments()
         onSuccess?.(response.data)
       } catch (error) {
@@ -234,9 +275,25 @@ function KnowledgePanel() {
     <Card
       title="知识库管理"
       extra={(
-        <Upload {...uploadProps}>
-          <Button type="primary" loading={uploading}>上传文档并构建</Button>
-        </Upload>
+        <div className="admin-action-row">
+          <Upload {...uploadProps}>
+            <Button type="primary" loading={uploading}>上传文件</Button>
+          </Upload>
+          <Button
+            icon={<BuildOutlined />}
+            loading={building}
+            onClick={() => void buildKnowledgeBase(false)}
+          >
+            开始构建
+          </Button>
+          <Button
+            danger
+            loading={building}
+            onClick={() => void buildKnowledgeBase(true)}
+          >
+            全量重建
+          </Button>
+        </div>
       )}
     >
       <div className="admin-form-grid">
@@ -247,8 +304,48 @@ function KnowledgePanel() {
           <Tag color="blue">支持 docx</Tag>
           <Tag color="gold">支持 pdf</Tag>
           <Tag color="purple">支持 txt</Tag>
+          <Tag color="cyan">上传后需手动构建</Tag>
         </div>
-        <Table columns={knowledgeColumns} dataSource={documents} pagination={false} />
+        <Row gutter={[16, 16]}>
+          <Col xs={24} md={6}>
+            <Card size="small">
+              <Statistic title="待构建文件数" value={documents.length} />
+            </Card>
+          </Col>
+          <Col xs={24} md={6}>
+            <Card size="small">
+              <Statistic title="上次扫描文件数" value={lastBuildResult?.filesSeen ?? 0} />
+            </Card>
+          </Col>
+          <Col xs={24} md={6}>
+            <Card size="small">
+              <Statistic title="上次入库文件数" value={lastBuildResult?.filesIndexed ?? 0} />
+            </Card>
+          </Col>
+          <Col xs={24} md={6}>
+            <Card size="small">
+              <Statistic title="上次知识块数" value={lastBuildResult?.chunksIndexed ?? 0} />
+            </Card>
+          </Col>
+        </Row>
+        {lastBuildResult ? (
+          <Card size="small" className="admin-build-summary">
+            最近一次构建写入集合 `{lastBuildResult.collection}`，共处理 {lastBuildResult.filesIndexed} 个文件，生成 {lastBuildResult.chunksIndexed} 个知识块。
+            <div className="admin-build-summary__time">
+              构建时间：{new Date(lastBuildResult.builtAt).toLocaleString('zh-CN')}
+            </div>
+          </Card>
+        ) : (
+          <Card size="small" className="admin-build-summary admin-build-summary--muted">
+            上传文件只会保存到知识库目录。点击“开始构建”后，系统才会执行文档解析、片段拆分、Embedding 和向量写入。
+          </Card>
+        )}
+        <Table
+          columns={knowledgeColumns}
+          dataSource={documents}
+          pagination={false}
+          locale={{ emptyText: '暂无已上传知识文件，请先上传景区资料。' }}
+        />
       </div>
     </Card>
   )
