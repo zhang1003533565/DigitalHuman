@@ -144,20 +144,39 @@ http://localhost:8080
 
 ### 4. 启动 FastAPI AI 服务
 
-当前 `ai-service` 目录只有虚拟环境和依赖文件，暂时还没有 `main.py` 或应用入口文件，所以现在还不能直接启动。
+`ai-service` 的入口文件是 `app.py`，不是 `main.py`。
 
-后续你创建入口文件后，可以用下面命令启动：
+首次启动前，先准备环境变量：
+
+```bash
+cd ai-service
+cp .env.example .env
+```
+
+如果你需要完整的向量检索能力，还要先启动 Qdrant：
+
+```bash
+docker run -p 6333:6333 qdrant/qdrant
+```
+
+然后启动 FastAPI 服务：
 
 ```bash
 cd ai-service
 source .venv/bin/activate
-uvicorn main:app --host 0.0.0.0 --port 8001 --reload
+python -m uvicorn app:app --host 0.0.0.0 --port 8001 --reload
 ```
 
 默认端口：
 
 ```text
 http://localhost:8001
+```
+
+可用下面命令检查服务是否启动成功：
+
+```bash
+curl http://127.0.0.1:8001/health
 ```
 
 ## 当前状态
@@ -167,12 +186,11 @@ http://localhost:8001
 - React 游客端初始化
 - React 管理后台初始化
 - Spring Boot 项目初始化
-- FastAPI 虚拟环境和依赖安装
+- FastAPI 服务入口与 RAG API
 - 各目录 `.gitignore` 配置
 
 当前还未完成：
 
-- `ai-service` 应用入口文件
 - `backend-java` 数据库配置
 - 前后端接口联调
 - Docker 编排文件
@@ -181,7 +199,7 @@ http://localhost:8001
 
 建议下一步按这个顺序继续：
 
-1. 在 `ai-service` 创建最小 `main.py`
+1. 完成 `ai-service/.env` 中的模型与密钥配置
 2. 在 `backend-java` 增加基础健康检查接口
 3. 前端接一个最小测试页面
 4. 再做前后端联调

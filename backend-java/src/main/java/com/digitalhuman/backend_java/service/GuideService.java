@@ -150,9 +150,6 @@ public class GuideService {
     }
 
     private String buildAnswer(String question, String interest) {
-        String suffix = interest == null || interest.isBlank()
-                ? "如果你愿意，我还可以继续推荐对应路线。"
-                : "结合你的兴趣，我也会优先推荐对应主题路线。";
-        return "你提到的是“" + question + "”。当前演示版本会优先基于灵山胜境官方资料返回景点介绍、路线建议和游玩提示，" + suffix;
+        return question;
     }
 }
