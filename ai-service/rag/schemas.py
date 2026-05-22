@@ -71,3 +71,30 @@ class QueryResponse(BaseModel):
     related_spots: list[str]
     sources: list[ChunkPayload]
     chunks: list[ChunkRecord]
+
+
+class ProviderConfigRequest(BaseModel):
+    provider: str = Field(..., min_length=1)
+    base_url: str = Field(..., min_length=1, alias="baseUrl")
+    api_key: str = Field(..., min_length=1, alias="apiKey")
+
+
+class ProviderConfigResponse(BaseModel):
+    provider: str
+    base_url: str = Field(alias="baseUrl")
+    api_key: str = Field(alias="apiKey")
+
+
+class SyncProviderModelsRequest(BaseModel):
+    provider: str = Field(..., min_length=1)
+    category: str = Field(..., min_length=1)
+    base_url: str = Field(..., min_length=1, alias="baseUrl")
+    api_key: str = Field(..., min_length=1, alias="apiKey")
+
+
+class SyncProviderModelsResponse(BaseModel):
+    provider: str
+    category: str
+    base_url: str = Field(alias="baseUrl")
+    synced_count: int = Field(alias="syncedCount")
+    model_ids: list[str] = Field(alias="modelIds")

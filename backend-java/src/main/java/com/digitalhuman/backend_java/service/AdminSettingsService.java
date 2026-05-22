@@ -3,20 +3,48 @@ package com.digitalhuman.backend_java.service;
 import com.digitalhuman.backend_java.dto.AdminModelCatalogDto;
 import com.digitalhuman.backend_java.dto.AdminModelOptionDto;
 import com.digitalhuman.backend_java.dto.AdminModelSettingsDto;
+import com.digitalhuman.backend_java.dto.AdminProviderConfigDto;
+import com.digitalhuman.backend_java.dto.AdminSyncModelsRequestDto;
+import com.digitalhuman.backend_java.dto.AdminSyncModelsResponseDto;
 import com.digitalhuman.backend_java.model.AdminModelConfig;
 import com.digitalhuman.backend_java.model.ModelCategory;
 import com.digitalhuman.backend_java.repository.AdminModelConfigRepository;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+import okhttp3.OkHttpClient;
+import okhttp3.MediaType;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AdminSettingsService {
 
-    private final AdminModelConfigRepository adminModelConfigRepository;
+    private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
-    public AdminSettingsService(AdminModelConfigRepository adminModelConfigRepository) {
+    @Value("${rag.service-url}")
+    private String ragServiceUrl;
+
+    private final AdminModelConfigRepository adminModelConfigRepository;
+    private final OkHttpClient httpClient;
+    private final ObjectMapper objectMapper;
+
+    public AdminSettingsService(
+            AdminModelConfigRepository adminModelConfigRepository,
+            ObjectMapper objectMapper) {
         this.adminModelConfigRepository = adminModelConfigRepository;
+        this.objectMapper = objectMapper;
+        this.httpClient = new OkHttpClient.Builder()
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(60, TimeUnit.SECONDS)
+                .writeTimeout(60, TimeUnit.SECONDS)
+                .build();
     }
 
     @Transactional(readOnly = true)
@@ -69,6 +97,78 @@ public class AdminSettingsService {
         return getModelCatalog();
     }
 
+    @Transactional(readOnly = true)
+    public List<AdminProviderConfigDto> getProviderConfigs() {
+        Request request = new Request.Builder()
+                .url(ragServiceUrl + "/admin/providers")
+                .get()
+                .build();
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful() || response.body() == null) {
+                throw new IOException("ai-service provider config request failed: " + response.code());
+            }
+            return objectMapper.readValue(response.body().string(), new TypeReference<>() {});
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("AI 服务配置读取失败", exception);
+        }
+    }
+
+    @Transactional
+    public AdminProviderConfigDto saveProviderConfig(AdminProviderConfigDto request) {
+        try {
+            String payload = objectMapper.writeValueAsString(request);
+            Request httpRequest = new Request.Builder()
+                    .url(ragServiceUrl + "/admin/providers")
+                    .put(RequestBody.create(payload, JSON))
+                    .build();
+            try (Response response = httpClient.newCall(httpRequest).execute()) {
+                if (!response.isSuccessful() || response.body() == null) {
+                    throw new IOException("ai-service provider config save failed: " + response.code());
+                }
+                return objectMapper.readValue(response.body().string(), AdminProviderConfigDto.class);
+            }
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("AI 服务配置保存失败", exception);
+        }
+    }
+
+    @Transactional
+    public AdminSyncModelsResponseDto syncProviderModels(AdminSyncModelsRequestDto request) {
+        ModelCategory category = normalizeCategory(request.getCategory());
+        AdminSyncModelsResponseDto syncResponse;
+        try {
+            String payload = objectMapper.writeValueAsString(request);
+            Request httpRequest = new Request.Builder()
+                    .url(ragServiceUrl + "/admin/providers/sync-models")
+                    .post(RequestBody.create(payload, JSON))
+                    .build();
+            try (Response response = httpClient.newCall(httpRequest).execute()) {
+                if (!response.isSuccessful() || response.body() == null) {
+                    throw new IOException("ai-service sync models failed: " + response.code());
+                }
+                syncResponse = objectMapper.readValue(response.body().string(), AdminSyncModelsResponseDto.class);
+            }
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("AI 服务模型同步失败", exception);
+        }
+
+        List<String> modelIds = syncResponse.getModelIds();
+        for (String modelId : modelIds) {
+            adminModelConfigRepository.findByCategoryAndModelIdIgnoreCase(category, modelId)
+                    .orElseGet(() -> {
+                        AdminModelConfig item = new AdminModelConfig();
+                        item.setCategory(category);
+                        item.setProvider(syncResponse.getProvider());
+                        item.setModelId(modelId);
+                        item.setSelected(false);
+                        return adminModelConfigRepository.save(item);
+                    });
+        }
+
+        syncResponse.setCategory(toCategoryKey(category));
+        return syncResponse;
+    }
+
     @Transactional
     public void seedDefaultsIfMissing() {
         seedModel(ModelCategory.EMBEDDING, "BAAI", "BAAI/bge-m3", true);
@@ -92,6 +192,7 @@ public class AdminSettingsService {
         seedModel(ModelCategory.MULTIMODAL, "OpenAI", "gpt-4.1", false);
         seedModel(ModelCategory.MULTIMODAL, "OpenAI", "gpt-4o", false);
         seedModel(ModelCategory.MULTIMODAL, "Google", "gemini-2.5-pro", false);
+
     }
 
     private List<AdminModelOptionDto> toOptionDtos(ModelCategory category) {
@@ -174,4 +275,5 @@ public class AdminSettingsService {
         }
         return value.trim();
     }
+
 }

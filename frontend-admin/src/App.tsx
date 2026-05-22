@@ -112,6 +112,19 @@ type AddModelOptionForm = {
   modelId: string
 }
 
+type AdminProviderConfig = {
+  provider: string
+  baseUrl: string
+  apiKey: string
+}
+
+type ProviderSyncForm = {
+  provider: string
+  baseUrl: string
+  apiKey: string
+  category: ModelCategory
+}
+
 const PROVIDER_OPTIONS = [
   { value: 'DeepSeek', label: 'DeepSeek' },
   { value: 'OpenAI', label: 'OpenAI' },
@@ -523,15 +536,19 @@ function AvatarPanel() {
 function SettingsPanel() {
   const [form] = Form.useForm<AdminModelSettings>()
   const [addOptionForm] = Form.useForm<AddModelOptionForm>()
+  const [providerForm] = Form.useForm<ProviderSyncForm>()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [addingOption, setAddingOption] = useState(false)
+  const [savingProvider, setSavingProvider] = useState(false)
+  const [syncingProvider, setSyncingProvider] = useState(false)
   const [catalog, setCatalog] = useState<AdminModelCatalog>({
     embeddingModels: [],
     speechModels: [],
     visionModels: [],
     multimodalModels: [],
   })
+  const [providerConfigs, setProviderConfigs] = useState<AdminProviderConfig[]>([])
 
   const embeddingOptions = useMemo(
     () => catalog.embeddingModels.map((item) => ({ value: item.modelId, label: `${item.provider} · ${item.modelId}` })),
@@ -554,16 +571,25 @@ function SettingsPanel() {
     async function loadSettings() {
       setLoading(true)
       try {
-        const [settingsResponse, catalogResponse] = await Promise.all([
+        const [settingsResponse, catalogResponse, providerConfigsResponse] = await Promise.all([
           axios.get<AdminModelSettings>('/api/admin/settings/models'),
           axios.get<AdminModelCatalog>('/api/admin/settings/model-options'),
+          axios.get<AdminProviderConfig[]>('/api/admin/settings/provider-configs'),
         ])
         form.setFieldsValue(settingsResponse.data)
         setCatalog(catalogResponse.data)
+        setProviderConfigs(providerConfigsResponse.data)
         addOptionForm.setFieldsValue({
           category: 'multimodal',
           provider: 'DeepSeek',
           modelId: '',
+        })
+        const deepSeekConfig = providerConfigsResponse.data.find((item) => item.provider === 'DeepSeek')
+        providerForm.setFieldsValue({
+          provider: deepSeekConfig?.provider ?? 'DeepSeek',
+          baseUrl: deepSeekConfig?.baseUrl ?? 'https://api.deepseek.com',
+          apiKey: deepSeekConfig?.apiKey ?? '',
+          category: 'multimodal',
         })
       } catch (error) {
         const description = axios.isAxiosError(error)
@@ -576,7 +602,7 @@ function SettingsPanel() {
     }
 
     void loadSettings()
-  }, [addOptionForm, form])
+  }, [addOptionForm, form, providerForm])
 
   const handleSave = async (values: AdminModelSettings) => {
     setSaving(true)
@@ -611,6 +637,71 @@ function SettingsPanel() {
       message.error(description)
     } finally {
       setAddingOption(false)
+    }
+  }
+
+  const applyProviderPreset = (provider: string) => {
+    const existing = providerConfigs.find((item) => item.provider === provider)
+    providerForm.setFieldsValue({
+      provider,
+      baseUrl: existing?.baseUrl ?? (provider === 'DeepSeek' ? 'https://api.deepseek.com' : ''),
+      apiKey: existing?.apiKey ?? '',
+      category: providerForm.getFieldValue('category') ?? 'multimodal',
+    })
+  }
+
+  const handleSaveProvider = async (values: ProviderSyncForm) => {
+    setSavingProvider(true)
+    try {
+      const response = await axios.put<AdminProviderConfig>('/api/admin/settings/provider-configs', {
+        provider: values.provider,
+        baseUrl: values.baseUrl,
+        apiKey: values.apiKey,
+      })
+      setProviderConfigs((current) => {
+        const next = current.filter((item) => item.provider !== response.data.provider)
+        return [...next, response.data].sort((left, right) => left.provider.localeCompare(right.provider))
+      })
+      providerForm.setFieldsValue({
+        ...values,
+        provider: response.data.provider,
+        baseUrl: response.data.baseUrl,
+        apiKey: response.data.apiKey,
+      })
+      message.success(`已保存 ${response.data.provider} 连接配置`)
+    } catch (error) {
+      const description = axios.isAxiosError(error)
+        ? error.response?.data?.message ?? '供应商配置保存失败，请检查后端服务。'
+        : '供应商配置保存失败，请稍后重试。'
+      message.error(description)
+    } finally {
+      setSavingProvider(false)
+    }
+  }
+
+  const handleSyncProviderModels = async () => {
+    const values = await providerForm.validateFields()
+    setSyncingProvider(true)
+    try {
+      const syncResponse = await axios.post('/api/admin/settings/provider-models/sync', values)
+      const catalogResponse = await axios.get<AdminModelCatalog>('/api/admin/settings/model-options')
+      setCatalog(catalogResponse.data)
+      setProviderConfigs((current) => {
+        const next = current.filter((item) => item.provider !== values.provider)
+        return [...next, {
+          provider: values.provider,
+          baseUrl: values.baseUrl,
+          apiKey: values.apiKey,
+        }].sort((left, right) => left.provider.localeCompare(right.provider))
+      })
+      message.success(`已同步 ${syncResponse.data.syncedCount} 个官方模型`)
+    } catch (error) {
+      const description = axios.isAxiosError(error)
+        ? error.response?.data?.message ?? '官方模型同步失败，请检查 URL、Key 或网络。'
+        : '官方模型同步失败，请稍后重试。'
+      message.error(description)
+    } finally {
+      setSyncingProvider(false)
     }
   }
 
@@ -717,44 +808,105 @@ function SettingsPanel() {
             ...modelSettingTabItems,
             {
               key: 'model-catalog',
-              label: '模型候选池',
+              label: '官方同步',
               children: (
-                <div className="admin-build-summary">
+                <div className="admin-form-grid">
+                  <Card size="small" className="admin-build-summary">
+                    先配置供应商连接，再从官方接口同步模型。以 DeepSeek 为例，填写 `https://api.deepseek.com` 和 API Key 后即可拉取官方现有模型，后续新模型也能再次同步进入候选列表。
+                  </Card>
                   <Form
-                    form={addOptionForm}
+                    form={providerForm}
                     layout="vertical"
-                    onFinish={(values) => void handleAddOption(values)}
+                    onFinish={(values) => void handleSaveProvider(values)}
                   >
-                    <Form.Item
-                      label="模型分类"
-                      name="category"
-                      rules={[{ required: true, message: '请选择模型分类' }]}
-                    >
-                      <Select options={MODEL_CATEGORY_OPTIONS as unknown as { value: string; label: string }[]} />
-                    </Form.Item>
                     <Form.Item
                       label="模型提供方"
                       name="provider"
                       rules={[{ required: true, message: '请选择或输入提供方' }]}
                     >
-                      <AutoComplete options={PROVIDER_OPTIONS}>
-                        <Input placeholder="例如：DeepSeek" />
+                      <AutoComplete
+                        options={PROVIDER_OPTIONS}
+                        onSelect={(value) => applyProviderPreset(value)}
+                      >
+                        <Input
+                          placeholder="例如：DeepSeek"
+                          onBlur={(event) => {
+                            const nextProvider = event.target.value.trim()
+                            if (nextProvider) {
+                              applyProviderPreset(nextProvider)
+                            }
+                          }}
+                        />
                       </AutoComplete>
                     </Form.Item>
                     <Form.Item
-                      label="模型 ID"
-                      name="modelId"
-                      rules={[{ required: true, message: '请输入模型 ID' }]}
-                      extra="可以直接添加 DeepSeek 模型，例如 deepseek-v4-flash、deepseek-v4-pro。"
+                      label="API URL"
+                      name="baseUrl"
+                      rules={[{ required: true, message: '请输入 API URL' }]}
+                      extra="DeepSeek 官方地址为 https://api.deepseek.com"
                     >
-                      <Input placeholder="例如：deepseek-v4-flash" />
+                      <Input placeholder="例如：https://api.deepseek.com" />
+                    </Form.Item>
+                    <Form.Item
+                      label="API Key"
+                      name="apiKey"
+                      rules={[{ required: true, message: '请输入 API Key' }]}
+                    >
+                      <Input.Password placeholder="请输入供应商 API Key" />
+                    </Form.Item>
+                    <Form.Item
+                      label="同步到模型分类"
+                      name="category"
+                      rules={[{ required: true, message: '请选择模型分类' }]}
+                    >
+                      <Select options={MODEL_CATEGORY_OPTIONS as unknown as { value: string; label: string }[]} />
                     </Form.Item>
                     <div className="admin-action-row">
-                      <Button type="primary" htmlType="submit" loading={addingOption}>
-                        添加到候选列表
+                      <Button type="primary" htmlType="submit" loading={savingProvider}>
+                        保存连接配置
+                      </Button>
+                      <Button onClick={() => void handleSyncProviderModels()} loading={syncingProvider}>
+                        同步官方模型
                       </Button>
                     </div>
                   </Form>
+                  <Card size="small" title="手动补充模型" className="admin-build-summary">
+                    <Form
+                      form={addOptionForm}
+                      layout="vertical"
+                      onFinish={(values) => void handleAddOption(values)}
+                    >
+                      <Form.Item
+                        label="模型分类"
+                        name="category"
+                        rules={[{ required: true, message: '请选择模型分类' }]}
+                      >
+                        <Select options={MODEL_CATEGORY_OPTIONS as unknown as { value: string; label: string }[]} />
+                      </Form.Item>
+                      <Form.Item
+                        label="模型提供方"
+                        name="provider"
+                        rules={[{ required: true, message: '请选择或输入提供方' }]}
+                      >
+                        <AutoComplete options={PROVIDER_OPTIONS}>
+                          <Input placeholder="例如：DeepSeek" />
+                        </AutoComplete>
+                      </Form.Item>
+                      <Form.Item
+                        label="模型 ID"
+                        name="modelId"
+                        rules={[{ required: true, message: '请输入模型 ID' }]}
+                        extra="当官方刚出新模型但你还不想走同步时，可以在这里手动补充。"
+                      >
+                        <Input placeholder="例如：deepseek-v4-flash" />
+                      </Form.Item>
+                      <div className="admin-action-row">
+                        <Button type="primary" htmlType="submit" loading={addingOption}>
+                          添加到候选列表
+                        </Button>
+                      </div>
+                    </Form>
+                  </Card>
                 </div>
               ),
             },
