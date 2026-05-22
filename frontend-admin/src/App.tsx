@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import axios from 'axios'
 import {
   BarChartOutlined,
@@ -10,9 +10,10 @@ import {
   NodeIndexOutlined,
   RobotOutlined,
   SearchOutlined,
+  SettingOutlined,
   UserOutlined,
 } from '@ant-design/icons'
-import { Layout, Menu, Button, Card, Form, Input, Table, Tag, Statistic, Row, Col, Upload, Select, AutoComplete, message } from 'antd'
+import { Layout, Menu, Button, Card, Form, Input, Table, Tag, Statistic, Row, Col, Upload, Select, AutoComplete, Tabs, message } from 'antd'
 import type { UploadProps } from 'antd'
 import type { MenuProps, TableColumnsType } from 'antd'
 import SpotAddPage from './pages/SpotAddPage'
@@ -40,6 +41,7 @@ type MenuKey =
   | 'facility-list'
   | 'routes'
   | 'avatar'
+  | 'settings'
   | 'feedback'
   | 'qa'
 
@@ -464,6 +466,61 @@ function RoutesPanel() {
 }
 
 function AvatarPanel() {
+  return (
+    <div className="admin-panel-grid">
+      <Card
+        title="数字人基础配置"
+        extra={<Tag color="blue">业务配置</Tag>}
+      >
+        <div className="admin-form-grid">
+          <Card size="small" className="admin-build-summary">
+            当前页只保留数字人的业务侧配置，比如欢迎词、讲解风格、默认角色和播报策略。
+          </Card>
+          <Form layout="vertical">
+            <Form.Item label="默认欢迎词">
+              <Input.TextArea
+                rows={4}
+                placeholder="例如：您好，欢迎来到灵山胜境，我可以为您介绍景点、路线和活动安排。"
+              />
+            </Form.Item>
+            <Form.Item label="讲解风格">
+              <Select
+                placeholder="请选择讲解风格"
+                options={[
+                  { value: 'friendly', label: '亲切讲解' },
+                  { value: 'professional', label: '专业导览' },
+                  { value: 'family', label: '亲子互动' },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item label="默认播报策略">
+              <Select
+                placeholder="请选择播报策略"
+                options={[
+                  { value: 'standard', label: '标准播报' },
+                  { value: 'brief', label: '简洁播报' },
+                  { value: 'storytelling', label: '故事化播报' },
+                ]}
+              />
+            </Form.Item>
+            <div className="admin-action-row">
+              <Button type="primary">保存数字人配置</Button>
+            </div>
+          </Form>
+        </div>
+      </Card>
+      <Card title="配置说明">
+        <ul className="admin-list">
+          <li>模型能力配置已统一迁移到左下角“设置”。</li>
+          <li>这里建议只放数字人角色、话术、动作策略等业务参数。</li>
+          <li>后续如果接真实接口，可以直接沿用当前表单结构。</li>
+        </ul>
+      </Card>
+    </div>
+  )
+}
+
+function SettingsPanel() {
   const [form] = Form.useForm<AdminModelSettings>()
   const [addOptionForm] = Form.useForm<AddModelOptionForm>()
   const [loading, setLoading] = useState(true)
@@ -557,109 +614,154 @@ function AvatarPanel() {
     }
   }
 
-  return (
-    <Card
-      title="模型设置"
-      extra={<Tag color="blue">管理员可配置</Tag>}
-    >
-      <Form
-        form={form}
-        layout="vertical"
-        onFinish={(values) => void handleSave(values)}
-        disabled={loading}
-      >
-        <Form.Item
-          label="嵌入模型"
-          name="embeddingModel"
-          rules={[{ required: true, message: '请输入嵌入模型' }]}
-          extra="用于知识库分块向量化与相似度检索。"
-        >
-          <AutoComplete options={embeddingOptions}>
-            <Input placeholder="例如：BAAI/bge-m3" />
-          </AutoComplete>
-        </Form.Item>
-        <Form.Item
-          label="语音模型"
-          name="speechModel"
-          rules={[{ required: true, message: '请输入语音模型' }]}
-          extra="用于数字人播报和文本转语音。"
-        >
-          <AutoComplete options={speechOptions}>
-            <Input placeholder="例如：zh-CN-XiaoxiaoNeural" />
-          </AutoComplete>
-        </Form.Item>
-        <Form.Item
-          label="视觉模型"
-          name="visionModel"
-          rules={[{ required: true, message: '请输入视觉模型' }]}
-          extra="用于图片理解、景区识别和视觉问答。"
-        >
-          <AutoComplete options={visionOptions}>
-            <Input placeholder="例如：Qwen/Qwen2.5-VL-7B-Instruct" />
-          </AutoComplete>
-        </Form.Item>
-        <Form.Item
-          label="多模态/对话模型"
-          name="multimodalModel"
-          rules={[{ required: true, message: '请输入多模态模型' }]}
-          extra="用于图文联合理解、复杂问答，DeepSeek 这类对话模型也可以挂在这里统一管理。"
-        >
-          <AutoComplete options={multimodalOptions}>
-            <Input placeholder="例如：deepseek-v4-flash" />
-          </AutoComplete>
-        </Form.Item>
-        <div className="admin-action-row">
-          <Button type="primary" htmlType="submit" loading={saving}>
-            保存设置
-          </Button>
-          <Button onClick={() => form.resetFields()} disabled={saving || loading}>
-            重置表单
-          </Button>
-        </div>
-      </Form>
-      <Card
-        size="small"
-        title="新增模型候选"
-        className="admin-build-summary"
-        style={{ marginTop: 16 }}
-      >
-        <Form
-          form={addOptionForm}
-          layout="vertical"
-          onFinish={(values) => void handleAddOption(values)}
-        >
+  const renderSaveActions = () => (
+    <div className="admin-action-row">
+      <Button type="primary" htmlType="submit" loading={saving}>
+        保存设置
+      </Button>
+      <Button onClick={() => form.resetFields()} disabled={saving || loading}>
+        重置表单
+      </Button>
+    </div>
+  )
+
+  const modelSettingTabItems = [
+    {
+      key: 'embedding',
+      label: '嵌入模型',
+      children: (
+        <Form form={form} layout="vertical" onFinish={(values) => void handleSave(values)} disabled={loading} className="admin-settings-form">
           <Form.Item
-            label="模型分类"
-            name="category"
-            rules={[{ required: true, message: '请选择模型分类' }]}
+            label="嵌入模型"
+            name="embeddingModel"
+            rules={[{ required: true, message: '请输入嵌入模型' }]}
+            extra="用于知识库分块向量化与相似度检索。"
           >
-            <Select options={MODEL_CATEGORY_OPTIONS as unknown as { value: string; label: string }[]} />
-          </Form.Item>
-          <Form.Item
-            label="模型提供方"
-            name="provider"
-            rules={[{ required: true, message: '请选择或输入提供方' }]}
-          >
-            <AutoComplete options={PROVIDER_OPTIONS}>
-              <Input placeholder="例如：DeepSeek" />
+            <AutoComplete options={embeddingOptions}>
+              <Input placeholder="例如：BAAI/bge-m3" />
             </AutoComplete>
           </Form.Item>
-          <Form.Item
-            label="模型 ID"
-            name="modelId"
-            rules={[{ required: true, message: '请输入模型 ID' }]}
-            extra="可以直接添加 DeepSeek 模型，例如 deepseek-v4-flash、deepseek-v4-pro。"
-          >
-            <Input placeholder="例如：deepseek-v4-flash" />
-          </Form.Item>
-          <div className="admin-action-row">
-            <Button type="primary" htmlType="submit" loading={addingOption}>
-              添加到候选列表
-            </Button>
-          </div>
+          {renderSaveActions()}
         </Form>
+      ),
+    },
+    {
+      key: 'speech',
+      label: '语音模型',
+      children: (
+        <Form form={form} layout="vertical" onFinish={(values) => void handleSave(values)} disabled={loading} className="admin-settings-form">
+          <Form.Item
+            label="语音模型"
+            name="speechModel"
+            rules={[{ required: true, message: '请输入语音模型' }]}
+            extra="用于数字人播报和文本转语音。"
+          >
+            <AutoComplete options={speechOptions}>
+              <Input placeholder="例如：zh-CN-XiaoxiaoNeural" />
+            </AutoComplete>
+          </Form.Item>
+          {renderSaveActions()}
+        </Form>
+      ),
+    },
+    {
+      key: 'vision',
+      label: '视觉模型',
+      children: (
+        <Form form={form} layout="vertical" onFinish={(values) => void handleSave(values)} disabled={loading} className="admin-settings-form">
+          <Form.Item
+            label="视觉模型"
+            name="visionModel"
+            rules={[{ required: true, message: '请输入视觉模型' }]}
+            extra="用于图片理解、景区识别和视觉问答。"
+          >
+            <AutoComplete options={visionOptions}>
+              <Input placeholder="例如：Qwen/Qwen2.5-VL-7B-Instruct" />
+            </AutoComplete>
+          </Form.Item>
+          {renderSaveActions()}
+        </Form>
+      ),
+    },
+    {
+      key: 'multimodal',
+      label: '多模态模型',
+      children: (
+        <Form form={form} layout="vertical" onFinish={(values) => void handleSave(values)} disabled={loading} className="admin-settings-form">
+          <Form.Item
+            label="多模态/对话模型"
+            name="multimodalModel"
+            rules={[{ required: true, message: '请输入多模态模型' }]}
+            extra="用于图文联合理解、复杂问答，DeepSeek 这类对话模型也可以挂在这里统一管理。"
+          >
+            <AutoComplete options={multimodalOptions}>
+              <Input placeholder="例如：deepseek-v4-flash" />
+            </AutoComplete>
+          </Form.Item>
+          {renderSaveActions()}
+        </Form>
+      ),
+    },
+  ]
+
+  return (
+    <div className="admin-panel-grid">
+      <Card
+        title="系统设置"
+        extra={<Tag color="blue">左下角入口</Tag>}
+        className="admin-settings-card"
+      >
+        <Tabs
+          defaultActiveKey="embedding"
+          items={[
+            ...modelSettingTabItems,
+            {
+              key: 'model-catalog',
+              label: '模型候选池',
+              children: (
+                <div className="admin-build-summary">
+                  <Form
+                    form={addOptionForm}
+                    layout="vertical"
+                    onFinish={(values) => void handleAddOption(values)}
+                  >
+                    <Form.Item
+                      label="模型分类"
+                      name="category"
+                      rules={[{ required: true, message: '请选择模型分类' }]}
+                    >
+                      <Select options={MODEL_CATEGORY_OPTIONS as unknown as { value: string; label: string }[]} />
+                    </Form.Item>
+                    <Form.Item
+                      label="模型提供方"
+                      name="provider"
+                      rules={[{ required: true, message: '请选择或输入提供方' }]}
+                    >
+                      <AutoComplete options={PROVIDER_OPTIONS}>
+                        <Input placeholder="例如：DeepSeek" />
+                      </AutoComplete>
+                    </Form.Item>
+                    <Form.Item
+                      label="模型 ID"
+                      name="modelId"
+                      rules={[{ required: true, message: '请输入模型 ID' }]}
+                      extra="可以直接添加 DeepSeek 模型，例如 deepseek-v4-flash、deepseek-v4-pro。"
+                    >
+                      <Input placeholder="例如：deepseek-v4-flash" />
+                    </Form.Item>
+                    <div className="admin-action-row">
+                      <Button type="primary" htmlType="submit" loading={addingOption}>
+                        添加到候选列表
+                      </Button>
+                    </div>
+                  </Form>
+                </div>
+              ),
+            },
+          ]}
+        />
       </Card>
-    </Card>
+    </div>
   )
 }
 
@@ -731,6 +833,8 @@ function renderPanel(activeKey: MenuKey) {
       return <RoutesPanel />
     case 'avatar':
       return <AvatarPanel />
+    case 'settings':
+      return <SettingsPanel />
     case 'feedback':
       return <FeedbackPanel />
     case 'qa':
@@ -808,18 +912,30 @@ function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: () => vo
           <strong>数字人管理后台</strong>
           <span>{user.displayName}</span>
         </div>
-        <Menu
-          theme="dark"
-          mode="inline"
-          selectedKeys={[activeKey]}
-          items={menuItems}
-          onClick={({ key }) => {
-            if (key === 'spots') {
-              return
-            }
-            setActiveKey(key as MenuKey)
-          }}
-        />
+        <div className="admin-sider__nav">
+          <Menu
+            theme="dark"
+            mode="inline"
+            selectedKeys={[activeKey]}
+            items={menuItems}
+            onClick={({ key }) => {
+              if (key === 'spots') {
+                return
+              }
+              setActiveKey(key as MenuKey)
+            }}
+          />
+        </div>
+        <div className="admin-sider__footer">
+          <Button
+            type={activeKey === 'settings' ? 'primary' : 'text'}
+            icon={<SettingOutlined />}
+            className="admin-settings-entry"
+            onClick={() => setActiveKey('settings')}
+          >
+            设置
+          </Button>
+        </div>
       </Sider>
       <Layout>
         <Header className="admin-header">

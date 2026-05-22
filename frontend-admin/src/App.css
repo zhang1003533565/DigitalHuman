@@ -122,6 +122,13 @@
 .admin-sider {
   background: linear-gradient(180deg, #0c1628, #101f36) !important;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
+  position: relative;
+}
+
+.admin-sider .ant-layout-sider-children {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .admin-brand {
@@ -138,6 +145,33 @@
 .admin-brand span {
   color: rgba(245, 249, 255, 0.66);
   font-size: 13px;
+}
+
+.admin-sider__nav {
+  flex: 1;
+  min-height: 0;
+}
+
+.admin-sider__footer {
+  margin-top: auto;
+  padding: 16px 12px 20px;
+}
+
+.admin-settings-entry {
+  width: 100%;
+  height: 44px;
+  justify-content: flex-start;
+  border-radius: 12px;
+}
+
+.admin-settings-entry.ant-btn-text {
+  color: rgba(245, 249, 255, 0.88);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.admin-settings-entry.ant-btn-text:hover {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.12) !important;
 }
 
 .admin-header {
@@ -210,6 +244,19 @@
 
 .admin-build-summary--muted {
   color: #5c6f88;
+}
+
+.admin-settings-card .ant-tabs-nav {
+  margin-bottom: 24px;
+}
+
+.admin-settings-card .ant-tabs-tab {
+  padding: 8px 4px 14px;
+  font-weight: 600;
+}
+
+.admin-settings-card .ant-tabs-content-holder {
+  min-height: 320px;
 }
 
 .admin-filter-row {

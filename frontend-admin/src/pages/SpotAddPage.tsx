@@ -248,46 +248,6 @@ function SpotAddPage() {
     })
   }
 
-  // 手动缩放
-  const handleZoom = (delta: number) => {
-    const map = mapInstanceRef.current
-    if (!map) return
-    const next = (map.getZoom?.() ?? 15) + delta
-    map.setZoom?.(next)
-  }
-
-  // 定位到当前位置（仅当位置在灵山景区范围内才会选点）
-  const handleLocate = () => {
-    const map = mapInstanceRef.current
-    const marker = markerRef.current
-    const geolocation = geolocationRef.current
-    if (!map || !marker || !geolocation) {
-      message.warning('地图还未准备就绪，请稍后重试')
-      return
-    }
-    geolocation.getCurrentPosition(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (status: string, result: any) => {
-        if (status !== 'complete' || !result?.position) {
-          message.error('定位失败：' + (result?.message ?? '未知错误'))
-          return
-        }
-        const lngLat = result.position
-        if (boundsRef.current && !boundsRef.current.contains(lngLat)) {
-          message.warning('当前位置不在灵山景区范围内')
-          map.setZoomAndCenter?.(15, LINGSHAN_CENTER)
-          return
-        }
-        map.setCenter?.(lngLat)
-        marker.setPosition(lngLat)
-        form.setFieldsValue({
-          longitude: lngLat.getLng().toFixed(6),
-          latitude: lngLat.getLat().toFixed(6),
-        })
-      },
-    )
-  }
-
   return (
     <div className="spot-add">
       <style>{styles}</style>
