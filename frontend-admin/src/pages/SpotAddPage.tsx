@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Form,
   Input,
@@ -10,6 +10,7 @@ import {
   Col,
   Upload,
   Tooltip,
+  message,
 } from 'antd'
 import {
   PlusOutlined,
@@ -30,6 +31,47 @@ import {
 } from '@ant-design/icons'
 
 const { TextArea } = Input
+
+// ===== 高德地图相关常量 =====
+const AMAP_KEY = '5b01b946c26d0f94f7d2ddb9d09ff26f'
+const AMAP_SECURITY_KEY = '692196a068ef6c9cad53a55fc9e47ad7'
+// 灵山胜境景区中心坐标 [lng, lat]
+const LINGSHAN_CENTER: [number, number] = [120.1009, 31.4259]
+// 灵山景区选点允许范围（西南、东北）
+const LINGSHAN_BOUNDS_SW: [number, number] = [120.0759, 31.4009]
+const LINGSHAN_BOUNDS_NE: [number, number] = [120.1259, 31.4509]
+
+declare global {
+  interface Window {
+    _AMapSecurityConfig?: { securityJsCode: string }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    AMap?: any
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let amapLoaderPromise: Promise<any> | null = null
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function loadAMap(): Promise<any> {
+  if (typeof window === 'undefined') return Promise.reject(new Error('no window'))
+  if (window.AMap) return Promise.resolve(window.AMap)
+  if (amapLoaderPromise) return amapLoaderPromise
+
+  window._AMapSecurityConfig = { securityJsCode: AMAP_SECURITY_KEY }
+  amapLoaderPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script')
+    script.src = `https://webapi.amap.com/maps?v=2.0&key=${AMAP_KEY}`
+    script.async = true
+    script.onload = () => resolve(window.AMap)
+    script.onerror = (err) => {
+      amapLoaderPromise = null
+      reject(err)
+    }
+    document.head.appendChild(script)
+  })
+  return amapLoaderPromise
+}
 
 type GalleryItem = {
   id: string
@@ -59,8 +101,191 @@ function SpotAddPage() {
   const [detail, setDetail] = useState('')
   const [gallery, setGallery] = useState<GalleryItem[]>(initialGallery)
 
+  const mapContainerRef = useRef<HTMLDivElement | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mapInstanceRef = useRef<any>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const markerRef = useRef<any>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const boundsRef = useRef<any>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const geolocationRef = useRef<any>(null)
+
   const removeGalleryItem = (id: string) => {
     setGallery((prev) => prev.filter((item) => item.id !== id))
+  }
+
+  // 初始化高德地图：限制视野与选点范围在灵山景区
+  useEffect(() => {
+    let cancelled = false
+    loadAMap()
+      .then((AMap) => {
+        if (cancelled || !mapContainerRef.current) return
+
+        const sw = new AMap.LngLat(LINGSHAN_BOUNDS_SW[0], LINGSHAN_BOUNDS_SW[1])
+        const ne = new AMap.LngLat(LINGSHAN_BOUNDS_NE[0], LINGSHAN_BOUNDS_NE[1])
+        const bounds = new AMap.Bounds(sw, ne)
+        boundsRef.current = bounds
+
+        const map = new AMap.Map(mapContainerRef.current, {
+          zoom: 15,
+          center: LINGSHAN_CENTER,
+          viewMode: '2D',
+          zooms: [13, 19],
+          mapStyle: 'amap://styles/normal',
+        })
+        // 限制地图浏览范围在灵山景区内
+        map.setLimitBounds?.(bounds)
+        mapInstanceRef.current = map
+
+        // 初始标记点（默认中心）
+        const marker = new AMap.Marker({
+          position: LINGSHAN_CENTER,
+          draggable: true,
+          cursor: 'move',
+          map,
+        })
+        markerRef.current = marker
+        // 同步初始经纬度到表单
+        form.setFieldsValue({
+          longitude: LINGSHAN_CENTER[0].toFixed(6),
+          latitude: LINGSHAN_CENTER[1].toFixed(6),
+        })
+
+        // 点击地图选点：仅允许在灵山景区范围内
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        map.on('click', (e: any) => {
+          const lngLat = e?.lnglat
+          if (!lngLat) return
+          if (boundsRef.current && !boundsRef.current.contains(lngLat)) {
+            message.warning('请在灵山景区范围内选点')
+            return
+          }
+          marker.setPosition(lngLat)
+          form.setFieldsValue({
+            longitude: lngLat.getLng().toFixed(6),
+            latitude: lngLat.getLat().toFixed(6),
+          })
+        })
+
+        // 拖拽标记选点
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        marker.on('dragend', (e: any) => {
+          const lngLat = e?.lnglat ?? marker.getPosition()
+          if (!lngLat) return
+          if (boundsRef.current && !boundsRef.current.contains(lngLat)) {
+            message.warning('请在灵山景区范围内选点')
+            marker.setPosition(LINGSHAN_CENTER)
+            form.setFieldsValue({
+              longitude: LINGSHAN_CENTER[0].toFixed(6),
+              latitude: LINGSHAN_CENTER[1].toFixed(6),
+            })
+            return
+          }
+          form.setFieldsValue({
+            longitude: lngLat.getLng().toFixed(6),
+            latitude: lngLat.getLat().toFixed(6),
+          })
+        })
+
+        // 加载控件插件：工具条（缩放）、比例尺、定位
+        AMap.plugin(
+          ['AMap.ToolBar', 'AMap.Scale', 'AMap.Geolocation'],
+          () => {
+            if (cancelled) return
+            const toolbar = new AMap.ToolBar({
+              position: { top: '10px', right: '10px' },
+              ruler: false,
+              direction: false,
+              locate: false,
+            })
+            map.addControl(toolbar)
+
+            const scale = new AMap.Scale({ position: 'LB' })
+            map.addControl(scale)
+
+            const geolocation = new AMap.Geolocation({
+              enableHighAccuracy: true,
+              timeout: 10000,
+              buttonPosition: 'RB',
+              showButton: true,
+              showMarker: false,
+              showCircle: false,
+              panToLocation: false,
+              zoomToAccuracy: false,
+            })
+            map.addControl(geolocation)
+            geolocationRef.current = geolocation
+          },
+        )
+      })
+      .catch((err) => {
+        console.error('AMap load failed', err)
+      })
+
+    return () => {
+      cancelled = true
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.destroy?.()
+        mapInstanceRef.current = null
+      }
+      markerRef.current = null
+      boundsRef.current = null
+      geolocationRef.current = null
+    }
+  }, [form])
+
+  // 重置选点到灵山景区中心
+  const handleResetCenter = () => {
+    const map = mapInstanceRef.current
+    const marker = markerRef.current
+    if (!map || !marker) return
+    map.setZoomAndCenter?.(15, LINGSHAN_CENTER)
+    marker.setPosition(LINGSHAN_CENTER)
+    form.setFieldsValue({
+      longitude: LINGSHAN_CENTER[0].toFixed(6),
+      latitude: LINGSHAN_CENTER[1].toFixed(6),
+    })
+  }
+
+  // 手动缩放
+  const handleZoom = (delta: number) => {
+    const map = mapInstanceRef.current
+    if (!map) return
+    const next = (map.getZoom?.() ?? 15) + delta
+    map.setZoom?.(next)
+  }
+
+  // 定位到当前位置（仅当位置在灵山景区范围内才会选点）
+  const handleLocate = () => {
+    const map = mapInstanceRef.current
+    const marker = markerRef.current
+    const geolocation = geolocationRef.current
+    if (!map || !marker || !geolocation) {
+      message.warning('地图还未准备就绪，请稍后重试')
+      return
+    }
+    geolocation.getCurrentPosition(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (status: string, result: any) => {
+        if (status !== 'complete' || !result?.position) {
+          message.error('定位失败：' + (result?.message ?? '未知错误'))
+          return
+        }
+        const lngLat = result.position
+        if (boundsRef.current && !boundsRef.current.contains(lngLat)) {
+          message.warning('当前位置不在灵山景区范围内')
+          map.setZoomAndCenter?.(15, LINGSHAN_CENTER)
+          return
+        }
+        map.setCenter?.(lngLat)
+        marker.setPosition(lngLat)
+        form.setFieldsValue({
+          longitude: lngLat.getLng().toFixed(6),
+          latitude: lngLat.getLat().toFixed(6),
+        })
+      },
+    )
   }
 
   return (
@@ -79,17 +304,17 @@ function SpotAddPage() {
 
       {/* 基础信息 + 地图选点 */}
       <Row gutter={16} className="spot-add__row">
-        <Col xs={24} lg={14}>
+        <Col xs={24} lg={7}>
           <div className="spot-add__card">
             <SectionTitle title="基础信息" />
             <Form form={form} layout="horizontal" labelAlign="left" labelCol={{ flex: '88px' }}>
               <Row gutter={16}>
-                <Col span={12}>
+                <Col span={24}>
                   <Form.Item label="景点名称" required>
                     <Input placeholder="请输入景点名称" />
                   </Form.Item>
                 </Col>
-                <Col span={12}>
+                <Col span={24}>
                   <Form.Item label="景点分类" required>
                     <Select
                       placeholder="请选择景点分类"
@@ -104,14 +329,14 @@ function SpotAddPage() {
               </Row>
 
               <Row gutter={16}>
-                <Col span={12}>
-                  <Form.Item label="经度" required>
-                    <Input placeholder="请输入经度，如：120.31" />
+                <Col span={24}>
+                  <Form.Item label="经度" name="longitude" required>
+                    <Input placeholder="请在右侧地图选点" readOnly />
                   </Form.Item>
                 </Col>
-                <Col span={12}>
-                  <Form.Item label="纬度" required>
-                    <Input placeholder="请输入纬度，如：31.49" />
+                <Col span={24}>
+                  <Form.Item label="纬度" name="latitude" required>
+                    <Input placeholder="请在右侧地图选点" readOnly />
                   </Form.Item>
                 </Col>
               </Row>
@@ -156,23 +381,22 @@ function SpotAddPage() {
           </div>
         </Col>
 
-        <Col xs={24} lg={10}>
+        <Col xs={24} lg={17}>
           <div className="spot-add__card">
             <SectionTitle title="地图选点" />
             <div className="spot-add__map">
-              <div className="spot-add__map-pin">
-                <EnvironmentFilled style={{ fontSize: 36, color: '#1677ff' }} />
-              </div>
+              <div ref={mapContainerRef} className="spot-add__map-canvas" />
               <Button
                 type="primary"
                 icon={<EnvironmentFilled />}
                 className="spot-add__map-btn"
+                onClick={handleResetCenter}
               >
-                点击选点
+                回到景区中心
               </Button>
             </div>
             <p className="spot-add__map-hint">
-              在地图上点击选择景点位置，拖动地图可调整视图位置
+              在地图上点击或拖动标记选择景点位置，仅可在灵山景区范围内选点
             </p>
           </div>
         </Col>
@@ -360,19 +584,29 @@ const styles = `
 }
 .spot-add__map {
   position: relative;
-  height: 240px;
+  height: 520px;
+  min-height: 420px;
   border-radius: 6px;
-  background-image: url('https://api.maptiler.com/maps/streets/static/120.31,31.49,13/600x320.png?key=demo'),
-    linear-gradient(135deg, #e6f1ff 0%, #d6e4f5 100%);
-  background-size: cover;
-  background-position: center;
   overflow: hidden;
+  border: 1px solid #e6eaf0;
+}
+@media (max-width: 1200px) {
+  .spot-add__map {
+    height: 420px;
+  }
+}
+.spot-add__map-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 .spot-add__map-pin {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -100%);
+  pointer-events: none;
 }
 .spot-add__map-btn {
   position: absolute;
@@ -380,6 +614,7 @@ const styles = `
   left: 50%;
   transform: translateX(-50%);
   box-shadow: 0 2px 8px rgba(22, 119, 255, 0.3);
+  z-index: 10;
 }
 .spot-add__map-hint {
   font-size: 12px;
