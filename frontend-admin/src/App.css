@@ -143,26 +143,13 @@
 .admin-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 16px;
-  height: auto;
-  padding: 20px 24px;
+  height: 56px;
+  padding: 8px 24px;
   background: #f6f8fb;
   border-bottom: 1px solid #e7edf5;
-}
-
-.admin-header h1 {
-  margin: 0;
-  font-size: 28px;
-  color: #142033;
-}
-
-.admin-header__eyebrow {
-  margin: 0 0 6px;
-  color: #6f87a6;
-  font-size: 12px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+  line-height: 1;
 }
 
 .admin-header__actions {
@@ -172,7 +159,7 @@
 }
 
 .admin-content {
-  padding: 24px;
+  padding: 12px 24px 24px;
   background: #f6f8fb;
 }
 

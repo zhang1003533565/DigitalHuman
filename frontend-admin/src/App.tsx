@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 import axios from 'axios'
 import {
   BarChartOutlined,
@@ -15,6 +15,8 @@ import {
 import { Layout, Menu, Button, Card, Form, Input, Table, Tag, Statistic, Row, Col, Upload, Select, message } from 'antd'
 import type { UploadProps } from 'antd'
 import type { MenuProps, TableColumnsType } from 'antd'
+import SpotAddPage from './pages/SpotAddPage'
+import SpotCategoryPage from './pages/SpotCategoryPage'
 import './App.css'
 
 const { Header, Sider, Content } = Layout
@@ -32,6 +34,8 @@ type MenuKey =
   | 'dashboard'
   | 'knowledge'
   | 'spots'
+  | 'spot-add'
+  | 'spot-category'
   | 'routes'
   | 'avatar'
   | 'feedback'
@@ -116,7 +120,15 @@ const knowledgeColumns: TableColumnsType<KnowledgeDocumentRow> = [
 const menuItems: MenuProps['items'] = [
   { key: 'dashboard', icon: <BarChartOutlined />, label: '数据总览' },
   { key: 'knowledge', icon: <BookOutlined />, label: '知识库管理' },
-  { key: 'spots', icon: <EnvironmentOutlined />, label: '景点管理' },
+  {
+    key: 'spots',
+    icon: <EnvironmentOutlined />,
+    label: '景点管理',
+    children: [
+      { key: 'spot-add', label: '新增景点' },
+      { key: 'spot-category', label: '景点分类' },
+    ],
+  },
   { key: 'routes', icon: <NodeIndexOutlined />, label: '路线管理' },
   { key: 'avatar', icon: <RobotOutlined />, label: '数字人配置' },
   { key: 'feedback', icon: <CommentOutlined />, label: '游客反馈分析' },
@@ -490,6 +502,10 @@ function renderPanel(activeKey: MenuKey) {
       return <KnowledgePanel />
     case 'spots':
       return <SpotsPanel />
+    case 'spot-add':
+      return <SpotAddPage />
+    case 'spot-category':
+      return <SpotCategoryPage />
     case 'routes':
       return <RoutesPanel />
     case 'avatar':
@@ -563,13 +579,6 @@ function LoginView({
 
 function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: () => void }) {
   const [activeKey, setActiveKey] = useState<MenuKey>('dashboard')
-  const pageTitle = useMemo(
-    () => {
-      const current = menuItems?.find((item) => item && 'key' in item && item.key === activeKey)
-      return current && 'label' in current ? current.label : '数据总览'
-    },
-    [activeKey],
-  )
 
   return (
     <Layout className="admin-shell">
@@ -583,15 +592,16 @@ function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: () => vo
           mode="inline"
           selectedKeys={[activeKey]}
           items={menuItems}
-          onClick={({ key }) => setActiveKey(key as MenuKey)}
+          onClick={({ key }) => {
+            if (key === 'spots') {
+              return
+            }
+            setActiveKey(key as MenuKey)
+          }}
         />
       </Sider>
       <Layout>
         <Header className="admin-header">
-          <div>
-            <p className="admin-header__eyebrow">Admin Console</p>
-            <h1>{pageTitle}</h1>
-          </div>
           <div className="admin-header__actions">
             <Tag color="blue">{user.role}</Tag>
             <Button icon={<UserOutlined />} onClick={onLogout}>退出登录</Button>
