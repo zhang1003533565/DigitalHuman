@@ -17,6 +17,7 @@ import type { UploadProps } from 'antd'
 import type { MenuProps, TableColumnsType } from 'antd'
 import SpotAddPage from './pages/SpotAddPage'
 import SpotCategoryPage from './pages/SpotCategoryPage'
+import FacilityListPage from './pages/FacilityListPage'
 import './App.css'
 
 const { Header, Sider, Content } = Layout
@@ -36,6 +37,7 @@ type MenuKey =
   | 'spots'
   | 'spot-add'
   | 'spot-category'
+  | 'facility-list'
   | 'routes'
   | 'avatar'
   | 'feedback'
@@ -127,6 +129,7 @@ const menuItems: MenuProps['items'] = [
     children: [
       { key: 'spot-add', label: '新增景点' },
       { key: 'spot-category', label: '景点分类' },
+      { key: 'facility-list', label: '全部设施' },
     ],
   },
   { key: 'routes', icon: <NodeIndexOutlined />, label: '路线管理' },
@@ -506,6 +509,8 @@ function renderPanel(activeKey: MenuKey) {
       return <SpotAddPage />
     case 'spot-category':
       return <SpotCategoryPage />
+    case 'facility-list':
+      return <FacilityListPage />
     case 'routes':
       return <RoutesPanel />
     case 'avatar':
