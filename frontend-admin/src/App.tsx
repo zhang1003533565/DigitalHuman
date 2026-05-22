@@ -12,7 +12,7 @@ import {
   SearchOutlined,
   UserOutlined,
 } from '@ant-design/icons'
-import { Layout, Menu, Button, Card, Form, Input, Table, Tag, Statistic, Row, Col, Upload, Select, message } from 'antd'
+import { Layout, Menu, Button, Card, Form, Input, Table, Tag, Statistic, Row, Col, Upload, Select, AutoComplete, message } from 'antd'
 import type { UploadProps } from 'antd'
 import type { MenuProps, TableColumnsType } from 'antd'
 import './App.css'
@@ -75,6 +75,50 @@ type KnowledgeBuildResult = {
   collection: string
   builtAt: string
 }
+
+type AdminModelSettings = {
+  embeddingModel: string
+  speechModel: string
+  visionModel: string
+  multimodalModel: string
+}
+
+type ModelCategory = 'embedding' | 'speech' | 'vision' | 'multimodal'
+
+type AdminModelOption = {
+  category: ModelCategory
+  provider: string
+  modelId: string
+}
+
+type AdminModelCatalog = {
+  embeddingModels: AdminModelOption[]
+  speechModels: AdminModelOption[]
+  visionModels: AdminModelOption[]
+  multimodalModels: AdminModelOption[]
+}
+
+type AddModelOptionForm = {
+  category: ModelCategory
+  provider: string
+  modelId: string
+}
+
+const PROVIDER_OPTIONS = [
+  { value: 'DeepSeek', label: 'DeepSeek' },
+  { value: 'OpenAI', label: 'OpenAI' },
+  { value: 'Qwen', label: 'Qwen' },
+  { value: 'Google', label: 'Google' },
+  { value: 'Azure', label: 'Azure' },
+  { value: 'Custom', label: 'Custom' },
+]
+
+const MODEL_CATEGORY_OPTIONS = [
+  { value: 'embedding', label: '嵌入模型' },
+  { value: 'speech', label: '语音模型' },
+  { value: 'vision', label: '视觉模型' },
+  { value: 'multimodal', label: '多模态/对话模型' },
+] as const
 
 const spotColumns: TableColumnsType<SpotRow> = [
   { title: '景点名称', dataIndex: 'name' },
@@ -202,7 +246,7 @@ function KnowledgePanel() {
     const response = await axios.get('/api/admin/knowledge/documents')
     setDocuments(
       response.data.map((item: { fileName: string; sizeBytes: number; updatedAt: string; supported: boolean }) => ({
-        key: item.fileName,
+        key: `${item.fileName}-${item.updatedAt}`,
         fileName: item.fileName,
         sizeText: formatBytes(item.sizeBytes),
         updatedAt: new Date(item.updatedAt).toLocaleString('zh-CN'),
@@ -405,29 +449,201 @@ function RoutesPanel() {
 }
 
 function AvatarPanel() {
+  const [form] = Form.useForm<AdminModelSettings>()
+  const [addOptionForm] = Form.useForm<AddModelOptionForm>()
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [addingOption, setAddingOption] = useState(false)
+  const [catalog, setCatalog] = useState<AdminModelCatalog>({
+    embeddingModels: [],
+    speechModels: [],
+    visionModels: [],
+    multimodalModels: [],
+  })
+
+  const embeddingOptions = useMemo(
+    () => catalog.embeddingModels.map((item) => ({ value: item.modelId, label: `${item.provider} · ${item.modelId}` })),
+    [catalog.embeddingModels],
+  )
+  const speechOptions = useMemo(
+    () => catalog.speechModels.map((item) => ({ value: item.modelId, label: `${item.provider} · ${item.modelId}` })),
+    [catalog.speechModels],
+  )
+  const visionOptions = useMemo(
+    () => catalog.visionModels.map((item) => ({ value: item.modelId, label: `${item.provider} · ${item.modelId}` })),
+    [catalog.visionModels],
+  )
+  const multimodalOptions = useMemo(
+    () => catalog.multimodalModels.map((item) => ({ value: item.modelId, label: `${item.provider} · ${item.modelId}` })),
+    [catalog.multimodalModels],
+  )
+
+  useEffect(() => {
+    async function loadSettings() {
+      setLoading(true)
+      try {
+        const [settingsResponse, catalogResponse] = await Promise.all([
+          axios.get<AdminModelSettings>('/api/admin/settings/models'),
+          axios.get<AdminModelCatalog>('/api/admin/settings/model-options'),
+        ])
+        form.setFieldsValue(settingsResponse.data)
+        setCatalog(catalogResponse.data)
+        addOptionForm.setFieldsValue({
+          category: 'multimodal',
+          provider: 'DeepSeek',
+          modelId: '',
+        })
+      } catch (error) {
+        const description = axios.isAxiosError(error)
+          ? error.response?.data?.message ?? '模型设置加载失败，请检查后端服务。'
+          : '模型设置加载失败，请稍后重试。'
+        message.error(description)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    void loadSettings()
+  }, [addOptionForm, form])
+
+  const handleSave = async (values: AdminModelSettings) => {
+    setSaving(true)
+    try {
+      const response = await axios.put<AdminModelSettings>('/api/admin/settings/models', values)
+      form.setFieldsValue(response.data)
+      message.success('模型设置已保存')
+    } catch (error) {
+      const description = axios.isAxiosError(error)
+        ? error.response?.data?.message ?? '模型设置保存失败，请检查后端服务。'
+        : '模型设置保存失败，请稍后重试。'
+      message.error(description)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleAddOption = async (values: AddModelOptionForm) => {
+    setAddingOption(true)
+    try {
+      const response = await axios.post<AdminModelCatalog>('/api/admin/settings/model-options', values)
+      setCatalog(response.data)
+      message.success(`模型 ${values.modelId} 已加入候选列表`)
+      addOptionForm.setFieldsValue({
+        ...values,
+        modelId: '',
+      })
+    } catch (error) {
+      const description = axios.isAxiosError(error)
+        ? error.response?.data?.message ?? '新增模型失败，请检查后端服务。'
+        : '新增模型失败，请稍后重试。'
+      message.error(description)
+    } finally {
+      setAddingOption(false)
+    }
+  }
+
   return (
-    <Card title="数字人配置">
-      <Form layout="vertical">
-        <Form.Item label="数字人形象">
-          <Select
-            options={[
-              { value: 'mark', label: 'Mark 中文模型' },
-              { value: 'hiyori', label: 'Hiyori 中文模型' },
-            ]}
-          />
+    <Card
+      title="模型设置"
+      extra={<Tag color="blue">管理员可配置</Tag>}
+    >
+      <Form
+        form={form}
+        layout="vertical"
+        onFinish={(values) => void handleSave(values)}
+        disabled={loading}
+      >
+        <Form.Item
+          label="嵌入模型"
+          name="embeddingModel"
+          rules={[{ required: true, message: '请输入嵌入模型' }]}
+          extra="用于知识库分块向量化与相似度检索。"
+        >
+          <AutoComplete options={embeddingOptions}>
+            <Input placeholder="例如：BAAI/bge-m3" />
+          </AutoComplete>
         </Form.Item>
-        <Form.Item label="默认音色">
-          <Select
-            options={[
-              { value: 'xiaoxiao', label: '晓晓' },
-              { value: 'yunxi', label: '云希' },
-            ]}
-          />
+        <Form.Item
+          label="语音模型"
+          name="speechModel"
+          rules={[{ required: true, message: '请输入语音模型' }]}
+          extra="用于数字人播报和文本转语音。"
+        >
+          <AutoComplete options={speechOptions}>
+            <Input placeholder="例如：zh-CN-XiaoxiaoNeural" />
+          </AutoComplete>
         </Form.Item>
-        <Form.Item label="欢迎词">
-          <Input.TextArea rows={4} placeholder="请输入数字人默认欢迎词" />
+        <Form.Item
+          label="视觉模型"
+          name="visionModel"
+          rules={[{ required: true, message: '请输入视觉模型' }]}
+          extra="用于图片理解、景区识别和视觉问答。"
+        >
+          <AutoComplete options={visionOptions}>
+            <Input placeholder="例如：Qwen/Qwen2.5-VL-7B-Instruct" />
+          </AutoComplete>
         </Form.Item>
+        <Form.Item
+          label="多模态/对话模型"
+          name="multimodalModel"
+          rules={[{ required: true, message: '请输入多模态模型' }]}
+          extra="用于图文联合理解、复杂问答，DeepSeek 这类对话模型也可以挂在这里统一管理。"
+        >
+          <AutoComplete options={multimodalOptions}>
+            <Input placeholder="例如：deepseek-v4-flash" />
+          </AutoComplete>
+        </Form.Item>
+        <div className="admin-action-row">
+          <Button type="primary" htmlType="submit" loading={saving}>
+            保存设置
+          </Button>
+          <Button onClick={() => form.resetFields()} disabled={saving || loading}>
+            重置表单
+          </Button>
+        </div>
       </Form>
+      <Card
+        size="small"
+        title="新增模型候选"
+        className="admin-build-summary"
+        style={{ marginTop: 16 }}
+      >
+        <Form
+          form={addOptionForm}
+          layout="vertical"
+          onFinish={(values) => void handleAddOption(values)}
+        >
+          <Form.Item
+            label="模型分类"
+            name="category"
+            rules={[{ required: true, message: '请选择模型分类' }]}
+          >
+            <Select options={MODEL_CATEGORY_OPTIONS as unknown as { value: string; label: string }[]} />
+          </Form.Item>
+          <Form.Item
+            label="模型提供方"
+            name="provider"
+            rules={[{ required: true, message: '请选择或输入提供方' }]}
+          >
+            <AutoComplete options={PROVIDER_OPTIONS}>
+              <Input placeholder="例如：DeepSeek" />
+            </AutoComplete>
+          </Form.Item>
+          <Form.Item
+            label="模型 ID"
+            name="modelId"
+            rules={[{ required: true, message: '请输入模型 ID' }]}
+            extra="可以直接添加 DeepSeek 模型，例如 deepseek-v4-flash、deepseek-v4-pro。"
+          >
+            <Input placeholder="例如：deepseek-v4-flash" />
+          </Form.Item>
+          <div className="admin-action-row">
+            <Button type="primary" htmlType="submit" loading={addingOption}>
+              添加到候选列表
+            </Button>
+          </div>
+        </Form>
+      </Card>
     </Card>
   )
 }
