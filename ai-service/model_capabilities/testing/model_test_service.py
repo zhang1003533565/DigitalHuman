@@ -20,7 +20,7 @@ class ModelTestResult:
     detail: str | None = None
 
 
-def test_model(provider: str, category: str, model_id: str) -> ModelTestResult:
+def test_model(provider: str, category: str, model_id: str, text: str | None = None) -> ModelTestResult:
     normalized_category = category.strip().lower()
     normalized_provider = provider.strip()
     normalized_model_id = model_id.strip()
@@ -30,7 +30,7 @@ def test_model(provider: str, category: str, model_id: str) -> ModelTestResult:
     if normalized_category in {"vision", "chat", "multimodal"}:
         return test_chat_model(normalized_provider, normalized_category, normalized_model_id)
     if normalized_category == "speech":
-        return test_speech_model(normalized_provider, normalized_model_id)
+        return test_speech_model(normalized_provider, normalized_model_id, text)
 
     return ModelTestResult(False, f"暂不支持测试模型分类：{category}")
 
@@ -61,15 +61,16 @@ def test_chat_model(provider: str, category: str, model_id: str) -> ModelTestRes
     return ModelTestResult(True, "对话接口调用成功", detail)
 
 
-def test_speech_model(provider: str, model_id: str) -> ModelTestResult:
+def test_speech_model(provider: str, model_id: str, text: str | None = None) -> ModelTestResult:
     if provider.lower() not in {"azure", "edge-tts", "edgetts"}:
         raise HTTPException(status_code=400, detail=f"{provider} 当前未接入语音测试逻辑")
+    content = (text or "").strip() or "您好，欢迎来到灵山胜境，这是一段语音测试。"
 
     async def synthesize() -> int:
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp_file:
             tmp_path = tmp_file.name
         try:
-            return await synthesize_voice_to_file("灵山胜境语音测试", model_id, tmp_path)
+            return await synthesize_voice_to_file(content, model_id, tmp_path)
         finally:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)

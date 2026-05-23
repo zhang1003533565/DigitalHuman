@@ -34,9 +34,9 @@ public class AdminSettingsService {
     private static final Path AI_SERVICE_ROOT = PROJECT_ROOT.resolve("ai-service");
     private static final Map<String, String> PROVIDER_DOC_FILES = Map.of(
             "DeepSeek", "model_providers/deepseek/docs/models.md",
-            "OpenAI", "model_providers/openai/docs/models.md",
             "Qwen", "model_providers/qwen/docs/models.md",
-            "Google", "model_providers/google/docs/models.md",
+            "Volcengine", "model_providers/volcengine/docs/models.md",
+            "Xunfei", "model_providers/xunfei/docs/models.md",
             "Local TTS", "model_providers/local_tts/docs/models.md"
     );
 

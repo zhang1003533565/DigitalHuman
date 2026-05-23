@@ -50,7 +50,7 @@ def query(request: QueryRequest) -> QueryResponse:
 @app.post("/admin/model-test", response_model=ModelTestResponse)
 def model_test(request: ModelTestRequest) -> ModelTestResponse:
     try:
-        result = test_model(request.provider, request.category, request.model_id)
+        result = test_model(request.provider, request.category, request.model_id, request.text)
         return ModelTestResponse.model_validate({
             "success": result.success,
             "provider": request.provider,

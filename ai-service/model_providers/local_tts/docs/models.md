@@ -1,29 +1,27 @@
 # 本地 TTS / 音色说明
 
-本文说明当前项目里“语音模型”这一栏在实际含义上对应什么。
-
-更新时间基准：
-- 当前整理时间：2026-05-23
+当前项目的语音合成不是远程大模型 provider，而是走本地 `edge-tts`。
 
 ## 官方明确列出的模型
 
-当前项目的语音合成并不是接某一家远程大模型 provider，而是走本地 `edge-tts` 能力。
+这里更准确的叫法不是“模型”，而是：
 
-因此这里严格来说不是“模型列表”，而是：
+- 本地可用音色（voice）
 
-- 本地可用音色（voice）列表
+当前系统会动态读取：
 
-当前系统会通过下面的链路动态读取：
+- `edge_tts.list_voices()`
 
-- `frontend-admin` -> `/api/tts/voices`
-- `backend-java` -> `ai-service /voices`
-- `ai-service` -> `edge_tts.list_voices()`
+因此网页里看到的语音项，是当前本地环境真实支持的微软 voice 列表，例如：
 
-也就是说，网页里看到的语音项是**当前本地环境实际支持的 voice**，不是后台手工预置的模型。
+- `zh-CN-XiaoxiaoNeural`
+- `zh-CN-YunxiNeural`
+- `en-US-JennyNeural`
 
 ## 官方未明确公开的模型类型
 
-由于这里走的是本地 `edge-tts` 音色能力，而不是某家 provider 的统一“模型清单”，所以：
+这里不是远程 LLM 模型清单，不适合和对话模型、视觉模型放在同一标准下理解。
 
-- 不适合把它写成远程 provider 模型文档
-- 也不适合和 DeepSeek / OpenAI / Qwen 的对话模型放在同一层理解
+它更适合理解为：
+
+- 本地 TTS 音色能力

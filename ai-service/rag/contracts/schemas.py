@@ -77,6 +77,7 @@ class ModelTestRequest(BaseModel):
     provider: str = Field(..., min_length=1)
     category: str = Field(..., min_length=1)
     model_id: str = Field(..., min_length=1, alias="modelId")
+    text: str | None = None
 
 
 class ModelTestResponse(BaseModel):

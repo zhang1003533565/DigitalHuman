@@ -49,16 +49,16 @@ cp model_providers/config/model_provider_configs.example.json model_providers/de
 
 - `embedding`
   - `BAAI` / `Local`：直接测试本地 embedding 模型是否能返回向量
-  - 其它 provider：按 OpenAI-compatible `/embeddings` 测试
+  - 已接入兼容协议的 provider：按 `/embeddings` 测试
 - `vision`
-  - 按 OpenAI-compatible `/chat/completions` 做连通性测试
+  - 按兼容对话接口做连通性测试
   - 当前是文本探活，不会真的上传图片
 - `chat`
-  - 按 OpenAI-compatible `/chat/completions` 做连通性测试
+  - 按兼容对话接口做连通性测试
 - `multimodal`
-  - 按 OpenAI-compatible `/chat/completions` 做连通性测试
+  - 按兼容对话接口做连通性测试
 - `speech`
-  - 当前只支持 `Azure` / `edge-tts` 风格语音名测试
+  - 当前走本地 `edge-tts` 风格语音名测试
 
 ## 4. 注意
 

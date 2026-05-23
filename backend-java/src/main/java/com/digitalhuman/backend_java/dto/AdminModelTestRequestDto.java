@@ -4,6 +4,7 @@ public class AdminModelTestRequestDto {
 
     private String category;
     private String modelId;
+    private String text;
 
     public String getCategory() {
         return category;
@@ -19,5 +20,13 @@ public class AdminModelTestRequestDto {
 
     public void setModelId(String modelId) {
         this.modelId = modelId;
+    }
+
+    public String getText() {
+        return text;
+    }
+
+    public void setText(String text) {
+        this.text = text;
     }
 }

@@ -8,11 +8,25 @@
       "notes": "DeepSeek official docs: https://api-docs.deepseek.com/"
     },
     {
-      "provider": "OpenAI",
+      "provider": "Qwen",
       "protocol": "openai_compatible",
-      "baseUrl": "https://api.openai.com/v1",
-      "apiKey": "fill_your_openai_api_key_here",
-      "notes": "OpenAI official docs: https://platform.openai.com/docs/api-reference/models/list"
+      "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "apiKey": "fill_your_qwen_api_key_here",
+      "notes": "Qwen official docs: https://help.aliyun.com/zh/model-studio/"
+    },
+    {
+      "provider": "Volcengine",
+      "protocol": "custom",
+      "baseUrl": "fill_your_volcengine_base_url_here",
+      "apiKey": "fill_your_volcengine_api_key_here",
+      "notes": "Volcengine provider placeholder"
+    },
+    {
+      "provider": "Xunfei",
+      "protocol": "custom",
+      "baseUrl": "fill_your_xunfei_base_url_here",
+      "apiKey": "fill_your_xunfei_api_key_here",
+      "notes": "Xunfei provider placeholder"
     }
   ]
 }
