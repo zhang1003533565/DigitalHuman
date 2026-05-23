@@ -648,6 +648,11 @@
     0 0 34px rgba(45, 166, 255, 0.22);
 }
 
+.auth-card--login-compact {
+  min-height: 540px;
+  padding-bottom: 24px;
+}
+
 .auth-card--tourism::before {
   content: '';
   position: absolute;
@@ -763,7 +768,7 @@
 
 .auth-form {
   display: grid;
-  gap: 28px;
+  gap: 18px;
 }
 
 .auth-mode-switch {
@@ -839,6 +844,16 @@
 .auth-input__suffix {
   right: 18px;
   color: rgba(163, 203, 240, 0.72);
+}
+
+.auth-input__suffix--clickable {
+  cursor: pointer;
+  transition: color 0.18s ease;
+}
+
+.auth-input__suffix--clickable:hover,
+.auth-input__suffix--clickable:focus-visible {
+  color: rgba(218, 239, 255, 0.95);
 }
 
 .auth-input__icon svg,
@@ -920,6 +935,27 @@
   font-size: 15px;
 }
 
+.auth-actions--single {
+  justify-content: flex-end;
+  margin-top: 2px;
+}
+
+.auth-actions--inline {
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 18px;
+}
+
+.auth-submit-button--inline {
+  width: auto;
+  min-width: 184px;
+  margin-top: 0;
+  padding: 14px 28px;
+  font-size: 32px;
+  line-height: 1;
+  letter-spacing: 0.06em;
+}
+
 .auth-checkbox {
   display: inline-flex;
   align-items: center;
@@ -953,6 +989,16 @@
   margin: 0;
   color: #ffb7b2;
   font-size: 14px;
+}
+
+.field-message {
+  margin: -10px 0 0;
+  padding-left: 4px;
+  color: rgba(255, 132, 132, 0.84);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
 }
 
 .sr-only {
