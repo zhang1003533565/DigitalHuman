@@ -114,17 +114,34 @@ function SpotDrawer({
   const boundsRef = useRef<any>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const geolocationRef = useRef<any>(null)
+  // 组件是否已挂载（防止异步回调在卸载后操作 DOM）
+  const isMountedRef = useRef(false)
 
   const removeGalleryItem = (id: string) => {
     setGallery((prev) => prev.filter((item) => item.id !== id))
   }
 
-  // 初始化高德地图：限制视野与选点范围在灵山景区
+  // 仅负责卸载时清理地图实例
   useEffect(() => {
-    let cancelled = false
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.destroy?.()
+        mapInstanceRef.current = null
+      }
+      markerRef.current = null
+      boundsRef.current = null
+      geolocationRef.current = null
+    }
+  }, [])
+
+  // Drawer 动画结束后调用，此时容器已在视口内，AMap 可正确读取尺寸并加载瓦片
+  const initAMap = () => {
+    if (mapInstanceRef.current || !mapContainerRef.current) return
     loadAMap()
       .then((AMap) => {
-        if (cancelled || !mapContainerRef.current) return
+        if (!isMountedRef.current || !mapContainerRef.current || mapInstanceRef.current) return
 
         const sw = new AMap.LngLat(LINGSHAN_BOUNDS_SW[0], LINGSHAN_BOUNDS_SW[1])
         const ne = new AMap.LngLat(LINGSHAN_BOUNDS_NE[0], LINGSHAN_BOUNDS_NE[1])
@@ -138,11 +155,9 @@ function SpotDrawer({
           zooms: [13, 19],
           mapStyle: 'amap://styles/normal',
         })
-        // 限制地图浏览范围在灵山景区内
         map.setLimitBounds?.(bounds)
         mapInstanceRef.current = map
 
-        // 初始标记点（默认中心）
         const marker = new AMap.Marker({
           position: LINGSHAN_CENTER,
           draggable: true,
@@ -150,13 +165,11 @@ function SpotDrawer({
           map,
         })
         markerRef.current = marker
-        // 同步初始经纬度到表单
         form.setFieldsValue({
           longitude: LINGSHAN_CENTER[0].toFixed(6),
           latitude: LINGSHAN_CENTER[1].toFixed(6),
         })
 
-        // 点击地图选点：仅允许在灵山景区范围内
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         map.on('click', (e: any) => {
           const lngLat = e?.lnglat
@@ -172,7 +185,6 @@ function SpotDrawer({
           })
         })
 
-        // 拖拽标记选点
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         marker.on('dragend', (e: any) => {
           const lngLat = e?.lnglat ?? marker.getPosition()
@@ -192,11 +204,10 @@ function SpotDrawer({
           })
         })
 
-        // 加载控件插件：工具条（缩放）、比例尺、定位
         AMap.plugin(
           ['AMap.ToolBar', 'AMap.Scale', 'AMap.Geolocation'],
           () => {
-            if (cancelled) return
+            if (!isMountedRef.current) return
             const toolbar = new AMap.ToolBar({
               position: { top: '10px', right: '10px' },
               ruler: false,
@@ -226,18 +237,7 @@ function SpotDrawer({
       .catch((err) => {
         console.error('AMap load failed', err)
       })
-
-    return () => {
-      cancelled = true
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.destroy?.()
-        mapInstanceRef.current = null
-      }
-      markerRef.current = null
-      boundsRef.current = null
-      geolocationRef.current = null
-    }
-  }, [form])
+  }
 
   // 重置选点到灵山景区中心
   const handleResetCenter = () => {
@@ -262,9 +262,7 @@ function SpotDrawer({
       destroyOnClose
       styles={{ body: { padding: 0, background: '#f5f7fa' } }}
       afterOpenChange={(visible) => {
-        if (visible && mapInstanceRef.current) {
-          mapInstanceRef.current.resize?.()
-        }
+        if (visible) initAMap()
       }}
     >
       <div className="spot-drawer">
