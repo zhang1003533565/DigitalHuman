@@ -16,7 +16,7 @@ import {
 import { Layout, Menu, Button, Card, Form, Input, Table, Tag, Statistic, Row, Col, Upload, Select, AutoComplete, Tabs, message } from 'antd'
 import type { UploadProps } from 'antd'
 import type { MenuProps, TableColumnsType } from 'antd'
-import SpotAddPage from './pages/SpotAddPage'
+import SpotDrawer from './pages/SpotAddPage'
 import SpotCategoryPage from './pages/SpotCategoryPage'
 import FacilityListPage from './pages/FacilityListPage'
 import './App.css'
@@ -36,7 +36,6 @@ type MenuKey =
   | 'dashboard'
   | 'knowledge'
   | 'spots'
-  | 'spot-add'
   | 'spot-category'
   | 'facility-list'
   | 'routes'
@@ -186,7 +185,6 @@ const menuItems: MenuProps['items'] = [
     icon: <EnvironmentOutlined />,
     label: '景点管理',
     children: [
-      { key: 'spot-add', label: '新增景点' },
       { key: 'spot-category', label: '景点分类' },
       { key: 'facility-list', label: '全部设施' },
     ],
@@ -975,8 +973,6 @@ function renderPanel(activeKey: MenuKey) {
       return <KnowledgePanel />
     case 'spots':
       return <SpotsPanel />
-    case 'spot-add':
-      return <SpotAddPage />
     case 'spot-category':
       return <SpotCategoryPage />
     case 'facility-list':
@@ -1056,9 +1052,17 @@ function LoginView({
 
 function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: () => void }) {
   const [activeKey, setActiveKey] = useState<MenuKey>('dashboard')
+  const [spotDrawerOpen, setSpotDrawerOpen] = useState(false)
 
   return (
     <Layout className="admin-shell">
+      <SpotDrawer
+        open={spotDrawerOpen}
+        onClose={() => setSpotDrawerOpen(false)}
+        title="新增景点"
+        actionText="发布景点"
+        onAction={() => { message.success('发布成功'); setSpotDrawerOpen(false) }}
+      />
       <Sider width={248} className="admin-sider">
         <div className="admin-brand">
           <strong>数字人管理后台</strong>
@@ -1096,7 +1100,11 @@ function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: () => vo
             <Button icon={<UserOutlined />} onClick={onLogout}>退出登录</Button>
           </div>
         </Header>
-        <Content className="admin-content">{renderPanel(activeKey)}</Content>
+        <Content className="admin-content">
+            {activeKey === 'facility-list'
+              ? <FacilityListPage onAddFacility={() => setSpotDrawerOpen(true)} />
+              : renderPanel(activeKey)}
+          </Content>
       </Layout>
     </Layout>
   )
