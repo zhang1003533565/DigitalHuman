@@ -166,12 +166,32 @@ const HARU_MICRO_MOTION_OPTIONS: MotionOption[] = [
 ]
 
 const HIYORI_MOTION_OPTIONS: MotionOption[] = [
-  { label: '身体点击', group: 'Tap@Body' },
+  { label: '待机 01', group: 'Idle', index: 0 },
+  { label: '待机 02', group: 'Idle', index: 1 },
+  { label: '待机 03', group: 'Idle', index: 2 },
+  { label: '轻扫', group: 'Flick', index: 0 },
+  { label: '下滑', group: 'FlickDown', index: 0 },
+  { label: '上滑', group: 'FlickUp', index: 0 },
+  { label: '点击 01', group: 'Tap', index: 0 },
+  { label: '点击 02', group: 'Tap', index: 1 },
+  { label: '身体点击', group: 'Tap@Body', index: 0 },
+  { label: '身体轻扫', group: 'Flick@Body', index: 0 },
+]
+
+const KEI_MOTION_OPTIONS: MotionOption[] = [
+  { label: '英文口型动作', group: '', index: 0 },
+  { label: '日文口型动作', group: '', index: 1 },
+  { label: '韩文口型动作', group: '', index: 2 },
+  { label: '中文口型动作', group: '', index: 3 },
 ]
 
 const MARK_MOTION_OPTIONS: MotionOption[] = [
-  { label: '上滑', group: 'FlickUp' },
-  { label: '下滑', group: 'FlickDown' },
+  { label: '待机', group: 'Idle', index: 0 },
+  { label: '点击 01', group: 'Tap', index: 0 },
+  { label: '点击 02', group: 'Tap', index: 1 },
+  { label: '点击 03', group: 'Tap', index: 2 },
+  { label: '下滑', group: 'FlickDown', index: 0 },
+  { label: '上滑', group: 'FlickUp', index: 0 },
 ]
 
 export const MODEL_OPTIONS = [
@@ -189,6 +209,7 @@ export const MODEL_OPTIONS = [
     id: 'kei_vowels_pro',
     name: 'Kei 中文口型模型',
     url: '/live2d/kei_vowels_pro/kei_vowels_pro.model3.json',
+    motionOptions: KEI_MOTION_OPTIONS,
   },
   {
     id: 'haru_greeter_pro_jp',
