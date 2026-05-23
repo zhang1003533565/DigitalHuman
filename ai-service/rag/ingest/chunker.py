@@ -6,8 +6,8 @@ from pathlib import Path
 import hashlib
 import re
 
-from rag.schemas import ChunkPayload, ChunkRecord
-from rag.parser import ParsedElement
+from rag.core.schemas import ChunkPayload, ChunkRecord
+from rag.ingest.parser import ParsedElement
 
 
 @dataclass

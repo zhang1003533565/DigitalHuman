@@ -8,8 +8,8 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from model_capabilities.testing.model_test_service import test_model
 from model_capabilities.tts.router import router as tts_router
 from model_providers.config_store import delete_provider_config, load_provider_configs, save_provider_config
-from rag.schemas import IngestRequest, IngestResponse, KnowledgeDocumentInfo, ModelTestRequest, ModelTestResponse, ProviderConfigRequest, ProviderConfigResponse, ProviderDeleteRequest, QueryRequest, QueryResponse, RetrieveRequest, RetrieveResponse, UploadKnowledgeResponse
-from rag.service import RagService
+from rag.core.schemas import IngestRequest, IngestResponse, KnowledgeDocumentInfo, ModelTestRequest, ModelTestResponse, ProviderConfigRequest, ProviderConfigResponse, ProviderDeleteRequest, QueryRequest, QueryResponse, RetrieveRequest, RetrieveResponse, UploadKnowledgeResponse
+from rag.services.rag_service import RagService
 
 
 app = FastAPI(title="DigitalHuman RAG Service")

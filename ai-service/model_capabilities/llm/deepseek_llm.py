@@ -5,7 +5,7 @@ import json
 
 import requests
 
-from rag.schemas import ChunkRecord
+from rag.core.schemas import ChunkRecord
 
 
 @dataclass
@@ -16,7 +16,7 @@ class LlmConfig:
     timeout_seconds: int
 
 
-class OpenAICompatibleLlm:
+class DeepSeekLlm:
     def __init__(self, config: LlmConfig) -> None:
         self.config = config
 

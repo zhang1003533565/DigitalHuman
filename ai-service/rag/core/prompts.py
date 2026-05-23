@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from rag.schemas import ChunkRecord
+from rag.core.schemas import ChunkRecord
 
 
 def build_grounded_answer(question: str, chunks: list[ChunkRecord]) -> str:

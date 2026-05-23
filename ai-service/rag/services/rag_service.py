@@ -5,17 +5,17 @@ from datetime import datetime
 
 from fastapi import HTTPException
 
-from rag.chunker import ChunkingConfig, build_chunks
-from rag.config import get_settings
-from rag.embedder import BgeM3Embedder
-from rag.llm import LlmConfig, OpenAICompatibleLlm
-from rag.parser import parse_document
-from rag.prompts import build_grounded_answer
-from rag.reranker import BgeReranker
-from rag.retriever import Retriever
-from rag.schemas import IngestRequest, IngestResponse, KnowledgeDocumentInfo, QueryRequest, QueryResponse, RetrieveRequest, RetrieveResponse, UploadKnowledgeResponse
-from rag.storage import ensure_directory, is_supported_file_name, save_uploaded_file
-from rag.vectordb import QdrantVectorStore
+from rag.core.config import get_settings
+from rag.core.prompts import build_grounded_answer
+from rag.core.schemas import IngestRequest, IngestResponse, KnowledgeDocumentInfo, QueryRequest, QueryResponse, RetrieveRequest, RetrieveResponse, UploadKnowledgeResponse
+from rag.ingest.chunker import ChunkingConfig, build_chunks
+from rag.ingest.parser import parse_document
+from rag.io.storage import ensure_directory, is_supported_file_name, save_uploaded_file
+from rag.llm import LlmConfig, ProviderBackedLlm, infer_provider_name
+from rag.retrieval.embedder import BgeM3Embedder
+from rag.retrieval.reranker import BgeReranker
+from rag.retrieval.retriever import Retriever
+from rag.retrieval.vectordb import QdrantVectorStore
 
 
 class RagService:
@@ -23,8 +23,9 @@ class RagService:
         self.settings = get_settings()
         self.embedder = BgeM3Embedder(self.settings.embedding_model_name)
         self.reranker = BgeReranker(self.settings.reranker_model_name)
-        self.llm = OpenAICompatibleLlm(
+        self.llm = ProviderBackedLlm(
             LlmConfig(
+                provider=infer_provider_name(self.settings.llm_base_url),
                 base_url=self.settings.llm_base_url,
                 api_key=self.settings.llm_api_key,
                 model=self.settings.llm_model,

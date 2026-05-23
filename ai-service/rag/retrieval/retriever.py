@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from rag.embedder import BgeM3Embedder
-from rag.reranker import BgeReranker
-from rag.schemas import ChunkRecord
-from rag.vectordb import QdrantVectorStore
+from rag.core.schemas import ChunkRecord
+from rag.retrieval.embedder import BgeM3Embedder
+from rag.retrieval.reranker import BgeReranker
+from rag.retrieval.vectordb import QdrantVectorStore
 
 
 class Retriever:

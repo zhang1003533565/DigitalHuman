@@ -5,7 +5,7 @@
 你需要手动填写两部分：
 
 1. 管理后台里的模型候选项
-2. `ai-service/model_providers/config/model_provider_configs.local.json` 里的 provider 连接信息
+2. `ai-service/model_providers/<provider>/config.local.json` 里的 provider 连接信息
 
 ## 1. 本地配置文件
 
@@ -13,10 +13,14 @@
 
 ```bash
 cd ai-service
-cp model_providers/config/model_provider_configs.example.json model_providers/config/model_provider_configs.local.json
+cp model_providers/config/model_provider_configs.example.json model_providers/deepseek/config.local.json
 ```
 
-然后手动填写你实际要测试的 provider。
+然后把内容改成对应 provider 的实际配置。不同 provider 建议各自放在自己的目录下，例如：
+
+- `model_providers/deepseek/config.local.json`
+- `model_providers/openai/config.local.json`
+- `model_providers/qwen/config.local.json`
 
 示例：
 
@@ -38,7 +42,7 @@ cp model_providers/config/model_provider_configs.example.json model_providers/co
 在后台设置页的“手动维护”里逐条添加：
 
 - 模型分类：`embedding` / `speech` / `vision` / `chat` / `multimodal`
-- 模型提供方：必须和 `model_provider_configs.local.json` 的 `provider` 保持一致
+- 模型提供方：必须和对应 `config.local.json` 的 `provider` 保持一致
 - 模型 ID：填官方模型名
 
 ## 3. 当前测试规则

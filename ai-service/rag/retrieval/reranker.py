@@ -4,7 +4,7 @@ import math
 import re
 from functools import cached_property
 
-from rag.schemas import ChunkRecord
+from rag.core.schemas import ChunkRecord
 
 
 class BgeReranker:

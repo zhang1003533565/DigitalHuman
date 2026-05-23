@@ -3,7 +3,7 @@ from __future__ import annotations
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 
-from rag.schemas import ChunkRecord
+from rag.core.schemas import ChunkRecord
 
 
 class QdrantVectorStore:

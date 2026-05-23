@@ -5,13 +5,12 @@ import os
 import tempfile
 from dataclasses import dataclass
 
-import requests
 from fastapi import HTTPException
 
-from model_capabilities.llm.openai_compatible import normalize_base_url
 from model_capabilities.tts.edge_tts_adapter import synthesize_voice_to_file
 from model_providers.config_store import find_provider_config
-from rag.embedder import BgeM3Embedder
+from model_providers.registry import get_provider_client
+from rag.retrieval.embedder import BgeM3Embedder
 
 
 @dataclass
@@ -47,28 +46,8 @@ def test_embedding_model(provider: str, model_id: str) -> ModelTestResult:
     config = require_provider_config(provider)
     if get_protocol(config) != "openai_compatible":
         raise HTTPException(status_code=400, detail=f"{provider} 当前未配置可测试的 embedding 协议")
-
-    try:
-        response = requests.post(
-            normalize_base_url(config["baseUrl"]) + "/embeddings",
-            headers=build_auth_headers(config["apiKey"]),
-            json={
-                "model": model_id,
-                "input": "灵山胜境模型测试",
-            },
-            timeout=45,
-        )
-        response.raise_for_status()
-    except requests.HTTPError as exc:
-        detail = extract_http_error_detail(exc.response)
-        raise HTTPException(status_code=400, detail=f"Embedding 接口测试失败：{detail}") from exc
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail=f"Embedding 接口连接失败：{exc}") from exc
-
-    data = response.json().get("data") or []
-    if not data:
-        return ModelTestResult(False, "Embedding 接口调用成功，但未返回向量数据")
-    embedding = data[0].get("embedding") or []
+    client = get_provider_client(provider, config)
+    embedding = client.test_embedding(model_id, "灵山胜境模型测试")
     return ModelTestResult(True, "Embedding 接口调用成功", f"返回向量维度：{len(embedding)}")
 
 
@@ -76,33 +55,8 @@ def test_chat_model(provider: str, category: str, model_id: str) -> ModelTestRes
     config = require_provider_config(provider)
     if get_protocol(config) != "openai_compatible":
         raise HTTPException(status_code=400, detail=f"{provider} 当前未配置可测试的对话协议")
-
-    try:
-        response = requests.post(
-            normalize_base_url(config["baseUrl"]) + "/chat/completions",
-            headers=build_auth_headers(config["apiKey"]),
-            json={
-                "model": model_id,
-                "temperature": 0,
-                "messages": [
-                    {"role": "system", "content": "You are a health check assistant."},
-                    {"role": "user", "content": f"Reply with OK for {category} model test."},
-                ],
-                "max_tokens": 16,
-            },
-            timeout=45,
-        )
-        response.raise_for_status()
-    except requests.HTTPError as exc:
-        detail = extract_http_error_detail(exc.response)
-        raise HTTPException(status_code=400, detail=f"对话接口测试失败：{detail}") from exc
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail=f"对话接口连接失败：{exc}") from exc
-
-    choices = response.json().get("choices") or []
-    if not choices:
-        return ModelTestResult(False, "对话接口调用成功，但未返回结果")
-    content = ((choices[0].get("message") or {}).get("content") or "").strip()
+    client = get_provider_client(provider, config)
+    content = client.test_chat_completion(model_id, category)
     detail = content[:120] if content else "模型有响应，但内容为空"
     return ModelTestResult(True, "对话接口调用成功", detail)
 
@@ -138,28 +92,3 @@ def require_provider_config(provider: str) -> dict[str, str]:
 
 def get_protocol(config: dict[str, str]) -> str:
     return str(config.get("protocol", "openai_compatible")).strip().lower()
-
-
-def build_auth_headers(api_key: str) -> dict[str, str]:
-    return {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-
-
-def extract_http_error_detail(response: requests.Response | None) -> str:
-    if response is None:
-        return "上游接口未返回响应"
-    try:
-        payload = response.json()
-        error = payload.get("error")
-        if isinstance(error, dict):
-            return str(error.get("message") or error)
-        if error:
-            return str(error)
-        detail = payload.get("detail")
-        if detail:
-            return str(detail)
-    except Exception:
-        pass
-    return f"HTTP {response.status_code}: {response.text[:200]}"
