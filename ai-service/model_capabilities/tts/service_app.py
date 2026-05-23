@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-Edge TTS FastAPI service.
+Standalone Edge TTS FastAPI service app.
 """
 
 import os
 import uuid
 
-import edge_tts
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse, Response
+from model_capabilities.tts.edge_tts_adapter import list_voice_short_names, synthesize_voice_to_file
 from pydantic import BaseModel, Field
 
 
@@ -26,7 +26,6 @@ class TtsRequest(BaseModel):
 
 @app.post("/tts")
 async def tts_handler(request: TtsRequest):
-    """Handle TTS synthesis requests."""
     try:
         import tempfile
 
@@ -34,14 +33,14 @@ async def tts_handler(request: TtsRequest):
             tmp_path = tmp_file.name
 
         try:
-            communicate = edge_tts.Communicate(
+            await synthesize_voice_to_file(
                 request.text,
                 request.voice,
+                tmp_path,
                 rate=request.rate,
                 volume=request.volume,
                 pitch=request.pitch,
             )
-            await communicate.save(tmp_path)
 
             with open(tmp_path, "rb") as f:
                 audio_data = f.read()
@@ -68,9 +67,8 @@ async def tts_handler(request: TtsRequest):
 
 @app.get("/voices")
 async def voices_handler():
-    """Return available voices."""
     try:
-        voices = await edge_tts.list_voices()
+        voices = await list_voice_short_names()
         return JSONResponse({"success": True, "voices": voices})
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch voices: {str(e)}")
@@ -78,14 +76,13 @@ async def voices_handler():
 
 @app.get("/health")
 async def health_handler():
-    """Health check endpoint."""
     return {"status": "ok"}
 
 
 def main():
     host = os.getenv("EDGE_TTS_HOST", "127.0.0.1")
     port = int(os.getenv("EDGE_TTS_PORT", "18754"))
-    uvicorn.run("edge_tts_service:app", host=host, port=port, reload=False)
+    uvicorn.run("model_capabilities.tts.service_app:app", host=host, port=port, reload=False)
 
 
 if __name__ == "__main__":

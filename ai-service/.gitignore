@@ -1,4 +1,4 @@
 .env
 .venv/
 __pycache__/
-model_provider_configs.local.json
+model_providers/config/model_provider_configs.local.json

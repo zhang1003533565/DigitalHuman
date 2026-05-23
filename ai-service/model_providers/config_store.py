@@ -4,8 +4,9 @@ import json
 from pathlib import Path
 
 
-AI_SERVICE_ROOT = Path(__file__).resolve().parent
-LOCAL_CONFIG_PATH = AI_SERVICE_ROOT / "model_provider_configs.local.json"
+PROVIDERS_ROOT = Path(__file__).resolve().parent
+AI_SERVICE_ROOT = PROVIDERS_ROOT.parent
+LOCAL_CONFIG_PATH = PROVIDERS_ROOT / "config" / "model_provider_configs.local.json"
 
 
 def load_provider_configs() -> list[dict[str, str]]:

@@ -16,22 +16,14 @@
 
 根据 OpenAI 官方 Models 页，当前明确公开展示的模型家族包括：
 
-### Frontier / 通用文本与推理
-
 - `gpt-5.2`
 - `gpt-5 mini`
 - `gpt-5 nano`
 - `gpt-5.2 pro`
 - `gpt-5`
 - `gpt-4.1`
-
-### Open-weight
-
 - `gpt-oss-120b`
 - `gpt-oss-20b`
-
-### Specialized
-
 - `Sora 2`
 - `Sora 2 Pro`
 - `o3-deep-research`
@@ -43,35 +35,14 @@
 - `GPT-4o mini TTS`
 - `GPT-4o Transcribe`
 - `GPT-4o mini Transcribe`
-
-### Realtime and audio
-
 - `gpt-realtime`
 - `gpt-audio`
 - `gpt-realtime-mini`
 - `gpt-audio-mini`
-
-### Embeddings
-
-根据 Embeddings API 文档与当前官方公开资料，可明确引用：
-
 - `text-embedding-3-large`
 - `text-embedding-3-small`
-
-### 多模态 / 图文理解
-
-根据官方公开资料，可明确引用：
-
 - `gpt-4o`
 - `gpt-4o-mini`
-
-### 接入方式
-
-- Base URL：`https://api.openai.com/v1`
-- 鉴权：`Authorization: Bearer <OPENAI_API_KEY>`
-- 模型列表：`GET /models`
-- 对话：`POST /chat/completions`
-- Embedding：`POST /embeddings`
 
 ## 官方未明确公开的模型类型
 

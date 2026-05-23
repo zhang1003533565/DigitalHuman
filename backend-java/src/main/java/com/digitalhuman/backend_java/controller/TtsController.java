@@ -89,7 +89,7 @@ public class TtsController {
         Map<String, String> status = new HashMap<>();
         boolean edgeServiceRunning = ttsService.isServiceAvailable();
         status.put("status", edgeServiceRunning ? "ok" : "degraded");
-        status.put("edge_tts_service", edgeServiceRunning ? "running" : "not_running");
+        status.put("local_tts_service", edgeServiceRunning ? "running" : "not_running");
         status.put("message", edgeServiceRunning ? "All services healthy" : "Unified ai-service needs to be started");
         return ResponseEntity.ok(status);
     }

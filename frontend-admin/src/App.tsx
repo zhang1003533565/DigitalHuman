@@ -1280,6 +1280,7 @@ function SettingsPanel() {
                             { value: 'OpenAI', label: 'OpenAI' },
                             { value: 'Qwen', label: 'Qwen' },
                             { value: 'Google', label: 'Google / Gemini' },
+                            { value: 'Local TTS', label: 'Local TTS / edge-tts' },
                           ]}
                           onChange={setProviderDocSelection}
                           style={{ width: 220 }}

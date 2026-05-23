@@ -5,11 +5,11 @@ RAG FastAPI service for ingesting the local knowledge base and serving retrieval
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 
-from model_provider_config import delete_provider_config, load_provider_configs, save_provider_config
-from model_test import test_model
+from model_capabilities.testing.model_test_service import test_model
+from model_capabilities.tts.router import router as tts_router
+from model_providers.config_store import delete_provider_config, load_provider_configs, save_provider_config
 from rag.schemas import IngestRequest, IngestResponse, KnowledgeDocumentInfo, ModelTestRequest, ModelTestResponse, ProviderConfigRequest, ProviderConfigResponse, ProviderDeleteRequest, QueryRequest, QueryResponse, RetrieveRequest, RetrieveResponse, UploadKnowledgeResponse
 from rag.service import RagService
-from tts import router as tts_router
 
 
 app = FastAPI(title="DigitalHuman RAG Service")

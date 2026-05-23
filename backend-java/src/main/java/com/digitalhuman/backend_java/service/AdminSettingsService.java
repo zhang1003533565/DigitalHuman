@@ -33,10 +33,11 @@ public class AdminSettingsService {
     private static final Path PROJECT_ROOT = Path.of("").toAbsolutePath().getParent();
     private static final Path AI_SERVICE_ROOT = PROJECT_ROOT.resolve("ai-service");
     private static final Map<String, String> PROVIDER_DOC_FILES = Map.of(
-            "DeepSeek", "DEEPSEEK_MODELS.md",
-            "OpenAI", "OPENAI_MODELS.md",
-            "Qwen", "QWEN_MODELS.md",
-            "Google", "GEMINI_MODELS.md"
+            "DeepSeek", "model_providers/deepseek/docs/models.md",
+            "OpenAI", "model_providers/openai/docs/models.md",
+            "Qwen", "model_providers/qwen/docs/models.md",
+            "Google", "model_providers/google/docs/models.md",
+            "Local TTS", "model_providers/local_tts/docs/models.md"
     );
 
     @Value("${rag.service-url}")

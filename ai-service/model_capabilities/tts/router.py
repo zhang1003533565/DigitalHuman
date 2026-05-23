@@ -4,9 +4,9 @@ import os
 import tempfile
 import uuid
 
-import edge_tts
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse, Response
+from model_capabilities.tts.edge_tts_adapter import list_voice_short_names, synthesize_voice_to_file
 from pydantic import BaseModel, Field
 
 
@@ -28,14 +28,14 @@ async def synthesize_tts(request: TtsRequest) -> Response:
             tmp_path = tmp_file.name
 
         try:
-            communicate = edge_tts.Communicate(
+            await synthesize_voice_to_file(
                 request.text,
                 request.voice,
+                tmp_path,
                 rate=request.rate,
                 volume=request.volume,
                 pitch=request.pitch,
             )
-            await communicate.save(tmp_path)
 
             with open(tmp_path, "rb") as audio_file:
                 audio_data = audio_file.read()
@@ -57,7 +57,7 @@ async def synthesize_tts(request: TtsRequest) -> Response:
 @router.get("/voices")
 async def list_tts_voices() -> JSONResponse:
     try:
-        voices = await edge_tts.list_voices()
+        voices = await list_voice_short_names()
         return JSONResponse({"success": True, "voices": voices})
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to fetch voices: {exc}") from exc

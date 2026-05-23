@@ -5,11 +5,12 @@ import os
 import tempfile
 from dataclasses import dataclass
 
-import edge_tts
 import requests
 from fastapi import HTTPException
 
-from model_provider_config import find_provider_config
+from model_capabilities.llm.openai_compatible import normalize_base_url
+from model_capabilities.tts.edge_tts_adapter import synthesize_voice_to_file
+from model_providers.config_store import find_provider_config
 from rag.embedder import BgeM3Embedder
 
 
@@ -114,9 +115,7 @@ def test_speech_model(provider: str, model_id: str) -> ModelTestResult:
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp_file:
             tmp_path = tmp_file.name
         try:
-            communicate = edge_tts.Communicate("灵山胜境语音测试", model_id)
-            await communicate.save(tmp_path)
-            return os.path.getsize(tmp_path)
+            return await synthesize_voice_to_file("灵山胜境语音测试", model_id, tmp_path)
         finally:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
@@ -139,10 +138,6 @@ def require_provider_config(provider: str) -> dict[str, str]:
 
 def get_protocol(config: dict[str, str]) -> str:
     return str(config.get("protocol", "openai_compatible")).strip().lower()
-
-
-def normalize_base_url(base_url: str) -> str:
-    return base_url.rstrip("/")
 
 
 def build_auth_headers(api_key: str) -> dict[str, str]:
