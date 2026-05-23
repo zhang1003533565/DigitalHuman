@@ -649,8 +649,8 @@
 }
 
 .auth-card--login-compact {
-  min-height: 540px;
-  padding-bottom: 24px;
+  min-height: 500px;
+  padding-bottom: 14px;
 }
 
 .auth-card--tourism::before {
@@ -943,7 +943,7 @@
 .auth-actions--inline {
   justify-content: space-between;
   align-items: center;
-  margin-top: 18px;
+  margin-top: 28px;
 }
 
 .auth-submit-button--inline {
