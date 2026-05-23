@@ -4,5 +4,6 @@ public enum ModelCategory {
     EMBEDDING,
     SPEECH,
     VISION,
+    CHAT,
     MULTIMODAL
 }

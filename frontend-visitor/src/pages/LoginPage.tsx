@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react'
 import axios from 'axios'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import '../App.css'
@@ -41,6 +41,15 @@ function EyeOffLineIcon() {
   )
 }
 
+function EyeLineIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M2.5 12s4-7 9.5-7 9.5 7 9.5 7-4 7-9.5 7-9.5-7-9.5-7Z" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+      <circle cx="12" cy="12" r="2.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  )
+}
+
 function CloudLineIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -63,7 +72,15 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
   const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [error, setError] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<{
+    username?: string
+    displayName?: string
+    password?: string
+    confirmPassword?: string
+    form?: string
+  }>({})
   const [submitting, setSubmitting] = useState(false)
   const [now, setNow] = useState(() => new Date())
   const hasTriggeredGreetingRef = useRef(false)
@@ -119,33 +136,42 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    const nextErrors: {
+      username?: string
+      displayName?: string
+      password?: string
+      confirmPassword?: string
+      form?: string
+    } = {}
 
     if (!username.trim()) {
-      setError('请输入用户名。')
-      return
+      nextErrors.username = '请输入用户名'
     }
 
     if (mode === 'register' && !displayName.trim()) {
-      setError('请输入昵称。')
-      return
+      nextErrors.displayName = '请输入昵称'
     }
 
     if (!password.trim()) {
-      setError('请输入密码。')
+      nextErrors.password = '请输入密码'
+    }
+
+    if (mode === 'register' && password.trim() && password.trim().length < 6) {
+      nextErrors.password = '密码至少 6 位'
+    }
+
+    if (mode === 'register' && !confirmPassword.trim()) {
+      nextErrors.confirmPassword = '请确认密码'
+    } else if (mode === 'register' && password !== confirmPassword) {
+      nextErrors.confirmPassword = '两次密码不一致'
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setFieldErrors(nextErrors)
       return
     }
 
-    if (mode === 'register' && password.trim().length < 6) {
-      setError('密码至少需要 6 位。')
-      return
-    }
-
-    if (mode === 'register' && password !== confirmPassword) {
-      setError('两次输入的密码不一致。')
-      return
-    }
-
-    setError('')
+    setFieldErrors({})
     setSubmitting(true)
 
     try {
@@ -164,7 +190,9 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
       )
 
       if (response.data.role !== 'USER') {
-        setError(mode === 'login' ? '当前入口仅允许游客用户登录，请使用用户账号。' : '当前入口仅支持注册游客用户。')
+        setFieldErrors({
+          form: mode === 'login' ? '当前入口仅允许游客用户登录，请使用用户账号。' : '当前入口仅支持注册游客用户。',
+        })
         return
       }
 
@@ -172,9 +200,13 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
       navigate(redirectTarget, { replace: true })
     } catch (submitError) {
       if (axios.isAxiosError(submitError)) {
-        setError(submitError.response?.data?.message ?? '登录失败，请检查账号密码或后端服务。')
+        setFieldErrors({
+          form: submitError.response?.data?.message ?? '登录失败，请检查账号密码或后端服务。',
+        })
       } else {
-        setError('登录失败，请稍后重试。')
+        setFieldErrors({
+          form: '登录失败，请稍后重试。',
+        })
       }
     } finally {
       setSubmitting(false)
@@ -196,6 +228,12 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
   const currentHour = now.getHours()
   const isDaytime = currentHour >= 6 && currentHour < 18
   const loginBgImage = isDaytime ? loginBgDayImage : loginBgNightImage
+  const handleSuffixKeyDown = (event: KeyboardEvent<HTMLSpanElement>, onToggle: () => void) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      onToggle()
+    }
+  }
 
   return (
     <main
@@ -242,7 +280,7 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
             <LoginDigitalHumanAssistant ref={assistantRef} />
           </section>
 
-          <section className="auth-card auth-card--tourism">
+          <section className={`auth-card auth-card--tourism ${mode === 'login' ? 'auth-card--login-compact' : ''}`}>
             <span className="auth-card-corner auth-card-corner--lt"></span>
             <span className="auth-card-corner auth-card-corner--rt"></span>
             <span className="auth-card-corner auth-card-corner--lb"></span>
@@ -255,116 +293,126 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
               </div>
             </div>
             <form className="auth-form" onSubmit={handleSubmit}>
-              <div className="auth-mode-switch" role="tablist" aria-label="登录注册切换">
-                <button
-                  type="button"
-                  className={`auth-mode-switch__button ${mode === 'login' ? 'is-active' : ''}`}
-                  onClick={() => {
-                    setMode('login')
-                    setError('')
-                  }}
-                >
-                  登录
-                </button>
-                <button
-                  type="button"
-                  className={`auth-mode-switch__button ${mode === 'register' ? 'is-active' : ''}`}
-                  onClick={() => {
-                    setMode('register')
-                    setError('')
-                  }}
-                >
-                  注册
-                </button>
-              </div>
-
               <label className="auth-input">
                 <span className="sr-only">用户名</span>
                 <span className="auth-input__icon"><UserLineIcon /></span>
                 <input
                   value={username}
-                  onChange={(event) => setUsername(event.target.value)}
+                  onChange={(event) => {
+                    setUsername(event.target.value)
+                    setFieldErrors((current) => ({ ...current, username: undefined, form: undefined }))
+                  }}
                   placeholder="请输入用户名"
                 />
               </label>
+              {fieldErrors.username ? <p className="field-message">{fieldErrors.username}</p> : null}
 
               {mode === 'register' ? (
-                <label className="auth-input">
-                  <span className="sr-only">昵称</span>
-                  <span className="auth-input__icon"><UserLineIcon /></span>
-                  <input
-                    value={displayName}
-                    onChange={(event) => setDisplayName(event.target.value)}
-                    placeholder="请输入昵称"
-                  />
-                </label>
+                <>
+                  <label className="auth-input">
+                    <span className="sr-only">昵称</span>
+                    <span className="auth-input__icon"><UserLineIcon /></span>
+                    <input
+                      value={displayName}
+                      onChange={(event) => {
+                        setDisplayName(event.target.value)
+                        setFieldErrors((current) => ({ ...current, displayName: undefined, form: undefined }))
+                      }}
+                      placeholder="请输入昵称"
+                    />
+                  </label>
+                  {fieldErrors.displayName ? <p className="field-message">{fieldErrors.displayName}</p> : null}
+                </>
               ) : null}
 
               <label className="auth-input">
                 <span className="sr-only">密码</span>
                 <span className="auth-input__icon"><LockLineIcon /></span>
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   value={password}
-                  onChange={(event) => setPassword(event.target.value)}
+                  onChange={(event) => {
+                    setPassword(event.target.value)
+                    setFieldErrors((current) => ({ ...current, password: undefined, confirmPassword: undefined, form: undefined }))
+                  }}
                   placeholder="请输入密码"
                 />
-                <span className="auth-input__suffix"><EyeOffLineIcon /></span>
+                <span
+                  className="auth-input__suffix auth-input__suffix--clickable"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={showPassword ? '隐藏密码' : '显示密码'}
+                  onClick={() => setShowPassword((current) => !current)}
+                  onKeyDown={(event) => handleSuffixKeyDown(event, () => setShowPassword((current) => !current))}
+                >
+                  {showPassword ? <EyeLineIcon /> : <EyeOffLineIcon />}
+                </span>
               </label>
+              {fieldErrors.password ? <p className="field-message">{fieldErrors.password}</p> : null}
 
               {mode === 'register' ? (
-                <label className="auth-input">
-                  <span className="sr-only">确认密码</span>
-                  <span className="auth-input__icon"><LockLineIcon /></span>
-                  <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(event) => setConfirmPassword(event.target.value)}
-                    placeholder="请再次输入密码"
-                  />
-                  <span className="auth-input__suffix"><EyeOffLineIcon /></span>
-                </label>
+                <>
+                  <label className="auth-input">
+                    <span className="sr-only">确认密码</span>
+                    <span className="auth-input__icon"><LockLineIcon /></span>
+                    <input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={(event) => {
+                        setConfirmPassword(event.target.value)
+                        setFieldErrors((current) => ({ ...current, confirmPassword: undefined, form: undefined }))
+                      }}
+                      placeholder="请再次输入密码"
+                    />
+                    <span
+                      className="auth-input__suffix auth-input__suffix--clickable"
+                      role="button"
+                      tabIndex={0}
+                      aria-label={showConfirmPassword ? '隐藏确认密码' : '显示确认密码'}
+                      onClick={() => setShowConfirmPassword((current) => !current)}
+                      onKeyDown={(event) => handleSuffixKeyDown(event, () => setShowConfirmPassword((current) => !current))}
+                    >
+                      {showConfirmPassword ? <EyeLineIcon /> : <EyeOffLineIcon />}
+                    </span>
+                  </label>
+                  {fieldErrors.confirmPassword ? <p className="field-message">{fieldErrors.confirmPassword}</p> : null}
+                </>
               ) : null}
 
-              <div className="auth-actions">
-                {mode === 'login' ? (
-                  <>
-                    <label className="auth-checkbox">
-                      <input type="checkbox" />
-                      <span>记住我</span>
-                    </label>
-                    <button
-                      type="button"
-                      className="auth-link-button"
-                      onClick={() => {
-                        setMode('register')
-                        setError('')
-                      }}
-                    >
-                      没有账号？去注册
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <span className="auth-register-hint">注册成功后将自动登录</span>
-                    <button
-                      type="button"
-                      className="auth-link-button"
-                      onClick={() => {
-                        setMode('login')
-                        setError('')
-                      }}
-                    >
-                      已有账号？去登录
-                    </button>
-                  </>
-                )}
-              </div>
-
-              <button type="submit" className="auth-submit-button" disabled={submitting}>
-                {submitting ? (mode === 'login' ? '登录中...' : '注册中...') : (mode === 'login' ? '登录' : '注册并进入')}
-              </button>
-              {error ? <p className="inline-message">{error}</p> : null}
+              {mode === 'login' ? (
+                <div className="auth-actions auth-actions--inline">
+                  <button
+                    type="button"
+                    className="auth-link-button"
+                    onClick={() => {
+                      setMode('register')
+                      setFieldErrors({})
+                    }}
+                  >
+                    没有账号？去注册
+                  </button>
+                  <button type="submit" className="auth-submit-button auth-submit-button--inline" disabled={submitting}>
+                    {submitting ? '登录中...' : '登录'}
+                  </button>
+                </div>
+              ) : (
+                <div className="auth-actions auth-actions--inline">
+                  <button
+                    type="button"
+                    className="auth-link-button"
+                    onClick={() => {
+                      setMode('login')
+                      setFieldErrors({})
+                    }}
+                  >
+                    已有账号？去登录
+                  </button>
+                  <button type="submit" className="auth-submit-button auth-submit-button--inline" disabled={submitting}>
+                    {submitting ? '注册中...' : '注册并进入'}
+                  </button>
+                </div>
+              )}
+              {fieldErrors.form ? <p className="inline-message">{fieldErrors.form}</p> : null}
             </form>
           </section>
         </section>

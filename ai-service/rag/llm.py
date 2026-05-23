@@ -1,66 +1,61 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import json
 
-import requests
-
-from rag.schemas import ChunkRecord
+from model_providers.registry import get_provider_client
+from rag.contracts.schemas import ChunkRecord
 
 
 @dataclass
 class LlmConfig:
+    provider: str | None
     base_url: str | None
     api_key: str | None
     model: str | None
     timeout_seconds: int
 
 
-class OpenAICompatibleLlm:
+class ProviderBackedLlm:
     def __init__(self, config: LlmConfig) -> None:
         self.config = config
 
     def is_enabled(self) -> bool:
-        return bool(self.config.base_url and self.config.model)
+        return bool(self.config.provider and self.config.base_url and self.config.model)
 
     def generate_answer(self, question: str, interest: str | None, chunks: list[ChunkRecord]) -> str | None:
         if not self.is_enabled() or not chunks:
             return None
 
+        provider_client = get_provider_client(
+            self.config.provider or "",
+            {
+                "provider": self.config.provider or "",
+                "baseUrl": self.config.base_url or "",
+                "apiKey": self.config.api_key or "",
+            },
+        )
         prompt = build_user_prompt(question, interest, chunks)
-        payload = {
-            "model": self.config.model,
-            "temperature": 0.2,
-            "messages": [
+        return provider_client.generate_answer(
+            model_id=self.config.model or "",
+            messages=[
                 {"role": "system", "content": build_system_prompt()},
                 {"role": "user", "content": prompt},
             ],
-        }
-
-        headers = {"Content-Type": "application/json"}
-        if self.config.api_key:
-            headers["Authorization"] = f"Bearer {self.config.api_key}"
-
-        response = requests.post(
-            normalize_base_url(self.config.base_url) + "/chat/completions",
-            headers=headers,
-            data=json.dumps(payload),
-            timeout=self.config.timeout_seconds,
+            temperature=0.2,
         )
-        response.raise_for_status()
-        data = response.json()
-        choices = data.get("choices") or []
-        if not choices:
-            return None
-        message = choices[0].get("message") or {}
-        content = message.get("content")
-        return content.strip() if isinstance(content, str) and content.strip() else None
 
 
-def normalize_base_url(base_url: str | None) -> str:
+def infer_provider_name(base_url: str | None) -> str | None:
     if not base_url:
-        return ""
-    return base_url.rstrip("/")
+        return None
+    normalized = base_url.lower()
+    if "deepseek" in normalized:
+        return "DeepSeek"
+    if "openai" in normalized:
+        return "OpenAI"
+    if "dashscope" in normalized or "aliyuncs" in normalized:
+        return "Qwen"
+    return None
 
 
 def build_system_prompt() -> str:

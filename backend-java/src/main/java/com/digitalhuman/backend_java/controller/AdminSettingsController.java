@@ -3,12 +3,14 @@ package com.digitalhuman.backend_java.controller;
 import com.digitalhuman.backend_java.dto.AdminModelSettingsDto;
 import com.digitalhuman.backend_java.dto.AdminModelCatalogDto;
 import com.digitalhuman.backend_java.dto.AdminModelOptionDto;
+import com.digitalhuman.backend_java.dto.AdminProviderDocDto;
 import com.digitalhuman.backend_java.dto.AdminProviderConfigDto;
-import com.digitalhuman.backend_java.dto.AdminSyncModelsRequestDto;
-import com.digitalhuman.backend_java.dto.AdminSyncModelsResponseDto;
+import com.digitalhuman.backend_java.dto.AdminModelTestRequestDto;
+import com.digitalhuman.backend_java.dto.AdminModelTestResponseDto;
 import java.util.List;
 import com.digitalhuman.backend_java.service.AdminSettingsService;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -45,18 +47,38 @@ public class AdminSettingsController {
         return adminSettingsService.addModelOption(request);
     }
 
-    @GetMapping("/provider-configs")
+    @PutMapping("/model-options/select")
+    public AdminModelSettingsDto selectModelOption(@RequestBody AdminModelOptionDto request) {
+        return adminSettingsService.selectModelOption(request);
+    }
+
+    @PostMapping("/model-options/delete")
+    public AdminModelCatalogDto removeModelOption(@RequestBody AdminModelOptionDto request) {
+        return adminSettingsService.removeModelOption(request);
+    }
+
+    @PostMapping("/model-test")
+    public AdminModelTestResponseDto testModel(@RequestBody AdminModelTestRequestDto request) {
+        return adminSettingsService.testModel(request);
+    }
+
+    @GetMapping("/providers")
     public List<AdminProviderConfigDto> getProviderConfigs() {
         return adminSettingsService.getProviderConfigs();
     }
 
-    @PutMapping("/provider-configs")
+    @PutMapping("/providers")
     public AdminProviderConfigDto saveProviderConfig(@RequestBody AdminProviderConfigDto request) {
         return adminSettingsService.saveProviderConfig(request);
     }
 
-    @PostMapping("/provider-models/sync")
-    public AdminSyncModelsResponseDto syncProviderModels(@RequestBody AdminSyncModelsRequestDto request) {
-        return adminSettingsService.syncProviderModels(request);
+    @PostMapping("/providers/delete")
+    public void deleteProviderConfig(@RequestBody AdminProviderConfigDto request) {
+        adminSettingsService.deleteProviderConfig(request);
+    }
+
+    @GetMapping("/provider-docs/{provider}")
+    public AdminProviderDocDto getProviderDoc(@PathVariable String provider) {
+        return adminSettingsService.getProviderDoc(provider);
     }
 }

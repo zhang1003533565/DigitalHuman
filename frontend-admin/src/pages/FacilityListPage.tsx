@@ -68,7 +68,7 @@ const columns: TableColumnsType<FacilityRow> = [
   },
 ]
 
-function FacilityListPage() {
+function FacilityListPage({ onAddFacility }: { onAddFacility?: () => void }) {
   const [selectedKeys, setSelectedKeys] = useState<React.Key[]>([])
   const [current, setCurrent] = useState(1)
 
@@ -79,8 +79,7 @@ function FacilityListPage() {
       <h1 className="fac-list__title">全部设施总览</h1>
 
       {/* 筛选栏 */}
-      <div className="fac-list__filter">
-        <div className="fac-list__filter-row">
+      <div className="fac-list__filter-row">
           <div className="fac-list__filter-item">
             <span className="fac-list__filter-label">设施名称</span>
             <Input
@@ -131,13 +130,8 @@ function FacilityListPage() {
             />
           </div>
           <div className="fac-list__filter-actions">
-            <Button type="primary" icon={<SearchOutlined />}>查询</Button>
             <Button icon={<ReloadOutlined />}>重置</Button>
-            <Button type="primary" icon={<PlusOutlined />} className="fac-list__btn-add">
-              新增设施
-            </Button>
           </div>
-        </div>
       </div>
 
       {/* 表格区域 */}
@@ -147,6 +141,9 @@ function FacilityListPage() {
             批量删除
           </Button>
           <Button icon={<DownloadOutlined />}>导出</Button>
+          <Button type="primary" icon={<PlusOutlined />} className="fac-list__btn-add" style={{ marginLeft: 'auto' }} onClick={onAddFacility}>
+            新增设施
+          </Button>
         </div>
 
         <Table
@@ -197,18 +194,12 @@ const styles = `
   color: #1f1f1f;
   line-height: 1.2;
 }
-.fac-list__filter {
-  background: #fff;
-  border-radius: 10px;
-  padding: 20px 24px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  margin-bottom: 16px;
-}
 .fac-list__filter-row {
   display: flex;
   align-items: flex-end;
   gap: 20px;
   flex-wrap: wrap;
+  margin-bottom: 16px;
 }
 .fac-list__filter-item {
   display: flex;

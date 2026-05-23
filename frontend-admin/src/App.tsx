@@ -1,4 +1,4 @@
-﻿import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+﻿import { type FormEvent, type JSX, useEffect, useMemo, useState } from 'react'
 import axios from 'axios'
 import * as XLSX from 'xlsx'
 import {
@@ -17,7 +17,7 @@ import {
 import { Layout, Menu, Button, Card, Form, Input, Table, Tag, Statistic, Row, Col, Upload, Select, AutoComplete, Tabs, message, Tooltip } from 'antd'
 import type { UploadProps } from 'antd'
 import type { MenuProps, TableColumnsType } from 'antd'
-import SpotAddPage from './pages/SpotAddPage'
+import SpotDrawer from './pages/SpotAddPage'
 import SpotCategoryPage from './pages/SpotCategoryPage'
 import FacilityListPage from './pages/FacilityListPage'
 import './App.css'
@@ -37,7 +37,6 @@ type MenuKey =
   | 'dashboard'
   | 'knowledge'
   | 'spots'
-  | 'spot-add'
   | 'spot-category'
   | 'facility-list'
   | 'routes'
@@ -90,10 +89,11 @@ type AdminModelSettings = {
   embeddingModel: string
   speechModel: string
   visionModel: string
+  chatModel: string
   multimodalModel: string
 }
 
-type ModelCategory = 'embedding' | 'speech' | 'vision' | 'multimodal'
+type ModelCategory = 'embedding' | 'speech' | 'vision' | 'chat' | 'multimodal'
 
 type AdminModelOption = {
   category: ModelCategory
@@ -105,6 +105,7 @@ type AdminModelCatalog = {
   embeddingModels: AdminModelOption[]
   speechModels: AdminModelOption[]
   visionModels: AdminModelOption[]
+  chatModels: AdminModelOption[]
   multimodalModels: AdminModelOption[]
 }
 
@@ -114,90 +115,140 @@ type AddModelOptionForm = {
   modelId: string
 }
 
-type AdminProviderConfig = {
+type ModelTestResponse = {
+  success: boolean
   provider: string
-  baseUrl: string
-  apiKey: string
+  category: ModelCategory
+  modelId: string
+  message: string
+  detail?: string
 }
 
-type ProviderSyncForm = {
+type ModelCatalogRow = {
+  key: string
+  category: ModelCategory
+  provider: string
+  modelId: string
+  selected: boolean
+}
+
+type ProviderConfig = {
   provider: string
   baseUrl: string
   apiKey: string
-  category: ModelCategory
+  protocol: string
+}
+
+type ProviderConfigForm = {
+  provider: string
+  baseUrl: string
+  apiKey: string
+  protocol: string
+}
+
+type ProviderDoc = {
+  provider: string
+  fileName: string
+  markdown: string
+}
+
+type TtsVoicesResponse = {
+  voices: string[]
 }
 
 const PROVIDER_OPTIONS = [
   { value: 'DeepSeek', label: 'DeepSeek' },
   { value: 'OpenAI', label: 'OpenAI' },
   { value: 'Qwen', label: 'Qwen' },
-  { value: 'Google', label: 'Google' },
   { value: 'Azure', label: 'Azure' },
-  { value: 'Custom', label: 'Custom' },
+  { value: 'Google', label: 'Google' },
 ]
 
+const PROVIDER_DEFAULTS: Record<string, { baseUrl: string; protocol: string }> = {
+  DeepSeek: {
+    baseUrl: 'https://api.deepseek.com',
+    protocol: 'openai_compatible',
+  },
+  OpenAI: {
+    baseUrl: 'https://api.openai.com/v1',
+    protocol: 'openai_compatible',
+  },
+  Qwen: {
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    protocol: 'openai_compatible',
+  },
+  Azure: {
+    baseUrl: '',
+    protocol: 'openai_compatible',
+  },
+  Google: {
+    baseUrl: '',
+    protocol: 'openai_compatible',
+  },
+}
+
 const MODEL_CATEGORY_OPTIONS = [
-  { value: 'embedding', label: '嵌入模型' },
-  { value: 'speech', label: '语音模型' },
-  { value: 'vision', label: '视觉模型' },
-  { value: 'multimodal', label: '多模态/对话模型' },
+  { value: 'embedding', label: '宓屽叆妯″瀷' },
+  { value: 'speech', label: '璇煶妯″瀷' },
+  { value: 'vision', label: '瑙嗚妯″瀷' },
+  { value: 'chat', label: '瀵硅瘽妯″瀷' },
+  { value: 'multimodal', label: '澶氭ā鎬佹ā鍨? },
 ] as const
 
 const spotColumns: TableColumnsType<SpotRow> = [
-  { title: '景点名称', dataIndex: 'name' },
-  { title: '所属园区', dataIndex: 'area' },
-  { title: '开放时间', dataIndex: 'openHours' },
+  { title: '鏅偣鍚嶇О', dataIndex: 'name' },
+  { title: '鎵€灞炲洯鍖?, dataIndex: 'area' },
+  { title: '寮€鏀炬椂闂?, dataIndex: 'openHours' },
   {
-    title: '标签',
+    title: '鏍囩',
     dataIndex: 'tags',
     render: (tags: string[]) => tags.map((tag) => <Tag key={tag}>{tag}</Tag>),
   },
 ]
 
 const routeColumns: TableColumnsType<RouteRow> = [
-  { title: '路线名称', dataIndex: 'name' },
-  { title: '适合人群', dataIndex: 'suitableFor' },
-  { title: '时长', dataIndex: 'duration' },
+  { title: '璺嚎鍚嶇О', dataIndex: 'name' },
+  { title: '閫傚悎浜虹兢', dataIndex: 'suitableFor' },
+  { title: '鏃堕暱', dataIndex: 'duration' },
 ]
 
 const feedbackColumns: TableColumnsType<FeedbackRow> = [
-  { title: '问题', dataIndex: 'question' },
-  { title: '帮助情况', dataIndex: 'helpful' },
-  { title: '评分', dataIndex: 'rating' },
-  { title: '意见', dataIndex: 'comment' },
+  { title: '闂', dataIndex: 'question' },
+  { title: '甯姪鎯呭喌', dataIndex: 'helpful' },
+  { title: '璇勫垎', dataIndex: 'rating' },
+  { title: '鎰忚', dataIndex: 'comment' },
 ]
 
 const knowledgeColumns: TableColumnsType<KnowledgeDocumentRow> = [
-  { title: '文件名', dataIndex: 'fileName' },
-  { title: '大小', dataIndex: 'sizeText' },
-  { title: '更新时间', dataIndex: 'updatedAt' },
+  { title: '鏂囦欢鍚?, dataIndex: 'fileName' },
+  { title: '澶у皬', dataIndex: 'sizeText' },
+  { title: '鏇存柊鏃堕棿', dataIndex: 'updatedAt' },
   {
-    title: '状态',
+    title: '鐘舵€?,
     dataIndex: 'supported',
     render: (supported: boolean) => (
-      <Tag color={supported ? 'green' : 'red'}>{supported ? '可用' : '格式不支持'}</Tag>
+      <Tag color={supported ? 'green' : 'red'}>{supported ? '鍙敤' : '鏍煎紡涓嶆敮鎸?}</Tag>
     ),
   },
 ]
 
 const menuItems: MenuProps['items'] = [
-  { key: 'dashboard', icon: <BarChartOutlined />, label: '数据总览' },
-  { key: 'knowledge', icon: <BookOutlined />, label: '知识库管理' },
+  { key: 'dashboard', icon: <BarChartOutlined />, label: '鏁版嵁鎬昏' },
+  { key: 'knowledge', icon: <BookOutlined />, label: '鐭ヨ瘑搴撶鐞? },
   {
     key: 'spots',
     icon: <EnvironmentOutlined />,
-    label: '景点管理',
+    label: '鏅偣绠＄悊',
     children: [
-      { key: 'spot-add', label: '新增景点' },
-      { key: 'spot-category', label: '景点分类' },
-      { key: 'facility-list', label: '全部设施' },
+      { key: 'spot-category', label: '鏅偣鍒嗙被' },
+      { key: 'facility-list', label: '鍏ㄩ儴璁炬柦' },
     ],
   },
-  { key: 'routes', icon: <NodeIndexOutlined />, label: '路线管理' },
-  { key: 'avatar', icon: <RobotOutlined />, label: '数字人配置' },
-  { key: 'feedback', icon: <CommentOutlined />, label: '游客反馈分析' },
-  { key: 'qa', icon: <SearchOutlined />, label: '问答记录查询' },
-  { key: 'travel-analytics', icon: <DatabaseOutlined />, label: '旅游数据行为分析' },
+  { key: 'routes', icon: <NodeIndexOutlined />, label: '璺嚎绠＄悊' },
+  { key: 'avatar', icon: <RobotOutlined />, label: '鏁板瓧浜洪厤缃? },
+  { key: 'feedback', icon: <CommentOutlined />, label: '娓稿鍙嶉鍒嗘瀽' },
+  { key: 'qa', icon: <SearchOutlined />, label: '闂瓟璁板綍鏌ヨ' },
+  { key: 'travel-analytics', icon: <DatabaseOutlined />, label: '鏃呮父鏁版嵁琛屼负鍒嗘瀽' },
 ]
 
 function applyAuthToken(token: string | null) {
@@ -241,26 +292,26 @@ function DashboardPanel() {
   return (
     <div className="admin-panel-grid">
       <Row gutter={[16, 16]}>
-        <Col xs={24} md={8}><Card><Statistic title="今日服务人次" value={128} /></Card></Col>
-        <Col xs={24} md={8}><Card><Statistic title="本周服务人次" value={986} /></Card></Col>
-        <Col xs={24} md={8}><Card><Statistic title="负面反馈占比" value={12.4} suffix="%" /></Card></Col>
+        <Col xs={24} md={8}><Card><Statistic title="浠婃棩鏈嶅姟浜烘" value={128} /></Card></Col>
+        <Col xs={24} md={8}><Card><Statistic title="鏈懆鏈嶅姟浜烘" value={986} /></Card></Col>
+        <Col xs={24} md={8}><Card><Statistic title="璐熼潰鍙嶉鍗犳瘮" value={12.4} suffix="%" /></Card></Col>
       </Row>
       <Row gutter={[16, 16]}>
         <Col xs={24} md={12}>
-          <Card title="热门问题 Top3">
+          <Card title="鐑棬闂 Top3">
             <ul className="admin-list">
-              <li>灵山大佛有什么历史？</li>
-              <li>亲子路线怎么安排？</li>
-              <li>拈花湾晚上适合去吗？</li>
+              <li>鐏靛北澶т經鏈変粈涔堝巻鍙诧紵</li>
+              <li>浜插瓙璺嚎鎬庝箞瀹夋帓锛?/li>
+              <li>鎷堣姳婀炬櫄涓婇€傚悎鍘诲悧锛?/li>
             </ul>
           </Card>
         </Col>
         <Col xs={24} md={12}>
-          <Card title="高频景点关注排行">
+          <Card title="楂橀鏅偣鍏虫敞鎺掕">
             <ul className="admin-list">
-              <li>灵山大佛</li>
-              <li>九龙灌浴</li>
-              <li>拈花塔</li>
+              <li>鐏靛北澶т經</li>
+              <li>涔濋緳鐏屾荡</li>
+              <li>鎷堣姳濉?/li>
             </ul>
           </Card>
         </Col>
@@ -304,14 +355,14 @@ function KnowledgePanel() {
       setLastBuildResult(result)
       message.success(
         recreateCollection
-          ? `全量重建完成，已写入 ${result.chunksIndexed} 个知识块`
-          : `知识库构建完成，已写入 ${result.chunksIndexed} 个知识块`,
+          ? `鍏ㄩ噺閲嶅缓瀹屾垚锛屽凡鍐欏叆 ${result.chunksIndexed} 涓煡璇嗗潡`
+          : `鐭ヨ瘑搴撴瀯寤哄畬鎴愶紝宸插啓鍏?${result.chunksIndexed} 涓煡璇嗗潡`,
       )
       await loadDocuments()
     } catch (error) {
       const description = axios.isAxiosError(error)
-        ? error.response?.data?.message ?? '知识库构建失败，请检查 AI 服务。'
-        : '知识库构建失败，请稍后重试。'
+        ? error.response?.data?.message ?? '鐭ヨ瘑搴撴瀯寤哄け璐ワ紝璇锋鏌?AI 鏈嶅姟銆?
+        : '鐭ヨ瘑搴撴瀯寤哄け璐ワ紝璇风◢鍚庨噸璇曘€?
       message.error(description)
     } finally {
       setBuilding(false)
@@ -333,13 +384,13 @@ function KnowledgePanel() {
         const response = await axios.post('/api/admin/knowledge/documents/upload', formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
         })
-        message.success(`上传成功，文件 ${response.data.fileName} 已加入待构建列表`)
+        message.success(`涓婁紶鎴愬姛锛屾枃浠?${response.data.fileName} 宸插姞鍏ュ緟鏋勫缓鍒楄〃`)
         await loadDocuments()
         onSuccess?.(response.data)
       } catch (error) {
         const description = axios.isAxiosError(error)
-          ? error.response?.data?.message ?? '上传失败，请检查知识库服务。'
-          : '上传失败，请稍后重试。'
+          ? error.response?.data?.message ?? '涓婁紶澶辫触锛岃妫€鏌ョ煡璇嗗簱鏈嶅姟銆?
+          : '涓婁紶澶辫触锛岃绋嶅悗閲嶈瘯銆?
         message.error(description)
         onError?.(error as Error)
       } finally {
@@ -350,78 +401,78 @@ function KnowledgePanel() {
 
   return (
     <Card
-      title="知识库管理"
+      title="鐭ヨ瘑搴撶鐞?
       extra={(
         <div className="admin-action-row">
           <Upload {...uploadProps}>
-            <Button type="primary" loading={uploading}>上传文件</Button>
+            <Button type="primary" loading={uploading}>涓婁紶鏂囦欢</Button>
           </Upload>
           <Button
             icon={<BuildOutlined />}
             loading={building}
             onClick={() => void buildKnowledgeBase(false)}
           >
-            开始构建
+            寮€濮嬫瀯寤?
           </Button>
           <Button
             danger
             loading={building}
             onClick={() => void buildKnowledgeBase(true)}
           >
-            全量重建
+            鍏ㄩ噺閲嶅缓
           </Button>
         </div>
       )}
     >
       <div className="admin-form-grid">
         <Upload {...uploadProps}>
-          <Button icon={<DatabaseOutlined />} loading={uploading}>选择景区资料</Button>
+          <Button icon={<DatabaseOutlined />} loading={uploading}>閫夋嫨鏅尯璧勬枡</Button>
         </Upload>
         <div className="admin-inline-meta">
-          <Tag color="blue">支持 docx</Tag>
-          <Tag color="gold">支持 pdf</Tag>
-          <Tag color="purple">支持 txt</Tag>
-          <Tag color="cyan">上传后需手动构建</Tag>
+          <Tag color="blue">鏀寔 docx</Tag>
+          <Tag color="gold">鏀寔 pdf</Tag>
+          <Tag color="purple">鏀寔 txt</Tag>
+          <Tag color="cyan">涓婁紶鍚庨渶鎵嬪姩鏋勫缓</Tag>
         </div>
         <Row gutter={[16, 16]}>
           <Col xs={24} md={6}>
             <Card size="small">
-              <Statistic title="待构建文件数" value={documents.length} />
+              <Statistic title="寰呮瀯寤烘枃浠舵暟" value={documents.length} />
             </Card>
           </Col>
           <Col xs={24} md={6}>
             <Card size="small">
-              <Statistic title="上次扫描文件数" value={lastBuildResult?.filesSeen ?? 0} />
+              <Statistic title="涓婃鎵弿鏂囦欢鏁? value={lastBuildResult?.filesSeen ?? 0} />
             </Card>
           </Col>
           <Col xs={24} md={6}>
             <Card size="small">
-              <Statistic title="上次入库文件数" value={lastBuildResult?.filesIndexed ?? 0} />
+              <Statistic title="涓婃鍏ュ簱鏂囦欢鏁? value={lastBuildResult?.filesIndexed ?? 0} />
             </Card>
           </Col>
           <Col xs={24} md={6}>
             <Card size="small">
-              <Statistic title="上次知识块数" value={lastBuildResult?.chunksIndexed ?? 0} />
+              <Statistic title="涓婃鐭ヨ瘑鍧楁暟" value={lastBuildResult?.chunksIndexed ?? 0} />
             </Card>
           </Col>
         </Row>
         {lastBuildResult ? (
           <Card size="small" className="admin-build-summary">
-            最近一次构建写入集合 `{lastBuildResult.collection}`，共处理 {lastBuildResult.filesIndexed} 个文件，生成 {lastBuildResult.chunksIndexed} 个知识块。
+            鏈€杩戜竴娆℃瀯寤哄啓鍏ラ泦鍚?`{lastBuildResult.collection}`锛屽叡澶勭悊 {lastBuildResult.filesIndexed} 涓枃浠讹紝鐢熸垚 {lastBuildResult.chunksIndexed} 涓煡璇嗗潡銆?
             <div className="admin-build-summary__time">
-              构建时间：{new Date(lastBuildResult.builtAt).toLocaleString('zh-CN')}
+              鏋勫缓鏃堕棿锛歿new Date(lastBuildResult.builtAt).toLocaleString('zh-CN')}
             </div>
           </Card>
         ) : (
           <Card size="small" className="admin-build-summary admin-build-summary--muted">
-            上传文件只会保存到知识库目录。点击“开始构建”后，系统才会执行文档解析、片段拆分、Embedding 和向量写入。
+            涓婁紶鏂囦欢鍙細淇濆瓨鍒扮煡璇嗗簱鐩綍銆傜偣鍑烩€滃紑濮嬫瀯寤衡€濆悗锛岀郴缁熸墠浼氭墽琛屾枃妗ｈВ鏋愩€佺墖娈垫媶鍒嗐€丒mbedding 鍜屽悜閲忓啓鍏ャ€?
           </Card>
         )}
         <Table
           columns={knowledgeColumns}
           dataSource={documents}
           pagination={false}
-          locale={{ emptyText: '暂无已上传知识文件，请先上传景区资料。' }}
+          locale={{ emptyText: '鏆傛棤宸蹭笂浼犵煡璇嗘枃浠讹紝璇峰厛涓婁紶鏅尯璧勬枡銆? }}
         />
       </div>
     </Card>
@@ -449,7 +500,7 @@ function SpotsPanel() {
   }, [])
 
   return (
-    <Card title="景点管理" extra={<Button type="primary">新增景点</Button>}>
+    <Card title="鏅偣绠＄悊" extra={<Button type="primary">鏂板鏅偣</Button>}>
       <Table columns={spotColumns} dataSource={data} pagination={false} />
     </Card>
   )
@@ -475,7 +526,7 @@ function RoutesPanel() {
   }, [])
 
   return (
-    <Card title="路线管理" extra={<Button type="primary">创建路线</Button>}>
+    <Card title="璺嚎绠＄悊" extra={<Button type="primary">鍒涘缓璺嚎</Button>}>
       <Table columns={routeColumns} dataSource={data} pagination={false} />
     </Card>
   )
@@ -485,51 +536,51 @@ function AvatarPanel() {
   return (
     <div className="admin-panel-grid">
       <Card
-        title="数字人基础配置"
-        extra={<Tag color="blue">业务配置</Tag>}
+        title="鏁板瓧浜哄熀纭€閰嶇疆"
+        extra={<Tag color="blue">涓氬姟閰嶇疆</Tag>}
       >
         <div className="admin-form-grid">
           <Card size="small" className="admin-build-summary">
-            当前页只保留数字人的业务侧配置，比如欢迎词、讲解风格、默认角色和播报策略。
+            褰撳墠椤靛彧淇濈暀鏁板瓧浜虹殑涓氬姟渚ч厤缃紝姣斿娆㈣繋璇嶃€佽瑙ｉ鏍笺€侀粯璁よ鑹插拰鎾姤绛栫暐銆?
           </Card>
           <Form layout="vertical">
-            <Form.Item label="默认欢迎词">
+            <Form.Item label="榛樿娆㈣繋璇?>
               <Input.TextArea
                 rows={4}
-                placeholder="例如：您好，欢迎来到灵山胜境，我可以为您介绍景点、路线和活动安排。"
+                placeholder="渚嬪锛氭偍濂斤紝娆㈣繋鏉ュ埌鐏靛北鑳滃锛屾垜鍙互涓烘偍浠嬬粛鏅偣銆佽矾绾垮拰娲诲姩瀹夋帓銆?
               />
             </Form.Item>
-            <Form.Item label="讲解风格">
+            <Form.Item label="璁茶В椋庢牸">
               <Select
-                placeholder="请选择讲解风格"
+                placeholder="璇烽€夋嫨璁茶В椋庢牸"
                 options={[
-                  { value: 'friendly', label: '亲切讲解' },
-                  { value: 'professional', label: '专业导览' },
-                  { value: 'family', label: '亲子互动' },
+                  { value: 'friendly', label: '浜插垏璁茶В' },
+                  { value: 'professional', label: '涓撲笟瀵艰' },
+                  { value: 'family', label: '浜插瓙浜掑姩' },
                 ]}
               />
             </Form.Item>
-            <Form.Item label="默认播报策略">
+            <Form.Item label="榛樿鎾姤绛栫暐">
               <Select
-                placeholder="请选择播报策略"
+                placeholder="璇烽€夋嫨鎾姤绛栫暐"
                 options={[
-                  { value: 'standard', label: '标准播报' },
-                  { value: 'brief', label: '简洁播报' },
-                  { value: 'storytelling', label: '故事化播报' },
+                  { value: 'standard', label: '鏍囧噯鎾姤' },
+                  { value: 'brief', label: '绠€娲佹挱鎶? },
+                  { value: 'storytelling', label: '鏁呬簨鍖栨挱鎶? },
                 ]}
               />
             </Form.Item>
             <div className="admin-action-row">
-              <Button type="primary">保存数字人配置</Button>
+              <Button type="primary">淇濆瓨鏁板瓧浜洪厤缃?/Button>
             </div>
           </Form>
         </div>
       </Card>
-      <Card title="配置说明">
+      <Card title="閰嶇疆璇存槑">
         <ul className="admin-list">
-          <li>模型能力配置已统一迁移到左下角“设置”。</li>
-          <li>这里建议只放数字人角色、话术、动作策略等业务参数。</li>
-          <li>后续如果接真实接口，可以直接沿用当前表单结构。</li>
+          <li>妯″瀷鑳藉姏閰嶇疆宸茬粺涓€杩佺Щ鍒板乏涓嬭鈥滆缃€濄€?/li>
+          <li>杩欓噷寤鸿鍙斁鏁板瓧浜鸿鑹层€佽瘽鏈€佸姩浣滅瓥鐣ョ瓑涓氬姟鍙傛暟銆?/li>
+          <li>鍚庣画濡傛灉鎺ョ湡瀹炴帴鍙ｏ紝鍙互鐩存帴娌跨敤褰撳墠琛ㄥ崟缁撴瀯銆?/li>
         </ul>
       </Card>
     </div>
@@ -539,84 +590,154 @@ function AvatarPanel() {
 function SettingsPanel() {
   const [form] = Form.useForm<AdminModelSettings>()
   const [addOptionForm] = Form.useForm<AddModelOptionForm>()
-  const [providerForm] = Form.useForm<ProviderSyncForm>()
+  const [providerForm] = Form.useForm<ProviderConfigForm>()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [addingOption, setAddingOption] = useState(false)
   const [savingProvider, setSavingProvider] = useState(false)
-  const [syncingProvider, setSyncingProvider] = useState(false)
+  const [deletingProvider, setDeletingProvider] = useState<string | null>(null)
+  const [providerDocSelection, setProviderDocSelection] = useState('DeepSeek')
+  const [providerDoc, setProviderDoc] = useState<ProviderDoc | null>(null)
+  const [providerDocLoading, setProviderDocLoading] = useState(false)
+  const [voiceOptions, setVoiceOptions] = useState<{ value: string; label: string }[]>([])
+  const [testingCategory, setTestingCategory] = useState<ModelCategory | null>(null)
+  const [testingRowKey, setTestingRowKey] = useState<string | null>(null)
+  const [selectingRowKey, setSelectingRowKey] = useState<string | null>(null)
+  const [deletingRowKey, setDeletingRowKey] = useState<string | null>(null)
+  const [testResults, setTestResults] = useState<Partial<Record<ModelCategory, ModelTestResponse>>>({})
+  const [providerConfigs, setProviderConfigs] = useState<ProviderConfig[]>([])
   const [catalog, setCatalog] = useState<AdminModelCatalog>({
     embeddingModels: [],
     speechModels: [],
     visionModels: [],
+    chatModels: [],
     multimodalModels: [],
   })
-  const [providerConfigs, setProviderConfigs] = useState<AdminProviderConfig[]>([])
 
   const embeddingOptions = useMemo(
-    () => catalog.embeddingModels.map((item) => ({ value: item.modelId, label: `${item.provider} · ${item.modelId}` })),
+    () => catalog.embeddingModels.map((item) => ({ value: item.modelId, label: `${item.provider} 路 ${item.modelId}` })),
     [catalog.embeddingModels],
   )
-  const speechOptions = useMemo(
-    () => catalog.speechModels.map((item) => ({ value: item.modelId, label: `${item.provider} · ${item.modelId}` })),
-    [catalog.speechModels],
-  )
   const visionOptions = useMemo(
-    () => catalog.visionModels.map((item) => ({ value: item.modelId, label: `${item.provider} · ${item.modelId}` })),
+    () => catalog.visionModels.map((item) => ({ value: item.modelId, label: `${item.provider} 路 ${item.modelId}` })),
     [catalog.visionModels],
   )
+  const chatOptions = useMemo(
+    () => catalog.chatModels.map((item) => ({ value: item.modelId, label: `${item.provider} 路 ${item.modelId}` })),
+    [catalog.chatModels],
+  )
   const multimodalOptions = useMemo(
-    () => catalog.multimodalModels.map((item) => ({ value: item.modelId, label: `${item.provider} · ${item.modelId}` })),
+    () => catalog.multimodalModels.map((item) => ({ value: item.modelId, label: `${item.provider} 路 ${item.modelId}` })),
     [catalog.multimodalModels],
   )
 
+  async function loadSettings() {
+    setLoading(true)
+    try {
+      const [settingsResponse, catalogResponse] = await Promise.all([
+        axios.get<AdminModelSettings>('/api/admin/settings/models'),
+        axios.get<AdminModelCatalog>('/api/admin/settings/model-options'),
+      ])
+      const providerResponse = await axios.get<ProviderConfig[]>('/api/admin/settings/providers')
+      form.setFieldsValue(settingsResponse.data)
+      setCatalog(catalogResponse.data)
+      setProviderConfigs(providerResponse.data)
+      addOptionForm.setFieldsValue({
+        category: 'multimodal',
+        provider: providerResponse.data[0]?.provider ?? '',
+        modelId: '',
+      })
+      providerForm.setFieldsValue({
+        provider: '',
+        baseUrl: '',
+        apiKey: '',
+        protocol: 'openai_compatible',
+      })
+    } catch (error) {
+      const description = axios.isAxiosError(error)
+        ? error.response?.data?.message ?? '妯″瀷璁剧疆鍔犺浇澶辫触锛岃妫€鏌ュ悗绔湇鍔°€?
+        : '妯″瀷璁剧疆鍔犺浇澶辫触锛岃绋嶅悗閲嶈瘯銆?
+      message.error(description)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
-    async function loadSettings() {
-      setLoading(true)
+    void loadSettings()
+  }, [addOptionForm, form])
+
+  useEffect(() => {
+    async function loadProviderDoc() {
+      setProviderDocLoading(true)
       try {
-        const [settingsResponse, catalogResponse, providerConfigsResponse] = await Promise.all([
-          axios.get<AdminModelSettings>('/api/admin/settings/models'),
-          axios.get<AdminModelCatalog>('/api/admin/settings/model-options'),
-          axios.get<AdminProviderConfig[]>('/api/admin/settings/provider-configs'),
-        ])
-        form.setFieldsValue(settingsResponse.data)
-        setCatalog(catalogResponse.data)
-        setProviderConfigs(providerConfigsResponse.data)
-        addOptionForm.setFieldsValue({
-          category: 'multimodal',
-          provider: 'DeepSeek',
-          modelId: '',
-        })
-        const deepSeekConfig = providerConfigsResponse.data.find((item) => item.provider === 'DeepSeek')
-        providerForm.setFieldsValue({
-          provider: deepSeekConfig?.provider ?? 'DeepSeek',
-          baseUrl: deepSeekConfig?.baseUrl ?? 'https://api.deepseek.com',
-          apiKey: deepSeekConfig?.apiKey ?? '',
-          category: 'multimodal',
-        })
+        const response = await axios.get<ProviderDoc>(`/api/admin/settings/provider-docs/${providerDocSelection}`)
+        setProviderDoc(response.data)
       } catch (error) {
         const description = axios.isAxiosError(error)
-          ? error.response?.data?.message ?? '模型设置加载失败，请检查后端服务。'
-          : '模型设置加载失败，请稍后重试。'
+          ? error.response?.data?.message ?? '璇诲彇妯″瀷璇存槑鏂囨。澶辫触銆?
+          : '璇诲彇妯″瀷璇存槑鏂囨。澶辫触銆?
         message.error(description)
+        setProviderDoc(null)
       } finally {
-        setLoading(false)
+        setProviderDocLoading(false)
       }
     }
 
-    void loadSettings()
-  }, [addOptionForm, form, providerForm])
+    void loadProviderDoc()
+  }, [providerDocSelection])
+
+  useEffect(() => {
+    async function loadVoices() {
+      try {
+        const response = await axios.get<TtsVoicesResponse>('/api/tts/voices')
+        setVoiceOptions(
+          (response.data.voices ?? []).map((voice) => ({
+            value: voice,
+            label: voice,
+          })),
+        )
+      } catch {
+        setVoiceOptions([])
+      }
+    }
+
+    void loadVoices()
+  }, [])
+
+  const catalogRows = useMemo<ModelCatalogRow[]>(() => {
+    const currentValues = form.getFieldsValue()
+    const rows: ModelCatalogRow[] = []
+    const pushRows = (items: AdminModelOption[], category: ModelCategory, selectedModelId: string | undefined) => {
+      items.forEach((item) => {
+        rows.push({
+          key: `${category}:${item.provider}:${item.modelId}`,
+          category,
+          provider: item.provider,
+          modelId: item.modelId,
+          selected: item.modelId === selectedModelId,
+        })
+      })
+    }
+
+    pushRows(catalog.embeddingModels, 'embedding', currentValues.embeddingModel)
+    pushRows(catalog.speechModels, 'speech', currentValues.speechModel)
+    pushRows(catalog.visionModels, 'vision', currentValues.visionModel)
+    pushRows(catalog.chatModels, 'chat', currentValues.chatModel)
+    pushRows(catalog.multimodalModels, 'multimodal', currentValues.multimodalModel)
+    return rows
+  }, [catalog, form])
 
   const handleSave = async (values: AdminModelSettings) => {
     setSaving(true)
     try {
       const response = await axios.put<AdminModelSettings>('/api/admin/settings/models', values)
       form.setFieldsValue(response.data)
-      message.success('模型设置已保存')
+      message.success('妯″瀷璁剧疆宸蹭繚瀛?)
     } catch (error) {
       const description = axios.isAxiosError(error)
-        ? error.response?.data?.message ?? '模型设置保存失败，请检查后端服务。'
-        : '模型设置保存失败，请稍后重试。'
+        ? error.response?.data?.message ?? '妯″瀷璁剧疆淇濆瓨澶辫触锛岃妫€鏌ュ悗绔湇鍔°€?
+        : '妯″瀷璁剧疆淇濆瓨澶辫触锛岃绋嶅悗閲嶈瘯銆?
       message.error(description)
     } finally {
       setSaving(false)
@@ -628,171 +749,506 @@ function SettingsPanel() {
     try {
       const response = await axios.post<AdminModelCatalog>('/api/admin/settings/model-options', values)
       setCatalog(response.data)
-      message.success(`模型 ${values.modelId} 已加入候选列表`)
+      message.success(`妯″瀷 ${values.modelId} 宸插姞鍏ュ€欓€夊垪琛╜)
       addOptionForm.setFieldsValue({
         ...values,
         modelId: '',
       })
     } catch (error) {
       const description = axios.isAxiosError(error)
-        ? error.response?.data?.message ?? '新增模型失败，请检查后端服务。'
-        : '新增模型失败，请稍后重试。'
+        ? error.response?.data?.message ?? '鏂板妯″瀷澶辫触锛岃妫€鏌ュ悗绔湇鍔°€?
+        : '鏂板妯″瀷澶辫触锛岃绋嶅悗閲嶈瘯銆?
       message.error(description)
     } finally {
       setAddingOption(false)
     }
   }
 
-  const applyProviderPreset = (provider: string) => {
-    const existing = providerConfigs.find((item) => item.provider === provider)
-    providerForm.setFieldsValue({
-      provider,
-      baseUrl: existing?.baseUrl ?? (provider === 'DeepSeek' ? 'https://api.deepseek.com' : ''),
-      apiKey: existing?.apiKey ?? '',
-      category: providerForm.getFieldValue('category') ?? 'multimodal',
-    })
-  }
-
-  const handleSaveProvider = async (values: ProviderSyncForm) => {
+  const handleSaveProvider = async (values: ProviderConfigForm) => {
     setSavingProvider(true)
     try {
-      const response = await axios.put<AdminProviderConfig>('/api/admin/settings/provider-configs', {
-        provider: values.provider,
-        baseUrl: values.baseUrl,
-        apiKey: values.apiKey,
-      })
+      const response = await axios.put<ProviderConfig>('/api/admin/settings/providers', values)
       setProviderConfigs((current) => {
         const next = current.filter((item) => item.provider !== response.data.provider)
         return [...next, response.data].sort((left, right) => left.provider.localeCompare(right.provider))
       })
       providerForm.setFieldsValue({
-        ...values,
-        provider: response.data.provider,
-        baseUrl: response.data.baseUrl,
-        apiKey: response.data.apiKey,
+        provider: '',
+        baseUrl: '',
+        apiKey: '',
+        protocol: 'openai_compatible',
       })
-      message.success(`已保存 ${response.data.provider} 连接配置`)
+      if (!addOptionForm.getFieldValue('provider')) {
+        addOptionForm.setFieldValue('provider', response.data.provider)
+      }
+      message.success(`宸蹭繚瀛樻彁渚涙柟 ${response.data.provider}`)
     } catch (error) {
       const description = axios.isAxiosError(error)
-        ? error.response?.data?.message ?? '供应商配置保存失败，请检查后端服务。'
-        : '供应商配置保存失败，请稍后重试。'
+        ? error.response?.data?.message ?? '淇濆瓨妯″瀷鎻愪緵鏂瑰け璐ワ紝璇锋鏌ュ悗绔湇鍔°€?
+        : '淇濆瓨妯″瀷鎻愪緵鏂瑰け璐ワ紝璇风◢鍚庨噸璇曘€?
       message.error(description)
     } finally {
       setSavingProvider(false)
     }
   }
 
-  const handleSyncProviderModels = async () => {
-    const values = await providerForm.validateFields()
-    setSyncingProvider(true)
+  const handleProviderDraftChange = (provider: string) => {
+    const preset = PROVIDER_DEFAULTS[provider]
+    if (!preset) {
+      providerForm.setFieldValue('provider', provider)
+      return
+    }
+
+    providerForm.setFieldsValue({
+      provider,
+      baseUrl: preset.baseUrl,
+      protocol: preset.protocol,
+      apiKey: providerForm.getFieldValue('apiKey') ?? '',
+    })
+  }
+
+  const handleDeleteProvider = async (provider: string) => {
+    setDeletingProvider(provider)
     try {
-      const syncResponse = await axios.post('/api/admin/settings/provider-models/sync', values)
-      const catalogResponse = await axios.get<AdminModelCatalog>('/api/admin/settings/model-options')
-      setCatalog(catalogResponse.data)
-      setProviderConfigs((current) => {
-        const next = current.filter((item) => item.provider !== values.provider)
-        return [...next, {
-          provider: values.provider,
-          baseUrl: values.baseUrl,
-          apiKey: values.apiKey,
-        }].sort((left, right) => left.provider.localeCompare(right.provider))
+      await axios.post('/api/admin/settings/providers/delete', {
+        provider,
       })
-      message.success(`已同步 ${syncResponse.data.syncedCount} 个官方模型`)
+      setProviderConfigs((current) => current.filter((item) => item.provider !== provider))
+      if (addOptionForm.getFieldValue('provider') === provider) {
+        addOptionForm.setFieldValue('provider', '')
+      }
+      message.success(`宸插垹闄ゆ彁渚涙柟 ${provider}`)
     } catch (error) {
       const description = axios.isAxiosError(error)
-        ? error.response?.data?.message ?? '官方模型同步失败，请检查 URL、Key 或网络。'
-        : '官方模型同步失败，请稍后重试。'
+        ? error.response?.data?.message ?? '鍒犻櫎妯″瀷鎻愪緵鏂瑰け璐ワ紝璇锋鏌ュ悗绔湇鍔°€?
+        : '鍒犻櫎妯″瀷鎻愪緵鏂瑰け璐ワ紝璇风◢鍚庨噸璇曘€?
       message.error(description)
     } finally {
-      setSyncingProvider(false)
+      setDeletingProvider(null)
     }
   }
 
-  const renderSaveActions = () => (
+  const handleEditProvider = (providerConfig: ProviderConfig) => {
+    providerForm.setFieldsValue({
+      provider: providerConfig.provider,
+      baseUrl: providerConfig.baseUrl,
+      apiKey: providerConfig.apiKey,
+      protocol: providerConfig.protocol,
+    })
+    message.info(`宸茶浇鍏?${providerConfig.provider} 閰嶇疆锛屽彲鐩存帴淇敼鍚庝繚瀛榒)
+  }
+
+  const fieldNameByCategory: Record<ModelCategory, keyof AdminModelSettings> = {
+    embedding: 'embeddingModel',
+    speech: 'speechModel',
+    vision: 'visionModel',
+    chat: 'chatModel',
+    multimodal: 'multimodalModel',
+  }
+
+  const handleTestModel = async (category: ModelCategory) => {
+    const fieldName = fieldNameByCategory[category]
+    const values = await form.validateFields([fieldName])
+    const modelId = values[fieldName] as string
+    setTestingCategory(category)
+    try {
+      const response = await axios.post<ModelTestResponse>('/api/admin/settings/model-test', {
+        category,
+        modelId,
+      })
+      setTestResults((current) => ({
+        ...current,
+        [category]: response.data,
+      }))
+      message.success(response.data.message)
+    } catch (error) {
+      const description = axios.isAxiosError(error)
+        ? error.response?.data?.message ?? '妯″瀷娴嬭瘯澶辫触锛岃妫€鏌ユ湇鍔￠厤缃€?
+        : '妯″瀷娴嬭瘯澶辫触锛岃绋嶅悗閲嶈瘯銆?
+      setTestResults((current) => ({
+        ...current,
+        [category]: {
+          success: false,
+          provider: '',
+          category,
+          modelId,
+          message: description,
+        },
+      }))
+      message.error(description)
+    } finally {
+      setTestingCategory(null)
+    }
+  }
+
+  const handleTestModelRow = async (row: ModelCatalogRow) => {
+    setTestingRowKey(row.key)
+    try {
+      const response = await axios.post<ModelTestResponse>('/api/admin/settings/model-test', {
+        category: row.category,
+        modelId: row.modelId,
+      })
+      setTestResults((current) => ({
+        ...current,
+        [row.category]: response.data,
+      }))
+      message.success(response.data.message)
+    } catch (error) {
+      const description = axios.isAxiosError(error)
+        ? error.response?.data?.message ?? '妯″瀷娴嬭瘯澶辫触锛岃妫€鏌ユ湇鍔￠厤缃€?
+        : '妯″瀷娴嬭瘯澶辫触锛岃绋嶅悗閲嶈瘯銆?
+      message.error(description)
+    } finally {
+      setTestingRowKey(null)
+    }
+  }
+
+  const handleSelectModelRow = async (row: ModelCatalogRow) => {
+    setSelectingRowKey(row.key)
+    try {
+      const response = await axios.put<AdminModelSettings>('/api/admin/settings/model-options/select', {
+        category: row.category,
+        provider: row.provider,
+        modelId: row.modelId,
+      })
+      form.setFieldsValue(response.data)
+      message.success(`宸插垏鎹㈠埌妯″瀷 ${row.modelId}`)
+    } catch (error) {
+      const description = axios.isAxiosError(error)
+        ? error.response?.data?.message ?? '璁剧疆褰撳墠妯″瀷澶辫触锛岃妫€鏌ュ悗绔湇鍔°€?
+        : '璁剧疆褰撳墠妯″瀷澶辫触锛岃绋嶅悗閲嶈瘯銆?
+      message.error(description)
+    } finally {
+      setSelectingRowKey(null)
+    }
+  }
+
+  const handleDeleteModelRow = async (row: ModelCatalogRow) => {
+    setDeletingRowKey(row.key)
+    try {
+      const response = await axios.post<AdminModelCatalog>('/api/admin/settings/model-options/delete', {
+        category: row.category,
+        provider: row.provider,
+        modelId: row.modelId,
+      })
+      setCatalog(response.data)
+      if (row.selected) {
+        await loadSettings()
+      }
+      message.success(`宸插垹闄ゆā鍨?${row.modelId}`)
+    } catch (error) {
+      const description = axios.isAxiosError(error)
+        ? error.response?.data?.message ?? '鍒犻櫎妯″瀷澶辫触锛岃妫€鏌ュ悗绔湇鍔°€?
+        : '鍒犻櫎妯″瀷澶辫触锛岃绋嶅悗閲嶈瘯銆?
+      message.error(description)
+    } finally {
+      setDeletingRowKey(null)
+    }
+  }
+
+  const catalogColumns: TableColumnsType<ModelCatalogRow> = [
+    {
+      title: '鍒嗙被',
+      dataIndex: 'category',
+      render: (value: ModelCategory) => MODEL_CATEGORY_OPTIONS.find((item) => item.value === value)?.label ?? value,
+    },
+    { title: '鎻愪緵鏂?, dataIndex: 'provider' },
+    { title: '妯″瀷 ID', dataIndex: 'modelId' },
+    {
+      title: '鐘舵€?,
+      dataIndex: 'selected',
+      render: (selected: boolean) => (
+        <Tag color={selected ? 'green' : 'default'}>{selected ? '褰撳墠浣跨敤' : '鍊欓€?}</Tag>
+      ),
+    },
+    {
+      title: '鎿嶄綔',
+      key: 'actions',
+      render: (_, row) => (
+        <div className="admin-action-row">
+          <Button size="small" onClick={() => void handleTestModelRow(row)} loading={testingRowKey === row.key}>
+            娴嬭瘯
+          </Button>
+          <Button size="small" type="primary" ghost onClick={() => void handleSelectModelRow(row)} loading={selectingRowKey === row.key}>
+            璁句负褰撳墠
+          </Button>
+          <Button size="small" danger onClick={() => void handleDeleteModelRow(row)} loading={deletingRowKey === row.key}>
+            鍒犻櫎
+          </Button>
+        </div>
+      ),
+    },
+  ]
+
+  const providerColumns: TableColumnsType<ProviderConfig> = [
+    { title: '鎻愪緵鏂?, dataIndex: 'provider' },
+    { title: '鍗忚', dataIndex: 'protocol' },
+    { title: 'Base URL', dataIndex: 'baseUrl' },
+    {
+      title: 'API Key',
+      dataIndex: 'apiKey',
+      render: (value: string) => (value ? `***${value.slice(-4)}` : '-'),
+    },
+    {
+      title: '鎿嶄綔',
+      key: 'actions',
+      render: (_, row) => (
+        <div className="admin-action-row">
+          <Button
+            size="small"
+            onClick={() => handleEditProvider(row)}
+          >
+            缂栬緫
+          </Button>
+          <Button
+            size="small"
+            danger
+            onClick={() => void handleDeleteProvider(row.provider)}
+            loading={deletingProvider === row.provider}
+          >
+            鍒犻櫎
+          </Button>
+        </div>
+      ),
+    },
+  ]
+
+  const renderMarkdown = (markdown: string) => {
+    const lines = markdown.split('\n')
+    const elements: JSX.Element[] = []
+    let listItems: string[] = []
+    let paragraphLines: string[] = []
+
+    const flushList = () => {
+      if (!listItems.length) {
+        return
+      }
+      elements.push(
+        <ul className="admin-list admin-markdown-list" key={`list-${elements.length}`}>
+          {listItems.map((item, index) => (
+            <li key={`${item}-${index}`}>{item}</li>
+          ))}
+        </ul>,
+      )
+      listItems = []
+    }
+
+    const flushParagraph = () => {
+      if (!paragraphLines.length) {
+        return
+      }
+      elements.push(
+        <p className="admin-markdown-paragraph" key={`p-${elements.length}`}>
+          {paragraphLines.join(' ')}
+        </p>,
+      )
+      paragraphLines = []
+    }
+
+    lines.forEach((rawLine) => {
+      const line = rawLine.trim()
+      if (!line) {
+        flushList()
+        flushParagraph()
+        return
+      }
+      if (line.startsWith('# ')) {
+        flushList()
+        flushParagraph()
+        elements.push(<h2 className="admin-markdown-h2" key={`h2-${elements.length}`}>{line.slice(2)}</h2>)
+        return
+      }
+      if (line.startsWith('## ')) {
+        flushList()
+        flushParagraph()
+        elements.push(<h3 className="admin-markdown-h3" key={`h3-${elements.length}`}>{line.slice(3)}</h3>)
+        return
+      }
+      if (line.startsWith('### ')) {
+        flushList()
+        flushParagraph()
+        elements.push(<h4 className="admin-markdown-h4" key={`h4-${elements.length}`}>{line.slice(4)}</h4>)
+        return
+      }
+      if (line.startsWith('- ')) {
+        flushParagraph()
+        listItems.push(line.slice(2))
+        return
+      }
+      paragraphLines.push(line)
+    })
+
+    flushList()
+    flushParagraph()
+    return elements
+  }
+
+  const renderActions = (category: ModelCategory) => (
     <div className="admin-action-row">
       <Button type="primary" htmlType="submit" loading={saving}>
-        保存设置
+        淇濆瓨璁剧疆
+      </Button>
+      <Button onClick={() => void handleTestModel(category)} loading={testingCategory === category}>
+        娴嬭瘯褰撳墠妯″瀷
       </Button>
       <Button onClick={() => form.resetFields()} disabled={saving || loading}>
-        重置表单
+        閲嶇疆琛ㄥ崟
       </Button>
     </div>
   )
 
+  const renderTestResult = (category: ModelCategory) => {
+    const result = testResults[category]
+    if (!result) {
+      return null
+    }
+
+    const isSoftSuccess = result.success && result.detail?.includes('鍐呭涓虹┖')
+    const title = result.success ? (isSoftSuccess ? '妯″瀷宸茶繛閫? : '娴嬭瘯鎴愬姛') : '娴嬭瘯澶辫触'
+    const summary = result.success
+      ? (isSoftSuccess
+        ? '鎺ュ彛宸茬粡鎵撻€氾紝妯″瀷涔熸湁鍝嶅簲锛屼絾杩欐鍋ュ悍妫€鏌ユ病鏈夎繑鍥炲彲灞曠ず鏂囨湰銆傞€氬父涓嶅奖鍝嶇户缁厤缃娇鐢ㄣ€?
+        : '妯″瀷鎺ュ彛璋冪敤鎴愬姛锛屽綋鍓嶉厤缃彲缁х画浣跨敤銆?)
+      : result.message
+    const detail = result.success
+      ? (isSoftSuccess ? '寤鸿锛氬彲浠ョ户缁湪鐪熷疄涓氬姟鍦烘櫙閲屽啀娴嬩竴杞棶绛旀垨鍥炬枃杈撳叆銆? : result.detail ?? '褰撳墠娴嬭瘯宸查€氳繃銆?)
+      : result.detail ?? '璇锋鏌ユ彁渚涙柟閰嶇疆銆佹ā鍨嬪悕绉版垨璐︽埛鐘舵€併€?
+
+    return (
+      <Card
+        size="small"
+        className={`admin-build-summary ${result.success ? '' : 'admin-build-summary--danger'}`}
+      >
+        <div className="admin-test-result">
+          <div className="admin-test-result__header">
+            <strong>{title}</strong>
+            <Tag color={result.success ? (isSoftSuccess ? 'blue' : 'green') : 'red'}>
+              {result.success ? (isSoftSuccess ? '宸茶繛閫? : '鍙敤') : '涓嶅彲鐢?}
+            </Tag>
+          </div>
+          <div className="admin-test-result__meta">
+            <span>妯″瀷锛歿result.modelId}</span>
+            {result.provider ? <span>鎻愪緵鏂癸細{result.provider}</span> : null}
+          </div>
+          <div className="admin-test-result__summary">{summary}</div>
+          <div className="admin-build-summary__time">{detail}</div>
+        </div>
+      </Card>
+    )
+  }
+
+  const renderTabLabel = (category: ModelCategory, label: string) => {
+    const result = testResults[category]
+    return (
+      <span className="admin-tab-label">
+        <span>{label}</span>
+        {result ? (
+          <Tag color={result.success ? 'green' : 'red'} className="admin-tab-label__tag">
+            {result.success ? '宸查€氳繃' : '澶辫触'}
+          </Tag>
+        ) : null}
+      </span>
+    )
+  }
+
   const modelSettingTabItems = [
     {
       key: 'embedding',
-      label: '嵌入模型',
+      label: renderTabLabel('embedding', '宓屽叆妯″瀷'),
       children: (
         <Form form={form} layout="vertical" onFinish={(values) => void handleSave(values)} disabled={loading} className="admin-settings-form">
           <Form.Item
-            label="嵌入模型"
+            label="宓屽叆妯″瀷"
             name="embeddingModel"
-            rules={[{ required: true, message: '请输入嵌入模型' }]}
-            extra="用于知识库分块向量化与相似度检索。"
+            rules={[{ required: true, message: '璇疯緭鍏ュ祵鍏ユā鍨? }]}
+            extra="鐢ㄤ簬鐭ヨ瘑搴撳垎鍧楀悜閲忓寲涓庣浉浼煎害妫€绱€?
           >
             <AutoComplete options={embeddingOptions}>
-              <Input placeholder="例如：BAAI/bge-m3" />
+              <Input placeholder="渚嬪锛欱AAI/bge-m3" />
             </AutoComplete>
           </Form.Item>
-          {renderSaveActions()}
+          {renderActions('embedding')}
+          {renderTestResult('embedding')}
         </Form>
       ),
     },
     {
       key: 'speech',
-      label: '语音模型',
+      label: renderTabLabel('speech', '璇煶妯″瀷'),
       children: (
         <Form form={form} layout="vertical" onFinish={(values) => void handleSave(values)} disabled={loading} className="admin-settings-form">
           <Form.Item
-            label="语音模型"
+            label="璇煶妯″瀷"
             name="speechModel"
-            rules={[{ required: true, message: '请输入语音模型' }]}
-            extra="用于数字人播报和文本转语音。"
+            rules={[{ required: true, message: '璇疯緭鍏ヨ闊虫ā鍨? }]}
+            extra="鐢ㄤ簬鏁板瓧浜烘挱鎶ュ拰鏂囨湰杞闊筹紝褰撳墠浼氱洿鎺ュ睍绀烘湰鍦?edge-tts 鏀寔鐨勮闊冲垪琛ㄣ€?
           >
-            <AutoComplete options={speechOptions}>
-              <Input placeholder="例如：zh-CN-XiaoxiaoNeural" />
+            <AutoComplete options={voiceOptions}>
+              <Input placeholder="渚嬪锛歾h-CN-XiaoxiaoNeural" />
             </AutoComplete>
           </Form.Item>
-          {renderSaveActions()}
+          {renderActions('speech')}
+          {renderTestResult('speech')}
         </Form>
       ),
     },
     {
       key: 'vision',
-      label: '视觉模型',
+      label: renderTabLabel('vision', '瑙嗚妯″瀷'),
       children: (
         <Form form={form} layout="vertical" onFinish={(values) => void handleSave(values)} disabled={loading} className="admin-settings-form">
           <Form.Item
-            label="视觉模型"
+            label="瑙嗚妯″瀷"
             name="visionModel"
-            rules={[{ required: true, message: '请输入视觉模型' }]}
-            extra="用于图片理解、景区识别和视觉问答。"
+            rules={[{ required: true, message: '璇疯緭鍏ヨ瑙夋ā鍨? }]}
+            extra="鐢ㄤ簬鍥剧墖鐞嗚В銆佹櫙鍖鸿瘑鍒拰瑙嗚闂瓟銆?
           >
             <AutoComplete options={visionOptions}>
-              <Input placeholder="例如：Qwen/Qwen2.5-VL-7B-Instruct" />
+              <Input placeholder="渚嬪锛歈wen/Qwen2.5-VL-7B-Instruct" />
             </AutoComplete>
           </Form.Item>
-          {renderSaveActions()}
+          {renderActions('vision')}
+          {renderTestResult('vision')}
+        </Form>
+      ),
+    },
+    {
+      key: 'chat',
+      label: renderTabLabel('chat', '瀵硅瘽妯″瀷'),
+      children: (
+        <Form form={form} layout="vertical" onFinish={(values) => void handleSave(values)} disabled={loading} className="admin-settings-form">
+          <Form.Item
+            label="瀵硅瘽妯″瀷"
+            name="chatModel"
+            rules={[{ required: true, message: '璇疯緭鍏ュ璇濇ā鍨? }]}
+            extra="鐢ㄤ簬绾枃鏈璇濄€侀棶绛斻€佹帹鐞嗙瓑鍦烘櫙銆?
+          >
+            <AutoComplete options={chatOptions}>
+              <Input placeholder="渚嬪锛歞eepseek-v4-flash / gpt-4.1 / qwen-max" />
+            </AutoComplete>
+          </Form.Item>
+          {renderActions('chat')}
+          {renderTestResult('chat')}
         </Form>
       ),
     },
     {
       key: 'multimodal',
-      label: '多模态模型',
+      label: renderTabLabel('multimodal', '澶氭ā鎬佹ā鍨?),
       children: (
         <Form form={form} layout="vertical" onFinish={(values) => void handleSave(values)} disabled={loading} className="admin-settings-form">
           <Form.Item
-            label="多模态/对话模型"
+            label="澶氭ā鎬佹ā鍨?
             name="multimodalModel"
-            rules={[{ required: true, message: '请输入多模态模型' }]}
-            extra="用于图文联合理解、复杂问答，DeepSeek 这类对话模型也可以挂在这里统一管理。"
+            rules={[{ required: true, message: '璇疯緭鍏ュ妯℃€佹ā鍨? }]}
+            extra="鐢ㄤ簬鍥炬枃鑱斿悎鐞嗚В銆佸浘鐗囬棶绛斻€佽瑙夋帹鐞嗙瓑澶氭ā鎬佸満鏅€?
           >
             <AutoComplete options={multimodalOptions}>
-              <Input placeholder="例如：deepseek-v4-flash" />
+              <Input placeholder="渚嬪锛歡pt-4o / Qwen/Qwen2.5-VL-7B-Instruct" />
             </AutoComplete>
           </Form.Item>
-          {renderSaveActions()}
+          {renderActions('multimodal')}
+          {renderTestResult('multimodal')}
         </Form>
       ),
     },
@@ -801,8 +1257,8 @@ function SettingsPanel() {
   return (
     <div className="admin-panel-grid">
       <Card
-        title="系统设置"
-        extra={<Tag color="blue">左下角入口</Tag>}
+        title="绯荤粺璁剧疆"
+        extra={<Tag color="blue">宸︿笅瑙掑叆鍙?/Tag>}
         className="admin-settings-card"
       >
         <Tabs
@@ -811,104 +1267,144 @@ function SettingsPanel() {
             ...modelSettingTabItems,
             {
               key: 'model-catalog',
-              label: '官方同步',
+              label: '鎵嬪姩缁存姢',
               children: (
                 <div className="admin-form-grid">
                   <Card size="small" className="admin-build-summary">
-                    先配置供应商连接，再从官方接口同步模型。以 DeepSeek 为例，填写 `https://api.deepseek.com` 和 API Key 后即可拉取官方现有模型，后续新模型也能再次同步进入候选列表。
+                    妯″瀷鍒楄〃鏀逛负鎵嬪姩缁存姢銆傛寜鍒嗙被閫愪釜娣诲姞妯″瀷鎻愪緵鏂瑰拰妯″瀷 ID锛屾洿閫傚悎浣犲綋鍓嶄竴鏉′竴鏉￠厤缃€侀€愭鎵╁睍 provider 鑳藉姏鏂囦欢鐨勬柟寮忋€?
                   </Card>
-                  <Form
-                    form={providerForm}
-                    layout="vertical"
-                    onFinish={(values) => void handleSaveProvider(values)}
-                  >
-                    <Form.Item
-                      label="模型提供方"
-                      name="provider"
-                      rules={[{ required: true, message: '请选择或输入提供方' }]}
-                    >
-                      <AutoComplete
-                        options={PROVIDER_OPTIONS}
-                        onSelect={(value) => applyProviderPreset(value)}
-                      >
-                        <Input
-                          placeholder="例如：DeepSeek"
-                          onBlur={(event) => {
-                            const nextProvider = event.target.value.trim()
-                            if (nextProvider) {
-                              applyProviderPreset(nextProvider)
-                            }
-                          }}
+                  <Card size="small" title="妯″瀷鑳藉姏涓庢敮鎸佹ā鍨? className="admin-build-summary">
+                    <div className="admin-provider-docs">
+                      <div className="admin-provider-docs__toolbar">
+                        <Select
+                          value={providerDocSelection}
+                          options={[
+                            { value: 'DeepSeek', label: 'DeepSeek' },
+                            { value: 'OpenAI', label: 'OpenAI' },
+                            { value: 'Qwen', label: 'Qwen' },
+                            { value: 'Google', label: 'Google / Gemini' },
+                            { value: 'Local TTS', label: 'Local TTS / edge-tts' },
+                          ]}
+                          onChange={setProviderDocSelection}
+                          style={{ width: 220 }}
                         />
-                      </AutoComplete>
-                    </Form.Item>
-                    <Form.Item
-                      label="API URL"
-                      name="baseUrl"
-                      rules={[{ required: true, message: '请输入 API URL' }]}
-                      extra="DeepSeek 官方地址为 https://api.deepseek.com"
-                    >
-                      <Input placeholder="例如：https://api.deepseek.com" />
-                    </Form.Item>
-                    <Form.Item
-                      label="API Key"
-                      name="apiKey"
-                      rules={[{ required: true, message: '请输入 API Key' }]}
-                    >
-                      <Input.Password placeholder="请输入供应商 API Key" />
-                    </Form.Item>
-                    <Form.Item
-                      label="同步到模型分类"
-                      name="category"
-                      rules={[{ required: true, message: '请选择模型分类' }]}
-                    >
-                      <Select options={MODEL_CATEGORY_OPTIONS as unknown as { value: string; label: string }[]} />
-                    </Form.Item>
-                    <div className="admin-action-row">
-                      <Button type="primary" htmlType="submit" loading={savingProvider}>
-                        保存连接配置
-                      </Button>
-                      <Button onClick={() => void handleSyncProviderModels()} loading={syncingProvider}>
-                        同步官方模型
-                      </Button>
+                      </div>
+                      {providerDocLoading ? (
+                        <div className="admin-provider-docs__summary">姝ｅ湪鍔犺浇妯″瀷璇存槑鏂囨。...</div>
+                      ) : providerDoc ? (
+                        <div className="admin-provider-docs__markdown">
+                          {renderMarkdown(providerDoc.markdown)}
+                        </div>
+                      ) : (
+                        <div className="admin-provider-docs__summary">褰撳墠鎻愪緵鏂规殏鏃犲彲灞曠ず鐨勬ā鍨嬭鏄庢枃妗ｃ€?/div>
+                      )}
                     </div>
-                  </Form>
-                  <Card size="small" title="手动补充模型" className="admin-build-summary">
+                  </Card>
+                  <Card size="small" title="妯″瀷鎻愪緵鏂归厤缃? className="admin-build-summary">
+                    <Form
+                      form={providerForm}
+                      layout="vertical"
+                      onFinish={(values) => void handleSaveProvider(values)}
+                    >
+                      <Form.Item
+                        label="鎻愪緵鏂?
+                        name="provider"
+                        rules={[{ required: true, message: '璇疯緭鍏ユā鍨嬫彁渚涙柟' }]}
+                      >
+                        <AutoComplete
+                          options={PROVIDER_OPTIONS}
+                          onSelect={(value) => handleProviderDraftChange(value)}
+                        >
+                          <Input placeholder="渚嬪锛欴eepSeek / OpenAI / Qwen" />
+                        </AutoComplete>
+                      </Form.Item>
+                      <Form.Item
+                        label="Base URL"
+                        name="baseUrl"
+                        rules={[{ required: true, message: '璇疯緭鍏?Base URL' }]}
+                      >
+                        <Input placeholder="渚嬪锛歨ttps://api.deepseek.com" />
+                      </Form.Item>
+                      <Form.Item
+                        label="API Key"
+                        name="apiKey"
+                        rules={[{ required: true, message: '璇疯緭鍏?API Key' }]}
+                      >
+                        <Input.Password placeholder="璇疯緭鍏ヨ鎻愪緵鏂圭殑 API Key" />
+                      </Form.Item>
+                      <Form.Item
+                        label="鍗忚"
+                        name="protocol"
+                        rules={[{ required: true, message: '璇烽€夋嫨鍗忚' }]}
+                      >
+                        <Select options={[{ value: 'openai_compatible', label: 'OpenAI Compatible' }]} />
+                      </Form.Item>
+                      <div className="admin-action-row">
+                        <Button type="primary" htmlType="submit" loading={savingProvider}>
+                          淇濆瓨鎻愪緵鏂?
+                        </Button>
+                      </div>
+                    </Form>
+                    <Table
+                      columns={providerColumns}
+                      dataSource={providerConfigs.map((item) => ({ ...item, key: item.provider }))}
+                      pagination={false}
+                      locale={{ emptyText: '鏆傛棤鎻愪緵鏂归厤缃紝璇峰厛娣诲姞鎻愪緵鏂瑰拰 API Key銆? }}
+                    />
+                  </Card>
+                  <Card size="small" title="鏂板妯″瀷" className="admin-build-summary">
                     <Form
                       form={addOptionForm}
                       layout="vertical"
                       onFinish={(values) => void handleAddOption(values)}
                     >
                       <Form.Item
-                        label="模型分类"
+                        label="妯″瀷鍒嗙被"
                         name="category"
-                        rules={[{ required: true, message: '请选择模型分类' }]}
+                        rules={[{ required: true, message: '璇烽€夋嫨妯″瀷鍒嗙被' }]}
                       >
                         <Select options={MODEL_CATEGORY_OPTIONS as unknown as { value: string; label: string }[]} />
                       </Form.Item>
                       <Form.Item
-                        label="模型提供方"
+                        label="妯″瀷鎻愪緵鏂?
                         name="provider"
-                        rules={[{ required: true, message: '请选择或输入提供方' }]}
+                        rules={[{ required: true, message: '璇烽€夋嫨宸查厤缃殑妯″瀷鎻愪緵鏂? }]}
+                        extra="璇峰厛鍦ㄤ笂鏂逛繚瀛樻彁渚涙柟鐨?Base URL 鍜?API Key锛屽啀閫夋嫨璇ユ彁渚涙柟娣诲姞妯″瀷銆?
                       >
-                        <AutoComplete options={PROVIDER_OPTIONS}>
-                          <Input placeholder="例如：DeepSeek" />
-                        </AutoComplete>
+                        <Select
+                          options={providerConfigs.map((item) => ({ value: item.provider, label: item.provider }))}
+                          placeholder="璇烽€夋嫨宸查厤缃彁渚涙柟"
+                        />
                       </Form.Item>
                       <Form.Item
-                        label="模型 ID"
+                        label="妯″瀷 ID"
                         name="modelId"
-                        rules={[{ required: true, message: '请输入模型 ID' }]}
-                        extra="当官方刚出新模型但你还不想走同步时，可以在这里手动补充。"
+                        rules={[{ required: true, message: '璇疯緭鍏ユā鍨?ID' }]}
+                        extra="渚嬪锛歞eepseek-v4-flash銆乼ext-embedding-3-large銆丵wen/Qwen2.5-VL-7B-Instruct銆?
                       >
-                        <Input placeholder="例如：deepseek-v4-flash" />
+                        <Input placeholder="渚嬪锛歞eepseek-v4-flash" />
                       </Form.Item>
                       <div className="admin-action-row">
                         <Button type="primary" htmlType="submit" loading={addingOption}>
-                          添加到候选列表
+                          娣诲姞鍒板€欓€夊垪琛?
                         </Button>
                       </div>
                     </Form>
+                  </Card>
+                  <Card size="small" title="宸叉坊鍔犳ā鍨? className="admin-build-summary">
+                    <Table
+                      columns={catalogColumns}
+                      dataSource={catalogRows}
+                      pagination={false}
+                      locale={{
+                        emptyText: (
+                          <div className="admin-empty-state">
+                            <strong>褰撳墠杩樻病鏈変换浣曟ā鍨?/strong>
+                            <div>绯荤粺宸叉敼涓虹┖鐧藉惎鍔ㄦā寮忥紝璇峰厛鍦ㄤ笂鏂规墜鍔ㄦ柊澧炴ā鍨嬶紝鐒跺悗鍐嶈涓哄綋鍓嶅苟鎵ц娴嬭瘯銆?/div>
+                          </div>
+                        ),
+                      }}
+                    />
                   </Card>
                 </div>
               ),
@@ -1022,7 +1518,7 @@ function TravelAnalyticsPanel() {
     async function loadExcelFromPublic() {
       setLoading(true)
       try {
-        const response = await fetch('/travel-analytics/景点景区旅游数据行为分析数据.xlsx')
+        const response = await fetch('/travel-analytics/鏅偣鏅尯鏃呮父鏁版嵁琛屼负鍒嗘瀽鏁版嵁.xlsx')
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`)
         }
@@ -1042,7 +1538,7 @@ function TravelAnalyticsPanel() {
         })
 
         const headerRow = (matrix[0] ?? []).map((cell) => String(cell ?? '').trim())
-        const normalizedHeaders = headerRow.map((header, index) => (header ? header : `列${index + 1}`))
+        const normalizedHeaders = headerRow.map((header, index) => (header ? header : `鍒?{index + 1}`))
         const builtRows = matrix
           .slice(1)
           .map((row, rowIndex) => {
@@ -1057,7 +1553,7 @@ function TravelAnalyticsPanel() {
         setHeaders(normalizedHeaders)
         setSourceRows(builtRows)
       } catch {
-        message.error('读取 Excel 失败，请检查文件是否存在于 public/travel-analytics 目录')
+        message.error('璇诲彇 Excel 澶辫触锛岃妫€鏌ユ枃浠舵槸鍚﹀瓨鍦ㄤ簬 public/travel-analytics 鐩綍')
       } finally {
         setLoading(false)
       }
@@ -1117,15 +1613,15 @@ function TravelAnalyticsPanel() {
 
   return (
     <div className="admin-panel-grid">
-      <Card title="旅游数据行为分析">
+      <Card title="鏃呮父鏁版嵁琛屼负鍒嗘瀽">
         <Card size="small" className="admin-build-summary admin-build-summary--muted">
-          固定展示文件：`景点景区旅游数据行为分析数据.xlsx`（与原表保持一致，不做导入修改）。
+          鍥哄畾灞曠ず鏂囦欢锛歚鏅偣鏅尯鏃呮父鏁版嵁琛屼负鍒嗘瀽鏁版嵁.xlsx`锛堜笌鍘熻〃淇濇寔涓€鑷达紝涓嶅仛瀵煎叆淇敼锛夈€?
         </Card>
         <div style={{ marginTop: 12, color: '#6b7280' }}>
-          可直接拖动表头右侧边线调整列宽；拖动单元格底部边线调整该行行高；悬停单元格查看完整内容。
+          鍙洿鎺ユ嫋鍔ㄨ〃澶村彸渚ц竟绾胯皟鏁村垪瀹斤紱鎷栧姩鍗曞厓鏍煎簳閮ㄨ竟绾胯皟鏁磋琛岃楂橈紱鎮仠鍗曞厓鏍兼煡鐪嬪畬鏁村唴瀹广€?
         </div>
       </Card>
-      <Card title="表格数据">
+      <Card title="琛ㄦ牸鏁版嵁">
         <div className="travel-analytics-table-wrap">
           <Table
             columns={columns}
@@ -1154,7 +1650,7 @@ function FeedbackPanel() {
           (item: { sessionId: string; question: string; helpful: boolean; rating: number; comment: string }) => ({
             key: `${item.sessionId}-${item.question}`,
             question: item.question,
-            helpful: item.helpful ? '有帮助' : '待优化',
+            helpful: item.helpful ? '鏈夊府鍔? : '寰呬紭鍖?,
             rating: `${item.rating}/5`,
             comment: item.comment || '-',
           }),
@@ -1166,7 +1662,7 @@ function FeedbackPanel() {
   }, [])
 
   return (
-    <Card title="游客反馈分析">
+    <Card title="娓稿鍙嶉鍒嗘瀽">
       <Table columns={feedbackColumns} dataSource={data} pagination={false} />
     </Card>
   )
@@ -1174,22 +1670,22 @@ function FeedbackPanel() {
 
 function QaPanel() {
   return (
-    <Card title="问答记录查询">
+    <Card title="闂瓟璁板綍鏌ヨ">
       <Form layout="inline" className="admin-filter-row">
-        <Form.Item label="关键词">
-          <Input placeholder="搜索问题关键词" />
+        <Form.Item label="鍏抽敭璇?>
+          <Input placeholder="鎼滅储闂鍏抽敭璇? />
         </Form.Item>
-        <Form.Item label="满意度">
+        <Form.Item label="婊℃剰搴?>
           <Select
             style={{ width: 180 }}
             options={[
-              { value: 'all', label: '全部' },
-              { value: 'good', label: '有帮助' },
-              { value: 'bad', label: '待优化' },
+              { value: 'all', label: '鍏ㄩ儴' },
+              { value: 'good', label: '鏈夊府鍔? },
+              { value: 'bad', label: '寰呬紭鍖? },
             ]}
           />
         </Form.Item>
-        <Button type="primary">查询</Button>
+        <Button type="primary">鏌ヨ</Button>
       </Form>
     </Card>
   )
@@ -1201,8 +1697,6 @@ function renderPanel(activeKey: MenuKey) {
       return <KnowledgePanel />
     case 'spots':
       return <SpotsPanel />
-    case 'spot-add':
-      return <SpotAddPage />
     case 'spot-category':
       return <SpotCategoryPage />
     case 'facility-list':
@@ -1246,17 +1740,17 @@ function LoginView({
     <main className="shell">
       <section className="intro">
         <p className="eyebrow">DigitalHuman Admin</p>
-        <h1>管理后台登录</h1>
+        <h1>绠＄悊鍚庡彴鐧诲綍</h1>
         <p className="lead">
-          这一版先完成比赛演示后台骨架，包括总览、知识库、景点、路线、数字人配置、反馈分析和问答查询。
+          杩欎竴鐗堝厛瀹屾垚姣旇禌婕旂ず鍚庡彴楠ㄦ灦锛屽寘鎷€昏銆佺煡璇嗗簱銆佹櫙鐐广€佽矾绾裤€佹暟瀛椾汉閰嶇疆銆佸弽棣堝垎鏋愬拰闂瓟鏌ヨ銆?
         </p>
         <div className="account-list">
           <div>
-            <span>管理员</span>
+            <span>绠＄悊鍛?/span>
             <strong>admin / admin123</strong>
           </div>
           <div>
-            <span>普通用户</span>
+            <span>鏅€氱敤鎴?/span>
             <strong>user / user123</strong>
           </div>
         </div>
@@ -1265,15 +1759,15 @@ function LoginView({
       <section className="panel">
         <form className="login-form" onSubmit={onSubmit}>
           <label>
-            用户名
+            鐢ㄦ埛鍚?
             <input value={username} onChange={(event) => setUsername(event.target.value)} />
           </label>
           <label>
-            密码
+            瀵嗙爜
             <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
           </label>
           <button type="submit" disabled={loading}>
-            {loading ? '登录中...' : '登录'}
+            {loading ? '鐧诲綍涓?..' : '鐧诲綍'}
           </button>
           {error ? <p className="message error">{error}</p> : null}
         </form>
@@ -1284,12 +1778,20 @@ function LoginView({
 
 function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: () => void }) {
   const [activeKey, setActiveKey] = useState<MenuKey>('dashboard')
+  const [spotDrawerOpen, setSpotDrawerOpen] = useState(false)
 
   return (
     <Layout className="admin-shell">
+      <SpotDrawer
+        open={spotDrawerOpen}
+        onClose={() => setSpotDrawerOpen(false)}
+        title="鏂板鏅偣"
+        actionText="鍙戝竷鏅偣"
+        onAction={() => { message.success('鍙戝竷鎴愬姛'); setSpotDrawerOpen(false) }}
+      />
       <Sider width={248} className="admin-sider">
         <div className="admin-brand">
-          <strong>数字人管理后台</strong>
+          <strong>鏁板瓧浜虹鐞嗗悗鍙?/strong>
           <span>{user.displayName}</span>
         </div>
         <div className="admin-sider__nav">
@@ -1313,7 +1815,7 @@ function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: () => vo
             className="admin-settings-entry"
             onClick={() => setActiveKey('settings')}
           >
-            设置
+            璁剧疆
           </Button>
         </div>
       </Sider>
@@ -1321,10 +1823,14 @@ function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: () => vo
         <Header className="admin-header">
           <div className="admin-header__actions">
             <Tag color="blue">{user.role}</Tag>
-            <Button icon={<UserOutlined />} onClick={onLogout}>退出登录</Button>
+            <Button icon={<UserOutlined />} onClick={onLogout}>閫€鍑虹櫥褰?/Button>
           </div>
         </Header>
-        <Content className="admin-content">{renderPanel(activeKey)}</Content>
+        <Content className="admin-content">
+            {activeKey === 'facility-list'
+              ? <FacilityListPage onAddFacility={() => setSpotDrawerOpen(true)} />
+              : renderPanel(activeKey)}
+          </Content>
       </Layout>
     </Layout>
   )
@@ -1360,7 +1866,7 @@ function App() {
       })
 
       if (response.data.role !== 'ADMIN') {
-        setError('当前入口仅允许管理员登录，请使用管理员账号。')
+        setError('褰撳墠鍏ュ彛浠呭厑璁哥鐞嗗憳鐧诲綍锛岃浣跨敤绠＄悊鍛樿处鍙枫€?)
         setUser(null)
         return
       }
@@ -1369,9 +1875,9 @@ function App() {
       setUser(response.data)
     } catch (submitError) {
       if (axios.isAxiosError(submitError)) {
-        setError(submitError.response?.data?.message ?? '登录失败，请检查后端服务和账号密码。')
+        setError(submitError.response?.data?.message ?? '鐧诲綍澶辫触锛岃妫€鏌ュ悗绔湇鍔″拰璐﹀彿瀵嗙爜銆?)
       } else {
-        setError('登录失败，请稍后重试。')
+        setError('鐧诲綍澶辫触锛岃绋嶅悗閲嶈瘯銆?)
       }
       setUser(null)
     } finally {

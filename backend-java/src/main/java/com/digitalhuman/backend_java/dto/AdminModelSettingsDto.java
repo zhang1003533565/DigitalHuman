@@ -5,15 +5,17 @@ public class AdminModelSettingsDto {
     private String embeddingModel;
     private String speechModel;
     private String visionModel;
+    private String chatModel;
     private String multimodalModel;
 
     public AdminModelSettingsDto() {
     }
 
-    public AdminModelSettingsDto(String embeddingModel, String speechModel, String visionModel, String multimodalModel) {
+    public AdminModelSettingsDto(String embeddingModel, String speechModel, String visionModel, String chatModel, String multimodalModel) {
         this.embeddingModel = embeddingModel;
         this.speechModel = speechModel;
         this.visionModel = visionModel;
+        this.chatModel = chatModel;
         this.multimodalModel = multimodalModel;
     }
 
@@ -47,5 +49,13 @@ public class AdminModelSettingsDto {
 
     public void setMultimodalModel(String multimodalModel) {
         this.multimodalModel = multimodalModel;
+    }
+
+    public String getChatModel() {
+        return chatModel;
+    }
+
+    public void setChatModel(String chatModel) {
+        this.chatModel = chatModel;
     }
 }

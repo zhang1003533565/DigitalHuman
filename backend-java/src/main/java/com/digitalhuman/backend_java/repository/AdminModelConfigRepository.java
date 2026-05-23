@@ -13,4 +13,6 @@ public interface AdminModelConfigRepository extends JpaRepository<AdminModelConf
     List<AdminModelConfig> findByCategoryOrderByProviderAscModelIdAsc(ModelCategory category);
 
     Optional<AdminModelConfig> findByCategoryAndModelIdIgnoreCase(ModelCategory category, String modelId);
+
+    List<AdminModelConfig> findByProviderIgnoreCaseOrderByCategoryAscModelIdAsc(String provider);
 }

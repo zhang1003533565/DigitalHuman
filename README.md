@@ -293,7 +293,7 @@ curl -X POST http://127.0.0.1:18755/kb/ingest \
 
 ## 重要说明
 
-- `ai-service/edge_tts_service.py` 仍然保留在仓库里，但已经不是主入口
+- 独立 TTS 服务入口已迁到 `ai-service/model_capabilities/tts/service_app.py`
 - 统一 AI 服务入口是 `ai-service/app.py`
 - TTS 已并入 `ai-service`
 - 前端游客端代理也已经从旧的 `18754` 切到统一的 `18755`

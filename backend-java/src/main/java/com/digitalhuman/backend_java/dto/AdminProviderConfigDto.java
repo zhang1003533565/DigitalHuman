@@ -5,15 +5,7 @@ public class AdminProviderConfigDto {
     private String provider;
     private String baseUrl;
     private String apiKey;
-
-    public AdminProviderConfigDto() {
-    }
-
-    public AdminProviderConfigDto(String provider, String baseUrl, String apiKey) {
-        this.provider = provider;
-        this.baseUrl = baseUrl;
-        this.apiKey = apiKey;
-    }
+    private String protocol;
 
     public String getProvider() {
         return provider;
@@ -37,5 +29,13 @@ public class AdminProviderConfigDto {
 
     public void setApiKey(String apiKey) {
         this.apiKey = apiKey;
+    }
+
+    public String getProtocol() {
+        return protocol;
+    }
+
+    public void setProtocol(String protocol) {
+        this.protocol = protocol;
     }
 }

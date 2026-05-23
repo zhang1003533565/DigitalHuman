@@ -3,13 +3,13 @@
 RAG FastAPI service for ingesting the local knowledge base and serving retrieval.
 """
 
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile
 
-from admin_config import load_provider_configs, save_provider_config
-from providers import sync_provider_models as sync_official_provider_models
-from rag.schemas import IngestRequest, IngestResponse, KnowledgeDocumentInfo, ProviderConfigRequest, ProviderConfigResponse, QueryRequest, QueryResponse, RetrieveRequest, RetrieveResponse, SyncProviderModelsRequest, SyncProviderModelsResponse, UploadKnowledgeResponse
-from rag.service import RagService
-from tts import router as tts_router
+from model_capabilities.testing.model_test_service import test_model
+from model_capabilities.tts.router import router as tts_router
+from model_providers.config_store import delete_provider_config, load_provider_configs, save_provider_config
+from rag.application.rag_service import RagService
+from rag.contracts.schemas import IngestRequest, IngestResponse, KnowledgeDocumentInfo, ModelTestRequest, ModelTestResponse, ProviderConfigRequest, ProviderConfigResponse, ProviderDeleteRequest, QueryRequest, QueryResponse, RetrieveRequest, RetrieveResponse, UploadKnowledgeResponse
 
 
 app = FastAPI(title="DigitalHuman RAG Service")
@@ -47,6 +47,24 @@ def query(request: QueryRequest) -> QueryResponse:
     return rag_service.query(request)
 
 
+@app.post("/admin/model-test", response_model=ModelTestResponse)
+def model_test(request: ModelTestRequest) -> ModelTestResponse:
+    try:
+        result = test_model(request.provider, request.category, request.model_id)
+        return ModelTestResponse.model_validate({
+            "success": result.success,
+            "provider": request.provider,
+            "category": request.category,
+            "modelId": request.model_id,
+            "message": result.message,
+            "detail": result.detail,
+        })
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"模型测试内部异常：{exc}") from exc
+
+
 @app.get("/admin/providers", response_model=list[ProviderConfigResponse])
 def list_provider_configs() -> list[ProviderConfigResponse]:
     return [ProviderConfigResponse.model_validate(item) for item in load_provider_configs()]
@@ -54,19 +72,11 @@ def list_provider_configs() -> list[ProviderConfigResponse]:
 
 @app.put("/admin/providers", response_model=ProviderConfigResponse)
 def update_provider_config(request: ProviderConfigRequest) -> ProviderConfigResponse:
-    saved = save_provider_config(request.provider, request.base_url, request.api_key)
+    saved = save_provider_config(request.provider, request.base_url, request.api_key, request.protocol)
     return ProviderConfigResponse.model_validate(saved)
 
 
-@app.post("/admin/providers/sync-models", response_model=SyncProviderModelsResponse)
-def sync_provider_models(request: SyncProviderModelsRequest) -> SyncProviderModelsResponse:
-    provider = request.provider.strip()
-    config = save_provider_config(provider, request.base_url, request.api_key)
-    model_ids = sync_official_provider_models(provider, config["baseUrl"], config["apiKey"])
-    return SyncProviderModelsResponse.model_validate({
-        "provider": provider,
-        "category": request.category,
-        "baseUrl": config["baseUrl"],
-        "syncedCount": len(model_ids),
-        "modelIds": model_ids,
-    })
+@app.post("/admin/providers/delete")
+def remove_provider_config(request: ProviderDeleteRequest) -> dict[str, bool]:
+    delete_provider_config(request.provider)
+    return {"success": True}
