@@ -18,15 +18,17 @@ import {
   Col,
   Upload,
   Select,
-  AutoComplete,
   Tabs,
   message,
 } from 'antd'
 import type { UploadProps } from 'antd'
 import type { TableColumnsType } from 'antd'
 import AdminSidebar from './components/AdminSidebar'
+import ChatConfigPage from './pages/settings/ChatConfigPage'
 import EmbeddingConfigPage from './pages/settings/EmbeddingConfigPage'
 import ModelManualPage from './pages/settings/ModelManualPage'
+import MultimodalConfigPage from './pages/settings/MultimodalConfigPage'
+import VisionConfigPage from './pages/settings/VisionConfigPage'
 import VoiceConfigPage from './pages/settings/VoiceConfigPage'
 import SpotDrawer from './pages/scenic/SpotAddPage'
 import SpotCategoryPage from './pages/scenic/SpotCategoryPage'
@@ -654,11 +656,12 @@ function SettingsPanel() {
     multimodal: 'multimodalModel',
   }
 
-  const handleSave = async (values: AdminModelSettings) => {
+  const handleSave = async () => {
+    const values = await form.validateFields()
     setSaving(true)
     try {
       const response = await axios.put<AdminModelSettings>('/api/admin/settings/models', values)
-      form.setFieldsValue(response.data)
+        form.setFieldsValue(response.data)
       message.success('模型设置已保存')
     } catch (error) {
       const description = axios.isAxiosError(error)
@@ -734,7 +737,7 @@ function SettingsPanel() {
           saving={saving}
           testing={testingCategory === 'embedding'}
           options={embeddingOptions.map((item) => ({ value: item.value, provider: item.label.split(' · ')[0] }))}
-          onSave={() => void form.submit()}
+          onSave={() => void handleSave()}
           onTest={() => void handleTestModel('embedding')}
           result={renderTestResult('embedding', testResults.embedding)}
         />
@@ -751,7 +754,7 @@ function SettingsPanel() {
           saving={saving}
           testing={testingCategory === 'speech'}
           options={voiceOptions}
-          onSave={() => void form.submit()}
+          onSave={() => void handleSave()}
           onTest={() => void handleTestModel('speech')}
           onReset={() => {
             form.resetFields(['speechModel'])
@@ -765,72 +768,48 @@ function SettingsPanel() {
       key: 'vision',
       label: renderTabLabel('视觉模型', testResults.vision),
       children: (
-        <Form form={form} layout="vertical" onFinish={(values) => void handleSave(values)} disabled={loading} className="admin-settings-form">
-          <Form.Item
-            label="视觉模型"
-            name="visionModel"
-            rules={[{ required: true, message: '请输入视觉模型' }]}
-            extra="用于图片理解、景区识别和视觉问答。"
-          >
-            <AutoComplete options={visionOptions}>
-              <Input placeholder="例如：Qwen/Qwen2.5-VL-7B-Instruct" />
-            </AutoComplete>
-          </Form.Item>
-          <div className="admin-action-row">
-            <Button type="primary" htmlType="submit" loading={saving}>保存设置</Button>
-            <Button onClick={() => void handleTestModel('vision')} loading={testingCategory === 'vision'}>测试当前模型</Button>
-            <Button onClick={() => form.resetFields()} disabled={saving || loading}>重置表单</Button>
-          </div>
-          {renderTestResult('vision', testResults.vision)}
-        </Form>
+        <VisionConfigPage
+          form={form}
+          loading={loading}
+          saving={saving}
+          testing={testingCategory === 'vision'}
+          options={visionOptions.map((item) => ({ value: item.value, provider: item.label.split(' · ')[0] }))}
+          onSave={() => void handleSave()}
+          onTest={() => void handleTestModel('vision')}
+          result={renderTestResult('vision', testResults.vision)}
+        />
       ),
     },
     {
       key: 'chat',
       label: renderTabLabel('对话模型', testResults.chat),
       children: (
-        <Form form={form} layout="vertical" onFinish={(values) => void handleSave(values)} disabled={loading} className="admin-settings-form">
-          <Form.Item
-            label="对话模型"
-            name="chatModel"
-            rules={[{ required: true, message: '请输入对话模型' }]}
-            extra="用于纯文本对话、问答、推理等场景。"
-          >
-            <AutoComplete options={chatOptions}>
-              <Input placeholder="例如：deepseek-v4-flash / qwen-max" />
-            </AutoComplete>
-          </Form.Item>
-          <div className="admin-action-row">
-            <Button type="primary" htmlType="submit" loading={saving}>保存设置</Button>
-            <Button onClick={() => void handleTestModel('chat')} loading={testingCategory === 'chat'}>测试当前模型</Button>
-            <Button onClick={() => form.resetFields()} disabled={saving || loading}>重置表单</Button>
-          </div>
-          {renderTestResult('chat', testResults.chat)}
-        </Form>
+        <ChatConfigPage
+          form={form}
+          loading={loading}
+          saving={saving}
+          testing={testingCategory === 'chat'}
+          options={chatOptions.map((item) => ({ value: item.value, provider: item.label.split(' · ')[0] }))}
+          onSave={() => void handleSave()}
+          onTest={() => void handleTestModel('chat')}
+          result={renderTestResult('chat', testResults.chat)}
+        />
       ),
     },
     {
       key: 'multimodal',
       label: renderTabLabel('多模态模型', testResults.multimodal),
       children: (
-        <Form form={form} layout="vertical" onFinish={(values) => void handleSave(values)} disabled={loading} className="admin-settings-form">
-          <Form.Item
-            label="多模态模型"
-            name="multimodalModel"
-            rules={[{ required: true, message: '请输入多模态模型' }]}
-            extra="用于图文联合理解、图片问答、视觉推理等多模态场景。"
-          >
-            <AutoComplete options={multimodalOptions}>
-              <Input placeholder="例如：Qwen/Qwen2.5-VL-7B-Instruct" />
-            </AutoComplete>
-          </Form.Item>
-          <div className="admin-action-row">
-            <Button type="primary" htmlType="submit" loading={saving}>保存设置</Button>
-            <Button onClick={() => void handleTestModel('multimodal')} loading={testingCategory === 'multimodal'}>测试当前模型</Button>
-            <Button onClick={() => form.resetFields()} disabled={saving || loading}>重置表单</Button>
-          </div>
-          {renderTestResult('multimodal', testResults.multimodal)}
-        </Form>
+        <MultimodalConfigPage
+          form={form}
+          loading={loading}
+          saving={saving}
+          testing={testingCategory === 'multimodal'}
+          options={multimodalOptions.map((item) => ({ value: item.value, provider: item.label.split(' · ')[0] }))}
+          onSave={() => void handleSave()}
+          onTest={() => void handleTestModel('multimodal')}
+          result={renderTestResult('multimodal', testResults.multimodal)}
+        />
       ),
     },
     {
