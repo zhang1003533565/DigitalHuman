@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from rag.core.schemas import ChunkRecord
+from rag.contracts.schemas import ChunkRecord
 from rag.retrieval.embedder import BgeM3Embedder
 from rag.retrieval.reranker import BgeReranker
 from rag.retrieval.vectordb import QdrantVectorStore

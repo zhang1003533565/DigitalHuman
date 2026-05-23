@@ -5,7 +5,7 @@ import json
 
 import requests
 
-from rag.core.schemas import ChunkRecord
+from rag.contracts.schemas import ChunkRecord
 
 
 @dataclass
