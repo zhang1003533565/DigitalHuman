@@ -117,6 +117,7 @@
 
 .admin-shell {
   min-height: 100vh;
+  background: #f6f8fb;
 }
 
 .admin-sider {
@@ -193,8 +194,11 @@
 }
 
 .admin-content {
+  min-height: calc(100vh - 56px);
   padding: 12px 24px 24px;
   background: #f6f8fb;
+  box-sizing: border-box;
+  overflow-x: auto;
 }
 
 .admin-panel-grid {
@@ -462,3 +466,18 @@
     grid-template-columns: 1fr;
   }
 }
+
+.travel-analytics-table-wrap .ant-table-pagination.ant-pagination {
+  justify-content: flex-start;
+  margin-top: 12px;
+}
+
+.travel-analytics-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.admin-shell > .ant-layout {
+  background: #f6f8fb;
+}
+
