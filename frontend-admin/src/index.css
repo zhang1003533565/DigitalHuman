@@ -27,6 +27,10 @@ body {
   margin: 0;
 }
 
+body.admin-page {
+  background: #f6f8fb;
+}
+
 h1,
 h2,
 p {

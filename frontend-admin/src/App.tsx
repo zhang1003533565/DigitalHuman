@@ -1,5 +1,6 @@
-import { type FormEvent, useEffect, useMemo, useState } from 'react'
+﻿import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import axios from 'axios'
+import * as XLSX from 'xlsx'
 import {
   BarChartOutlined,
   BookOutlined,
@@ -13,7 +14,7 @@ import {
   SettingOutlined,
   UserOutlined,
 } from '@ant-design/icons'
-import { Layout, Menu, Button, Card, Form, Input, Table, Tag, Statistic, Row, Col, Upload, Select, AutoComplete, Tabs, message } from 'antd'
+import { Layout, Menu, Button, Card, Form, Input, Table, Tag, Statistic, Row, Col, Upload, Select, AutoComplete, Tabs, message, Tooltip } from 'antd'
 import type { UploadProps } from 'antd'
 import type { MenuProps, TableColumnsType } from 'antd'
 import SpotAddPage from './pages/SpotAddPage'
@@ -42,6 +43,7 @@ type MenuKey =
   | 'routes'
   | 'avatar'
   | 'settings'
+  | 'travel-analytics'
   | 'feedback'
   | 'qa'
 
@@ -195,6 +197,7 @@ const menuItems: MenuProps['items'] = [
   { key: 'avatar', icon: <RobotOutlined />, label: '数字人配置' },
   { key: 'feedback', icon: <CommentOutlined />, label: '游客反馈分析' },
   { key: 'qa', icon: <SearchOutlined />, label: '问答记录查询' },
+  { key: 'travel-analytics', icon: <DatabaseOutlined />, label: '旅游数据行为分析' },
 ]
 
 function applyAuthToken(token: string | null) {
@@ -917,6 +920,229 @@ function SettingsPanel() {
   )
 }
 
+function renderTruncatedCell(
+  value: string,
+  rowHeight: number,
+  fontSize: number,
+  rowKey: string,
+  onRowResizeStart: (event: React.MouseEvent<HTMLDivElement>, rowKey: string, currentHeight: number) => void,
+) {
+  const text = (value ?? '').toString()
+  const lineHeight = Math.max(18, fontSize + 6)
+  const maxLines = Math.max(1, Math.floor(rowHeight / lineHeight))
+
+  return (
+    <Tooltip
+      placement="topLeft"
+      title={<div style={{ maxWidth: 900, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{text || '-'}</div>}
+    >
+      <div
+        style={{
+          position: 'relative',
+          minHeight: rowHeight,
+          paddingBottom: 6,
+          fontSize,
+          lineHeight: `${lineHeight}px`,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          display: '-webkit-box',
+          WebkitLineClamp: maxLines,
+          WebkitBoxOrient: 'vertical',
+          whiteSpace: 'normal',
+          wordBreak: 'break-word',
+          cursor: 'pointer',
+        }}
+      >
+        {text || '-'}
+        <div
+          role="separator"
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: -3,
+            height: 8,
+            cursor: 'row-resize',
+            zIndex: 3,
+          }}
+          onMouseDown={(event) => {
+            event.stopPropagation()
+            onRowResizeStart(event, rowKey, rowHeight)
+          }}
+        />
+      </div>
+    </Tooltip>
+  )
+}
+
+function TravelAnalyticsPanel() {
+  const [loading, setLoading] = useState(true)
+  const [columns, setColumns] = useState<TableColumnsType<Record<string, string>>>([])
+  const [rows, setRows] = useState<Array<Record<string, string>>>([])
+  const [fontSize] = useState(16)
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
+  const [rowHeights, setRowHeights] = useState<Record<string, number>>({})
+  const [headers, setHeaders] = useState<string[]>([])
+  const [sourceRows, setSourceRows] = useState<Array<Record<string, string>>>([])
+
+  const colDragRef = useRef<{ header: string; startX: number; startWidth: number } | null>(null)
+  const rowDragRef = useRef<{ rowKey: string; startY: number; startHeight: number } | null>(null)
+
+  useEffect(() => {
+    function onMouseMove(event: MouseEvent) {
+      if (colDragRef.current) {
+        const { header, startX, startWidth } = colDragRef.current
+        const nextWidth = Math.max(140, startWidth + event.clientX - startX)
+        setColumnWidths((prev) => ({ ...prev, [header]: nextWidth }))
+        return
+      }
+      if (rowDragRef.current) {
+        const { rowKey, startY, startHeight } = rowDragRef.current
+        const nextHeight = Math.max(44, startHeight + event.clientY - startY)
+        setRowHeights((prev) => ({ ...prev, [rowKey]: nextHeight }))
+      }
+    }
+
+    function onMouseUp() {
+      colDragRef.current = null
+      rowDragRef.current = null
+      document.body.style.userSelect = ''
+      document.body.style.cursor = ''
+    }
+
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+  }, [])
+
+  useEffect(() => {
+    async function loadExcelFromPublic() {
+      setLoading(true)
+      try {
+        const response = await fetch('/travel-analytics/景点景区旅游数据行为分析数据.xlsx')
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`)
+        }
+
+        const buffer = await response.arrayBuffer()
+        const workbook = XLSX.read(buffer, { type: 'array' })
+        const firstSheetName = workbook.SheetNames[0]
+        const sheet = workbook.Sheets[firstSheetName]
+        if (!sheet) {
+          throw new Error('sheet not found')
+        }
+
+        const matrix = XLSX.utils.sheet_to_json<(string | number | boolean | null)[]>(sheet, {
+          header: 1,
+          raw: false,
+          defval: '',
+        })
+
+        const headerRow = (matrix[0] ?? []).map((cell) => String(cell ?? '').trim())
+        const normalizedHeaders = headerRow.map((header, index) => (header ? header : `列${index + 1}`))
+        const builtRows = matrix
+          .slice(1)
+          .map((row, rowIndex) => {
+            const nextRow: Record<string, string> = { key: String(rowIndex + 1) }
+            normalizedHeaders.forEach((header, colIndex) => {
+              nextRow[header] = String(row[colIndex] ?? '')
+            })
+            return nextRow
+          })
+          .filter((row) => normalizedHeaders.some((header) => (row[header] ?? '').trim() !== ''))
+
+        setHeaders(normalizedHeaders)
+        setSourceRows(builtRows)
+      } catch {
+        message.error('读取 Excel 失败，请检查文件是否存在于 public/travel-analytics 目录')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    void loadExcelFromPublic()
+  }, [])
+
+  useEffect(() => {
+    const builtColumns: TableColumnsType<Record<string, string>> = headers.map((header) => {
+      const width = columnWidths[header] ?? 260
+      return {
+        title: (
+          <div style={{ position: 'relative', paddingRight: 10 }}>
+            <span>{header}</span>
+            <span
+              role="separator"
+              style={{
+                position: 'absolute',
+                right: -6,
+                top: 0,
+                width: 12,
+                height: '100%',
+                cursor: 'col-resize',
+                zIndex: 2,
+              }}
+              onMouseDown={(event) => {
+                event.preventDefault()
+                colDragRef.current = { header, startX: event.clientX, startWidth: width }
+                document.body.style.userSelect = 'none'
+                document.body.style.cursor = 'col-resize'
+              }}
+            />
+          </div>
+        ),
+        dataIndex: header,
+        key: header,
+        width,
+        render: (value: string, record: Record<string, string>) => {
+          const rowKey = String(record.key ?? '')
+          const rowHeight = rowHeights[rowKey] ?? 64
+          return renderTruncatedCell(value, rowHeight, fontSize, rowKey, setRowHeightDragStart)
+        },
+      }
+    })
+
+    setColumns(builtColumns)
+    setRows(sourceRows)
+  }, [headers, sourceRows, columnWidths, rowHeights, fontSize])
+
+  function setRowHeightDragStart(event: React.MouseEvent<HTMLDivElement>, rowKey: string, currentHeight: number) {
+    event.preventDefault()
+    rowDragRef.current = { rowKey, startY: event.clientY, startHeight: currentHeight }
+    document.body.style.userSelect = 'none'
+    document.body.style.cursor = 'row-resize'
+  }
+
+  return (
+    <div className="admin-panel-grid">
+      <Card title="旅游数据行为分析">
+        <Card size="small" className="admin-build-summary admin-build-summary--muted">
+          固定展示文件：`景点景区旅游数据行为分析数据.xlsx`（与原表保持一致，不做导入修改）。
+        </Card>
+        <div style={{ marginTop: 12, color: '#6b7280' }}>
+          可直接拖动表头右侧边线调整列宽；拖动单元格底部边线调整该行行高；悬停单元格查看完整内容。
+        </div>
+      </Card>
+      <Card title="表格数据">
+        <div className="travel-analytics-table-wrap">
+          <Table
+            columns={columns}
+            dataSource={rows}
+            loading={loading}
+            scroll={{ x: 'max-content' }}
+            pagination={{
+              pageSize: 20,
+              showSizeChanger: true,
+              position: ['bottomLeft'],
+            }}
+          />
+        </div>
+      </Card>
+    </div>
+  )
+}
 function FeedbackPanel() {
   const [data, setData] = useState<FeedbackRow[]>([])
 
@@ -987,6 +1213,8 @@ function renderPanel(activeKey: MenuKey) {
       return <AvatarPanel />
     case 'settings':
       return <SettingsPanel />
+    case 'travel-analytics':
+      return <TravelAnalyticsPanel />
     case 'feedback':
       return <FeedbackPanel />
     case 'qa':
@@ -1113,6 +1341,13 @@ function App() {
     setUser(getStoredUser())
   }, [])
 
+  useEffect(() => {
+    document.body.classList.toggle('admin-page', Boolean(user))
+    return () => {
+      document.body.classList.remove('admin-page')
+    }
+  }, [user])
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setLoading(true)
@@ -1183,3 +1418,6 @@ function formatBytes(sizeBytes: number) {
   }
   return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`
 }
+
+
+
