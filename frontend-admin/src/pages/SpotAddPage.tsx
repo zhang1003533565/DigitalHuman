@@ -114,26 +114,25 @@ function SpotDrawer({
   const boundsRef = useRef<any>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const geolocationRef = useRef<any>(null)
-  // 组件是否已挂载（防止异步回调在卸载后操作 DOM）
-  const isMountedRef = useRef(false)
 
   const removeGalleryItem = (id: string) => {
     setGallery((prev) => prev.filter((item) => item.id !== id))
   }
 
-  // 仅负责卸载时清理地图实例
-  useEffect(() => {
-    isMountedRef.current = true
-    return () => {
-      isMountedRef.current = false
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.destroy?.()
-        mapInstanceRef.current = null
-      }
-      markerRef.current = null
-      boundsRef.current = null
-      geolocationRef.current = null
+  // 销毁地图实例，关闭和卸载时均会调用
+  const destroyMap = () => {
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.destroy?.()
+      mapInstanceRef.current = null
     }
+    markerRef.current = null
+    boundsRef.current = null
+    geolocationRef.current = null
+  }
+
+  // 组件卸载时的安全底博清理
+  useEffect(() => {
+    return () => destroyMap()
   }, [])
 
   // Drawer 动画结束后调用，此时容器已在视口内，AMap 可正确读取尺寸并加载瓦片
@@ -141,7 +140,9 @@ function SpotDrawer({
     if (mapInstanceRef.current || !mapContainerRef.current) return
     loadAMap()
       .then((AMap) => {
-        if (!isMountedRef.current || !mapContainerRef.current || mapInstanceRef.current) return
+        // 如果在 AMap 加载期间关闭了 Drawer，容器已从 DOM 移除，直接放弃
+        if (!mapContainerRef.current || !document.body.contains(mapContainerRef.current)) return
+        if (mapInstanceRef.current) return
 
         const sw = new AMap.LngLat(LINGSHAN_BOUNDS_SW[0], LINGSHAN_BOUNDS_SW[1])
         const ne = new AMap.LngLat(LINGSHAN_BOUNDS_NE[0], LINGSHAN_BOUNDS_NE[1])
@@ -207,7 +208,7 @@ function SpotDrawer({
         AMap.plugin(
           ['AMap.ToolBar', 'AMap.Scale', 'AMap.Geolocation'],
           () => {
-            if (!isMountedRef.current) return
+            if (!mapInstanceRef.current) return
             const toolbar = new AMap.ToolBar({
               position: { top: '10px', right: '10px' },
               ruler: false,
@@ -263,6 +264,7 @@ function SpotDrawer({
       styles={{ body: { padding: 0, background: '#f5f7fa' } }}
       afterOpenChange={(visible) => {
         if (visible) initAMap()
+        else destroyMap()
       }}
     >
       <div className="spot-drawer">
