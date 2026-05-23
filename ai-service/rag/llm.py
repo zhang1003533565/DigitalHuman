@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from model_providers.registry import get_provider_client
-from rag.core.schemas import ChunkRecord
+from rag.contracts.schemas import ChunkRecord
 
 
 @dataclass

@@ -1,6 +1,6 @@
 """RAG service package."""
 
-from rag.core.config import RagSettings, get_settings
-from rag.services.rag_service import RagService
+from rag.application.rag_service import RagService
+from rag.config.settings import RagSettings, get_settings
 
 __all__ = ["RagService", "RagSettings", "get_settings"]

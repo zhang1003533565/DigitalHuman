@@ -5,12 +5,12 @@ from datetime import datetime
 
 from fastapi import HTTPException
 
-from rag.core.config import get_settings
-from rag.core.prompts import build_grounded_answer
-from rag.core.schemas import IngestRequest, IngestResponse, KnowledgeDocumentInfo, QueryRequest, QueryResponse, RetrieveRequest, RetrieveResponse, UploadKnowledgeResponse
-from rag.ingest.chunker import ChunkingConfig, build_chunks
-from rag.ingest.parser import parse_document
-from rag.io.storage import ensure_directory, is_supported_file_name, save_uploaded_file
+from rag.config.settings import get_settings
+from rag.contracts.schemas import IngestRequest, IngestResponse, KnowledgeDocumentInfo, QueryRequest, QueryResponse, RetrieveRequest, RetrieveResponse, UploadKnowledgeResponse
+from rag.content.file_store import ensure_directory, is_supported_file_name, save_uploaded_file
+from rag.generation.prompts import build_grounded_answer
+from rag.ingestion.chunker import ChunkingConfig, build_chunks
+from rag.ingestion.parser import parse_document
 from rag.llm import LlmConfig, ProviderBackedLlm, infer_provider_name
 from rag.retrieval.embedder import BgeM3Embedder
 from rag.retrieval.reranker import BgeReranker
