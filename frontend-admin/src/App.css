@@ -242,8 +242,113 @@
   font-size: 13px;
 }
 
+.admin-test-result {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-test-result__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-test-result__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  color: #35506f;
+}
+
+.admin-test-result__summary {
+  color: #24415f;
+  line-height: 1.7;
+}
+
 .admin-build-summary--muted {
   color: #5c6f88;
+}
+
+.admin-build-summary--danger {
+  background: linear-gradient(135deg, rgba(180, 35, 24, 0.08), rgba(205, 73, 54, 0.08));
+  color: #8a2d1f;
+}
+
+.admin-empty-state {
+  padding: 20px 12px;
+  color: #5c6f88;
+  text-align: center;
+}
+
+.admin-empty-state strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #24364d;
+  font-size: 15px;
+}
+
+.admin-provider-docs {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-provider-docs__toolbar {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.admin-provider-docs__summary {
+  color: #35506f;
+  line-height: 1.7;
+}
+
+.admin-provider-docs__section {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-provider-docs__groups {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-provider-docs__group-card {
+  border-radius: 14px;
+}
+
+.admin-provider-docs__markdown {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-markdown-h2,
+.admin-markdown-h3,
+.admin-markdown-h4 {
+  margin: 0;
+  color: #24364d;
+}
+
+.admin-markdown-h2 {
+  font-size: 24px;
+}
+
+.admin-markdown-h3 {
+  font-size: 20px;
+}
+
+.admin-markdown-h4 {
+  font-size: 17px;
+}
+
+.admin-markdown-paragraph {
+  margin: 0;
+  color: #35506f;
+  line-height: 1.8;
+}
+
+.admin-markdown-list {
+  margin: 0;
 }
 
 .admin-settings-card .ant-tabs-nav {
@@ -253,6 +358,18 @@
 .admin-settings-card .ant-tabs-tab {
   padding: 8px 4px 14px;
   font-weight: 600;
+}
+
+.admin-tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-tab-label__tag {
+  margin-inline-end: 0 !important;
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .admin-settings-card .ant-tabs-content-holder {

@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from 'react'
+import { type FormEvent, type JSX, useEffect, useMemo, useState } from 'react'
 import axios from 'axios'
 import {
   BarChartOutlined,
@@ -88,10 +88,11 @@ type AdminModelSettings = {
   embeddingModel: string
   speechModel: string
   visionModel: string
+  chatModel: string
   multimodalModel: string
 }
 
-type ModelCategory = 'embedding' | 'speech' | 'vision' | 'multimodal'
+type ModelCategory = 'embedding' | 'speech' | 'vision' | 'chat' | 'multimodal'
 
 type AdminModelOption = {
   category: ModelCategory
@@ -103,6 +104,7 @@ type AdminModelCatalog = {
   embeddingModels: AdminModelOption[]
   speechModels: AdminModelOption[]
   visionModels: AdminModelOption[]
+  chatModels: AdminModelOption[]
   multimodalModels: AdminModelOption[]
 }
 
@@ -112,33 +114,84 @@ type AddModelOptionForm = {
   modelId: string
 }
 
-type AdminProviderConfig = {
+type ModelTestResponse = {
+  success: boolean
   provider: string
-  baseUrl: string
-  apiKey: string
+  category: ModelCategory
+  modelId: string
+  message: string
+  detail?: string
 }
 
-type ProviderSyncForm = {
+type ModelCatalogRow = {
+  key: string
+  category: ModelCategory
+  provider: string
+  modelId: string
+  selected: boolean
+}
+
+type ProviderConfig = {
   provider: string
   baseUrl: string
   apiKey: string
-  category: ModelCategory
+  protocol: string
+}
+
+type ProviderConfigForm = {
+  provider: string
+  baseUrl: string
+  apiKey: string
+  protocol: string
+}
+
+type ProviderDoc = {
+  provider: string
+  fileName: string
+  markdown: string
+}
+
+type TtsVoicesResponse = {
+  voices: string[]
 }
 
 const PROVIDER_OPTIONS = [
   { value: 'DeepSeek', label: 'DeepSeek' },
   { value: 'OpenAI', label: 'OpenAI' },
   { value: 'Qwen', label: 'Qwen' },
-  { value: 'Google', label: 'Google' },
   { value: 'Azure', label: 'Azure' },
-  { value: 'Custom', label: 'Custom' },
+  { value: 'Google', label: 'Google' },
 ]
+
+const PROVIDER_DEFAULTS: Record<string, { baseUrl: string; protocol: string }> = {
+  DeepSeek: {
+    baseUrl: 'https://api.deepseek.com',
+    protocol: 'openai_compatible',
+  },
+  OpenAI: {
+    baseUrl: 'https://api.openai.com/v1',
+    protocol: 'openai_compatible',
+  },
+  Qwen: {
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    protocol: 'openai_compatible',
+  },
+  Azure: {
+    baseUrl: '',
+    protocol: 'openai_compatible',
+  },
+  Google: {
+    baseUrl: '',
+    protocol: 'openai_compatible',
+  },
+}
 
 const MODEL_CATEGORY_OPTIONS = [
   { value: 'embedding', label: '嵌入模型' },
   { value: 'speech', label: '语音模型' },
   { value: 'vision', label: '视觉模型' },
-  { value: 'multimodal', label: '多模态/对话模型' },
+  { value: 'chat', label: '对话模型' },
+  { value: 'multimodal', label: '多模态模型' },
 ] as const
 
 const spotColumns: TableColumnsType<SpotRow> = [
@@ -536,73 +589,143 @@ function AvatarPanel() {
 function SettingsPanel() {
   const [form] = Form.useForm<AdminModelSettings>()
   const [addOptionForm] = Form.useForm<AddModelOptionForm>()
-  const [providerForm] = Form.useForm<ProviderSyncForm>()
+  const [providerForm] = Form.useForm<ProviderConfigForm>()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [addingOption, setAddingOption] = useState(false)
   const [savingProvider, setSavingProvider] = useState(false)
-  const [syncingProvider, setSyncingProvider] = useState(false)
+  const [deletingProvider, setDeletingProvider] = useState<string | null>(null)
+  const [providerDocSelection, setProviderDocSelection] = useState('DeepSeek')
+  const [providerDoc, setProviderDoc] = useState<ProviderDoc | null>(null)
+  const [providerDocLoading, setProviderDocLoading] = useState(false)
+  const [voiceOptions, setVoiceOptions] = useState<{ value: string; label: string }[]>([])
+  const [testingCategory, setTestingCategory] = useState<ModelCategory | null>(null)
+  const [testingRowKey, setTestingRowKey] = useState<string | null>(null)
+  const [selectingRowKey, setSelectingRowKey] = useState<string | null>(null)
+  const [deletingRowKey, setDeletingRowKey] = useState<string | null>(null)
+  const [testResults, setTestResults] = useState<Partial<Record<ModelCategory, ModelTestResponse>>>({})
+  const [providerConfigs, setProviderConfigs] = useState<ProviderConfig[]>([])
   const [catalog, setCatalog] = useState<AdminModelCatalog>({
     embeddingModels: [],
     speechModels: [],
     visionModels: [],
+    chatModels: [],
     multimodalModels: [],
   })
-  const [providerConfigs, setProviderConfigs] = useState<AdminProviderConfig[]>([])
 
   const embeddingOptions = useMemo(
     () => catalog.embeddingModels.map((item) => ({ value: item.modelId, label: `${item.provider} · ${item.modelId}` })),
     [catalog.embeddingModels],
   )
-  const speechOptions = useMemo(
-    () => catalog.speechModels.map((item) => ({ value: item.modelId, label: `${item.provider} · ${item.modelId}` })),
-    [catalog.speechModels],
-  )
   const visionOptions = useMemo(
     () => catalog.visionModels.map((item) => ({ value: item.modelId, label: `${item.provider} · ${item.modelId}` })),
     [catalog.visionModels],
+  )
+  const chatOptions = useMemo(
+    () => catalog.chatModels.map((item) => ({ value: item.modelId, label: `${item.provider} · ${item.modelId}` })),
+    [catalog.chatModels],
   )
   const multimodalOptions = useMemo(
     () => catalog.multimodalModels.map((item) => ({ value: item.modelId, label: `${item.provider} · ${item.modelId}` })),
     [catalog.multimodalModels],
   )
 
+  async function loadSettings() {
+    setLoading(true)
+    try {
+      const [settingsResponse, catalogResponse] = await Promise.all([
+        axios.get<AdminModelSettings>('/api/admin/settings/models'),
+        axios.get<AdminModelCatalog>('/api/admin/settings/model-options'),
+      ])
+      const providerResponse = await axios.get<ProviderConfig[]>('/api/admin/settings/providers')
+      form.setFieldsValue(settingsResponse.data)
+      setCatalog(catalogResponse.data)
+      setProviderConfigs(providerResponse.data)
+      addOptionForm.setFieldsValue({
+        category: 'multimodal',
+        provider: providerResponse.data[0]?.provider ?? '',
+        modelId: '',
+      })
+      providerForm.setFieldsValue({
+        provider: '',
+        baseUrl: '',
+        apiKey: '',
+        protocol: 'openai_compatible',
+      })
+    } catch (error) {
+      const description = axios.isAxiosError(error)
+        ? error.response?.data?.message ?? '模型设置加载失败，请检查后端服务。'
+        : '模型设置加载失败，请稍后重试。'
+      message.error(description)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
-    async function loadSettings() {
-      setLoading(true)
+    void loadSettings()
+  }, [addOptionForm, form])
+
+  useEffect(() => {
+    async function loadProviderDoc() {
+      setProviderDocLoading(true)
       try {
-        const [settingsResponse, catalogResponse, providerConfigsResponse] = await Promise.all([
-          axios.get<AdminModelSettings>('/api/admin/settings/models'),
-          axios.get<AdminModelCatalog>('/api/admin/settings/model-options'),
-          axios.get<AdminProviderConfig[]>('/api/admin/settings/provider-configs'),
-        ])
-        form.setFieldsValue(settingsResponse.data)
-        setCatalog(catalogResponse.data)
-        setProviderConfigs(providerConfigsResponse.data)
-        addOptionForm.setFieldsValue({
-          category: 'multimodal',
-          provider: 'DeepSeek',
-          modelId: '',
-        })
-        const deepSeekConfig = providerConfigsResponse.data.find((item) => item.provider === 'DeepSeek')
-        providerForm.setFieldsValue({
-          provider: deepSeekConfig?.provider ?? 'DeepSeek',
-          baseUrl: deepSeekConfig?.baseUrl ?? 'https://api.deepseek.com',
-          apiKey: deepSeekConfig?.apiKey ?? '',
-          category: 'multimodal',
-        })
+        const response = await axios.get<ProviderDoc>(`/api/admin/settings/provider-docs/${providerDocSelection}`)
+        setProviderDoc(response.data)
       } catch (error) {
         const description = axios.isAxiosError(error)
-          ? error.response?.data?.message ?? '模型设置加载失败，请检查后端服务。'
-          : '模型设置加载失败，请稍后重试。'
+          ? error.response?.data?.message ?? '读取模型说明文档失败。'
+          : '读取模型说明文档失败。'
         message.error(description)
+        setProviderDoc(null)
       } finally {
-        setLoading(false)
+        setProviderDocLoading(false)
       }
     }
 
-    void loadSettings()
-  }, [addOptionForm, form, providerForm])
+    void loadProviderDoc()
+  }, [providerDocSelection])
+
+  useEffect(() => {
+    async function loadVoices() {
+      try {
+        const response = await axios.get<TtsVoicesResponse>('/api/tts/voices')
+        setVoiceOptions(
+          (response.data.voices ?? []).map((voice) => ({
+            value: voice,
+            label: voice,
+          })),
+        )
+      } catch {
+        setVoiceOptions([])
+      }
+    }
+
+    void loadVoices()
+  }, [])
+
+  const catalogRows = useMemo<ModelCatalogRow[]>(() => {
+    const currentValues = form.getFieldsValue()
+    const rows: ModelCatalogRow[] = []
+    const pushRows = (items: AdminModelOption[], category: ModelCategory, selectedModelId: string | undefined) => {
+      items.forEach((item) => {
+        rows.push({
+          key: `${category}:${item.provider}:${item.modelId}`,
+          category,
+          provider: item.provider,
+          modelId: item.modelId,
+          selected: item.modelId === selectedModelId,
+        })
+      })
+    }
+
+    pushRows(catalog.embeddingModels, 'embedding', currentValues.embeddingModel)
+    pushRows(catalog.speechModels, 'speech', currentValues.speechModel)
+    pushRows(catalog.visionModels, 'vision', currentValues.visionModel)
+    pushRows(catalog.chatModels, 'chat', currentValues.chatModel)
+    pushRows(catalog.multimodalModels, 'multimodal', currentValues.multimodalModel)
+    return rows
+  }, [catalog, form])
 
   const handleSave = async (values: AdminModelSettings) => {
     setSaving(true)
@@ -640,75 +763,332 @@ function SettingsPanel() {
     }
   }
 
-  const applyProviderPreset = (provider: string) => {
-    const existing = providerConfigs.find((item) => item.provider === provider)
-    providerForm.setFieldsValue({
-      provider,
-      baseUrl: existing?.baseUrl ?? (provider === 'DeepSeek' ? 'https://api.deepseek.com' : ''),
-      apiKey: existing?.apiKey ?? '',
-      category: providerForm.getFieldValue('category') ?? 'multimodal',
-    })
-  }
-
-  const handleSaveProvider = async (values: ProviderSyncForm) => {
+  const handleSaveProvider = async (values: ProviderConfigForm) => {
     setSavingProvider(true)
     try {
-      const response = await axios.put<AdminProviderConfig>('/api/admin/settings/provider-configs', {
-        provider: values.provider,
-        baseUrl: values.baseUrl,
-        apiKey: values.apiKey,
-      })
+      const response = await axios.put<ProviderConfig>('/api/admin/settings/providers', values)
       setProviderConfigs((current) => {
         const next = current.filter((item) => item.provider !== response.data.provider)
         return [...next, response.data].sort((left, right) => left.provider.localeCompare(right.provider))
       })
       providerForm.setFieldsValue({
-        ...values,
-        provider: response.data.provider,
-        baseUrl: response.data.baseUrl,
-        apiKey: response.data.apiKey,
+        provider: '',
+        baseUrl: '',
+        apiKey: '',
+        protocol: 'openai_compatible',
       })
-      message.success(`已保存 ${response.data.provider} 连接配置`)
+      if (!addOptionForm.getFieldValue('provider')) {
+        addOptionForm.setFieldValue('provider', response.data.provider)
+      }
+      message.success(`已保存提供方 ${response.data.provider}`)
     } catch (error) {
       const description = axios.isAxiosError(error)
-        ? error.response?.data?.message ?? '供应商配置保存失败，请检查后端服务。'
-        : '供应商配置保存失败，请稍后重试。'
+        ? error.response?.data?.message ?? '保存模型提供方失败，请检查后端服务。'
+        : '保存模型提供方失败，请稍后重试。'
       message.error(description)
     } finally {
       setSavingProvider(false)
     }
   }
 
-  const handleSyncProviderModels = async () => {
-    const values = await providerForm.validateFields()
-    setSyncingProvider(true)
+  const handleProviderDraftChange = (provider: string) => {
+    const preset = PROVIDER_DEFAULTS[provider]
+    if (!preset) {
+      providerForm.setFieldValue('provider', provider)
+      return
+    }
+
+    providerForm.setFieldsValue({
+      provider,
+      baseUrl: preset.baseUrl,
+      protocol: preset.protocol,
+      apiKey: providerForm.getFieldValue('apiKey') ?? '',
+    })
+  }
+
+  const handleDeleteProvider = async (provider: string) => {
+    setDeletingProvider(provider)
     try {
-      const syncResponse = await axios.post('/api/admin/settings/provider-models/sync', values)
-      const catalogResponse = await axios.get<AdminModelCatalog>('/api/admin/settings/model-options')
-      setCatalog(catalogResponse.data)
-      setProviderConfigs((current) => {
-        const next = current.filter((item) => item.provider !== values.provider)
-        return [...next, {
-          provider: values.provider,
-          baseUrl: values.baseUrl,
-          apiKey: values.apiKey,
-        }].sort((left, right) => left.provider.localeCompare(right.provider))
+      await axios.post('/api/admin/settings/providers/delete', {
+        provider,
       })
-      message.success(`已同步 ${syncResponse.data.syncedCount} 个官方模型`)
+      setProviderConfigs((current) => current.filter((item) => item.provider !== provider))
+      if (addOptionForm.getFieldValue('provider') === provider) {
+        addOptionForm.setFieldValue('provider', '')
+      }
+      message.success(`已删除提供方 ${provider}`)
     } catch (error) {
       const description = axios.isAxiosError(error)
-        ? error.response?.data?.message ?? '官方模型同步失败，请检查 URL、Key 或网络。'
-        : '官方模型同步失败，请稍后重试。'
+        ? error.response?.data?.message ?? '删除模型提供方失败，请检查后端服务。'
+        : '删除模型提供方失败，请稍后重试。'
       message.error(description)
     } finally {
-      setSyncingProvider(false)
+      setDeletingProvider(null)
     }
   }
 
-  const renderSaveActions = () => (
+  const handleEditProvider = (providerConfig: ProviderConfig) => {
+    providerForm.setFieldsValue({
+      provider: providerConfig.provider,
+      baseUrl: providerConfig.baseUrl,
+      apiKey: providerConfig.apiKey,
+      protocol: providerConfig.protocol,
+    })
+    message.info(`已载入 ${providerConfig.provider} 配置，可直接修改后保存`)
+  }
+
+  const fieldNameByCategory: Record<ModelCategory, keyof AdminModelSettings> = {
+    embedding: 'embeddingModel',
+    speech: 'speechModel',
+    vision: 'visionModel',
+    chat: 'chatModel',
+    multimodal: 'multimodalModel',
+  }
+
+  const handleTestModel = async (category: ModelCategory) => {
+    const fieldName = fieldNameByCategory[category]
+    const values = await form.validateFields([fieldName])
+    const modelId = values[fieldName] as string
+    setTestingCategory(category)
+    try {
+      const response = await axios.post<ModelTestResponse>('/api/admin/settings/model-test', {
+        category,
+        modelId,
+      })
+      setTestResults((current) => ({
+        ...current,
+        [category]: response.data,
+      }))
+      message.success(response.data.message)
+    } catch (error) {
+      const description = axios.isAxiosError(error)
+        ? error.response?.data?.message ?? '模型测试失败，请检查服务配置。'
+        : '模型测试失败，请稍后重试。'
+      setTestResults((current) => ({
+        ...current,
+        [category]: {
+          success: false,
+          provider: '',
+          category,
+          modelId,
+          message: description,
+        },
+      }))
+      message.error(description)
+    } finally {
+      setTestingCategory(null)
+    }
+  }
+
+  const handleTestModelRow = async (row: ModelCatalogRow) => {
+    setTestingRowKey(row.key)
+    try {
+      const response = await axios.post<ModelTestResponse>('/api/admin/settings/model-test', {
+        category: row.category,
+        modelId: row.modelId,
+      })
+      setTestResults((current) => ({
+        ...current,
+        [row.category]: response.data,
+      }))
+      message.success(response.data.message)
+    } catch (error) {
+      const description = axios.isAxiosError(error)
+        ? error.response?.data?.message ?? '模型测试失败，请检查服务配置。'
+        : '模型测试失败，请稍后重试。'
+      message.error(description)
+    } finally {
+      setTestingRowKey(null)
+    }
+  }
+
+  const handleSelectModelRow = async (row: ModelCatalogRow) => {
+    setSelectingRowKey(row.key)
+    try {
+      const response = await axios.put<AdminModelSettings>('/api/admin/settings/model-options/select', {
+        category: row.category,
+        provider: row.provider,
+        modelId: row.modelId,
+      })
+      form.setFieldsValue(response.data)
+      message.success(`已切换到模型 ${row.modelId}`)
+    } catch (error) {
+      const description = axios.isAxiosError(error)
+        ? error.response?.data?.message ?? '设置当前模型失败，请检查后端服务。'
+        : '设置当前模型失败，请稍后重试。'
+      message.error(description)
+    } finally {
+      setSelectingRowKey(null)
+    }
+  }
+
+  const handleDeleteModelRow = async (row: ModelCatalogRow) => {
+    setDeletingRowKey(row.key)
+    try {
+      const response = await axios.post<AdminModelCatalog>('/api/admin/settings/model-options/delete', {
+        category: row.category,
+        provider: row.provider,
+        modelId: row.modelId,
+      })
+      setCatalog(response.data)
+      if (row.selected) {
+        await loadSettings()
+      }
+      message.success(`已删除模型 ${row.modelId}`)
+    } catch (error) {
+      const description = axios.isAxiosError(error)
+        ? error.response?.data?.message ?? '删除模型失败，请检查后端服务。'
+        : '删除模型失败，请稍后重试。'
+      message.error(description)
+    } finally {
+      setDeletingRowKey(null)
+    }
+  }
+
+  const catalogColumns: TableColumnsType<ModelCatalogRow> = [
+    {
+      title: '分类',
+      dataIndex: 'category',
+      render: (value: ModelCategory) => MODEL_CATEGORY_OPTIONS.find((item) => item.value === value)?.label ?? value,
+    },
+    { title: '提供方', dataIndex: 'provider' },
+    { title: '模型 ID', dataIndex: 'modelId' },
+    {
+      title: '状态',
+      dataIndex: 'selected',
+      render: (selected: boolean) => (
+        <Tag color={selected ? 'green' : 'default'}>{selected ? '当前使用' : '候选'}</Tag>
+      ),
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      render: (_, row) => (
+        <div className="admin-action-row">
+          <Button size="small" onClick={() => void handleTestModelRow(row)} loading={testingRowKey === row.key}>
+            测试
+          </Button>
+          <Button size="small" type="primary" ghost onClick={() => void handleSelectModelRow(row)} loading={selectingRowKey === row.key}>
+            设为当前
+          </Button>
+          <Button size="small" danger onClick={() => void handleDeleteModelRow(row)} loading={deletingRowKey === row.key}>
+            删除
+          </Button>
+        </div>
+      ),
+    },
+  ]
+
+  const providerColumns: TableColumnsType<ProviderConfig> = [
+    { title: '提供方', dataIndex: 'provider' },
+    { title: '协议', dataIndex: 'protocol' },
+    { title: 'Base URL', dataIndex: 'baseUrl' },
+    {
+      title: 'API Key',
+      dataIndex: 'apiKey',
+      render: (value: string) => (value ? `***${value.slice(-4)}` : '-'),
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      render: (_, row) => (
+        <div className="admin-action-row">
+          <Button
+            size="small"
+            onClick={() => handleEditProvider(row)}
+          >
+            编辑
+          </Button>
+          <Button
+            size="small"
+            danger
+            onClick={() => void handleDeleteProvider(row.provider)}
+            loading={deletingProvider === row.provider}
+          >
+            删除
+          </Button>
+        </div>
+      ),
+    },
+  ]
+
+  const renderMarkdown = (markdown: string) => {
+    const lines = markdown.split('\n')
+    const elements: JSX.Element[] = []
+    let listItems: string[] = []
+    let paragraphLines: string[] = []
+
+    const flushList = () => {
+      if (!listItems.length) {
+        return
+      }
+      elements.push(
+        <ul className="admin-list admin-markdown-list" key={`list-${elements.length}`}>
+          {listItems.map((item, index) => (
+            <li key={`${item}-${index}`}>{item}</li>
+          ))}
+        </ul>,
+      )
+      listItems = []
+    }
+
+    const flushParagraph = () => {
+      if (!paragraphLines.length) {
+        return
+      }
+      elements.push(
+        <p className="admin-markdown-paragraph" key={`p-${elements.length}`}>
+          {paragraphLines.join(' ')}
+        </p>,
+      )
+      paragraphLines = []
+    }
+
+    lines.forEach((rawLine) => {
+      const line = rawLine.trim()
+      if (!line) {
+        flushList()
+        flushParagraph()
+        return
+      }
+      if (line.startsWith('# ')) {
+        flushList()
+        flushParagraph()
+        elements.push(<h2 className="admin-markdown-h2" key={`h2-${elements.length}`}>{line.slice(2)}</h2>)
+        return
+      }
+      if (line.startsWith('## ')) {
+        flushList()
+        flushParagraph()
+        elements.push(<h3 className="admin-markdown-h3" key={`h3-${elements.length}`}>{line.slice(3)}</h3>)
+        return
+      }
+      if (line.startsWith('### ')) {
+        flushList()
+        flushParagraph()
+        elements.push(<h4 className="admin-markdown-h4" key={`h4-${elements.length}`}>{line.slice(4)}</h4>)
+        return
+      }
+      if (line.startsWith('- ')) {
+        flushParagraph()
+        listItems.push(line.slice(2))
+        return
+      }
+      paragraphLines.push(line)
+    })
+
+    flushList()
+    flushParagraph()
+    return elements
+  }
+
+  const renderActions = (category: ModelCategory) => (
     <div className="admin-action-row">
       <Button type="primary" htmlType="submit" loading={saving}>
         保存设置
+      </Button>
+      <Button onClick={() => void handleTestModel(category)} loading={testingCategory === category}>
+        测试当前模型
       </Button>
       <Button onClick={() => form.resetFields()} disabled={saving || loading}>
         重置表单
@@ -716,10 +1096,64 @@ function SettingsPanel() {
     </div>
   )
 
+  const renderTestResult = (category: ModelCategory) => {
+    const result = testResults[category]
+    if (!result) {
+      return null
+    }
+
+    const isSoftSuccess = result.success && result.detail?.includes('内容为空')
+    const title = result.success ? (isSoftSuccess ? '模型已连通' : '测试成功') : '测试失败'
+    const summary = result.success
+      ? (isSoftSuccess
+        ? '接口已经打通，模型也有响应，但这次健康检查没有返回可展示文本。通常不影响继续配置使用。'
+        : '模型接口调用成功，当前配置可继续使用。')
+      : result.message
+    const detail = result.success
+      ? (isSoftSuccess ? '建议：可以继续在真实业务场景里再测一轮问答或图文输入。' : result.detail ?? '当前测试已通过。')
+      : result.detail ?? '请检查提供方配置、模型名称或账户状态。'
+
+    return (
+      <Card
+        size="small"
+        className={`admin-build-summary ${result.success ? '' : 'admin-build-summary--danger'}`}
+      >
+        <div className="admin-test-result">
+          <div className="admin-test-result__header">
+            <strong>{title}</strong>
+            <Tag color={result.success ? (isSoftSuccess ? 'blue' : 'green') : 'red'}>
+              {result.success ? (isSoftSuccess ? '已连通' : '可用') : '不可用'}
+            </Tag>
+          </div>
+          <div className="admin-test-result__meta">
+            <span>模型：{result.modelId}</span>
+            {result.provider ? <span>提供方：{result.provider}</span> : null}
+          </div>
+          <div className="admin-test-result__summary">{summary}</div>
+          <div className="admin-build-summary__time">{detail}</div>
+        </div>
+      </Card>
+    )
+  }
+
+  const renderTabLabel = (category: ModelCategory, label: string) => {
+    const result = testResults[category]
+    return (
+      <span className="admin-tab-label">
+        <span>{label}</span>
+        {result ? (
+          <Tag color={result.success ? 'green' : 'red'} className="admin-tab-label__tag">
+            {result.success ? '已通过' : '失败'}
+          </Tag>
+        ) : null}
+      </span>
+    )
+  }
+
   const modelSettingTabItems = [
     {
       key: 'embedding',
-      label: '嵌入模型',
+      label: renderTabLabel('embedding', '嵌入模型'),
       children: (
         <Form form={form} layout="vertical" onFinish={(values) => void handleSave(values)} disabled={loading} className="admin-settings-form">
           <Form.Item
@@ -732,32 +1166,34 @@ function SettingsPanel() {
               <Input placeholder="例如：BAAI/bge-m3" />
             </AutoComplete>
           </Form.Item>
-          {renderSaveActions()}
+          {renderActions('embedding')}
+          {renderTestResult('embedding')}
         </Form>
       ),
     },
     {
       key: 'speech',
-      label: '语音模型',
+      label: renderTabLabel('speech', '语音模型'),
       children: (
         <Form form={form} layout="vertical" onFinish={(values) => void handleSave(values)} disabled={loading} className="admin-settings-form">
           <Form.Item
             label="语音模型"
             name="speechModel"
             rules={[{ required: true, message: '请输入语音模型' }]}
-            extra="用于数字人播报和文本转语音。"
+            extra="用于数字人播报和文本转语音，当前会直接展示本地 edge-tts 支持的语音列表。"
           >
-            <AutoComplete options={speechOptions}>
+            <AutoComplete options={voiceOptions}>
               <Input placeholder="例如：zh-CN-XiaoxiaoNeural" />
             </AutoComplete>
           </Form.Item>
-          {renderSaveActions()}
+          {renderActions('speech')}
+          {renderTestResult('speech')}
         </Form>
       ),
     },
     {
       key: 'vision',
-      label: '视觉模型',
+      label: renderTabLabel('vision', '视觉模型'),
       children: (
         <Form form={form} layout="vertical" onFinish={(values) => void handleSave(values)} disabled={loading} className="admin-settings-form">
           <Form.Item
@@ -770,26 +1206,48 @@ function SettingsPanel() {
               <Input placeholder="例如：Qwen/Qwen2.5-VL-7B-Instruct" />
             </AutoComplete>
           </Form.Item>
-          {renderSaveActions()}
+          {renderActions('vision')}
+          {renderTestResult('vision')}
+        </Form>
+      ),
+    },
+    {
+      key: 'chat',
+      label: renderTabLabel('chat', '对话模型'),
+      children: (
+        <Form form={form} layout="vertical" onFinish={(values) => void handleSave(values)} disabled={loading} className="admin-settings-form">
+          <Form.Item
+            label="对话模型"
+            name="chatModel"
+            rules={[{ required: true, message: '请输入对话模型' }]}
+            extra="用于纯文本对话、问答、推理等场景。"
+          >
+            <AutoComplete options={chatOptions}>
+              <Input placeholder="例如：deepseek-v4-flash / gpt-4.1 / qwen-max" />
+            </AutoComplete>
+          </Form.Item>
+          {renderActions('chat')}
+          {renderTestResult('chat')}
         </Form>
       ),
     },
     {
       key: 'multimodal',
-      label: '多模态模型',
+      label: renderTabLabel('multimodal', '多模态模型'),
       children: (
         <Form form={form} layout="vertical" onFinish={(values) => void handleSave(values)} disabled={loading} className="admin-settings-form">
           <Form.Item
-            label="多模态/对话模型"
+            label="多模态模型"
             name="multimodalModel"
             rules={[{ required: true, message: '请输入多模态模型' }]}
-            extra="用于图文联合理解、复杂问答，DeepSeek 这类对话模型也可以挂在这里统一管理。"
+            extra="用于图文联合理解、图片问答、视觉推理等多模态场景。"
           >
             <AutoComplete options={multimodalOptions}>
-              <Input placeholder="例如：deepseek-v4-flash" />
+              <Input placeholder="例如：gpt-4o / Qwen/Qwen2.5-VL-7B-Instruct" />
             </AutoComplete>
           </Form.Item>
-          {renderSaveActions()}
+          {renderActions('multimodal')}
+          {renderTestResult('multimodal')}
         </Form>
       ),
     },
@@ -808,69 +1266,91 @@ function SettingsPanel() {
             ...modelSettingTabItems,
             {
               key: 'model-catalog',
-              label: '官方同步',
+              label: '手动维护',
               children: (
                 <div className="admin-form-grid">
                   <Card size="small" className="admin-build-summary">
-                    先配置供应商连接，再从官方接口同步模型。以 DeepSeek 为例，填写 `https://api.deepseek.com` 和 API Key 后即可拉取官方现有模型，后续新模型也能再次同步进入候选列表。
+                    模型列表改为手动维护。按分类逐个添加模型提供方和模型 ID，更适合你当前一条一条配置、逐步扩展 provider 能力文件的方式。
                   </Card>
-                  <Form
-                    form={providerForm}
-                    layout="vertical"
-                    onFinish={(values) => void handleSaveProvider(values)}
-                  >
-                    <Form.Item
-                      label="模型提供方"
-                      name="provider"
-                      rules={[{ required: true, message: '请选择或输入提供方' }]}
-                    >
-                      <AutoComplete
-                        options={PROVIDER_OPTIONS}
-                        onSelect={(value) => applyProviderPreset(value)}
-                      >
-                        <Input
-                          placeholder="例如：DeepSeek"
-                          onBlur={(event) => {
-                            const nextProvider = event.target.value.trim()
-                            if (nextProvider) {
-                              applyProviderPreset(nextProvider)
-                            }
-                          }}
+                  <Card size="small" title="模型能力与支持模型" className="admin-build-summary">
+                    <div className="admin-provider-docs">
+                      <div className="admin-provider-docs__toolbar">
+                        <Select
+                          value={providerDocSelection}
+                          options={[
+                            { value: 'DeepSeek', label: 'DeepSeek' },
+                            { value: 'OpenAI', label: 'OpenAI' },
+                            { value: 'Qwen', label: 'Qwen' },
+                            { value: 'Google', label: 'Google / Gemini' },
+                          ]}
+                          onChange={setProviderDocSelection}
+                          style={{ width: 220 }}
                         />
-                      </AutoComplete>
-                    </Form.Item>
-                    <Form.Item
-                      label="API URL"
-                      name="baseUrl"
-                      rules={[{ required: true, message: '请输入 API URL' }]}
-                      extra="DeepSeek 官方地址为 https://api.deepseek.com"
-                    >
-                      <Input placeholder="例如：https://api.deepseek.com" />
-                    </Form.Item>
-                    <Form.Item
-                      label="API Key"
-                      name="apiKey"
-                      rules={[{ required: true, message: '请输入 API Key' }]}
-                    >
-                      <Input.Password placeholder="请输入供应商 API Key" />
-                    </Form.Item>
-                    <Form.Item
-                      label="同步到模型分类"
-                      name="category"
-                      rules={[{ required: true, message: '请选择模型分类' }]}
-                    >
-                      <Select options={MODEL_CATEGORY_OPTIONS as unknown as { value: string; label: string }[]} />
-                    </Form.Item>
-                    <div className="admin-action-row">
-                      <Button type="primary" htmlType="submit" loading={savingProvider}>
-                        保存连接配置
-                      </Button>
-                      <Button onClick={() => void handleSyncProviderModels()} loading={syncingProvider}>
-                        同步官方模型
-                      </Button>
+                      </div>
+                      {providerDocLoading ? (
+                        <div className="admin-provider-docs__summary">正在加载模型说明文档...</div>
+                      ) : providerDoc ? (
+                        <div className="admin-provider-docs__markdown">
+                          {renderMarkdown(providerDoc.markdown)}
+                        </div>
+                      ) : (
+                        <div className="admin-provider-docs__summary">当前提供方暂无可展示的模型说明文档。</div>
+                      )}
                     </div>
-                  </Form>
-                  <Card size="small" title="手动补充模型" className="admin-build-summary">
+                  </Card>
+                  <Card size="small" title="模型提供方配置" className="admin-build-summary">
+                    <Form
+                      form={providerForm}
+                      layout="vertical"
+                      onFinish={(values) => void handleSaveProvider(values)}
+                    >
+                      <Form.Item
+                        label="提供方"
+                        name="provider"
+                        rules={[{ required: true, message: '请输入模型提供方' }]}
+                      >
+                        <AutoComplete
+                          options={PROVIDER_OPTIONS}
+                          onSelect={(value) => handleProviderDraftChange(value)}
+                        >
+                          <Input placeholder="例如：DeepSeek / OpenAI / Qwen" />
+                        </AutoComplete>
+                      </Form.Item>
+                      <Form.Item
+                        label="Base URL"
+                        name="baseUrl"
+                        rules={[{ required: true, message: '请输入 Base URL' }]}
+                      >
+                        <Input placeholder="例如：https://api.deepseek.com" />
+                      </Form.Item>
+                      <Form.Item
+                        label="API Key"
+                        name="apiKey"
+                        rules={[{ required: true, message: '请输入 API Key' }]}
+                      >
+                        <Input.Password placeholder="请输入该提供方的 API Key" />
+                      </Form.Item>
+                      <Form.Item
+                        label="协议"
+                        name="protocol"
+                        rules={[{ required: true, message: '请选择协议' }]}
+                      >
+                        <Select options={[{ value: 'openai_compatible', label: 'OpenAI Compatible' }]} />
+                      </Form.Item>
+                      <div className="admin-action-row">
+                        <Button type="primary" htmlType="submit" loading={savingProvider}>
+                          保存提供方
+                        </Button>
+                      </div>
+                    </Form>
+                    <Table
+                      columns={providerColumns}
+                      dataSource={providerConfigs.map((item) => ({ ...item, key: item.provider }))}
+                      pagination={false}
+                      locale={{ emptyText: '暂无提供方配置，请先添加提供方和 API Key。' }}
+                    />
+                  </Card>
+                  <Card size="small" title="新增模型" className="admin-build-summary">
                     <Form
                       form={addOptionForm}
                       layout="vertical"
@@ -886,17 +1366,19 @@ function SettingsPanel() {
                       <Form.Item
                         label="模型提供方"
                         name="provider"
-                        rules={[{ required: true, message: '请选择或输入提供方' }]}
+                        rules={[{ required: true, message: '请选择已配置的模型提供方' }]}
+                        extra="请先在上方保存提供方的 Base URL 和 API Key，再选择该提供方添加模型。"
                       >
-                        <AutoComplete options={PROVIDER_OPTIONS}>
-                          <Input placeholder="例如：DeepSeek" />
-                        </AutoComplete>
+                        <Select
+                          options={providerConfigs.map((item) => ({ value: item.provider, label: item.provider }))}
+                          placeholder="请选择已配置提供方"
+                        />
                       </Form.Item>
                       <Form.Item
                         label="模型 ID"
                         name="modelId"
                         rules={[{ required: true, message: '请输入模型 ID' }]}
-                        extra="当官方刚出新模型但你还不想走同步时，可以在这里手动补充。"
+                        extra="例如：deepseek-v4-flash、text-embedding-3-large、Qwen/Qwen2.5-VL-7B-Instruct。"
                       >
                         <Input placeholder="例如：deepseek-v4-flash" />
                       </Form.Item>
@@ -906,6 +1388,21 @@ function SettingsPanel() {
                         </Button>
                       </div>
                     </Form>
+                  </Card>
+                  <Card size="small" title="已添加模型" className="admin-build-summary">
+                    <Table
+                      columns={catalogColumns}
+                      dataSource={catalogRows}
+                      pagination={false}
+                      locale={{
+                        emptyText: (
+                          <div className="admin-empty-state">
+                            <strong>当前还没有任何模型</strong>
+                            <div>系统已改为空白启动模式，请先在上方手动新增模型，然后再设为当前并执行测试。</div>
+                          </div>
+                        ),
+                      }}
+                    />
                   </Card>
                 </div>
               ),

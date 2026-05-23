@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.File;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -73,28 +74,14 @@ public class TtsController {
     }
 
     @GetMapping("/voices")
-    public ResponseEntity<Map<String, String>> getAvailableVoices() {
-        Map<String, String> voices = new HashMap<>();
-        voices.put("xiaoxiao", "zh-CN-XiaoxiaoNeural");
-        voices.put("xiaoyi", "zh-CN-XiaoyiNeural");
-        voices.put("yunjian", "zh-CN-YunjianNeural");
-        voices.put("yunxi", "zh-CN-YunxiNeural");
-        voices.put("yunxia", "zh-CN-YunxiaNeural");
-        voices.put("yunyang", "zh-CN-YunyangNeural");
-        voices.put("xiaobei", "zh-CN-XiaobeiNeural");
-        voices.put("xiaoni", "zh-CN-XiaoniNeural");
-        voices.put("hiugaai", "zh-HK-HiuGaaiNeural");
-        voices.put("hiumaan", "zh-HK-HiuMaanNeural");
-        voices.put("wanlung", "zh-HK-WanLungNeural");
-        voices.put("xiaochou", "zh-TW-XiaoChouNeural");
-        voices.put("hsiaochen", "zh-TW-HsiaoChenNeural");
-        voices.put("hsiaoyu", "zh-TW-HsiaoYuNeural");
-        voices.put("yunjhe", "zh-TW-YunJheNeural");
-        voices.put("en_us_jenny", "en-US-JennyNeural");
-        voices.put("en_us_guy", "en-US-GuyNeural");
-        voices.put("en_us_aria", "en-US-AriaNeural");
-
-        return ResponseEntity.ok(voices);
+    public ResponseEntity<?> getAvailableVoices() {
+        try {
+            List<String> voices = ttsService.listVoices();
+            return ResponseEntity.ok(Map.of("voices", voices));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("message", "读取语音列表失败: " + e.getMessage()));
+        }
     }
 
     @GetMapping("/health")

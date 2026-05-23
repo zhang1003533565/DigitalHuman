@@ -73,28 +73,34 @@ class QueryResponse(BaseModel):
     chunks: list[ChunkRecord]
 
 
+class ModelTestRequest(BaseModel):
+    provider: str = Field(..., min_length=1)
+    category: str = Field(..., min_length=1)
+    model_id: str = Field(..., min_length=1, alias="modelId")
+
+
+class ModelTestResponse(BaseModel):
+    success: bool
+    provider: str
+    category: str
+    model_id: str = Field(alias="modelId")
+    message: str
+    detail: str | None = None
+
+
 class ProviderConfigRequest(BaseModel):
     provider: str = Field(..., min_length=1)
     base_url: str = Field(..., min_length=1, alias="baseUrl")
     api_key: str = Field(..., min_length=1, alias="apiKey")
+    protocol: str = "openai_compatible"
 
 
 class ProviderConfigResponse(BaseModel):
     provider: str
     base_url: str = Field(alias="baseUrl")
     api_key: str = Field(alias="apiKey")
+    protocol: str
 
 
-class SyncProviderModelsRequest(BaseModel):
+class ProviderDeleteRequest(BaseModel):
     provider: str = Field(..., min_length=1)
-    category: str = Field(..., min_length=1)
-    base_url: str = Field(..., min_length=1, alias="baseUrl")
-    api_key: str = Field(..., min_length=1, alias="apiKey")
-
-
-class SyncProviderModelsResponse(BaseModel):
-    provider: str
-    category: str
-    base_url: str = Field(alias="baseUrl")
-    synced_count: int = Field(alias="syncedCount")
-    model_ids: list[str] = Field(alias="modelIds")

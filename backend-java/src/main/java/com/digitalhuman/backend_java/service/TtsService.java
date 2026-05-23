@@ -1,6 +1,7 @@
 package com.digitalhuman.backend_java.service;
 
 import com.digitalhuman.backend_java.dto.TtsRequest;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.*;
 import org.slf4j.Logger;
@@ -10,6 +11,8 @@ import org.springframework.stereotype.Service;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -89,6 +92,34 @@ public class TtsService {
             }
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    public List<String> listVoices() throws Exception {
+        Request request = new Request.Builder()
+                .url(edgeServiceUrl + "/voices")
+                .get()
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful() || response.body() == null) {
+                throw new IOException("Voice list request failed: " + response.code());
+            }
+
+            Map<String, Object> payload = objectMapper.readValue(response.body().string(), new TypeReference<>() {});
+            Object voicesObj = payload.get("voices");
+            if (!(voicesObj instanceof List<?> voices)) {
+                throw new IOException("Voice list payload is invalid");
+            }
+
+            return voices.stream()
+                    .filter(Map.class::isInstance)
+                    .map(Map.class::cast)
+                    .map(item -> item.get("ShortName"))
+                    .filter(String.class::isInstance)
+                    .map(String.class::cast)
+                    .sorted()
+                    .toList();
         }
     }
 

@@ -1,0 +1,18 @@
+{
+  "providers": [
+    {
+      "provider": "DeepSeek",
+      "protocol": "openai_compatible",
+      "baseUrl": "https://api.deepseek.com",
+      "apiKey": "fill_your_deepseek_api_key_here",
+      "notes": "DeepSeek official docs: https://api-docs.deepseek.com/"
+    },
+    {
+      "provider": "OpenAI",
+      "protocol": "openai_compatible",
+      "baseUrl": "https://api.openai.com/v1",
+      "apiKey": "fill_your_openai_api_key_here",
+      "notes": "OpenAI official docs: https://platform.openai.com/docs/api-reference/models/list"
+    }
+  ]
+}

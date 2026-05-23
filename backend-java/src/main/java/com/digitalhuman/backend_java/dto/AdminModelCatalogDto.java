@@ -7,6 +7,7 @@ public class AdminModelCatalogDto {
     private List<AdminModelOptionDto> embeddingModels;
     private List<AdminModelOptionDto> speechModels;
     private List<AdminModelOptionDto> visionModels;
+    private List<AdminModelOptionDto> chatModels;
     private List<AdminModelOptionDto> multimodalModels;
 
     public AdminModelCatalogDto() {
@@ -16,10 +17,12 @@ public class AdminModelCatalogDto {
             List<AdminModelOptionDto> embeddingModels,
             List<AdminModelOptionDto> speechModels,
             List<AdminModelOptionDto> visionModels,
+            List<AdminModelOptionDto> chatModels,
             List<AdminModelOptionDto> multimodalModels) {
         this.embeddingModels = embeddingModels;
         this.speechModels = speechModels;
         this.visionModels = visionModels;
+        this.chatModels = chatModels;
         this.multimodalModels = multimodalModels;
     }
 
@@ -53,5 +56,13 @@ public class AdminModelCatalogDto {
 
     public void setMultimodalModels(List<AdminModelOptionDto> multimodalModels) {
         this.multimodalModels = multimodalModels;
+    }
+
+    public List<AdminModelOptionDto> getChatModels() {
+        return chatModels;
+    }
+
+    public void setChatModels(List<AdminModelOptionDto> chatModels) {
+        this.chatModels = chatModels;
     }
 }
