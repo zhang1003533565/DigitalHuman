@@ -274,6 +274,45 @@
   color: #5c6f88;
 }
 
+.admin-vision-preview {
+  width: 100%;
+  max-width: 320px;
+  border-radius: 14px;
+  border: 1px solid #e3eaf3;
+  object-fit: cover;
+}
+
+.admin-vision-preview-wrap {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-mode-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.admin-preview-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-preview-block {
+  border: 1px solid #e3eaf3;
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #35506f;
+  line-height: 1.7;
+}
+
+.admin-preview-block strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #24364d;
+}
+
 .admin-form-grid .ant-table-wrapper {
   margin-top: 4px;
 }
@@ -480,4 +519,3 @@
 .admin-shell > .ant-layout {
   background: #f6f8fb;
 }
-

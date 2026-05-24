@@ -78,6 +78,8 @@ class ModelTestRequest(BaseModel):
     category: str = Field(..., min_length=1)
     model_id: str = Field(..., min_length=1, alias="modelId")
     text: str | None = None
+    image_data_url: str | None = Field(default=None, alias="imageDataUrl")
+    mode: str | None = None
 
 
 class ModelTestResponse(BaseModel):
@@ -87,6 +89,10 @@ class ModelTestResponse(BaseModel):
     model_id: str = Field(alias="modelId")
     message: str
     detail: str | None = None
+    caption: str | None = None
+    ocr_text: str | None = Field(default=None, alias="ocrText")
+    model_answer: str | None = Field(default=None, alias="modelAnswer")
+    scene_summary: str | None = Field(default=None, alias="sceneSummary")
 
 
 class ProviderConfigRequest(BaseModel):

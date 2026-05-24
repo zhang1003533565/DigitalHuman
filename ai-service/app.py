@@ -50,7 +50,7 @@ def query(request: QueryRequest) -> QueryResponse:
 @app.post("/admin/model-test", response_model=ModelTestResponse)
 def model_test(request: ModelTestRequest) -> ModelTestResponse:
     try:
-        result = test_model(request.provider, request.category, request.model_id, request.text)
+        result = test_model(request.provider, request.category, request.model_id, request.text, request.image_data_url, request.mode)
         return ModelTestResponse.model_validate({
             "success": result.success,
             "provider": request.provider,
@@ -58,6 +58,10 @@ def model_test(request: ModelTestRequest) -> ModelTestResponse:
             "modelId": request.model_id,
             "message": result.message,
             "detail": result.detail,
+            "caption": result.caption,
+            "ocrText": result.ocr_text,
+            "modelAnswer": result.model_answer,
+            "sceneSummary": result.scene_summary,
         })
     except HTTPException:
         raise

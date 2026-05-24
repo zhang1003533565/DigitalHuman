@@ -18,9 +18,13 @@ class ModelTestResult:
     success: bool
     message: str
     detail: str | None = None
+    caption: str | None = None
+    ocr_text: str | None = None
+    model_answer: str | None = None
+    scene_summary: str | None = None
 
 
-def test_model(provider: str, category: str, model_id: str, text: str | None = None) -> ModelTestResult:
+def test_model(provider: str, category: str, model_id: str, text: str | None = None, image_data_url: str | None = None, mode: str | None = None) -> ModelTestResult:
     normalized_category = category.strip().lower()
     normalized_provider = provider.strip()
     normalized_model_id = model_id.strip()
@@ -28,7 +32,7 @@ def test_model(provider: str, category: str, model_id: str, text: str | None = N
     if normalized_category == "embedding":
         return test_embedding_model(normalized_provider, normalized_model_id)
     if normalized_category in {"vision", "chat", "multimodal"}:
-        return test_chat_model(normalized_provider, normalized_category, normalized_model_id)
+        return test_chat_model(normalized_provider, normalized_category, normalized_model_id, text, image_data_url, mode)
     if normalized_category == "speech":
         return test_speech_model(normalized_provider, normalized_model_id, text)
 
@@ -51,14 +55,43 @@ def test_embedding_model(provider: str, model_id: str) -> ModelTestResult:
     return ModelTestResult(True, "Embedding 接口调用成功", f"返回向量维度：{len(embedding)}")
 
 
-def test_chat_model(provider: str, category: str, model_id: str) -> ModelTestResult:
+def test_chat_model(provider: str, category: str, model_id: str, text: str | None = None, image_data_url: str | None = None, mode: str | None = None) -> ModelTestResult:
     config = require_provider_config(provider)
     if get_protocol(config) != "openai_compatible":
         raise HTTPException(status_code=400, detail=f"{provider} 当前未配置可测试的对话协议")
     client = get_provider_client(provider, config)
-    content = client.test_chat_completion(model_id, category)
+    if image_data_url:
+        prompt = (text or "").strip() or f"请识别图片内容，并完成 {category} 测试。"
+        content = client.generate_answer(
+            model_id,
+            [
+                {"role": "system", "content": "You are a multimodal health check assistant."},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": image_data_url}},
+                    ],
+                },
+            ],
+            temperature=0,
+        )
+    else:
+        content = client.test_chat_completion(model_id, category)
     detail = content[:120] if content else "模型有响应，但内容为空"
-    return ModelTestResult(True, "对话接口调用成功", detail)
+    normalized_mode = (mode or '').strip().lower()
+    result = ModelTestResult(True, "对话接口调用成功", detail)
+    if normalized_mode == 'caption':
+        result.caption = content
+    elif normalized_mode == 'ocr':
+        result.ocr_text = content
+    elif normalized_mode in {'qa', 'answer'}:
+        result.model_answer = content
+    elif normalized_mode in {'scene', 'reason'}:
+        result.scene_summary = content
+    else:
+        result.model_answer = content
+    return result
 
 
 def test_speech_model(provider: str, model_id: str, text: str | None = None) -> ModelTestResult:

@@ -134,6 +134,10 @@ type ModelTestResponse = {
   detail?: string
   audioUrl?: string
   audioFileName?: string
+  caption?: string
+  ocrText?: string
+  modelAnswer?: string
+  sceneSummary?: string
 }
 
 type TtsVoicesResponse = {
@@ -673,7 +677,7 @@ function SettingsPanel() {
     }
   }
 
-  const handleTestModel = async (category: ModelCategory) => {
+  const handleTestModel = async (category: ModelCategory, payload?: { promptText?: string; imageDataUrl?: string }) => {
     const fieldName = fieldNameByCategory[category]
     const values = await form.validateFields([fieldName])
     const modelId = values[fieldName] as string
@@ -683,7 +687,8 @@ function SettingsPanel() {
       const response = await axios.post<ModelTestResponse>('/api/admin/settings/model-test', {
         category,
         modelId,
-        text: category === 'speech' ? speechValues?.speechTestText : undefined,
+        text: category === 'speech' ? speechValues?.speechTestText : payload?.promptText,
+        imageDataUrl: payload?.imageDataUrl,
       })
 
       let nextResult: ModelTestResponse = response.data
@@ -775,7 +780,8 @@ function SettingsPanel() {
           testing={testingCategory === 'vision'}
           options={visionOptions.map((item) => ({ value: item.value, provider: item.label.split(' · ')[0] }))}
           onSave={() => void handleSave()}
-          onTest={() => void handleTestModel('vision')}
+          onTest={(payload) => void handleTestModel('vision', payload)}
+          testResult={testResults.vision}
           result={renderTestResult('vision', testResults.vision)}
         />
       ),
@@ -807,7 +813,8 @@ function SettingsPanel() {
           testing={testingCategory === 'multimodal'}
           options={multimodalOptions.map((item) => ({ value: item.value, provider: item.label.split(' · ')[0] }))}
           onSave={() => void handleSave()}
-          onTest={() => void handleTestModel('multimodal')}
+          onTest={(payload) => void handleTestModel('multimodal', payload)}
+          testResult={testResults.multimodal}
           result={renderTestResult('multimodal', testResults.multimodal)}
         />
       ),

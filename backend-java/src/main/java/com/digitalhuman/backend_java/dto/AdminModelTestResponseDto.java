@@ -8,6 +8,10 @@ public class AdminModelTestResponseDto {
     private String modelId;
     private String message;
     private String detail;
+    private String caption;
+    private String ocrText;
+    private String modelAnswer;
+    private String sceneSummary;
 
     public boolean isSuccess() {
         return success;
@@ -55,5 +59,37 @@ public class AdminModelTestResponseDto {
 
     public void setDetail(String detail) {
         this.detail = detail;
+    }
+
+    public String getCaption() {
+        return caption;
+    }
+
+    public void setCaption(String caption) {
+        this.caption = caption;
+    }
+
+    public String getOcrText() {
+        return ocrText;
+    }
+
+    public void setOcrText(String ocrText) {
+        this.ocrText = ocrText;
+    }
+
+    public String getModelAnswer() {
+        return modelAnswer;
+    }
+
+    public void setModelAnswer(String modelAnswer) {
+        this.modelAnswer = modelAnswer;
+    }
+
+    public String getSceneSummary() {
+        return sceneSummary;
+    }
+
+    public void setSceneSummary(String sceneSummary) {
+        this.sceneSummary = sceneSummary;
     }
 }

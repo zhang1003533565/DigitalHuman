@@ -50,7 +50,7 @@ class OpenAICompatibleProviderClient:
         self,
         *,
         model_id: str,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, object]],
         temperature: float = 0.2,
         max_tokens: int | None = None,
     ) -> str:
