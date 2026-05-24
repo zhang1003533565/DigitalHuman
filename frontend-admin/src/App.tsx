@@ -33,6 +33,7 @@ import VoiceConfigPage from './pages/settings/VoiceConfigPage'
 import SpotDrawer from './pages/scenic/SpotAddPage'
 import SpotCategoryPage from './pages/scenic/SpotCategoryPage'
 import FacilityListPage from './pages/scenic/FacilityListPage'
+import TravelAnalyticsPage from './pages/scenic/TravelAnalyticsPage'
 import './App.css'
 
 const { Header, Content } = Layout
@@ -55,6 +56,7 @@ type MenuKey =
   | 'routes'
   | 'avatar'
   | 'settings'
+  | 'travel-analytics'
   | 'feedback'
   | 'qa'
 
@@ -903,6 +905,8 @@ function renderPanel(activeKey: MenuKey) {
       return <AvatarPanel />
     case 'settings':
       return <SettingsPanel />
+    case 'travel-analytics':
+      return <TravelAnalyticsPage />
     case 'feedback':
       return <FeedbackPanel />
     case 'qa':
@@ -997,7 +1001,7 @@ function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: () => vo
             <Button icon={<UserOutlined />} onClick={onLogout}>退出登录</Button>
           </div>
         </Header>
-        <Content className="admin-content">
+        <Content className={activeKey === 'travel-analytics' ? 'admin-content admin-content--fullscreen-table' : 'admin-content'}>
           {activeKey === 'facility-list'
             ? <FacilityListPage onAddFacility={() => setSpotDrawerOpen(true)} />
             : renderPanel(activeKey)}
