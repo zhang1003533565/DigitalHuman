@@ -64,6 +64,8 @@ class QueryRequest(BaseModel):
     question: str = Field(..., min_length=1)
     interest: str | None = None
     top_k: int | None = None
+    session_id: str | None = Field(default=None, alias="sessionId")
+    enable_human_review: bool = Field(default=False, alias="enableHumanReview")
 
 
 class QueryResponse(BaseModel):
@@ -71,6 +73,17 @@ class QueryResponse(BaseModel):
     related_spots: list[str]
     sources: list[ChunkPayload]
     chunks: list[ChunkRecord]
+    rewritten_question: str | None = Field(default=None, alias="rewrittenQuestion")
+    context_sufficient: bool = Field(default=True, alias="contextSufficient")
+    context_reason: str | None = Field(default=None, alias="contextReason")
+    quality_passed: bool = Field(default=True, alias="qualityPassed")
+    quality_issues: list[str] = Field(default_factory=list, alias="qualityIssues")
+    citations_valid: bool = Field(default=True, alias="citationsValid")
+    citation_issues: list[str] = Field(default_factory=list, alias="citationIssues")
+    review_required: bool = Field(default=False, alias="reviewRequired")
+    review_reason: str | None = Field(default=None, alias="reviewReason")
+    graph_steps: list[str] = Field(default_factory=list, alias="graphSteps")
+    retrieval_attempts: int = Field(default=1, alias="retrievalAttempts")
 
 
 class ModelTestRequest(BaseModel):

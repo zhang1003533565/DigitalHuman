@@ -128,8 +128,26 @@ Generate answer with DeepSeek:
 ```bash
 curl -X POST http://127.0.0.1:18755/rag/query \
   -H 'Content-Type: application/json' \
-  -d '{"question":"灵山大佛适合什么时候去看？","interest":"历史文化"}'
+  -d '{"question":"灵山大佛适合什么时候去看？","interest":"历史文化","sessionId":"demo-001","enableHumanReview":false}'
 ```
+
+`/rag/query` is now orchestrated by LangGraph. The graph includes:
+
+- query rewrite from recent conversation memory
+- retrieval and reranking
+- context sufficiency judging
+- second retrieval when context is weak
+- grounded answer generation
+- fallback answer generation
+- answer quality checking
+- citation format validation and auto-completion
+- optional human review interrupt through `enableHumanReview`
+- SQLite checkpoint persistence by `sessionId`
+
+The runtime files are created under `ai-service/rag/.runtime/`:
+
+- `rag_checkpoints.sqlite` stores LangGraph checkpoints.
+- `rag_memory.sqlite` stores recent user/assistant turns for follow-up question rewriting.
 
 ## 7. Connect backend-java
 

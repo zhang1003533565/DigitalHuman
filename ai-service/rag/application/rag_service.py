@@ -44,7 +44,7 @@ class RagService:
             retrieve_limit=self.settings.retrieve_limit,
             rerank_limit=self.settings.rerank_limit,
         )
-        self.query_graph = RagQueryGraph(self.retriever, self.llm)
+        self.query_graph = RagQueryGraph(self.retriever, self.llm, score_threshold=self.settings.score_threshold)
 
     def ingest(self, request: IngestRequest) -> IngestResponse:
         source_dir = Path(request.source_dir) if request.source_dir else self.settings.knowledge_base_dir

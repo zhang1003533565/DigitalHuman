@@ -26,6 +26,18 @@ class ProviderBackedLlm:
         if not self.is_enabled() or not chunks:
             return None
 
+        return self.generate_messages(
+            [
+                {"role": "system", "content": build_system_prompt()},
+                {"role": "user", "content": build_user_prompt(question, interest, chunks)},
+            ],
+            temperature=0.2,
+        )
+
+    def generate_messages(self, messages: list[dict[str, object]], temperature: float = 0.2) -> str | None:
+        if not self.is_enabled():
+            return None
+
         provider_client = get_provider_client(
             self.config.provider or "",
             {
@@ -34,15 +46,25 @@ class ProviderBackedLlm:
                 "apiKey": self.config.api_key or "",
             },
         )
-        prompt = build_user_prompt(question, interest, chunks)
         return provider_client.generate_answer(
             model_id=self.config.model or "",
-            messages=[
-                {"role": "system", "content": build_system_prompt()},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.2,
+            messages=messages,
+            temperature=temperature,
         )
+
+    def rewrite_question(self, question: str, history: list[dict[str, str]], interest: str | None) -> str | None:
+        if not self.is_enabled() or not history:
+            return None
+        history_text = "\n".join(f"{item['role']}：{item['content']}" for item in history[-6:])
+        interest_line = f"\n用户兴趣：{interest}" if interest else ""
+        rewritten = self.generate_messages(
+            [
+                {"role": "system", "content": "你负责把多轮对话中的用户问题改写成适合知识库检索的单句中文查询。只输出改写后的查询。"},
+                {"role": "user", "content": f"历史对话：\n{history_text}{interest_line}\n\n当前问题：{question}\n\n请输出检索查询："},
+            ],
+            temperature=0,
+        )
+        return rewritten.strip() if rewritten else None
 
 
 def infer_provider_name(base_url: str | None) -> str | None:

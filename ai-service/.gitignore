@@ -1,4 +1,6 @@
 .env
 .venv/
 __pycache__/
+.runtime/
+rag/.runtime/
 model_providers/*/config.local.json

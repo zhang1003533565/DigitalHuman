@@ -84,7 +84,7 @@ public class GuideService {
             sessionId = "session-" + UUID.randomUUID();
         }
 
-        RagQueryResponse ragResponse = queryRag(request);
+        RagQueryResponse ragResponse = queryRag(request, sessionId);
         String answerText = ragResponse != null && ragResponse.getAnswer() != null && !ragResponse.getAnswer().isBlank()
                 ? ragResponse.getAnswer()
                 : buildAnswer(request.getQuestion(), request.getInterest());
@@ -125,10 +125,10 @@ public class GuideService {
                 .toList();
     }
 
-    private RagQueryResponse queryRag(GuideChatRequest request) {
+    private RagQueryResponse queryRag(GuideChatRequest request, String sessionId) {
         try {
             String url = ragServiceUrl + "/rag/query";
-            String json = objectMapper.writeValueAsString(new RagQueryRequest(request.getQuestion(), request.getInterest(), 5));
+            String json = objectMapper.writeValueAsString(new RagQueryRequest(request.getQuestion(), request.getInterest(), 5, sessionId));
             Request httpRequest = new Request.Builder()
                     .url(url)
                     .post(RequestBody.create(json, JSON))
