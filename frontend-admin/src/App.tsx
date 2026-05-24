@@ -71,6 +71,7 @@ const menuPathByKey: Record<MenuKey, string> = {
   routes: '/admin/routes',
   avatar: '/admin/avatar',
   settings: '/admin/setting',
+  'travel-analytics': '/admin/travel-analytics',
   feedback: '/admin/feedback',
   qa: '/admin/qa',
 }
@@ -1040,17 +1041,7 @@ function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: () => vo
         onSelect={(key) => navigate(getPathForMenuKey(key as MenuKey))}
       />
       <Layout>
-<<<<<<< HEAD
-        <Header className="admin-header">
-          <div className="admin-header__actions">
-            <Tag color="blue">{user.role}</Tag>
-            <Button icon={<UserOutlined />} onClick={onLogout}>退出登录</Button>
-          </div>
-        </Header>
         <Content className={activeKey === 'travel-analytics' ? 'admin-content admin-content--fullscreen-table' : 'admin-content'}>
-=======
-        <Content className="admin-content">
->>>>>>> 6ac70e71dc681ef8b326e9ede1155fdd5496d452
           {activeKey === 'facility-list'
             ? <FacilityListPage onAddFacility={() => setSpotDrawerOpen(true)} />
             : renderPanel(activeKey)}
