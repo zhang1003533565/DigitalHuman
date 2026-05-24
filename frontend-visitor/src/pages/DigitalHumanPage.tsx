@@ -27,6 +27,7 @@ type DigitalHumanPageProps = {
 
 type GuideChatResponse = {
   sessionId: string
+  traceId?: string
   answerText: string
   relatedSpots: string[]
   recommendedRoutes: string[]

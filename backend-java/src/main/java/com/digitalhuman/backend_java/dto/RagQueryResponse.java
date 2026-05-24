@@ -2,15 +2,19 @@ package com.digitalhuman.backend_java.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class RagQueryResponse {
 
     private String answer;
+    @JsonProperty("traceId")
+    private String traceId;
     @JsonProperty("relatedSpots")
     private List<String> relatedSpots;
     private List<RagSourceDto> sources;
+    private JsonNode chunks;
     @JsonProperty("rewrittenQuestion")
     private String rewrittenQuestion;
     @JsonProperty("contextSufficient")
@@ -33,6 +37,16 @@ public class RagQueryResponse {
     private List<String> graphSteps;
     @JsonProperty("retrievalAttempts")
     private Integer retrievalAttempts;
+    @JsonProperty("retrievalTrace")
+    private JsonNode retrievalTrace;
+    @JsonProperty("nodeTimingsMs")
+    private JsonNode nodeTimingsMs;
+    @JsonProperty("totalDurationMs")
+    private Double totalDurationMs;
+    @JsonProperty("lowConfidence")
+    private Boolean lowConfidence;
+    @JsonProperty("lowConfidenceReason")
+    private String lowConfidenceReason;
 
     public String getAnswer() {
         return answer;
@@ -40,6 +54,14 @@ public class RagQueryResponse {
 
     public void setAnswer(String answer) {
         this.answer = answer;
+    }
+
+    public String getTraceId() {
+        return traceId;
+    }
+
+    public void setTraceId(String traceId) {
+        this.traceId = traceId;
     }
 
     public List<String> getRelatedSpots() {
@@ -56,6 +78,14 @@ public class RagQueryResponse {
 
     public void setSources(List<RagSourceDto> sources) {
         this.sources = sources;
+    }
+
+    public JsonNode getChunks() {
+        return chunks;
+    }
+
+    public void setChunks(JsonNode chunks) {
+        this.chunks = chunks;
     }
 
     public String getRewrittenQuestion() {
@@ -144,5 +174,45 @@ public class RagQueryResponse {
 
     public void setRetrievalAttempts(Integer retrievalAttempts) {
         this.retrievalAttempts = retrievalAttempts;
+    }
+
+    public JsonNode getRetrievalTrace() {
+        return retrievalTrace;
+    }
+
+    public void setRetrievalTrace(JsonNode retrievalTrace) {
+        this.retrievalTrace = retrievalTrace;
+    }
+
+    public JsonNode getNodeTimingsMs() {
+        return nodeTimingsMs;
+    }
+
+    public void setNodeTimingsMs(JsonNode nodeTimingsMs) {
+        this.nodeTimingsMs = nodeTimingsMs;
+    }
+
+    public Double getTotalDurationMs() {
+        return totalDurationMs;
+    }
+
+    public void setTotalDurationMs(Double totalDurationMs) {
+        this.totalDurationMs = totalDurationMs;
+    }
+
+    public Boolean getLowConfidence() {
+        return lowConfidence;
+    }
+
+    public void setLowConfidence(Boolean lowConfidence) {
+        this.lowConfidence = lowConfidence;
+    }
+
+    public String getLowConfidenceReason() {
+        return lowConfidenceReason;
+    }
+
+    public void setLowConfidenceReason(String lowConfidenceReason) {
+        this.lowConfidenceReason = lowConfidenceReason;
     }
 }

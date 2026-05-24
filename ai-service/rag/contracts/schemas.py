@@ -22,6 +22,19 @@ class ChunkRecord(BaseModel):
     score: float | None = None
 
 
+class RetrievalStage(BaseModel):
+    name: str
+    query: str
+    chunks: list[ChunkRecord] = Field(default_factory=list)
+
+
+class RetrievalAttempt(BaseModel):
+    name: str
+    query: str
+    dense: RetrievalStage
+    reranked: RetrievalStage
+
+
 class IngestRequest(BaseModel):
     source_dir: str | None = None
     glob: str = "*"
@@ -65,10 +78,12 @@ class QueryRequest(BaseModel):
     interest: str | None = None
     top_k: int | None = None
     session_id: str | None = Field(default=None, alias="sessionId")
+    trace_id: str | None = Field(default=None, alias="traceId")
     enable_human_review: bool = Field(default=False, alias="enableHumanReview")
 
 
 class QueryResponse(BaseModel):
+    trace_id: str | None = Field(default=None, alias="traceId")
     answer: str
     related_spots: list[str]
     sources: list[ChunkPayload]
@@ -84,6 +99,11 @@ class QueryResponse(BaseModel):
     review_reason: str | None = Field(default=None, alias="reviewReason")
     graph_steps: list[str] = Field(default_factory=list, alias="graphSteps")
     retrieval_attempts: int = Field(default=1, alias="retrievalAttempts")
+    retrieval_trace: list[RetrievalAttempt] = Field(default_factory=list, alias="retrievalTrace")
+    node_timings_ms: dict[str, float] = Field(default_factory=dict, alias="nodeTimingsMs")
+    total_duration_ms: float | None = Field(default=None, alias="totalDurationMs")
+    low_confidence: bool = Field(default=False, alias="lowConfidence")
+    low_confidence_reason: str | None = Field(default=None, alias="lowConfidenceReason")
 
 
 class ModelTestRequest(BaseModel):

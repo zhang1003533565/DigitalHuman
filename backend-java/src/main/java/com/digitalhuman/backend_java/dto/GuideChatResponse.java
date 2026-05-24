@@ -5,12 +5,14 @@ import java.util.List;
 public class GuideChatResponse {
 
     private final String sessionId;
+    private final String traceId;
     private final String answerText;
     private final List<String> relatedSpots;
     private final List<String> recommendedRoutes;
 
-    public GuideChatResponse(String sessionId, String answerText, List<String> relatedSpots, List<String> recommendedRoutes) {
+    public GuideChatResponse(String sessionId, String traceId, String answerText, List<String> relatedSpots, List<String> recommendedRoutes) {
         this.sessionId = sessionId;
+        this.traceId = traceId;
         this.answerText = answerText;
         this.relatedSpots = relatedSpots;
         this.recommendedRoutes = recommendedRoutes;
@@ -18,6 +20,10 @@ public class GuideChatResponse {
 
     public String getSessionId() {
         return sessionId;
+    }
+
+    public String getTraceId() {
+        return traceId;
     }
 
     public String getAnswerText() {

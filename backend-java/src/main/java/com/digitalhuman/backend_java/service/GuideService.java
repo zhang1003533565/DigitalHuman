@@ -54,8 +54,10 @@ public class GuideService {
     private final List<FeedbackRecordDto> feedbackRecords = new ArrayList<>();
     private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
+    private final RagTraceService ragTraceService;
 
-    public GuideService() {
+    public GuideService(RagTraceService ragTraceService) {
+        this.ragTraceService = ragTraceService;
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(60, TimeUnit.SECONDS)
@@ -84,7 +86,8 @@ public class GuideService {
             sessionId = "session-" + UUID.randomUUID();
         }
 
-        RagQueryResponse ragResponse = queryRag(request, sessionId);
+        String traceId = "rag-" + UUID.randomUUID();
+        RagQueryResponse ragResponse = queryRag(request, sessionId, traceId);
         String answerText = ragResponse != null && ragResponse.getAnswer() != null && !ragResponse.getAnswer().isBlank()
                 ? ragResponse.getAnswer()
                 : buildAnswer(request.getQuestion(), request.getInterest());
@@ -100,7 +103,7 @@ public class GuideService {
         messages.add(new GuideMessageDto("user", request.getQuestion(), now));
         messages.add(new GuideMessageDto("assistant", answerText, now + 1));
 
-        return new GuideChatResponse(sessionId, answerText, relatedSpots, recommendedRoutes);
+        return new GuideChatResponse(sessionId, traceId, answerText, relatedSpots, recommendedRoutes);
     }
 
     public List<GuideMessageDto> getSessionMessages(String sessionId) {
@@ -125,10 +128,10 @@ public class GuideService {
                 .toList();
     }
 
-    private RagQueryResponse queryRag(GuideChatRequest request, String sessionId) {
+    private RagQueryResponse queryRag(GuideChatRequest request, String sessionId, String traceId) {
         try {
             String url = ragServiceUrl + "/rag/query";
-            String json = objectMapper.writeValueAsString(new RagQueryRequest(request.getQuestion(), request.getInterest(), 5, sessionId));
+            String json = objectMapper.writeValueAsString(new RagQueryRequest(request.getQuestion(), request.getInterest(), 5, sessionId, traceId));
             Request httpRequest = new Request.Builder()
                     .url(url)
                     .post(RequestBody.create(json, JSON))
@@ -141,10 +144,13 @@ public class GuideService {
                 if (response.body() == null) {
                     throw new IOException("RAG response body is empty");
                 }
-                return objectMapper.readValue(response.body().string(), RagQueryResponse.class);
+                RagQueryResponse ragResponse = objectMapper.readValue(response.body().string(), RagQueryResponse.class);
+                ragTraceService.saveSuccess(traceId, sessionId, request, ragResponse);
+                return ragResponse;
             }
         } catch (Exception exception) {
             log.warn("Falling back to local guide answer because RAG service is unavailable", exception);
+            ragTraceService.saveFailure(traceId, sessionId, request, exception);
             return null;
         }
     }

@@ -1,0 +1,24 @@
+[
+  {
+    "id": "spot_intro_lingshan",
+    "question": "灵山大佛有什么特色？",
+    "expectKeywords": ["灵山大佛", "地标"]
+  },
+  {
+    "id": "route_family",
+    "question": "带孩子去灵山胜境怎么安排？",
+    "interest": "亲子",
+    "expectKeywords": ["亲子"]
+  },
+  {
+    "id": "followup_pronoun",
+    "sessionId": "eval-followup",
+    "question": "这里适合拍照吗？",
+    "expectKeywords": ["拍照", "景点"]
+  },
+  {
+    "id": "unknown_coverage",
+    "question": "景区附近明天几点有无人机表演？",
+    "expectKeywords": ["知识库暂未覆盖"]
+  }
+]

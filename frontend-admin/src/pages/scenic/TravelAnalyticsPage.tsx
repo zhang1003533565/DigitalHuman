@@ -129,11 +129,11 @@ export default function TravelAnalyticsPage() {
           defval: '',
         })
 
-        const headerRow = (matrix[0] ?? []).map((cell) => String(cell ?? '').trim())
-        const normalizedHeaders = headerRow.map((header, index) => (header ? header : `列${index + 1}`))
+        const headerRow = (matrix[0] ?? []).map((cell: string | number | boolean | null) => String(cell ?? '').trim())
+        const normalizedHeaders = headerRow.map((header: string, index: number) => (header ? header : `列${index + 1}`))
         const sheetCols = (sheet['!cols'] ?? []) as Array<{ wpx?: number; wch?: number }>
         const baseWidths: Record<string, number> = {}
-        normalizedHeaders.forEach((header, colIndex) => {
+        normalizedHeaders.forEach((header: string, colIndex: number) => {
           const rawWpx = sheetCols[colIndex]?.wpx
           const rawWch = sheetCols[colIndex]?.wch
           const computed = rawWpx ?? (rawWch ? Math.round(rawWch * 8 + 24) : 260)
@@ -142,14 +142,14 @@ export default function TravelAnalyticsPage() {
 
         const builtRows = matrix
           .slice(1)
-          .map((row, rowIndex) => {
+          .map((row: Array<string | number | boolean | null>, rowIndex: number) => {
             const nextRow: DataRow = { key: String(rowIndex + 1) }
-            normalizedHeaders.forEach((header, colIndex) => {
+            normalizedHeaders.forEach((header: string, colIndex: number) => {
               nextRow[header] = String(row[colIndex] ?? '')
             })
             return nextRow
           })
-          .filter((row) => normalizedHeaders.some((header) => (row[header] ?? '').trim() !== ''))
+          .filter((row: DataRow) => normalizedHeaders.some((header: string) => (row[header] ?? '').trim() !== ''))
 
         setHeaders(normalizedHeaders)
         setBaseColumnWidths(baseWidths)

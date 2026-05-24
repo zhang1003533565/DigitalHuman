@@ -19,6 +19,11 @@ import {
   Select,
   Tabs,
   message,
+  Drawer,
+  Descriptions,
+  Space,
+  Typography,
+  Divider,
 } from 'antd'
 import type { UploadProps } from 'antd'
 import type { TableColumnsType } from 'antd'
@@ -113,6 +118,44 @@ type FeedbackRow = {
   helpful: string
   rating: string
   comment: string
+}
+
+type RagTraceSummary = {
+  traceId: string
+  sessionId: string
+  status: string
+  question: string
+  answerPreview?: string
+  rewrittenQuestion?: string
+  reviewRequired: boolean
+  lowConfidence: boolean
+  noAnswer: boolean
+  retrievalAttempts?: number
+  totalDurationMs?: number
+  createdAt: string
+}
+
+type RagTraceDetail = RagTraceSummary & {
+  interest?: string
+  failureReason?: string
+  reviewReason?: string
+  lowConfidenceReason?: string
+  contextSufficient: boolean
+  qualityPassed: boolean
+  citationsValid: boolean
+  request?: Record<string, unknown>
+  response?: {
+    answer?: string
+    rewrittenQuestion?: string
+    graphSteps?: string[]
+    chunks?: Array<Record<string, unknown>>
+    retrievalTrace?: Array<Record<string, unknown>>
+    nodeTimingsMs?: Record<string, number>
+    qualityIssues?: string[]
+    citationIssues?: string[]
+    contextReason?: string
+    lowConfidenceReason?: string
+  }
 }
 
 type KnowledgeDocumentRow = {
@@ -902,25 +945,263 @@ function FeedbackPanel() {
   )
 }
 
-function QaPanel() {
+function getRagStatusTag(status: string) {
+  const statusMap: Record<string, { color: string; label: string }> = {
+    SUCCESS: { color: 'green', label: '正常' },
+    LOW_CONFIDENCE: { color: 'gold', label: '低置信' },
+    NO_ANSWER: { color: 'orange', label: '无答案' },
+    FAILED: { color: 'red', label: '失败' },
+  }
+  const item = statusMap[status] ?? { color: 'default', label: status }
+  return <Tag color={item.color}>{item.label}</Tag>
+}
+
+function getTextField(value: unknown, fallback = '-') {
+  return typeof value === 'string' && value.trim() ? value : fallback
+}
+
+function getNumberField(value: unknown) {
+  return typeof value === 'number' ? value : undefined
+}
+
+function renderChunkList(chunks?: Array<Record<string, unknown>>) {
+  if (!chunks?.length) {
+    return <Typography.Text type="secondary">暂无片段</Typography.Text>
+  }
+
   return (
-    <Card title="问答记录查询">
-      <Form layout="inline" className="admin-filter-row">
-        <Form.Item label="关键词">
+    <div className="admin-rag-chunk-list">
+      {chunks.slice(0, 8).map((chunk, index) => {
+        const payload = (chunk.payload ?? {}) as Record<string, unknown>
+        const source = getTextField(payload.source_file)
+        const sectionPath = Array.isArray(payload.section_path) ? payload.section_path.join(' / ') : getTextField(payload.title)
+        const score = getNumberField(chunk.score)
+        return (
+          <div className="admin-rag-chunk" key={`${getTextField(chunk.id, String(index))}-${index}`}>
+            <div className="admin-rag-chunk__meta">
+              <Tag color="blue">#{index + 1}</Tag>
+              {score !== undefined ? <Tag color="purple">{score.toFixed(4)}</Tag> : null}
+              <span>{source}</span>
+              <span>{sectionPath}</span>
+            </div>
+            <Typography.Paragraph ellipsis={{ rows: 3, expandable: true, symbol: '展开' }}>
+              {getTextField(chunk.text, '')}
+            </Typography.Paragraph>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function renderRetrievalTrace(trace?: Array<Record<string, unknown>>) {
+  if (!trace?.length) {
+    return <Typography.Text type="secondary">暂无检索详情</Typography.Text>
+  }
+
+  return (
+    <div className="admin-rag-attempts">
+      {trace.map((attempt, index) => {
+        const dense = (attempt.dense ?? {}) as { chunks?: Array<Record<string, unknown>> }
+        const reranked = (attempt.reranked ?? {}) as { chunks?: Array<Record<string, unknown>> }
+        return (
+          <div className="admin-rag-attempt" key={`${getTextField(attempt.name, 'attempt')}-${index}`}>
+            <Typography.Title level={5}>
+              {getTextField(attempt.name, `第 ${index + 1} 次检索`)} · {getTextField(attempt.query)}
+            </Typography.Title>
+            <div className="admin-rag-compare">
+              <div>
+                <Typography.Text strong>向量召回</Typography.Text>
+                {renderChunkList(dense.chunks)}
+              </div>
+              <div>
+                <Typography.Text strong>Rerank 后</Typography.Text>
+                {renderChunkList(reranked.chunks)}
+              </div>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function QaPanel() {
+  const [data, setData] = useState<RagTraceSummary[]>([])
+  const [detail, setDetail] = useState<RagTraceDetail | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [detailLoading, setDetailLoading] = useState(false)
+
+  async function loadTraces(values?: { keyword?: string; status?: string }) {
+    setLoading(true)
+    try {
+      const response = await axios.get<RagTraceSummary[]>('/api/admin/guide/rag-traces', {
+        params: {
+          keyword: values?.keyword,
+          status: values?.status ?? 'all',
+        },
+      })
+      setData(response.data)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function openDetail(traceId: string) {
+    setDetailLoading(true)
+    try {
+      const response = await axios.get<RagTraceDetail>(`/api/admin/guide/rag-traces/${traceId}`)
+      setDetail(response.data)
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadTraces()
+  }, [])
+
+  const columns: TableColumnsType<RagTraceSummary> = [
+    {
+      title: '状态',
+      dataIndex: 'status',
+      width: 100,
+      render: (status: string) => getRagStatusTag(status),
+    },
+    {
+      title: '问题',
+      dataIndex: 'question',
+      render: (question: string, row) => (
+        <div>
+          <Typography.Text strong>{question}</Typography.Text>
+          <div className="admin-rag-trace-id">{row.traceId}</div>
+        </div>
+      ),
+    },
+    {
+      title: '改写问题',
+      dataIndex: 'rewrittenQuestion',
+      ellipsis: true,
+      render: (value?: string) => value || '-',
+    },
+    {
+      title: '检索',
+      dataIndex: 'retrievalAttempts',
+      width: 90,
+      render: (value?: number) => value ?? '-',
+    },
+    {
+      title: '耗时',
+      dataIndex: 'totalDurationMs',
+      width: 110,
+      render: (value?: number) => (value === undefined || value === null ? '-' : `${Math.round(value)} ms`),
+    },
+    {
+      title: '时间',
+      dataIndex: 'createdAt',
+      width: 180,
+      render: (value: string) => new Date(value).toLocaleString('zh-CN'),
+    },
+    {
+      title: '操作',
+      width: 90,
+      render: (_, row) => (
+        <Button type="link" onClick={() => void openDetail(row.traceId)}>
+          详情
+        </Button>
+      ),
+    },
+  ]
+
+  return (
+    <Card title="RAG 调试中心">
+      <Form layout="inline" className="admin-filter-row" onFinish={(values) => void loadTraces(values)}>
+        <Form.Item label="关键词" name="keyword">
           <Input placeholder="搜索问题关键词" />
         </Form.Item>
-        <Form.Item label="满意度">
+        <Form.Item label="状态" name="status" initialValue="all">
           <Select
             style={{ width: 180 }}
             options={[
               { value: 'all', label: '全部' },
-              { value: 'good', label: '有帮助' },
-              { value: 'bad', label: '待优化' },
+              { value: 'SUCCESS', label: '正常' },
+              { value: 'LOW_CONFIDENCE', label: '低置信' },
+              { value: 'NO_ANSWER', label: '无答案' },
+              { value: 'FAILED', label: '失败' },
             ]}
           />
         </Form.Item>
-        <Button type="primary">查询</Button>
+        <Button type="primary" htmlType="submit" loading={loading}>查询</Button>
+        <Button onClick={() => void loadTraces()} loading={loading}>刷新</Button>
       </Form>
+      <Table
+        rowKey="traceId"
+        columns={columns}
+        dataSource={data}
+        loading={loading}
+        pagination={{ pageSize: 10 }}
+      />
+      <Drawer
+        title={detail ? `RAG Trace · ${detail.traceId}` : 'RAG Trace'}
+        open={Boolean(detail)}
+        width={960}
+        onClose={() => setDetail(null)}
+      >
+        {detailLoading ? <Typography.Text type="secondary">正在加载详情...</Typography.Text> : null}
+        {detail ? (
+          <Space direction="vertical" size="large" className="admin-rag-detail">
+            <Descriptions bordered size="small" column={2}>
+              <Descriptions.Item label="状态">{getRagStatusTag(detail.status)}</Descriptions.Item>
+              <Descriptions.Item label="耗时">{detail.totalDurationMs ? `${Math.round(detail.totalDurationMs)} ms` : '-'}</Descriptions.Item>
+              <Descriptions.Item label="会话">{detail.sessionId}</Descriptions.Item>
+              <Descriptions.Item label="检索次数">{detail.retrievalAttempts ?? '-'}</Descriptions.Item>
+              <Descriptions.Item label="问题" span={2}>{detail.question}</Descriptions.Item>
+              <Descriptions.Item label="改写问题" span={2}>{detail.response?.rewrittenQuestion ?? detail.rewrittenQuestion ?? '-'}</Descriptions.Item>
+              <Descriptions.Item label="低置信原因" span={2}>{detail.lowConfidenceReason || detail.response?.lowConfidenceReason || '-'}</Descriptions.Item>
+              <Descriptions.Item label="审核原因" span={2}>{detail.reviewReason || '-'}</Descriptions.Item>
+              <Descriptions.Item label="失败原因" span={2}>{detail.failureReason || '-'}</Descriptions.Item>
+            </Descriptions>
+
+            <div>
+              <Typography.Title level={5}>Graph Steps</Typography.Title>
+              <Space wrap>
+                {(detail.response?.graphSteps ?? []).map((step) => <Tag key={step}>{step}</Tag>)}
+              </Space>
+            </div>
+
+            <div>
+              <Typography.Title level={5}>回答</Typography.Title>
+              <Typography.Paragraph>{detail.response?.answer ?? detail.answerPreview ?? '-'}</Typography.Paragraph>
+            </div>
+
+            <div>
+              <Typography.Title level={5}>质量检查</Typography.Title>
+              <Space wrap>
+                <Tag color={detail.contextSufficient ? 'green' : 'red'}>上下文{detail.contextSufficient ? '充足' : '不足'}</Tag>
+                <Tag color={detail.qualityPassed ? 'green' : 'red'}>质量{detail.qualityPassed ? '通过' : '未通过'}</Tag>
+                <Tag color={detail.citationsValid ? 'green' : 'red'}>引用{detail.citationsValid ? '通过' : '未通过'}</Tag>
+              </Space>
+              <Typography.Paragraph className="admin-rag-issues">
+                {[detail.response?.contextReason, ...(detail.response?.qualityIssues ?? []), ...(detail.response?.citationIssues ?? [])]
+                  .filter(Boolean)
+                  .join('；') || '暂无问题'}
+              </Typography.Paragraph>
+            </div>
+
+            <Divider />
+            <div>
+              <Typography.Title level={5}>最终片段</Typography.Title>
+              {renderChunkList(detail.response?.chunks)}
+            </div>
+
+            <Divider />
+            <div>
+              <Typography.Title level={5}>检索可视化</Typography.Title>
+              {renderRetrievalTrace(detail.response?.retrievalTrace)}
+            </div>
+          </Space>
+        ) : null}
+      </Drawer>
     </Card>
   )
 }

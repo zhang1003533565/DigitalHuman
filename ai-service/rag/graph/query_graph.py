@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sqlite3
+import time
+import uuid
 from pathlib import Path
 from typing import Literal, TypedDict
 
@@ -8,7 +10,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.types import interrupt
 
-from rag.contracts.schemas import ChunkPayload, ChunkRecord, QueryRequest, QueryResponse
+from rag.contracts.schemas import ChunkPayload, ChunkRecord, QueryRequest, QueryResponse, RetrievalAttempt
 from rag.generation.prompts import build_grounded_answer
 from rag.graph.memory_store import ConversationMemoryStore
 from rag.llm import ProviderBackedLlm
@@ -16,6 +18,7 @@ from rag.retrieval.retriever import Retriever
 
 
 class RagQueryState(TypedDict, total=False):
+    trace_id: str
     question: str
     rewritten_question: str
     interest: str | None
@@ -37,6 +40,10 @@ class RagQueryState(TypedDict, total=False):
     sources: list[dict[str, object]]
     graph_steps: list[str]
     retrieval_attempts: int
+    retrieval_trace: list[dict[str, object]]
+    node_timings_ms: dict[str, float]
+    low_confidence: bool
+    low_confidence_reason: str | None
 
 
 class RagQueryGraph:
@@ -52,8 +59,11 @@ class RagQueryGraph:
 
     def run(self, request: QueryRequest) -> QueryResponse:
         session_id = request.session_id or "anonymous"
+        trace_id = request.trace_id or f"rag-{uuid.uuid4()}"
+        started = time.perf_counter()
         result = self.graph.invoke(
             {
+                "trace_id": trace_id,
                 "question": request.question,
                 "interest": request.interest,
                 "top_k": request.top_k,
@@ -61,12 +71,16 @@ class RagQueryGraph:
                 "enable_human_review": request.enable_human_review,
                 "graph_steps": [],
                 "retrieval_attempts": 0,
+                "retrieval_trace": [],
+                "node_timings_ms": {},
             },
             config={"configurable": {"thread_id": session_id}},
         )
+        total_duration_ms = elapsed_ms(started)
         if "__interrupt__" in result:
             interrupt_value = result["__interrupt__"][0].value
             return QueryResponse(
+                traceId=trace_id,
                 answer="当前回答需要人工审核后再返回。",
                 related_spots=[],
                 sources=[],
@@ -82,12 +96,17 @@ class RagQueryGraph:
                 reviewReason=str(interrupt_value.get("reason") or "需要人工审核"),
                 graphSteps=["human_review_interrupt"],
                 retrievalAttempts=0,
+                totalDurationMs=total_duration_ms,
+                lowConfidence=True,
+                lowConfidenceReason=str(interrupt_value.get("reason") or "需要人工审核"),
             )
 
         chunks = deserialize_chunks(result.get("chunks", []))
         answer = result.get("answer") or ""
         self._append_memory(session_id, request.question, answer)
+        low_confidence, low_confidence_reason = build_low_confidence(result, chunks, answer)
         return QueryResponse(
+            traceId=trace_id,
             answer=answer,
             related_spots=result.get("related_spots", extract_related_spots(chunks)),
             sources=deserialize_payloads(result.get("sources", [])) or [chunk.payload for chunk in chunks],
@@ -103,6 +122,11 @@ class RagQueryGraph:
             reviewReason=result.get("review_reason"),
             graphSteps=result.get("graph_steps", []),
             retrievalAttempts=result.get("retrieval_attempts", 1),
+            retrievalTrace=deserialize_retrieval_attempts(result.get("retrieval_trace", [])),
+            nodeTimingsMs=result.get("node_timings_ms", {}),
+            totalDurationMs=total_duration_ms,
+            lowConfidence=low_confidence,
+            lowConfidenceReason=low_confidence_reason,
         )
 
     def _build_graph(self):
@@ -155,13 +179,16 @@ class RagQueryGraph:
         return graph.compile(checkpointer=self.checkpointer)
 
     def _load_memory(self, state: RagQueryState) -> RagQueryState:
+        started = time.perf_counter()
         session_id = state.get("session_id") or "anonymous"
         return {
             "history": self.memory_store.load(session_id, limit=8),
             "graph_steps": add_step(state, "load_memory"),
+            "node_timings_ms": add_timing(state, "load_memory", started),
         }
 
     def _rewrite_query(self, state: RagQueryState) -> RagQueryState:
+        started = time.perf_counter()
         question = state["question"]
         rewritten = self.llm.rewrite_question(question, state.get("history", []), state.get("interest"))
         if not rewritten:
@@ -169,18 +196,24 @@ class RagQueryGraph:
         return {
             "rewritten_question": rewritten,
             "graph_steps": add_step(state, "rewrite_query"),
+            "node_timings_ms": add_timing(state, "rewrite_query", started),
         }
 
     def _retrieve(self, state: RagQueryState) -> RagQueryState:
+        started = time.perf_counter()
         query = state.get("rewritten_question") or state["question"]
-        chunks = self.retriever.retrieve(query, top_k=state.get("top_k"))
+        stages = self.retriever.retrieve_with_stages(query, top_k=state.get("top_k"))
+        chunks = stages["reranked"]
         return {
             "chunks": serialize_chunks(chunks),
             "retrieval_attempts": state.get("retrieval_attempts", 0) + 1,
+            "retrieval_trace": add_retrieval_attempt(state, "primary", query, stages),
             "graph_steps": add_step(state, "retrieve"),
+            "node_timings_ms": add_timing(state, "retrieve", started),
         }
 
     def _judge_context(self, state: RagQueryState) -> RagQueryState:
+        started = time.perf_counter()
         chunks = deserialize_chunks(state.get("chunks", []))
         sufficient, reason = judge_context_sufficiency(
             state.get("rewritten_question") or state["question"],
@@ -191,12 +224,15 @@ class RagQueryGraph:
             "context_sufficient": sufficient,
             "context_reason": reason,
             "graph_steps": add_step(state, "judge_context"),
+            "node_timings_ms": add_timing(state, "judge_context", started),
         }
 
     def _second_retrieve(self, state: RagQueryState) -> RagQueryState:
+        started = time.perf_counter()
         query = expand_query(state.get("rewritten_question") or state["question"], state.get("interest"))
         limit = max(state.get("top_k") or 5, 8)
-        extra_chunks = self.retriever.retrieve(query, top_k=limit)
+        stages = self.retriever.retrieve_with_stages(query, top_k=limit)
+        extra_chunks = stages["reranked"]
         merged = merge_chunks(deserialize_chunks(state.get("chunks", [])), extra_chunks)
         return {
             "rewritten_question": query,
@@ -204,10 +240,13 @@ class RagQueryGraph:
             "context_sufficient": bool(merged),
             "context_reason": "二次检索后已有可用片段" if merged else "二次检索仍未召回可用片段",
             "retrieval_attempts": state.get("retrieval_attempts", 0) + 1,
+            "retrieval_trace": add_retrieval_attempt(state, "second", query, stages),
             "graph_steps": add_step(state, "second_retrieve"),
+            "node_timings_ms": add_timing(state, "second_retrieve", started),
         }
 
     def _generate(self, state: RagQueryState) -> RagQueryState:
+        started = time.perf_counter()
         chunks = deserialize_chunks(state.get("chunks", []))
         answer = self.llm.generate_answer(
             state.get("rewritten_question") or state["question"],
@@ -217,9 +256,11 @@ class RagQueryGraph:
         return {
             "answer": answer,
             "graph_steps": add_step(state, "generate"),
+            "node_timings_ms": add_timing(state, "generate", started),
         }
 
     def _fallback_answer(self, state: RagQueryState) -> RagQueryState:
+        started = time.perf_counter()
         chunks = deserialize_chunks(state.get("chunks", []))
         answer = build_grounded_answer(
             state.get("rewritten_question") or state["question"],
@@ -229,9 +270,11 @@ class RagQueryGraph:
             "answer": answer,
             "quality_passed": bool(chunks),
             "graph_steps": add_step(state, "fallback_answer"),
+            "node_timings_ms": add_timing(state, "fallback_answer", started),
         }
 
     def _answer_quality_check(self, state: RagQueryState) -> RagQueryState:
+        started = time.perf_counter()
         answer = (state.get("answer") or "").strip()
         chunks = deserialize_chunks(state.get("chunks", []))
         quality_issues = check_answer_quality(answer, chunks)
@@ -239,9 +282,11 @@ class RagQueryGraph:
             "quality_passed": not quality_issues,
             "quality_issues": quality_issues,
             "graph_steps": add_step(state, "answer_quality_check"),
+            "node_timings_ms": add_timing(state, "answer_quality_check", started),
         }
 
     def _citation_validation(self, state: RagQueryState) -> RagQueryState:
+        started = time.perf_counter()
         answer = state.get("answer") or ""
         chunks = deserialize_chunks(state.get("chunks", []))
         citations_valid, citation_issues = validate_citations(answer, chunks)
@@ -253,9 +298,11 @@ class RagQueryGraph:
             "citations_valid": citations_valid,
             "citation_issues": citation_issues,
             "graph_steps": add_step(state, "citation_validation"),
+            "node_timings_ms": add_timing(state, "citation_validation", started),
         }
 
     def _human_review(self, state: RagQueryState) -> RagQueryState:
+        started = time.perf_counter()
         reason = build_review_reason(state)
         if state.get("enable_human_review") and reason:
             interrupt({"reason": reason, "question": state["question"], "answer": state.get("answer")})
@@ -263,14 +310,17 @@ class RagQueryGraph:
             "review_required": bool(reason),
             "review_reason": reason,
             "graph_steps": add_step(state, "human_review"),
+            "node_timings_ms": add_timing(state, "human_review", started),
         }
 
     def _prepare_response(self, state: RagQueryState) -> RagQueryState:
+        started = time.perf_counter()
         chunks = deserialize_chunks(state.get("chunks", []))
         return {
             "related_spots": extract_related_spots(chunks),
             "sources": [chunk.payload.model_dump() for chunk in chunks],
             "graph_steps": add_step(state, "prepare_response"),
+            "node_timings_ms": add_timing(state, "prepare_response", started),
         }
 
     def _append_memory(self, session_id: str, question: str, answer: str) -> None:
@@ -314,6 +364,15 @@ def deserialize_payloads(raw_payloads: list[ChunkPayload | dict[str, object]] | 
     ]
 
 
+def deserialize_retrieval_attempts(raw_attempts: list[RetrievalAttempt | dict[str, object]] | None) -> list[RetrievalAttempt]:
+    if not raw_attempts:
+        return []
+    return [
+        attempt if isinstance(attempt, RetrievalAttempt) else RetrievalAttempt.model_validate(attempt)
+        for attempt in raw_attempts
+    ]
+
+
 def route_after_context_judge(state: RagQueryState) -> Literal["second_retrieve", "generate"]:
     if state.get("context_sufficient"):
         return "generate"
@@ -334,6 +393,42 @@ def route_after_citation_validation(state: RagQueryState) -> Literal["human_revi
 
 def add_step(state: RagQueryState, step: str) -> list[str]:
     return [*state.get("graph_steps", []), step]
+
+
+def add_timing(state: RagQueryState, step: str, started: float) -> dict[str, float]:
+    return {
+        **state.get("node_timings_ms", {}),
+        step: elapsed_ms(started),
+    }
+
+
+def elapsed_ms(started: float) -> float:
+    return round((time.perf_counter() - started) * 1000, 2)
+
+
+def add_retrieval_attempt(
+    state: RagQueryState,
+    name: str,
+    query: str,
+    stages: dict[str, list[ChunkRecord]],
+) -> list[dict[str, object]]:
+    return [
+        *state.get("retrieval_trace", []),
+        {
+            "name": name,
+            "query": query,
+            "dense": {
+                "name": "dense",
+                "query": query,
+                "chunks": serialize_chunks(stages.get("dense", [])),
+            },
+            "reranked": {
+                "name": "reranked",
+                "query": query,
+                "chunks": serialize_chunks(stages.get("reranked", [])),
+            },
+        },
+    ]
 
 
 def heuristic_rewrite(question: str, history: list[dict[str, str]]) -> str:
@@ -435,6 +530,21 @@ def build_review_reason(state: RagQueryState) -> str | None:
     if not state.get("citations_valid", True):
         reasons.extend(state.get("citation_issues", []) or ["引用格式或来源校验未通过"])
     return "；".join(reasons) if reasons else None
+
+
+def build_low_confidence(state: RagQueryState, chunks: list[ChunkRecord], answer: str) -> tuple[bool, str | None]:
+    reasons: list[str] = []
+    if not chunks:
+        reasons.append("没有召回知识片段")
+    if not state.get("context_sufficient", True):
+        reasons.append(state.get("context_reason") or "检索上下文不足")
+    if not state.get("quality_passed", True):
+        reasons.extend(state.get("quality_issues", []) or ["答案质量检查未通过"])
+    if state.get("review_required"):
+        reasons.append(state.get("review_reason") or "需要人工审核")
+    if "知识库暂未覆盖" in answer:
+        reasons.append("答案声明知识库暂未覆盖")
+    return bool(reasons), "；".join(reasons) if reasons else None
 
 
 def extract_related_spots(chunks: list[ChunkRecord]) -> list[str]:
