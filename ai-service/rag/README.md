@@ -29,7 +29,35 @@
 - 统一读取环境变量和共享配置
 - 定义 `RagSettings`
 
-## 3. `contracts/`
+## 3. `graph/`
+
+LangGraph 工作流层。
+
+当前文件：
+
+- `query_graph.py`
+
+职责：
+
+- 用节点和边编排 RAG 查询流程
+- 把检索、生成、兜底回答、响应整理拆成可扩展节点
+- 为后续增加查询重写、二次检索、答案质检、人工审核等步骤预留扩展点
+
+当前查询图：
+
+```text
+retrieve -> generate -> prepare_response -> END
+                    \-> fallback_answer -> prepare_response -> END
+```
+
+节点说明：
+
+- `retrieve`：调用 `retrieval/` 里的统一检索器，完成向量召回和 rerank
+- `generate`：调用 `rag/llm.py`，再由 `model_providers/` 出口访问具体模型供应商
+- `fallback_answer`：当 LLM 未配置、无回答或调用失败时，使用知识片段生成兜底回答
+- `prepare_response`：整理来源、相关景点和最终响应字段
+
+## 4. `contracts/`
 
 协议与数据结构层。
 
@@ -42,7 +70,7 @@
 - 定义 RAG 请求/响应模型
 - 定义知识块、payload、上传响应、测试请求等结构
 
-## 4. `ingestion/`
+## 5. `ingestion/`
 
 入库处理层。
 
@@ -57,7 +85,7 @@
 - 切分 chunk
 - 为后续 embedding 入库准备结构化内容
 
-## 5. `retrieval/`
+## 6. `retrieval/`
 
 检索层。
 
@@ -75,7 +103,7 @@
 - 检索召回
 - 向量库读写
 
-## 6. `generation/`
+## 7. `generation/`
 
 生成层。
 
@@ -88,7 +116,7 @@
 - 组织 grounded answer
 - 负责生成前的文本拼装逻辑
 
-## 7. `content/`
+## 8. `content/`
 
 内容文件处理层。
 
@@ -102,7 +130,7 @@
 - 目录确保
 - 文件名与扩展名校验
 
-## 8. 根目录保留文件
+## 9. 根目录保留文件
 
 ### `__init__.py`
 

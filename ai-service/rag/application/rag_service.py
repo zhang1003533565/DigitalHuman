@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from rag.config.settings import get_settings
 from rag.contracts.schemas import IngestRequest, IngestResponse, KnowledgeDocumentInfo, QueryRequest, QueryResponse, RetrieveRequest, RetrieveResponse, UploadKnowledgeResponse
 from rag.content.file_store import ensure_directory, is_supported_file_name, save_uploaded_file
-from rag.generation.prompts import build_grounded_answer
+from rag.graph.query_graph import RagQueryGraph, extract_related_spots
 from rag.ingestion.chunker import ChunkingConfig, build_chunks
 from rag.ingestion.parser import parse_document
 from rag.llm import LlmConfig, ProviderBackedLlm, infer_provider_name
@@ -44,6 +44,7 @@ class RagService:
             retrieve_limit=self.settings.retrieve_limit,
             rerank_limit=self.settings.rerank_limit,
         )
+        self.query_graph = RagQueryGraph(self.retriever, self.llm)
 
     def ingest(self, request: IngestRequest) -> IngestResponse:
         source_dir = Path(request.source_dir) if request.source_dir else self.settings.knowledge_base_dir
@@ -135,23 +136,4 @@ class RagService:
         )
 
     def query(self, request: QueryRequest) -> QueryResponse:
-        chunks = self.retriever.retrieve(request.question, top_k=request.top_k)
-        answer = self.llm.generate_answer(request.question, request.interest, chunks)
-        if not answer:
-            answer = build_grounded_answer(request.question, chunks)
-        return QueryResponse(
-            answer=answer,
-            related_spots=extract_related_spots(chunks),
-            sources=[chunk.payload for chunk in chunks],
-            chunks=chunks,
-        )
-
-
-def extract_related_spots(chunks) -> list[str]:
-    spots: list[str] = []
-    for chunk in chunks:
-        if chunk.payload.spot_name and chunk.payload.spot_name not in spots:
-            spots.append(chunk.payload.spot_name)
-        if len(spots) >= 5:
-            break
-    return spots
+        return self.query_graph.run(request)

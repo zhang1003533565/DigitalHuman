@@ -22,6 +22,7 @@ import {
 } from 'antd'
 import type { UploadProps } from 'antd'
 import type { TableColumnsType } from 'antd'
+import { useLocation, useNavigate } from 'react-router-dom'
 import AdminSidebar from './components/AdminSidebar'
 import ChatConfigPage from './pages/settings/ChatConfigPage'
 import EmbeddingConfigPage from './pages/settings/EmbeddingConfigPage'
@@ -56,6 +57,37 @@ type MenuKey =
   | 'settings'
   | 'feedback'
   | 'qa'
+
+const ADMIN_HOME_PATH = '/admin/dashboard'
+
+const menuPathByKey: Record<MenuKey, string> = {
+  dashboard: ADMIN_HOME_PATH,
+  knowledge: '/admin/knowledge',
+  spots: '/admin/spots',
+  'spot-category': '/admin/spots/categories',
+  'facility-list': '/admin/spots/facilities',
+  routes: '/admin/routes',
+  avatar: '/admin/avatar',
+  settings: '/admin/setting',
+  feedback: '/admin/feedback',
+  qa: '/admin/qa',
+}
+
+const menuKeyByPath = new Map<string, MenuKey>(
+  Object.entries(menuPathByKey).map(([key, path]) => [path, key as MenuKey]),
+)
+
+function getMenuKeyFromPath(pathname: string): MenuKey {
+  const normalizedPath = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname
+  if (normalizedPath === '/admin/settings') {
+    return 'settings'
+  }
+  return menuKeyByPath.get(normalizedPath) ?? 'dashboard'
+}
+
+function getPathForMenuKey(key: MenuKey) {
+  return menuPathByKey[key] ?? ADMIN_HOME_PATH
+}
 
 type SpotRow = {
   key: string
@@ -973,8 +1005,16 @@ function LoginView({
 }
 
 function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: () => void }) {
-  const [activeKey, setActiveKey] = useState<MenuKey>('dashboard')
   const [spotDrawerOpen, setSpotDrawerOpen] = useState(false)
+  const location = useLocation()
+  const navigate = useNavigate()
+  const activeKey = getMenuKeyFromPath(location.pathname)
+
+  useEffect(() => {
+    if (location.pathname === '/' || location.pathname === '/admin') {
+      navigate(ADMIN_HOME_PATH, { replace: true })
+    }
+  }, [location.pathname, navigate])
 
   return (
     <Layout className="admin-shell">
@@ -993,7 +1033,7 @@ function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: () => vo
         displayName={user.displayName}
         role={user.role}
         onLogout={onLogout}
-        onSelect={(key) => setActiveKey(key as MenuKey)}
+        onSelect={(key) => navigate(getPathForMenuKey(key as MenuKey))}
       />
       <Layout>
         <Content className="admin-content">
