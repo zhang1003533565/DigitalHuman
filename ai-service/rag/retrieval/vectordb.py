@@ -62,3 +62,57 @@ class QdrantVectorStore:
                 )
             )
         return results
+
+    def delete_by_source_file(self, file_name: str) -> int | None:
+        points, _ = self.client.scroll(
+            collection_name=self.collection_name,
+            scroll_filter=models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="source_file",
+                        match=models.MatchValue(value=file_name),
+                    )
+                ]
+            ),
+            limit=10000,
+            with_payload=False,
+            with_vectors=False,
+        )
+        point_ids = [point.id for point in points]
+        if not point_ids:
+            return 0
+        self.client.delete(
+            collection_name=self.collection_name,
+            points_selector=models.PointIdsList(points=point_ids),
+            wait=True,
+        )
+        return len(point_ids)
+
+    def list_by_source_file(self, file_name: str, limit: int = 1000) -> list[ChunkRecord]:
+        points, _ = self.client.scroll(
+            collection_name=self.collection_name,
+            scroll_filter=models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="source_file",
+                        match=models.MatchValue(value=file_name),
+                    )
+                ]
+            ),
+            limit=limit,
+            with_payload=True,
+            with_vectors=False,
+        )
+        chunks: list[ChunkRecord] = []
+        for point in points:
+            payload = dict(point.payload or {})
+            text = str(payload.pop("text", ""))
+            chunks.append(
+                ChunkRecord(
+                    id=str(point.id),
+                    text=text,
+                    score=None,
+                    payload=payload,
+                )
+            )
+        return sorted(chunks, key=lambda chunk: chunk.payload.chunk_index)

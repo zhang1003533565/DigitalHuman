@@ -13,7 +13,7 @@ from langgraph.types import interrupt
 from rag.contracts.schemas import ChunkPayload, ChunkRecord, QueryRequest, QueryResponse, RetrievalAttempt
 from rag.generation.prompts import build_grounded_answer
 from rag.graph.memory_store import ConversationMemoryStore
-from rag.llm import ProviderBackedLlm
+from rag.llm import PROMPT_VERSION, ProviderBackedLlm
 from rag.retrieval.retriever import Retriever
 
 
@@ -44,6 +44,8 @@ class RagQueryState(TypedDict, total=False):
     node_timings_ms: dict[str, float]
     low_confidence: bool
     low_confidence_reason: str | None
+    provider_status: str | None
+    provider_error: str | None
 
 
 class RagQueryGraph:
@@ -71,9 +73,10 @@ class RagQueryGraph:
                 "enable_human_review": request.enable_human_review,
                 "graph_steps": [],
                 "retrieval_attempts": 0,
-                "retrieval_trace": [],
-                "node_timings_ms": {},
-            },
+            "retrieval_trace": [],
+            "node_timings_ms": {},
+            "provider_status": "not_called",
+        },
             config={"configurable": {"thread_id": session_id}},
         )
         total_duration_ms = elapsed_ms(started)
@@ -99,6 +102,7 @@ class RagQueryGraph:
                 totalDurationMs=total_duration_ms,
                 lowConfidence=True,
                 lowConfidenceReason=str(interrupt_value.get("reason") or "需要人工审核"),
+                promptVersion=PROMPT_VERSION,
             )
 
         chunks = deserialize_chunks(result.get("chunks", []))
@@ -127,6 +131,9 @@ class RagQueryGraph:
             totalDurationMs=total_duration_ms,
             lowConfidence=low_confidence,
             lowConfidenceReason=low_confidence_reason,
+            promptVersion=PROMPT_VERSION,
+            providerStatus=result.get("provider_status"),
+            providerError=result.get("provider_error"),
         )
 
     def _build_graph(self):
@@ -248,13 +255,22 @@ class RagQueryGraph:
     def _generate(self, state: RagQueryState) -> RagQueryState:
         started = time.perf_counter()
         chunks = deserialize_chunks(state.get("chunks", []))
-        answer = self.llm.generate_answer(
-            state.get("rewritten_question") or state["question"],
-            state.get("interest"),
-            chunks,
-        )
+        try:
+            answer = self.llm.generate_answer(
+                state.get("rewritten_question") or state["question"],
+                state.get("interest"),
+                chunks,
+            )
+            provider_status = "success" if answer else "skipped"
+            provider_error = None
+        except Exception as exc:
+            answer = None
+            provider_status = classify_provider_error(exc)
+            provider_error = str(exc)
         return {
             "answer": answer,
+            "provider_status": provider_status,
+            "provider_error": provider_error,
             "graph_steps": add_step(state, "generate"),
             "node_timings_ms": add_timing(state, "generate", started),
         }
@@ -544,7 +560,22 @@ def build_low_confidence(state: RagQueryState, chunks: list[ChunkRecord], answer
         reasons.append(state.get("review_reason") or "需要人工审核")
     if "知识库暂未覆盖" in answer:
         reasons.append("答案声明知识库暂未覆盖")
+    if state.get("provider_status") not in (None, "success", "skipped", "not_called"):
+        reasons.append(f"模型调用异常：{state.get('provider_status')}")
     return bool(reasons), "；".join(reasons) if reasons else None
+
+
+def classify_provider_error(exc: Exception) -> str:
+    text = str(exc).lower()
+    if "timeout" in text or "timed out" in text or "超时" in text:
+        return "timeout"
+    if "401" in text or "403" in text or "api key" in text or "apikey" in text or "unauthorized" in text:
+        return "auth_error"
+    if "429" in text or "rate limit" in text:
+        return "rate_limited"
+    if "502" in text or "503" in text or "504" in text or "connection" in text or "连接" in text:
+        return "network_error"
+    return "provider_error"
 
 
 def extract_related_spots(chunks: list[ChunkRecord]) -> list[str]:

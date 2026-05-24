@@ -13,6 +13,12 @@ public class RagTraceDetailDto {
     private final String failureReason;
     private final String reviewReason;
     private final String lowConfidenceReason;
+    private final String reviewStatus;
+    private final String reviewedAnswer;
+    private final String reviewComment;
+    private final String promptVersion;
+    private final String providerStatus;
+    private final String providerError;
     private final boolean contextSufficient;
     private final boolean qualityPassed;
     private final boolean citationsValid;
@@ -34,6 +40,12 @@ public class RagTraceDetailDto {
             String failureReason,
             String reviewReason,
             String lowConfidenceReason,
+            String reviewStatus,
+            String reviewedAnswer,
+            String reviewComment,
+            String promptVersion,
+            String providerStatus,
+            String providerError,
             boolean contextSufficient,
             boolean qualityPassed,
             boolean citationsValid,
@@ -53,6 +65,12 @@ public class RagTraceDetailDto {
         this.failureReason = failureReason;
         this.reviewReason = reviewReason;
         this.lowConfidenceReason = lowConfidenceReason;
+        this.reviewStatus = reviewStatus;
+        this.reviewedAnswer = reviewedAnswer;
+        this.reviewComment = reviewComment;
+        this.promptVersion = promptVersion;
+        this.providerStatus = providerStatus;
+        this.providerError = providerError;
         this.contextSufficient = contextSufficient;
         this.qualityPassed = qualityPassed;
         this.citationsValid = citationsValid;
@@ -96,6 +114,30 @@ public class RagTraceDetailDto {
 
     public String getLowConfidenceReason() {
         return lowConfidenceReason;
+    }
+
+    public String getReviewStatus() {
+        return reviewStatus;
+    }
+
+    public String getReviewedAnswer() {
+        return reviewedAnswer;
+    }
+
+    public String getReviewComment() {
+        return reviewComment;
+    }
+
+    public String getPromptVersion() {
+        return promptVersion;
+    }
+
+    public String getProviderStatus() {
+        return providerStatus;
+    }
+
+    public String getProviderError() {
+        return providerError;
     }
 
     public boolean isContextSufficient() {

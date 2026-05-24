@@ -6,7 +6,7 @@ from datetime import datetime
 from fastapi import HTTPException
 
 from rag.config.settings import get_settings
-from rag.contracts.schemas import IngestRequest, IngestResponse, KnowledgeDocumentInfo, QueryRequest, QueryResponse, RetrieveRequest, RetrieveResponse, UploadKnowledgeResponse
+from rag.contracts.schemas import DeleteKnowledgeResponse, IngestRequest, IngestResponse, KnowledgeChunkListResponse, KnowledgeDocumentInfo, QueryRequest, QueryResponse, RetrieveRequest, RetrieveResponse, UploadKnowledgeResponse
 from rag.content.file_store import ensure_directory, is_supported_file_name, save_uploaded_file
 from rag.graph.query_graph import RagQueryGraph, extract_related_spots
 from rag.ingestion.chunker import ChunkingConfig, build_chunks
@@ -128,6 +128,28 @@ class RagService:
             supported=True,
         )
 
+    def delete_document(self, file_name: str) -> DeleteKnowledgeResponse:
+        path = self._resolve_document_path(file_name)
+        file_deleted = False
+        if path.exists():
+            path.unlink()
+            file_deleted = True
+        vectors_deleted = self.vector_store.delete_by_source_file(path.name)
+        return DeleteKnowledgeResponse(fileName=path.name, fileDeleted=file_deleted, vectorsDeleted=vectors_deleted)
+
+    def rebuild_document(self, file_name: str) -> IngestResponse:
+        path = self._resolve_document_path(file_name)
+        if not path.exists():
+            raise HTTPException(status_code=404, detail="知识文件不存在")
+        if not is_supported_file_name(path.name):
+            raise HTTPException(status_code=400, detail="文件格式不支持构建")
+        self.vector_store.delete_by_source_file(path.name)
+        return self.ingest_files([path], recreate_collection=False)
+
+    def list_document_chunks(self, file_name: str) -> KnowledgeChunkListResponse:
+        path = self._resolve_document_path(file_name)
+        return KnowledgeChunkListResponse(fileName=path.name, chunks=self.vector_store.list_by_source_file(path.name))
+
     def retrieve(self, request: RetrieveRequest) -> RetrieveResponse:
         chunks = self.retriever.retrieve(request.question, top_k=request.top_k)
         return RetrieveResponse(
@@ -137,3 +159,9 @@ class RagService:
 
     def query(self, request: QueryRequest) -> QueryResponse:
         return self.query_graph.run(request)
+
+    def _resolve_document_path(self, file_name: str) -> Path:
+        if not file_name or "/" in file_name or "\\" in file_name:
+            raise HTTPException(status_code=400, detail="文件名不合法")
+        ensure_directory(self.settings.knowledge_base_dir)
+        return self.settings.knowledge_base_dir / file_name

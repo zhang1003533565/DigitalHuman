@@ -44,14 +44,28 @@ def run_case(base_url: str, case: dict[str, Any]) -> dict[str, Any]:
     answer = data.get("answer") or ""
     expected = case.get("expectKeywords") or []
     missing = [keyword for keyword in expected if keyword not in answer]
+    chunks = data.get("chunks") or []
+    sources = data.get("sources") or []
+    citation_issues = data.get("citationIssues") or []
     return {
         "id": case["id"],
         "passed": not missing,
         "missingKeywords": missing,
         "durationMs": duration_ms,
         "traceId": data.get("traceId"),
+        "promptVersion": data.get("promptVersion"),
+        "providerStatus": data.get("providerStatus"),
+        "providerError": data.get("providerError"),
         "lowConfidence": data.get("lowConfidence"),
+        "lowConfidenceReason": data.get("lowConfidenceReason"),
         "retrievalAttempts": data.get("retrievalAttempts"),
+        "retrievedChunks": len(chunks),
+        "sourceCount": len(sources),
+        "topScore": chunks[0].get("score") if chunks else None,
+        "citationsValid": data.get("citationsValid"),
+        "citationIssues": citation_issues,
+        "contextSufficient": data.get("contextSufficient"),
+        "qualityPassed": data.get("qualityPassed"),
         "answerPreview": answer[:160],
     }
 

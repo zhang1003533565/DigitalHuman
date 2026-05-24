@@ -47,6 +47,12 @@ public class RagQueryResponse {
     private Boolean lowConfidence;
     @JsonProperty("lowConfidenceReason")
     private String lowConfidenceReason;
+    @JsonProperty("promptVersion")
+    private String promptVersion;
+    @JsonProperty("providerStatus")
+    private String providerStatus;
+    @JsonProperty("providerError")
+    private String providerError;
 
     public String getAnswer() {
         return answer;
@@ -214,5 +220,29 @@ public class RagQueryResponse {
 
     public void setLowConfidenceReason(String lowConfidenceReason) {
         this.lowConfidenceReason = lowConfidenceReason;
+    }
+
+    public String getPromptVersion() {
+        return promptVersion;
+    }
+
+    public void setPromptVersion(String promptVersion) {
+        this.promptVersion = promptVersion;
+    }
+
+    public String getProviderStatus() {
+        return providerStatus;
+    }
+
+    public void setProviderStatus(String providerStatus) {
+        this.providerStatus = providerStatus;
+    }
+
+    public String getProviderError() {
+        return providerError;
+    }
+
+    public void setProviderError(String providerError) {
+        this.providerError = providerError;
     }
 }

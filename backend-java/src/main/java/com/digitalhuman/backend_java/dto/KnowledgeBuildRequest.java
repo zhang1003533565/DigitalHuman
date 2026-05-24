@@ -4,6 +4,7 @@ public class KnowledgeBuildRequest {
 
     private Boolean recreateCollection;
     private String glob;
+    private String fileName;
 
     public Boolean getRecreateCollection() {
         return recreateCollection;
@@ -19,5 +20,13 @@ public class KnowledgeBuildRequest {
 
     public void setGlob(String glob) {
         this.glob = glob;
+    }
+
+    public String getFileName() {
+        return fileName;
+    }
+
+    public void setFileName(String fileName) {
+        this.fileName = fileName;
     }
 }

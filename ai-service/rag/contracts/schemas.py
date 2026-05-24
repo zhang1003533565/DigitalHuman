@@ -55,6 +55,17 @@ class KnowledgeDocumentInfo(BaseModel):
     supported: bool
 
 
+class KnowledgeChunkListResponse(BaseModel):
+    file_name: str = Field(alias="fileName")
+    chunks: list[ChunkRecord]
+
+
+class DeleteKnowledgeResponse(BaseModel):
+    file_name: str = Field(alias="fileName")
+    file_deleted: bool = Field(alias="fileDeleted")
+    vectors_deleted: int | None = Field(default=None, alias="vectorsDeleted")
+
+
 class UploadKnowledgeResponse(BaseModel):
     file_name: str
     size_bytes: int
@@ -104,6 +115,9 @@ class QueryResponse(BaseModel):
     total_duration_ms: float | None = Field(default=None, alias="totalDurationMs")
     low_confidence: bool = Field(default=False, alias="lowConfidence")
     low_confidence_reason: str | None = Field(default=None, alias="lowConfidenceReason")
+    prompt_version: str = Field(default="rag-grounded-v1", alias="promptVersion")
+    provider_status: str | None = Field(default=None, alias="providerStatus")
+    provider_error: str | None = Field(default=None, alias="providerError")
 
 
 class ModelTestRequest(BaseModel):

@@ -24,6 +24,7 @@ import {
   Space,
   Typography,
   Divider,
+  Modal,
 } from 'antd'
 import type { UploadProps } from 'antd'
 import type { TableColumnsType } from 'antd'
@@ -64,6 +65,7 @@ type MenuKey =
   | 'travel-analytics'
   | 'feedback'
   | 'qa'
+  | 'review'
 
 const ADMIN_HOME_PATH = '/admin/dashboard'
 
@@ -79,6 +81,7 @@ const menuPathByKey: Record<MenuKey, string> = {
   'travel-analytics': '/admin/travel-analytics',
   feedback: '/admin/feedback',
   qa: '/admin/qa',
+  review: '/admin/review',
 }
 
 const menuKeyByPath = new Map<string, MenuKey>(
@@ -130,6 +133,9 @@ type RagTraceSummary = {
   reviewRequired: boolean
   lowConfidence: boolean
   noAnswer: boolean
+  reviewStatus?: string
+  promptVersion?: string
+  providerStatus?: string
   retrievalAttempts?: number
   totalDurationMs?: number
   createdAt: string
@@ -140,6 +146,12 @@ type RagTraceDetail = RagTraceSummary & {
   failureReason?: string
   reviewReason?: string
   lowConfidenceReason?: string
+  reviewStatus?: string
+  reviewedAnswer?: string
+  reviewComment?: string
+  promptVersion?: string
+  providerStatus?: string
+  providerError?: string
   contextSufficient: boolean
   qualityPassed: boolean
   citationsValid: boolean
@@ -155,6 +167,7 @@ type RagTraceDetail = RagTraceSummary & {
     citationIssues?: string[]
     contextReason?: string
     lowConfidenceReason?: string
+    promptVersion?: string
   }
 }
 
@@ -172,6 +185,21 @@ type KnowledgeBuildResult = {
   chunksIndexed: number
   collection: string
   builtAt: string
+}
+
+type KnowledgeChunk = {
+  id: string
+  text: string
+  score?: number
+  payload?: {
+    source_file?: string
+    title?: string
+    section_path?: string[]
+    chunk_index?: number
+    tags?: string[]
+    spot_name?: string
+    updated_at?: string
+  }
 }
 
 type AdminModelSettings = {
@@ -353,6 +381,9 @@ function KnowledgePanel() {
   const [uploading, setUploading] = useState(false)
   const [building, setBuilding] = useState(false)
   const [lastBuildResult, setLastBuildResult] = useState<KnowledgeBuildResult | null>(null)
+  const [chunkDrawerTitle, setChunkDrawerTitle] = useState('')
+  const [chunks, setChunks] = useState<KnowledgeChunk[]>([])
+  const [chunkDrawerOpen, setChunkDrawerOpen] = useState(false)
 
   async function loadDocuments() {
     const response = await axios.get('/api/admin/knowledge/documents')
@@ -395,6 +426,45 @@ function KnowledgePanel() {
     }
   }
 
+  async function rebuildDocument(fileName: string) {
+    setBuilding(true)
+    try {
+      const response = await axios.post(`/api/admin/knowledge/documents/${encodeURIComponent(fileName)}/rebuild`)
+      setLastBuildResult({
+        filesSeen: response.data.filesSeen,
+        filesIndexed: response.data.filesIndexed,
+        chunksIndexed: response.data.chunksIndexed,
+        collection: response.data.collection,
+        builtAt: new Date().toISOString(),
+      })
+      message.success(`已重建 ${fileName}`)
+    } finally {
+      setBuilding(false)
+    }
+  }
+
+  async function deleteDocument(fileName: string) {
+    Modal.confirm({
+      title: '删除知识文件',
+      content: `确认删除 ${fileName} 并同步删除向量库中的对应知识块吗？`,
+      okText: '删除',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: async () => {
+        const response = await axios.delete(`/api/admin/knowledge/documents/${encodeURIComponent(fileName)}`)
+        message.success(`已删除 ${response.data.fileName}，同步移除 ${response.data.vectorsDeleted ?? 0} 个向量`)
+        await loadDocuments()
+      },
+    })
+  }
+
+  async function openChunks(fileName: string) {
+    const response = await axios.get(`/api/admin/knowledge/documents/${encodeURIComponent(fileName)}/chunks`)
+    setChunkDrawerTitle(fileName)
+    setChunks(response.data.chunks ?? [])
+    setChunkDrawerOpen(true)
+  }
+
   useEffect(() => {
     void loadDocuments()
   }, [])
@@ -424,6 +494,21 @@ function KnowledgePanel() {
       }
     },
   }
+
+  const documentColumns: TableColumnsType<KnowledgeDocumentRow> = [
+    ...knowledgeColumns,
+    {
+      title: '操作',
+      width: 240,
+      render: (_, row) => (
+        <Space>
+          <Button type="link" onClick={() => void openChunks(row.fileName)}>知识块</Button>
+          <Button type="link" loading={building} onClick={() => void rebuildDocument(row.fileName)}>重建</Button>
+          <Button type="link" danger onClick={() => void deleteDocument(row.fileName)}>删除</Button>
+        </Space>
+      ),
+    },
+  ]
 
   return (
     <Card
@@ -479,12 +564,25 @@ function KnowledgePanel() {
           </Card>
         )}
         <Table
-          columns={knowledgeColumns}
+          columns={documentColumns}
           dataSource={documents}
           pagination={false}
           locale={{ emptyText: '暂无已上传知识文件，请先上传景区资料。' }}
         />
       </div>
+      <Drawer
+        title={`${chunkDrawerTitle} · 知识块`}
+        open={chunkDrawerOpen}
+        width={900}
+        onClose={() => setChunkDrawerOpen(false)}
+      >
+        {renderChunkList(chunks.map((chunk) => ({
+          id: chunk.id,
+          text: chunk.text,
+          score: chunk.score,
+          payload: chunk.payload,
+        })))}
+      </Drawer>
     </Card>
   )
 }
@@ -1155,6 +1253,9 @@ function QaPanel() {
               <Descriptions.Item label="耗时">{detail.totalDurationMs ? `${Math.round(detail.totalDurationMs)} ms` : '-'}</Descriptions.Item>
               <Descriptions.Item label="会话">{detail.sessionId}</Descriptions.Item>
               <Descriptions.Item label="检索次数">{detail.retrievalAttempts ?? '-'}</Descriptions.Item>
+              <Descriptions.Item label="Prompt">{detail.promptVersion || detail.response?.promptVersion || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Provider">{detail.providerStatus || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Provider错误" span={2}>{detail.providerError || '-'}</Descriptions.Item>
               <Descriptions.Item label="问题" span={2}>{detail.question}</Descriptions.Item>
               <Descriptions.Item label="改写问题" span={2}>{detail.response?.rewrittenQuestion ?? detail.rewrittenQuestion ?? '-'}</Descriptions.Item>
               <Descriptions.Item label="低置信原因" span={2}>{detail.lowConfidenceReason || detail.response?.lowConfidenceReason || '-'}</Descriptions.Item>
@@ -1206,6 +1307,106 @@ function QaPanel() {
   )
 }
 
+function ReviewPanel() {
+  const [data, setData] = useState<RagTraceSummary[]>([])
+  const [detail, setDetail] = useState<RagTraceDetail | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [reviewForm] = Form.useForm()
+
+  async function loadQueue(status = 'PENDING') {
+    setLoading(true)
+    try {
+      const response = await axios.get<RagTraceSummary[]>('/api/admin/guide/rag-reviews', { params: { status } })
+      setData(response.data)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function openReview(traceId: string) {
+    const response = await axios.get<RagTraceDetail>(`/api/admin/guide/rag-traces/${traceId}`)
+    setDetail(response.data)
+    reviewForm.setFieldsValue({
+      reviewedAnswer: response.data.reviewedAnswer || response.data.response?.answer || '',
+      comment: response.data.reviewComment || '',
+    })
+  }
+
+  async function submitReview(action: string) {
+    if (!detail) return
+    const values = reviewForm.getFieldsValue()
+    await axios.post(`/api/admin/guide/rag-reviews/${detail.traceId}`, {
+      action,
+      reviewedAnswer: values.reviewedAnswer,
+      comment: values.comment,
+    })
+    message.success('审核结果已保存')
+    setDetail(null)
+    await loadQueue()
+  }
+
+  useEffect(() => {
+    void loadQueue()
+  }, [])
+
+  const columns: TableColumnsType<RagTraceSummary> = [
+    { title: '状态', dataIndex: 'reviewStatus', width: 120, render: (value?: string) => <Tag color={value === 'PENDING' ? 'gold' : 'green'}>{value || '-'}</Tag> },
+    { title: '问题', dataIndex: 'question' },
+    { title: '原因', dataIndex: 'answerPreview', ellipsis: true },
+    { title: '时间', dataIndex: 'createdAt', width: 180, render: (value: string) => new Date(value).toLocaleString('zh-CN') },
+    { title: '操作', width: 90, render: (_, row) => <Button type="link" onClick={() => void openReview(row.traceId)}>审核</Button> },
+  ]
+
+  return (
+    <Card title="人工审核队列">
+      <Form layout="inline" className="admin-filter-row" onFinish={(values) => void loadQueue(values.status)}>
+        <Form.Item name="status" label="状态" initialValue="PENDING">
+          <Select
+            style={{ width: 180 }}
+            options={[
+              { value: 'PENDING', label: '待审核' },
+              { value: 'APPROVED', label: '已放行' },
+              { value: 'REWRITTEN', label: '已改写' },
+              { value: 'REJECTED', label: '已驳回' },
+              { value: 'KNOWLEDGE_MISSING', label: '知识缺失' },
+              { value: 'all', label: '全部' },
+            ]}
+          />
+        </Form.Item>
+        <Button type="primary" htmlType="submit" loading={loading}>查询</Button>
+      </Form>
+      <Table rowKey="traceId" columns={columns} dataSource={data} loading={loading} pagination={{ pageSize: 10 }} />
+      <Drawer title={detail ? `审核 · ${detail.traceId}` : '审核'} open={Boolean(detail)} width={900} onClose={() => setDetail(null)}>
+        {detail ? (
+          <Space direction="vertical" size="large" className="admin-rag-detail">
+            <Descriptions bordered size="small" column={1}>
+              <Descriptions.Item label="问题">{detail.question}</Descriptions.Item>
+              <Descriptions.Item label="审核原因">{detail.reviewReason || detail.lowConfidenceReason || '-'}</Descriptions.Item>
+              <Descriptions.Item label="原回答">{detail.response?.answer || '-'}</Descriptions.Item>
+            </Descriptions>
+            <Form layout="vertical" form={reviewForm}>
+              <Form.Item name="reviewedAnswer" label="审核后答案">
+                <Input.TextArea rows={6} />
+              </Form.Item>
+              <Form.Item name="comment" label="审核备注">
+                <Input.TextArea rows={3} />
+              </Form.Item>
+            </Form>
+            <Space wrap>
+              <Button type="primary" onClick={() => void submitReview('APPROVED')}>放行</Button>
+              <Button onClick={() => void submitReview('REWRITTEN')}>保存改写</Button>
+              <Button danger onClick={() => void submitReview('REJECTED')}>驳回</Button>
+              <Button onClick={() => void submitReview('KNOWLEDGE_MISSING')}>标记知识缺失</Button>
+            </Space>
+            <Divider />
+            {renderRetrievalTrace(detail.response?.retrievalTrace)}
+          </Space>
+        ) : null}
+      </Drawer>
+    </Card>
+  )
+}
+
 function renderPanel(activeKey: MenuKey) {
   switch (activeKey) {
     case 'knowledge':
@@ -1228,6 +1429,8 @@ function renderPanel(activeKey: MenuKey) {
       return <FeedbackPanel />
     case 'qa':
       return <QaPanel />
+    case 'review':
+      return <ReviewPanel />
     case 'dashboard':
     default:
       return <DashboardPanel />

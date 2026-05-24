@@ -13,6 +13,9 @@ public class RagTraceSummaryDto {
     private final boolean reviewRequired;
     private final boolean lowConfidence;
     private final boolean noAnswer;
+    private final String reviewStatus;
+    private final String promptVersion;
+    private final String providerStatus;
     private final Integer retrievalAttempts;
     private final Double totalDurationMs;
     private final LocalDateTime createdAt;
@@ -27,6 +30,9 @@ public class RagTraceSummaryDto {
             boolean reviewRequired,
             boolean lowConfidence,
             boolean noAnswer,
+            String reviewStatus,
+            String promptVersion,
+            String providerStatus,
             Integer retrievalAttempts,
             Double totalDurationMs,
             LocalDateTime createdAt) {
@@ -39,6 +45,9 @@ public class RagTraceSummaryDto {
         this.reviewRequired = reviewRequired;
         this.lowConfidence = lowConfidence;
         this.noAnswer = noAnswer;
+        this.reviewStatus = reviewStatus;
+        this.promptVersion = promptVersion;
+        this.providerStatus = providerStatus;
         this.retrievalAttempts = retrievalAttempts;
         this.totalDurationMs = totalDurationMs;
         this.createdAt = createdAt;
@@ -78,6 +87,18 @@ public class RagTraceSummaryDto {
 
     public boolean isNoAnswer() {
         return noAnswer;
+    }
+
+    public String getReviewStatus() {
+        return reviewStatus;
+    }
+
+    public String getPromptVersion() {
+        return promptVersion;
+    }
+
+    public String getProviderStatus() {
+        return providerStatus;
     }
 
     public Integer getRetrievalAttempts() {

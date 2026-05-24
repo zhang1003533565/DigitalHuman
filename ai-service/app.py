@@ -9,7 +9,7 @@ from model_capabilities.testing.model_test_service import test_model
 from model_capabilities.tts.router import router as tts_router
 from model_providers.config_store import delete_provider_config, load_provider_configs, save_provider_config
 from rag.application.rag_service import RagService
-from rag.contracts.schemas import IngestRequest, IngestResponse, KnowledgeDocumentInfo, ModelTestRequest, ModelTestResponse, ProviderConfigRequest, ProviderConfigResponse, ProviderDeleteRequest, QueryRequest, QueryResponse, RetrieveRequest, RetrieveResponse, UploadKnowledgeResponse
+from rag.contracts.schemas import DeleteKnowledgeResponse, IngestRequest, IngestResponse, KnowledgeChunkListResponse, KnowledgeDocumentInfo, ModelTestRequest, ModelTestResponse, ProviderConfigRequest, ProviderConfigResponse, ProviderDeleteRequest, QueryRequest, QueryResponse, RetrieveRequest, RetrieveResponse, UploadKnowledgeResponse
 
 
 app = FastAPI(title="DigitalHuman RAG Service")
@@ -35,6 +35,21 @@ def list_documents() -> list[KnowledgeDocumentInfo]:
 @app.post("/kb/documents/upload", response_model=UploadKnowledgeResponse)
 async def upload_document(file: UploadFile = File(...)) -> UploadKnowledgeResponse:
     return rag_service.upload_document(file.filename or "uploaded_document.txt", file.file)
+
+
+@app.delete("/kb/documents/{file_name}", response_model=DeleteKnowledgeResponse)
+def delete_document(file_name: str) -> DeleteKnowledgeResponse:
+    return rag_service.delete_document(file_name)
+
+
+@app.post("/kb/documents/{file_name}/rebuild", response_model=IngestResponse)
+def rebuild_document(file_name: str) -> IngestResponse:
+    return rag_service.rebuild_document(file_name)
+
+
+@app.get("/kb/documents/{file_name}/chunks", response_model=KnowledgeChunkListResponse)
+def list_document_chunks(file_name: str) -> KnowledgeChunkListResponse:
+    return rag_service.list_document_chunks(file_name)
 
 
 @app.post("/rag/retrieve", response_model=RetrieveResponse)

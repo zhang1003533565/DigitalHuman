@@ -7,6 +7,7 @@
   NodeIndexOutlined,
   RobotOutlined,
   SearchOutlined,
+  SafetyOutlined,
   SettingOutlined,
   UserOutlined,
 } from '@ant-design/icons'
@@ -39,6 +40,7 @@ const menuItems: MenuProps['items'] = [
   { key: 'avatar', icon: <RobotOutlined />, label: '数字人配置' },
   { key: 'feedback', icon: <CommentOutlined />, label: '游客反馈分析' },
   { key: 'qa', icon: <SearchOutlined />, label: '问答记录查询' },
+  { key: 'review', icon: <SafetyOutlined />, label: '人工审核队列' },
   { key: 'travel-analytics', icon: <DatabaseOutlined />, label: '旅游数据行为分析' },
 ]
 

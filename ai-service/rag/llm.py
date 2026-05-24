@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from model_providers.registry import get_provider_client
 from rag.contracts.schemas import ChunkRecord
 
+PROMPT_VERSION = "rag-grounded-v1"
+
 
 @dataclass
 class LlmConfig:
@@ -82,7 +84,7 @@ def infer_provider_name(base_url: str | None) -> str | None:
 
 def build_system_prompt() -> str:
     return (
-        "你是景区知识库问答助手。"
+        f"你是景区知识库问答助手。Prompt版本：{PROMPT_VERSION}。"
         "只能依据提供的知识库片段回答，不允许补充片段中没有的信息。"
         "如果信息不足，明确说知识库暂未覆盖。"
         "回答使用简洁中文，优先给出直接结论，再补充要点。"

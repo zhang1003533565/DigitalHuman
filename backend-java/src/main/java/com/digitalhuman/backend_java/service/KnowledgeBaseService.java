@@ -3,10 +3,15 @@ package com.digitalhuman.backend_java.service;
 import com.digitalhuman.backend_java.dto.KnowledgeDocumentDto;
 import com.digitalhuman.backend_java.dto.KnowledgeBuildRequest;
 import com.digitalhuman.backend_java.dto.KnowledgeBuildResponse;
+import com.digitalhuman.backend_java.dto.KnowledgeChunkDto;
+import com.digitalhuman.backend_java.dto.KnowledgeDeleteResponse;
 import com.digitalhuman.backend_java.dto.KnowledgeUploadResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import okhttp3.MediaType;
@@ -89,6 +94,9 @@ public class KnowledgeBaseService {
     public KnowledgeBuildResponse buildKnowledgeBase(KnowledgeBuildRequest requestPayload) {
         try {
             KnowledgeBuildRequest payload = requestPayload != null ? requestPayload : new KnowledgeBuildRequest();
+            if (payload.getFileName() != null && !payload.getFileName().isBlank()) {
+                return rebuildDocument(payload.getFileName());
+            }
             String json = objectMapper.writeValueAsString(payload);
             Request request = new Request.Builder()
                     .url(ragServiceUrl + "/kb/ingest")
@@ -104,5 +112,55 @@ public class KnowledgeBaseService {
         } catch (Exception exception) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "知识库构建失败", exception);
         }
+    }
+
+    public KnowledgeBuildResponse rebuildDocument(String fileName) {
+        Request request = new Request.Builder()
+                .url(ragServiceUrl + "/kb/documents/" + encodePath(fileName) + "/rebuild")
+                .post(RequestBody.create(new byte[0], null))
+                .build();
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful() || response.body() == null) {
+                throw new IOException("RAG knowledge document rebuild request failed: " + response.code());
+            }
+            return objectMapper.readValue(response.body().string(), KnowledgeBuildResponse.class);
+        } catch (Exception exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "单文件重建失败", exception);
+        }
+    }
+
+    public KnowledgeDeleteResponse deleteDocument(String fileName) {
+        Request request = new Request.Builder()
+                .url(ragServiceUrl + "/kb/documents/" + encodePath(fileName))
+                .delete()
+                .build();
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful() || response.body() == null) {
+                throw new IOException("RAG knowledge document delete request failed: " + response.code());
+            }
+            return objectMapper.readValue(response.body().string(), KnowledgeDeleteResponse.class);
+        } catch (Exception exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "知识文件删除失败", exception);
+        }
+    }
+
+    public KnowledgeChunkDto listDocumentChunks(String fileName) {
+        Request request = new Request.Builder()
+                .url(ragServiceUrl + "/kb/documents/" + encodePath(fileName) + "/chunks")
+                .get()
+                .build();
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful() || response.body() == null) {
+                throw new IOException("RAG knowledge chunks request failed: " + response.code());
+            }
+            JsonNode payload = objectMapper.readTree(response.body().string());
+            return new KnowledgeChunkDto(payload.path("fileName").asText(fileName), payload.path("chunks"));
+        } catch (Exception exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "知识块查询失败", exception);
+        }
+    }
+
+    private String encodePath(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
     }
 }

@@ -2,6 +2,7 @@ package com.digitalhuman.backend_java.service;
 
 import com.digitalhuman.backend_java.dto.GuideChatRequest;
 import com.digitalhuman.backend_java.dto.RagQueryResponse;
+import com.digitalhuman.backend_java.dto.RagReviewActionRequest;
 import com.digitalhuman.backend_java.dto.RagTraceDetailDto;
 import com.digitalhuman.backend_java.dto.RagTraceSummaryDto;
 import com.digitalhuman.backend_java.model.RagTrace;
@@ -45,10 +46,14 @@ public class RagTraceService {
         trace.setQualityPassed(!Boolean.FALSE.equals(response.getQualityPassed()));
         trace.setCitationsValid(!Boolean.FALSE.equals(response.getCitationsValid()));
         trace.setReviewRequired(Boolean.TRUE.equals(response.getReviewRequired()));
+        trace.setReviewStatus(Boolean.TRUE.equals(response.getReviewRequired()) ? "PENDING" : "NOT_REQUIRED");
         trace.setLowConfidence(lowConfidence);
         trace.setNoAnswer(noAnswer);
         trace.setRetrievalAttempts(response.getRetrievalAttempts());
         trace.setTotalDurationMs(response.getTotalDurationMs());
+        trace.setPromptVersion(truncate(response.getPromptVersion(), 80));
+        trace.setProviderStatus(truncate(response.getProviderStatus(), 50));
+        trace.setProviderError(truncate(response.getProviderError(), 1000));
         trace.setRequestJson(writeJson(request));
         trace.setResponseJson(writeJson(response));
         repository.save(trace);
@@ -62,6 +67,7 @@ public class RagTraceService {
         trace.setQualityPassed(false);
         trace.setCitationsValid(false);
         trace.setReviewRequired(false);
+        trace.setReviewStatus("NOT_REQUIRED");
         trace.setLowConfidence(true);
         trace.setNoAnswer(true);
         trace.setRequestJson(writeJson(request));
@@ -97,6 +103,12 @@ public class RagTraceService {
                 trace.getFailureReason(),
                 trace.getReviewReason(),
                 trace.getLowConfidenceReason(),
+                trace.getReviewStatus(),
+                trace.getReviewedAnswer(),
+                trace.getReviewComment(),
+                trace.getPromptVersion(),
+                trace.getProviderStatus(),
+                trace.getProviderError(),
                 trace.isContextSufficient(),
                 trace.isQualityPassed(),
                 trace.isCitationsValid(),
@@ -108,6 +120,30 @@ public class RagTraceService {
                 trace.getCreatedAt(),
                 readJson(trace.getRequestJson()),
                 readJson(trace.getResponseJson()));
+    }
+
+    public List<RagTraceSummaryDto> listReviewQueue(String status) {
+        String normalizedStatus = status == null ? "PENDING" : status.trim();
+        return repository.findAllByOrderByCreatedAtDesc().stream()
+                .filter(RagTrace::isReviewRequired)
+                .filter(trace -> "all".equalsIgnoreCase(normalizedStatus) || normalizedStatus.isBlank() || normalizedStatus.equalsIgnoreCase(trace.getReviewStatus()))
+                .limit(200)
+                .map(this::toSummary)
+                .toList();
+    }
+
+    public RagTraceDetailDto review(String traceId, RagReviewActionRequest request) {
+        RagTrace trace = repository.findByTraceId(traceId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "RAG trace 不存在"));
+        String action = request.getAction() == null ? "" : request.getAction().trim().toUpperCase(Locale.ROOT);
+        if (!List.of("APPROVED", "REWRITTEN", "REJECTED", "KNOWLEDGE_MISSING").contains(action)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "审核动作不合法");
+        }
+        trace.setReviewStatus(action);
+        trace.setReviewedAnswer(truncate(request.getReviewedAnswer(), 2000));
+        trace.setReviewComment(truncate(request.getComment(), 1000));
+        repository.save(trace);
+        return getDetail(traceId);
     }
 
     private RagTrace baseTrace(String traceId, String sessionId, GuideChatRequest request) {
@@ -131,6 +167,9 @@ public class RagTraceService {
                 trace.isReviewRequired(),
                 trace.isLowConfidence(),
                 trace.isNoAnswer(),
+                trace.getReviewStatus(),
+                trace.getPromptVersion(),
+                trace.getProviderStatus(),
                 trace.getRetrievalAttempts(),
                 trace.getTotalDurationMs(),
                 trace.getCreatedAt());

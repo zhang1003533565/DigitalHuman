@@ -47,6 +47,15 @@ public class RagTrace {
     @Column(length = 1000)
     private String lowConfidenceReason;
 
+    @Column(length = 30)
+    private String reviewStatus;
+
+    @Column(length = 2000)
+    private String reviewedAnswer;
+
+    @Column(length = 1000)
+    private String reviewComment;
+
     @Column(nullable = false)
     private boolean contextSufficient;
 
@@ -68,6 +77,15 @@ public class RagTrace {
     private Integer retrievalAttempts;
 
     private Double totalDurationMs;
+
+    @Column(length = 80)
+    private String promptVersion;
+
+    @Column(length = 50)
+    private String providerStatus;
+
+    @Column(length = 1000)
+    private String providerError;
 
     @Column(nullable = false)
     private LocalDateTime createdAt;
@@ -162,6 +180,30 @@ public class RagTrace {
         this.lowConfidenceReason = lowConfidenceReason;
     }
 
+    public String getReviewStatus() {
+        return reviewStatus;
+    }
+
+    public void setReviewStatus(String reviewStatus) {
+        this.reviewStatus = reviewStatus;
+    }
+
+    public String getReviewedAnswer() {
+        return reviewedAnswer;
+    }
+
+    public void setReviewedAnswer(String reviewedAnswer) {
+        this.reviewedAnswer = reviewedAnswer;
+    }
+
+    public String getReviewComment() {
+        return reviewComment;
+    }
+
+    public void setReviewComment(String reviewComment) {
+        this.reviewComment = reviewComment;
+    }
+
     public boolean isContextSufficient() {
         return contextSufficient;
     }
@@ -224,6 +266,30 @@ public class RagTrace {
 
     public void setTotalDurationMs(Double totalDurationMs) {
         this.totalDurationMs = totalDurationMs;
+    }
+
+    public String getPromptVersion() {
+        return promptVersion;
+    }
+
+    public void setPromptVersion(String promptVersion) {
+        this.promptVersion = promptVersion;
+    }
+
+    public String getProviderStatus() {
+        return providerStatus;
+    }
+
+    public void setProviderStatus(String providerStatus) {
+        this.providerStatus = providerStatus;
+    }
+
+    public String getProviderError() {
+        return providerError;
+    }
+
+    public void setProviderError(String providerError) {
+        this.providerError = providerError;
     }
 
     public LocalDateTime getCreatedAt() {
