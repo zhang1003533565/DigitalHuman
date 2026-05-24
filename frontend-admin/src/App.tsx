@@ -3,7 +3,6 @@ import axios from 'axios'
 import {
   BuildOutlined,
   DatabaseOutlined,
-  UserOutlined,
 } from '@ant-design/icons'
 import {
   Layout,
@@ -23,6 +22,7 @@ import {
 } from 'antd'
 import type { UploadProps } from 'antd'
 import type { TableColumnsType } from 'antd'
+import { useLocation, useNavigate } from 'react-router-dom'
 import AdminSidebar from './components/AdminSidebar'
 import ChatConfigPage from './pages/settings/ChatConfigPage'
 import EmbeddingConfigPage from './pages/settings/EmbeddingConfigPage'
@@ -36,7 +36,7 @@ import FacilityListPage from './pages/scenic/FacilityListPage'
 import TravelAnalyticsPage from './pages/scenic/TravelAnalyticsPage'
 import './App.css'
 
-const { Header, Content } = Layout
+const { Content } = Layout
 const SESSION_STORAGE_KEY = 'digitalhuman.admin.user'
 
 type LoginResult = {
@@ -59,6 +59,37 @@ type MenuKey =
   | 'travel-analytics'
   | 'feedback'
   | 'qa'
+
+const ADMIN_HOME_PATH = '/admin/dashboard'
+
+const menuPathByKey: Record<MenuKey, string> = {
+  dashboard: ADMIN_HOME_PATH,
+  knowledge: '/admin/knowledge',
+  spots: '/admin/spots',
+  'spot-category': '/admin/spots/categories',
+  'facility-list': '/admin/spots/facilities',
+  routes: '/admin/routes',
+  avatar: '/admin/avatar',
+  settings: '/admin/setting',
+  feedback: '/admin/feedback',
+  qa: '/admin/qa',
+}
+
+const menuKeyByPath = new Map<string, MenuKey>(
+  Object.entries(menuPathByKey).map(([key, path]) => [path, key as MenuKey]),
+)
+
+function getMenuKeyFromPath(pathname: string): MenuKey {
+  const normalizedPath = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname
+  if (normalizedPath === '/admin/settings') {
+    return 'settings'
+  }
+  return menuKeyByPath.get(normalizedPath) ?? 'dashboard'
+}
+
+function getPathForMenuKey(key: MenuKey) {
+  return menuPathByKey[key] ?? ADMIN_HOME_PATH
+}
 
 type SpotRow = {
   key: string
@@ -580,6 +611,7 @@ function renderTabLabel(label: string, result?: ModelTestResponse | null) {
 function SettingsPanel() {
   const [form] = Form.useForm<AdminModelSettings>()
   const [speechTestForm] = Form.useForm<SpeechTestForm>()
+  const [activeSettingsTab, setActiveSettingsTab] = useState('embedding')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [voiceOptions, setVoiceOptions] = useState<{ value: string; label: string }[]>([])
@@ -679,7 +711,7 @@ function SettingsPanel() {
     }
   }
 
-  const handleTestModel = async (category: ModelCategory, payload?: { promptText?: string; imageDataUrl?: string }) => {
+  const handleTestModel = async (category: ModelCategory, payload?: { promptText?: string; imageDataUrl?: string; mode?: string }) => {
     const fieldName = fieldNameByCategory[category]
     const values = await form.validateFields([fieldName])
     const modelId = values[fieldName] as string
@@ -691,6 +723,7 @@ function SettingsPanel() {
         modelId,
         text: category === 'speech' ? speechValues?.speechTestText : payload?.promptText,
         imageDataUrl: payload?.imageDataUrl,
+        mode: payload?.mode,
       })
 
       let nextResult: ModelTestResponse = response.data
@@ -781,6 +814,7 @@ function SettingsPanel() {
           saving={saving}
           testing={testingCategory === 'vision'}
           options={visionOptions.map((item) => ({ value: item.value, provider: item.label.split(' · ')[0] }))}
+          onOpenManual={() => setActiveSettingsTab('model-catalog')}
           onSave={() => void handleSave()}
           onTest={(payload) => void handleTestModel('vision', payload)}
           testResult={testResults.vision}
@@ -814,6 +848,7 @@ function SettingsPanel() {
           saving={saving}
           testing={testingCategory === 'multimodal'}
           options={multimodalOptions.map((item) => ({ value: item.value, provider: item.label.split(' · ')[0] }))}
+          onOpenManual={() => setActiveSettingsTab('model-catalog')}
           onSave={() => void handleSave()}
           onTest={(payload) => void handleTestModel('multimodal', payload)}
           testResult={testResults.multimodal}
@@ -831,7 +866,7 @@ function SettingsPanel() {
   return (
     <div className="admin-panel-grid">
       <Card title="系统设置" extra={<Tag color="blue">左下角入口</Tag>} className="admin-settings-card">
-        <Tabs defaultActiveKey="embedding" items={settingsTabs} />
+        <Tabs activeKey={activeSettingsTab} onChange={setActiveSettingsTab} items={settingsTabs} />
       </Card>
     </div>
   )
@@ -974,8 +1009,16 @@ function LoginView({
 }
 
 function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: () => void }) {
-  const [activeKey, setActiveKey] = useState<MenuKey>('dashboard')
   const [spotDrawerOpen, setSpotDrawerOpen] = useState(false)
+  const location = useLocation()
+  const navigate = useNavigate()
+  const activeKey = getMenuKeyFromPath(location.pathname)
+
+  useEffect(() => {
+    if (location.pathname === '/' || location.pathname === '/admin') {
+      navigate(ADMIN_HOME_PATH, { replace: true })
+    }
+  }, [location.pathname, navigate])
 
   return (
     <Layout className="admin-shell">
@@ -992,9 +1035,12 @@ function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: () => vo
       <AdminSidebar
         activeKey={activeKey}
         displayName={user.displayName}
-        onSelect={(key) => setActiveKey(key as MenuKey)}
+        role={user.role}
+        onLogout={onLogout}
+        onSelect={(key) => navigate(getPathForMenuKey(key as MenuKey))}
       />
       <Layout>
+<<<<<<< HEAD
         <Header className="admin-header">
           <div className="admin-header__actions">
             <Tag color="blue">{user.role}</Tag>
@@ -1002,6 +1048,9 @@ function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: () => vo
           </div>
         </Header>
         <Content className={activeKey === 'travel-analytics' ? 'admin-content admin-content--fullscreen-table' : 'admin-content'}>
+=======
+        <Content className="admin-content">
+>>>>>>> 6ac70e71dc681ef8b326e9ede1155fdd5496d452
           {activeKey === 'facility-list'
             ? <FacilityListPage onAddFacility={() => setSpotDrawerOpen(true)} />
             : renderPanel(activeKey)}
