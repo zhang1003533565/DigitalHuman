@@ -36,8 +36,10 @@ public class KnowledgeBaseService {
 
     private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
+    private final AuditLogService auditLogService;
 
-    public KnowledgeBaseService() {
+    public KnowledgeBaseService(AuditLogService auditLogService) {
+        this.auditLogService = auditLogService;
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(20, TimeUnit.SECONDS)
                 .readTimeout(180, TimeUnit.SECONDS)
@@ -82,7 +84,9 @@ public class KnowledgeBaseService {
                 if (!response.isSuccessful() || response.body() == null) {
                     throw new IOException("RAG knowledge upload request failed: " + response.code());
                 }
-                return objectMapper.readValue(response.body().string(), KnowledgeUploadResponse.class);
+                KnowledgeUploadResponse result = objectMapper.readValue(response.body().string(), KnowledgeUploadResponse.class);
+                auditLogService.record("admin", "KNOWLEDGE_UPLOAD", "knowledge_document", result.getFileName(), result);
+                return result;
             }
         } catch (ResponseStatusException exception) {
             throw exception;
@@ -107,7 +111,10 @@ public class KnowledgeBaseService {
                 if (!response.isSuccessful() || response.body() == null) {
                     throw new IOException("RAG knowledge build request failed: " + response.code());
                 }
-                return objectMapper.readValue(response.body().string(), KnowledgeBuildResponse.class);
+                KnowledgeBuildResponse result = objectMapper.readValue(response.body().string(), KnowledgeBuildResponse.class);
+                String action = Boolean.TRUE.equals(payload.getRecreateCollection()) ? "KNOWLEDGE_RECREATE" : "KNOWLEDGE_BUILD";
+                auditLogService.record("admin", action, "knowledge_collection", result.getCollection(), result);
+                return result;
             }
         } catch (Exception exception) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "知识库构建失败", exception);
@@ -123,7 +130,9 @@ public class KnowledgeBaseService {
             if (!response.isSuccessful() || response.body() == null) {
                 throw new IOException("RAG knowledge document rebuild request failed: " + response.code());
             }
-            return objectMapper.readValue(response.body().string(), KnowledgeBuildResponse.class);
+            KnowledgeBuildResponse result = objectMapper.readValue(response.body().string(), KnowledgeBuildResponse.class);
+            auditLogService.record("admin", "KNOWLEDGE_REBUILD_FILE", "knowledge_document", fileName, result);
+            return result;
         } catch (Exception exception) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "单文件重建失败", exception);
         }
@@ -138,7 +147,9 @@ public class KnowledgeBaseService {
             if (!response.isSuccessful() || response.body() == null) {
                 throw new IOException("RAG knowledge document delete request failed: " + response.code());
             }
-            return objectMapper.readValue(response.body().string(), KnowledgeDeleteResponse.class);
+            KnowledgeDeleteResponse result = objectMapper.readValue(response.body().string(), KnowledgeDeleteResponse.class);
+            auditLogService.record("admin", "KNOWLEDGE_DELETE", "knowledge_document", fileName, result);
+            return result;
         } catch (Exception exception) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "知识文件删除失败", exception);
         }

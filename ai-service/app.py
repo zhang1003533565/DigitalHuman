@@ -8,6 +8,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from model_capabilities.testing.model_test_service import test_model
 from model_capabilities.tts.router import router as tts_router
 from model_providers.config_store import delete_provider_config, load_provider_configs, save_provider_config
+from rag.generation.prompt_store import PromptConfig, PromptConfigRequest, load_prompt_config, save_prompt_config
 from rag.application.rag_service import RagService
 from rag.contracts.schemas import DeleteKnowledgeResponse, IngestRequest, IngestResponse, KnowledgeChunkListResponse, KnowledgeDocumentInfo, ModelTestRequest, ModelTestResponse, ProviderConfigRequest, ProviderConfigResponse, ProviderDeleteRequest, QueryRequest, QueryResponse, RetrieveRequest, RetrieveResponse, UploadKnowledgeResponse
 
@@ -99,3 +100,13 @@ def update_provider_config(request: ProviderConfigRequest) -> ProviderConfigResp
 def remove_provider_config(request: ProviderDeleteRequest) -> dict[str, bool]:
     delete_provider_config(request.provider)
     return {"success": True}
+
+
+@app.get("/admin/rag/prompt", response_model=PromptConfig)
+def get_rag_prompt() -> PromptConfig:
+    return load_prompt_config()
+
+
+@app.put("/admin/rag/prompt", response_model=PromptConfig)
+def update_rag_prompt(request: PromptConfigRequest) -> PromptConfig:
+    return save_prompt_config(request)

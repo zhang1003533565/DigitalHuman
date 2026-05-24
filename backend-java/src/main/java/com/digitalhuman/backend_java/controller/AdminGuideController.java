@@ -5,6 +5,7 @@ import com.digitalhuman.backend_java.dto.GuideMessageDto;
 import com.digitalhuman.backend_java.dto.RagTraceDetailDto;
 import com.digitalhuman.backend_java.dto.RagTraceSummaryDto;
 import com.digitalhuman.backend_java.dto.RagReviewActionRequest;
+import com.digitalhuman.backend_java.dto.RagMetricsDto;
 import com.digitalhuman.backend_java.service.GuideService;
 import com.digitalhuman.backend_java.service.RagTraceService;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -49,6 +50,11 @@ public class AdminGuideController {
     @GetMapping("/rag-traces/{traceId}")
     public RagTraceDetailDto getRagTrace(@PathVariable String traceId) {
         return ragTraceService.getDetail(traceId);
+    }
+
+    @GetMapping("/rag-metrics")
+    public RagMetricsDto getRagMetrics() {
+        return ragTraceService.getMetrics();
     }
 
     @GetMapping("/rag-reviews")

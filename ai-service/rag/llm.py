@@ -4,8 +4,7 @@ from dataclasses import dataclass
 
 from model_providers.registry import get_provider_client
 from rag.contracts.schemas import ChunkRecord
-
-PROMPT_VERSION = "rag-grounded-v1"
+from rag.generation.prompt_store import DEFAULT_SYSTEM_PROMPT, DEFAULT_PROMPT_VERSION, load_prompt_config
 
 
 @dataclass
@@ -83,13 +82,17 @@ def infer_provider_name(base_url: str | None) -> str | None:
 
 
 def build_system_prompt() -> str:
+    config = load_prompt_config()
+    prompt = config.system_prompt if config.enabled else DEFAULT_SYSTEM_PROMPT
     return (
-        f"你是景区知识库问答助手。Prompt版本：{PROMPT_VERSION}。"
-        "只能依据提供的知识库片段回答，不允许补充片段中没有的信息。"
-        "如果信息不足，明确说知识库暂未覆盖。"
-        "回答使用简洁中文，优先给出直接结论，再补充要点。"
-        "如果引用来源，请用“来源：文件名 / 标题”这种格式。"
+        f"Prompt版本：{get_prompt_version()}。"
+        + prompt
     )
+
+
+def get_prompt_version() -> str:
+    config = load_prompt_config()
+    return config.version if config.enabled else DEFAULT_PROMPT_VERSION
 
 
 def build_user_prompt(question: str, interest: str | None, chunks: list[ChunkRecord]) -> str:

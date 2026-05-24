@@ -19,6 +19,9 @@ public class RagTraceDetailDto {
     private final String promptVersion;
     private final String providerStatus;
     private final String providerError;
+    private final Boolean feedbackHelpful;
+    private final Integer feedbackRating;
+    private final String feedbackComment;
     private final boolean contextSufficient;
     private final boolean qualityPassed;
     private final boolean citationsValid;
@@ -46,6 +49,9 @@ public class RagTraceDetailDto {
             String promptVersion,
             String providerStatus,
             String providerError,
+            Boolean feedbackHelpful,
+            Integer feedbackRating,
+            String feedbackComment,
             boolean contextSufficient,
             boolean qualityPassed,
             boolean citationsValid,
@@ -71,6 +77,9 @@ public class RagTraceDetailDto {
         this.promptVersion = promptVersion;
         this.providerStatus = providerStatus;
         this.providerError = providerError;
+        this.feedbackHelpful = feedbackHelpful;
+        this.feedbackRating = feedbackRating;
+        this.feedbackComment = feedbackComment;
         this.contextSufficient = contextSufficient;
         this.qualityPassed = qualityPassed;
         this.citationsValid = citationsValid;
@@ -138,6 +147,18 @@ public class RagTraceDetailDto {
 
     public String getProviderError() {
         return providerError;
+    }
+
+    public Boolean getFeedbackHelpful() {
+        return feedbackHelpful;
+    }
+
+    public Integer getFeedbackRating() {
+        return feedbackRating;
+    }
+
+    public String getFeedbackComment() {
+        return feedbackComment;
     }
 
     public boolean isContextSufficient() {

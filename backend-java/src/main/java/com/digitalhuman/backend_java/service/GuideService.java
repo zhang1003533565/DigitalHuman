@@ -9,6 +9,12 @@ import com.digitalhuman.backend_java.dto.RagQueryRequest;
 import com.digitalhuman.backend_java.dto.RagQueryResponse;
 import com.digitalhuman.backend_java.dto.ScenicRouteDto;
 import com.digitalhuman.backend_java.dto.ScenicSpotDto;
+import com.digitalhuman.backend_java.model.GuideMessage;
+import com.digitalhuman.backend_java.model.GuideSession;
+import com.digitalhuman.backend_java.model.UserFeedback;
+import com.digitalhuman.backend_java.repository.GuideMessageRepository;
+import com.digitalhuman.backend_java.repository.GuideSessionRepository;
+import com.digitalhuman.backend_java.repository.UserFeedbackRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
@@ -21,13 +27,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 @Service
 public class GuideService {
@@ -50,14 +54,22 @@ public class GuideService {
             new ScenicRouteDto("route-3", "亲子家庭路线", "亲子家庭", "4小时", "适合家庭出游，节奏更轻松，互动点更集中。", List.of("九龙灌浴", "拈花塔"))
     );
 
-    private final Map<String, List<GuideMessageDto>> sessions = new ConcurrentHashMap<>();
-    private final List<FeedbackRecordDto> feedbackRecords = new ArrayList<>();
     private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
     private final RagTraceService ragTraceService;
+    private final GuideSessionRepository sessionRepository;
+    private final GuideMessageRepository messageRepository;
+    private final UserFeedbackRepository feedbackRepository;
 
-    public GuideService(RagTraceService ragTraceService) {
+    public GuideService(
+            RagTraceService ragTraceService,
+            GuideSessionRepository sessionRepository,
+            GuideMessageRepository messageRepository,
+            UserFeedbackRepository feedbackRepository) {
         this.ragTraceService = ragTraceService;
+        this.sessionRepository = sessionRepository;
+        this.messageRepository = messageRepository;
+        this.feedbackRepository = feedbackRepository;
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(60, TimeUnit.SECONDS)
@@ -98,33 +110,47 @@ public class GuideService {
                 .map(ScenicRouteDto::getName)
                 .toList();
 
-        List<GuideMessageDto> messages = sessions.computeIfAbsent(sessionId, key -> new ArrayList<>());
-        long now = System.currentTimeMillis();
-        messages.add(new GuideMessageDto("user", request.getQuestion(), now));
-        messages.add(new GuideMessageDto("assistant", answerText, now + 1));
+        touchSession(sessionId);
+        saveMessage(sessionId, traceId, "user", request.getQuestion());
+        saveMessage(sessionId, traceId, "assistant", answerText);
 
         return new GuideChatResponse(sessionId, traceId, answerText, relatedSpots, recommendedRoutes);
     }
 
     public List<GuideMessageDto> getSessionMessages(String sessionId) {
-        return sessions.getOrDefault(sessionId, List.of());
+        return messageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId).stream()
+                .map(message -> new GuideMessageDto(
+                        message.getRole(),
+                        message.getContent(),
+                        toEpochMillis(message.getCreatedAt())))
+                .toList();
     }
 
     public void saveFeedback(FeedbackRequest request) {
-        feedbackRecords.add(new FeedbackRecordDto(
-                request.getSessionId(),
-                request.getQuestion(),
-                request.getAnswer(),
-                request.isHelpful(),
-                request.getRating(),
-                request.getComment(),
-                System.currentTimeMillis()
-        ));
+        UserFeedback feedback = new UserFeedback();
+        feedback.setSessionId(request.getSessionId());
+        feedback.setTraceId(request.getTraceId());
+        feedback.setQuestion(request.getQuestion());
+        feedback.setAnswer(request.getAnswer());
+        feedback.setHelpful(request.isHelpful());
+        feedback.setRating(request.getRating());
+        feedback.setComment(request.getComment());
+        feedback.setCreatedAt(LocalDateTime.now());
+        feedbackRepository.save(feedback);
+        ragTraceService.attachFeedback(request.getTraceId(), request.isHelpful(), request.getRating(), request.getComment());
     }
 
     public List<FeedbackRecordDto> getFeedbackRecords() {
-        return feedbackRecords.stream()
-                .sorted(Comparator.comparingLong(FeedbackRecordDto::getTimestamp).reversed())
+        return feedbackRepository.findAllByOrderByCreatedAtDesc().stream()
+                .map(feedback -> new FeedbackRecordDto(
+                        feedback.getSessionId(),
+                        feedback.getTraceId(),
+                        feedback.getQuestion(),
+                        feedback.getAnswer(),
+                        feedback.isHelpful(),
+                        feedback.getRating(),
+                        feedback.getComment(),
+                        toEpochMillis(feedback.getCreatedAt())))
                 .toList();
     }
 
@@ -157,5 +183,30 @@ public class GuideService {
 
     private String buildAnswer(String question, String interest) {
         return question;
+    }
+
+    private void touchSession(String sessionId) {
+        LocalDateTime now = LocalDateTime.now();
+        GuideSession session = sessionRepository.findById(sessionId).orElseGet(GuideSession::new);
+        if (session.getSessionId() == null) {
+            session.setSessionId(sessionId);
+            session.setCreatedAt(now);
+        }
+        session.setUpdatedAt(now);
+        sessionRepository.save(session);
+    }
+
+    private void saveMessage(String sessionId, String traceId, String role, String content) {
+        GuideMessage message = new GuideMessage();
+        message.setSessionId(sessionId);
+        message.setTraceId(traceId);
+        message.setRole(role);
+        message.setContent(content);
+        message.setCreatedAt(LocalDateTime.now());
+        messageRepository.save(message);
+    }
+
+    private long toEpochMillis(LocalDateTime value) {
+        return value.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
     }
 }

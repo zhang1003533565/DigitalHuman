@@ -2,6 +2,7 @@ package com.digitalhuman.backend_java.service;
 
 import com.digitalhuman.backend_java.dto.GuideChatRequest;
 import com.digitalhuman.backend_java.dto.RagQueryResponse;
+import com.digitalhuman.backend_java.dto.RagMetricsDto;
 import com.digitalhuman.backend_java.dto.RagReviewActionRequest;
 import com.digitalhuman.backend_java.dto.RagTraceDetailDto;
 import com.digitalhuman.backend_java.dto.RagTraceSummaryDto;
@@ -10,6 +11,7 @@ import com.digitalhuman.backend_java.repository.RagTraceRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import org.springframework.http.HttpStatus;
@@ -21,10 +23,12 @@ public class RagTraceService {
 
     private final RagTraceRepository repository;
     private final ObjectMapper objectMapper;
+    private final AuditLogService auditLogService;
 
-    public RagTraceService(RagTraceRepository repository, ObjectMapper objectMapper) {
+    public RagTraceService(RagTraceRepository repository, ObjectMapper objectMapper, AuditLogService auditLogService) {
         this.repository = repository;
         this.objectMapper = objectMapper;
+        this.auditLogService = auditLogService;
     }
 
     public void saveSuccess(String traceId, String sessionId, GuideChatRequest request, RagQueryResponse response) {
@@ -91,6 +95,49 @@ public class RagTraceService {
                 .toList();
     }
 
+    public RagMetricsDto getMetrics() {
+        List<RagTrace> traces = repository.findAllByOrderByCreatedAtDesc();
+        long total = traces.size();
+        long failed = traces.stream().filter(trace -> "FAILED".equalsIgnoreCase(trace.getStatus())).count();
+        long lowConfidence = traces.stream().filter(RagTrace::isLowConfidence).count();
+        long noAnswer = traces.stream().filter(RagTrace::isNoAnswer).count();
+        long reviewRequired = traces.stream().filter(RagTrace::isReviewRequired).count();
+        long negativeFeedback = traces.stream()
+                .filter(trace -> Boolean.FALSE.equals(trace.getFeedbackHelpful()) || (trace.getFeedbackRating() != null && trace.getFeedbackRating() <= 2))
+                .count();
+        double averageDuration = traces.stream()
+                .filter(trace -> trace.getTotalDurationMs() != null)
+                .mapToDouble(RagTrace::getTotalDurationMs)
+                .average()
+                .orElse(0);
+        List<RagTraceSummaryDto> slowTraces = traces.stream()
+                .filter(trace -> trace.getTotalDurationMs() != null)
+                .sorted(Comparator.comparing(RagTrace::getTotalDurationMs, Comparator.nullsLast(Double::compareTo)).reversed())
+                .limit(20)
+                .map(this::toSummary)
+                .toList();
+        List<RagTraceSummaryDto> anomalyTraces = traces.stream()
+                .filter(trace -> trace.isLowConfidence() || trace.isNoAnswer() || "FAILED".equalsIgnoreCase(trace.getStatus()))
+                .limit(20)
+                .map(this::toSummary)
+                .toList();
+        return new RagMetricsDto(
+                total,
+                failed,
+                lowConfidence,
+                noAnswer,
+                reviewRequired,
+                negativeFeedback,
+                round(averageDuration),
+                rate(failed, total),
+                rate(lowConfidence, total),
+                rate(noAnswer, total),
+                rate(reviewRequired, total),
+                rate(negativeFeedback, total),
+                slowTraces,
+                anomalyTraces);
+    }
+
     public RagTraceDetailDto getDetail(String traceId) {
         RagTrace trace = repository.findByTraceId(traceId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "RAG trace 不存在"));
@@ -109,6 +156,9 @@ public class RagTraceService {
                 trace.getPromptVersion(),
                 trace.getProviderStatus(),
                 trace.getProviderError(),
+                trace.getFeedbackHelpful(),
+                trace.getFeedbackRating(),
+                trace.getFeedbackComment(),
                 trace.isContextSufficient(),
                 trace.isQualityPassed(),
                 trace.isCitationsValid(),
@@ -143,7 +193,25 @@ public class RagTraceService {
         trace.setReviewedAnswer(truncate(request.getReviewedAnswer(), 2000));
         trace.setReviewComment(truncate(request.getComment(), 1000));
         repository.save(trace);
+        auditLogService.record("admin", "RAG_REVIEW_" + action, "rag_trace", traceId, request);
         return getDetail(traceId);
+    }
+
+    public void attachFeedback(String traceId, boolean helpful, int rating, String comment) {
+        if (traceId == null || traceId.isBlank()) {
+            return;
+        }
+        repository.findByTraceId(traceId).ifPresent(trace -> {
+            trace.setFeedbackHelpful(helpful);
+            trace.setFeedbackRating(rating);
+            trace.setFeedbackComment(truncate(comment, 1000));
+            if (!helpful || rating <= 2) {
+                trace.setLowConfidence(true);
+                trace.setStatus("LOW_CONFIDENCE");
+                trace.setLowConfidenceReason(appendReason(trace.getLowConfidenceReason(), "用户差评或低评分"));
+            }
+            repository.save(trace);
+        });
     }
 
     private RagTrace baseTrace(String traceId, String sessionId, GuideChatRequest request) {
@@ -175,6 +243,17 @@ public class RagTraceService {
                 trace.getCreatedAt());
     }
 
+    private double rate(long value, long total) {
+        if (total == 0) {
+            return 0;
+        }
+        return round(value * 100.0 / total);
+    }
+
+    private double round(double value) {
+        return Math.round(value * 100.0) / 100.0;
+    }
+
     private String writeJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -200,6 +279,16 @@ public class RagTraceService {
             return value;
         }
         return value.substring(0, maxLength);
+    }
+
+    private static String appendReason(String current, String reason) {
+        if (current == null || current.isBlank()) {
+            return reason;
+        }
+        if (current.contains(reason)) {
+            return current;
+        }
+        return current + "；" + reason;
     }
 
     private record FailurePayload(String type, String message) {

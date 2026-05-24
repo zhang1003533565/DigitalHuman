@@ -13,7 +13,7 @@ from langgraph.types import interrupt
 from rag.contracts.schemas import ChunkPayload, ChunkRecord, QueryRequest, QueryResponse, RetrievalAttempt
 from rag.generation.prompts import build_grounded_answer
 from rag.graph.memory_store import ConversationMemoryStore
-from rag.llm import PROMPT_VERSION, ProviderBackedLlm
+from rag.llm import ProviderBackedLlm, get_prompt_version
 from rag.retrieval.retriever import Retriever
 
 
@@ -102,7 +102,7 @@ class RagQueryGraph:
                 totalDurationMs=total_duration_ms,
                 lowConfidence=True,
                 lowConfidenceReason=str(interrupt_value.get("reason") or "需要人工审核"),
-                promptVersion=PROMPT_VERSION,
+                promptVersion=get_prompt_version(),
             )
 
         chunks = deserialize_chunks(result.get("chunks", []))
@@ -131,7 +131,7 @@ class RagQueryGraph:
             totalDurationMs=total_duration_ms,
             lowConfidence=low_confidence,
             lowConfidenceReason=low_confidence_reason,
-            promptVersion=PROMPT_VERSION,
+            promptVersion=get_prompt_version(),
             providerStatus=result.get("provider_status"),
             providerError=result.get("provider_error"),
         )

@@ -132,6 +132,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
   const [isReady, setIsReady] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [sessionId, setSessionId] = useState(() => window.sessionStorage.getItem(GUIDE_SESSION_KEY) ?? '')
+  const [lastTraceId, setLastTraceId] = useState('')
   const [answerText, setAnswerText] = useState('')
   const [relatedSpots, setRelatedSpots] = useState<string[]>([])
   const [recommendedRoutes, setRecommendedRoutes] = useState<string[]>([])
@@ -427,6 +428,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
       setSessionId(nextSessionId)
       window.sessionStorage.setItem(GUIDE_SESSION_KEY, nextSessionId)
       setAnswerText(chatResponse.data.answerText)
+      setLastTraceId(chatResponse.data.traceId ?? '')
       setRelatedSpots(chatResponse.data.relatedSpots)
       setRecommendedRoutes(chatResponse.data.recommendedRoutes)
 
@@ -490,6 +492,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     try {
       await axios.post('/api/user/guide/feedback', {
         sessionId,
+        traceId: lastTraceId || undefined,
         question: text.trim(),
         answer: answerText,
         helpful,

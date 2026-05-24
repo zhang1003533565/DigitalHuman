@@ -87,6 +87,13 @@ public class RagTrace {
     @Column(length = 1000)
     private String providerError;
 
+    @Column(length = 1000)
+    private String feedbackComment;
+
+    private Boolean feedbackHelpful;
+
+    private Integer feedbackRating;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
@@ -290,6 +297,30 @@ public class RagTrace {
 
     public void setProviderError(String providerError) {
         this.providerError = providerError;
+    }
+
+    public String getFeedbackComment() {
+        return feedbackComment;
+    }
+
+    public void setFeedbackComment(String feedbackComment) {
+        this.feedbackComment = feedbackComment;
+    }
+
+    public Boolean getFeedbackHelpful() {
+        return feedbackHelpful;
+    }
+
+    public void setFeedbackHelpful(Boolean feedbackHelpful) {
+        this.feedbackHelpful = feedbackHelpful;
+    }
+
+    public Integer getFeedbackRating() {
+        return feedbackRating;
+    }
+
+    public void setFeedbackRating(Integer feedbackRating) {
+        this.feedbackRating = feedbackRating;
     }
 
     public LocalDateTime getCreatedAt() {

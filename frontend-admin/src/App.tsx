@@ -117,6 +117,7 @@ type RouteRow = {
 
 type FeedbackRow = {
   key: string
+  traceId?: string
   question: string
   helpful: string
   rating: string
@@ -152,6 +153,9 @@ type RagTraceDetail = RagTraceSummary & {
   promptVersion?: string
   providerStatus?: string
   providerError?: string
+  feedbackHelpful?: boolean
+  feedbackRating?: number
+  feedbackComment?: string
   contextSufficient: boolean
   qualityPassed: boolean
   citationsValid: boolean
@@ -169,6 +173,23 @@ type RagTraceDetail = RagTraceSummary & {
     lowConfidenceReason?: string
     promptVersion?: string
   }
+}
+
+type RagMetrics = {
+  totalTraces: number
+  failedTraces: number
+  lowConfidenceTraces: number
+  noAnswerTraces: number
+  reviewRequiredTraces: number
+  negativeFeedbackTraces: number
+  averageDurationMs: number
+  providerFailureRate: number
+  lowConfidenceRate: number
+  noAnswerRate: number
+  reviewTriggerRate: number
+  negativeFeedbackRate: number
+  slowTraces: RagTraceSummary[]
+  anomalyTraces: RagTraceSummary[]
 }
 
 type KnowledgeDocumentRow = {
@@ -275,6 +296,7 @@ const routeColumns: TableColumnsType<RouteRow> = [
 ]
 
 const feedbackColumns: TableColumnsType<FeedbackRow> = [
+  { title: 'Trace', dataIndex: 'traceId', render: (value?: string) => value || '-' },
   { title: '问题', dataIndex: 'question' },
   { title: '帮助情况', dataIndex: 'helpful' },
   { title: '评分', dataIndex: 'rating' },
@@ -333,41 +355,68 @@ function clearUser() {
 }
 
 function DashboardPanel() {
+  const [metrics, setMetrics] = useState<RagMetrics | null>(null)
+
+  useEffect(() => {
+    axios.get<RagMetrics>('/api/admin/guide/rag-metrics')
+      .then((response) => setMetrics(response.data))
+      .catch(() => setMetrics(null))
+  }, [])
+
   return (
     <div className="admin-panel-grid">
       <Row gutter={[16, 16]}>
         <Col xs={24} md={8}>
           <Card>
-            <Statistic title="今日服务人次" value={128} />
+            <Statistic title="RAG 总请求" value={metrics?.totalTraces ?? 0} />
           </Card>
         </Col>
         <Col xs={24} md={8}>
           <Card>
-            <Statistic title="本周服务人次" value={986} />
+            <Statistic title="平均耗时" value={metrics?.averageDurationMs ?? 0} suffix="ms" />
           </Card>
         </Col>
         <Col xs={24} md={8}>
           <Card>
-            <Statistic title="负面反馈占比" value={12.4} suffix="%" />
+            <Statistic title="低置信率" value={metrics?.lowConfidenceRate ?? 0} suffix="%" />
+          </Card>
+        </Col>
+      </Row>
+      <Row gutter={[16, 16]}>
+        <Col xs={24} md={8}>
+          <Card>
+            <Statistic title="无答案率" value={metrics?.noAnswerRate ?? 0} suffix="%" />
+          </Card>
+        </Col>
+        <Col xs={24} md={8}>
+          <Card>
+            <Statistic title="人审触发率" value={metrics?.reviewTriggerRate ?? 0} suffix="%" />
+          </Card>
+        </Col>
+        <Col xs={24} md={8}>
+          <Card>
+            <Statistic title="差评率" value={metrics?.negativeFeedbackRate ?? 0} suffix="%" />
           </Card>
         </Col>
       </Row>
       <Row gutter={[16, 16]}>
         <Col xs={24} md={12}>
-          <Card title="热门问题 Top3">
+          <Card title="慢查询 Top20">
             <ul className="admin-list">
-              <li>灵山大佛有什么历史？</li>
-              <li>亲子路线怎么安排？</li>
-              <li>拈花湾晚上适合去吗？</li>
+              {(metrics?.slowTraces ?? []).map((trace) => (
+                <li key={trace.traceId}>{Math.round(trace.totalDurationMs ?? 0)}ms · {trace.question}</li>
+              ))}
+              {!metrics?.slowTraces?.length ? <li>暂无数据</li> : null}
             </ul>
           </Card>
         </Col>
         <Col xs={24} md={12}>
-          <Card title="高频景点关注排行">
+          <Card title="异常 Trace">
             <ul className="admin-list">
-              <li>灵山大佛</li>
-              <li>九龙灌浴</li>
-              <li>拈花塔</li>
+              {(metrics?.anomalyTraces ?? []).map((trace) => (
+                <li key={trace.traceId}>{trace.status} · {trace.question}</li>
+              ))}
+              {!metrics?.anomalyTraces?.length ? <li>暂无数据</li> : null}
             </ul>
           </Card>
         </Col>
@@ -1022,8 +1071,9 @@ function FeedbackPanel() {
       const response = await axios.get('/api/admin/guide/feedback')
       setData(
         response.data.map(
-          (item: { sessionId: string; question: string; helpful: boolean; rating: number; comment: string }) => ({
+          (item: { sessionId: string; traceId?: string; question: string; helpful: boolean; rating: number; comment: string }) => ({
             key: `${item.sessionId}-${item.question}`,
+            traceId: item.traceId,
             question: item.question,
             helpful: item.helpful ? '有帮助' : '待优化',
             rating: `${item.rating}/5`,
@@ -1155,6 +1205,11 @@ function QaPanel() {
     }
   }
 
+  async function copyTraceId(traceId: string) {
+    await navigator.clipboard.writeText(traceId)
+    message.success('TraceId 已复制')
+  }
+
   useEffect(() => {
     void loadTraces()
   }, [])
@@ -1248,6 +1303,9 @@ function QaPanel() {
         {detailLoading ? <Typography.Text type="secondary">正在加载详情...</Typography.Text> : null}
         {detail ? (
           <Space direction="vertical" size="large" className="admin-rag-detail">
+            <Space>
+              <Button onClick={() => void copyTraceId(detail.traceId)}>复制 TraceId</Button>
+            </Space>
             <Descriptions bordered size="small" column={2}>
               <Descriptions.Item label="状态">{getRagStatusTag(detail.status)}</Descriptions.Item>
               <Descriptions.Item label="耗时">{detail.totalDurationMs ? `${Math.round(detail.totalDurationMs)} ms` : '-'}</Descriptions.Item>
@@ -1256,6 +1314,9 @@ function QaPanel() {
               <Descriptions.Item label="Prompt">{detail.promptVersion || detail.response?.promptVersion || '-'}</Descriptions.Item>
               <Descriptions.Item label="Provider">{detail.providerStatus || '-'}</Descriptions.Item>
               <Descriptions.Item label="Provider错误" span={2}>{detail.providerError || '-'}</Descriptions.Item>
+              <Descriptions.Item label="用户反馈" span={2}>
+                {detail.feedbackRating ? `${detail.feedbackHelpful ? '有帮助' : '待优化'} · ${detail.feedbackRating}/5 · ${detail.feedbackComment || '-'}` : '-'}
+              </Descriptions.Item>
               <Descriptions.Item label="问题" span={2}>{detail.question}</Descriptions.Item>
               <Descriptions.Item label="改写问题" span={2}>{detail.response?.rewrittenQuestion ?? detail.rewrittenQuestion ?? '-'}</Descriptions.Item>
               <Descriptions.Item label="低置信原因" span={2}>{detail.lowConfidenceReason || detail.response?.lowConfidenceReason || '-'}</Descriptions.Item>

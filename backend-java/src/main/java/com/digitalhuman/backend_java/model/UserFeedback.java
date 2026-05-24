@@ -1,26 +1,45 @@
-package com.digitalhuman.backend_java.dto;
+package com.digitalhuman.backend_java.model;
 
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
+import jakarta.persistence.Table;
+import java.time.LocalDateTime;
 
-public class FeedbackRequest {
+@Entity
+@Table(name = "user_feedback")
+public class UserFeedback {
 
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(length = 80)
     private String sessionId;
+
+    @Column(length = 80)
     private String traceId;
 
-    @NotBlank(message = "问题不能为空")
+    @Column(nullable = false, length = 500)
     private String question;
 
+    @Lob
     private String answer;
 
+    @Column(nullable = false)
     private boolean helpful;
 
-    @Min(value = 1, message = "评分最小为 1")
-    @Max(value = 5, message = "评分最大为 5")
+    @Column(nullable = false)
     private int rating;
 
+    @Column(length = 1000)
     private String comment;
+
+    @Column(nullable = false)
+    private LocalDateTime createdAt;
 
     public String getSessionId() {
         return sessionId;
@@ -76,5 +95,13 @@ public class FeedbackRequest {
 
     public void setComment(String comment) {
         this.comment = comment;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
     }
 }
