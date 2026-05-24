@@ -3,7 +3,6 @@ import axios from 'axios'
 import {
   BuildOutlined,
   DatabaseOutlined,
-  UserOutlined,
 } from '@ant-design/icons'
 import {
   Layout,
@@ -35,7 +34,7 @@ import SpotCategoryPage from './pages/scenic/SpotCategoryPage'
 import FacilityListPage from './pages/scenic/FacilityListPage'
 import './App.css'
 
-const { Header, Content } = Layout
+const { Content } = Layout
 const SESSION_STORAGE_KEY = 'digitalhuman.admin.user'
 
 type LoginResult = {
@@ -578,6 +577,7 @@ function renderTabLabel(label: string, result?: ModelTestResponse | null) {
 function SettingsPanel() {
   const [form] = Form.useForm<AdminModelSettings>()
   const [speechTestForm] = Form.useForm<SpeechTestForm>()
+  const [activeSettingsTab, setActiveSettingsTab] = useState('embedding')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [voiceOptions, setVoiceOptions] = useState<{ value: string; label: string }[]>([])
@@ -677,7 +677,7 @@ function SettingsPanel() {
     }
   }
 
-  const handleTestModel = async (category: ModelCategory, payload?: { promptText?: string; imageDataUrl?: string }) => {
+  const handleTestModel = async (category: ModelCategory, payload?: { promptText?: string; imageDataUrl?: string; mode?: string }) => {
     const fieldName = fieldNameByCategory[category]
     const values = await form.validateFields([fieldName])
     const modelId = values[fieldName] as string
@@ -689,6 +689,7 @@ function SettingsPanel() {
         modelId,
         text: category === 'speech' ? speechValues?.speechTestText : payload?.promptText,
         imageDataUrl: payload?.imageDataUrl,
+        mode: payload?.mode,
       })
 
       let nextResult: ModelTestResponse = response.data
@@ -779,6 +780,7 @@ function SettingsPanel() {
           saving={saving}
           testing={testingCategory === 'vision'}
           options={visionOptions.map((item) => ({ value: item.value, provider: item.label.split(' · ')[0] }))}
+          onOpenManual={() => setActiveSettingsTab('model-catalog')}
           onSave={() => void handleSave()}
           onTest={(payload) => void handleTestModel('vision', payload)}
           testResult={testResults.vision}
@@ -812,6 +814,7 @@ function SettingsPanel() {
           saving={saving}
           testing={testingCategory === 'multimodal'}
           options={multimodalOptions.map((item) => ({ value: item.value, provider: item.label.split(' · ')[0] }))}
+          onOpenManual={() => setActiveSettingsTab('model-catalog')}
           onSave={() => void handleSave()}
           onTest={(payload) => void handleTestModel('multimodal', payload)}
           testResult={testResults.multimodal}
@@ -829,7 +832,7 @@ function SettingsPanel() {
   return (
     <div className="admin-panel-grid">
       <Card title="系统设置" extra={<Tag color="blue">左下角入口</Tag>} className="admin-settings-card">
-        <Tabs defaultActiveKey="embedding" items={settingsTabs} />
+        <Tabs activeKey={activeSettingsTab} onChange={setActiveSettingsTab} items={settingsTabs} />
       </Card>
     </div>
   )
@@ -988,15 +991,11 @@ function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: () => vo
       <AdminSidebar
         activeKey={activeKey}
         displayName={user.displayName}
+        role={user.role}
+        onLogout={onLogout}
         onSelect={(key) => setActiveKey(key as MenuKey)}
       />
       <Layout>
-        <Header className="admin-header">
-          <div className="admin-header__actions">
-            <Tag color="blue">{user.role}</Tag>
-            <Button icon={<UserOutlined />} onClick={onLogout}>退出登录</Button>
-          </div>
-        </Header>
         <Content className="admin-content">
           {activeKey === 'facility-list'
             ? <FacilityListPage onAddFacility={() => setSpotDrawerOpen(true)} />

@@ -7,6 +7,7 @@ import {
   RobotOutlined,
   SearchOutlined,
   SettingOutlined,
+  UserOutlined,
 } from '@ant-design/icons'
 import { Button, Layout, Menu } from 'antd'
 import type { MenuProps } from 'antd'
@@ -14,6 +15,8 @@ import type { MenuProps } from 'antd'
 type AdminSidebarProps = {
   activeKey: string
   displayName: string
+  role: string
+  onLogout: () => void
   onSelect: (key: string) => void
 }
 
@@ -37,7 +40,7 @@ const menuItems: MenuProps['items'] = [
   { key: 'qa', icon: <SearchOutlined />, label: '问答记录查询' },
 ]
 
-export default function AdminSidebar({ activeKey, displayName, onSelect }: AdminSidebarProps) {
+export default function AdminSidebar({ activeKey, displayName, role, onLogout, onSelect }: AdminSidebarProps) {
   return (
     <Sider width={248} className="admin-sider">
       <div className="admin-brand">
@@ -59,6 +62,12 @@ export default function AdminSidebar({ activeKey, displayName, onSelect }: Admin
         />
       </div>
       <div className="admin-sider__footer">
+        <div className="admin-sider__account">
+          <span className="admin-sider__role">{role}</span>
+          <Button icon={<UserOutlined />} className="admin-sider__logout" onClick={onLogout}>
+            退出登录
+          </Button>
+        </div>
         <Button
           type={activeKey === 'settings' ? 'primary' : 'text'}
           icon={<SettingOutlined />}

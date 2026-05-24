@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Button, Card, Form, Input, Tag, Upload } from 'antd'
+import { useMemo, useState } from 'react'
+import { Button, Card, Form, Input, Pagination, Tag, Upload } from 'antd'
 import type { FormInstance } from 'antd'
 import type { UploadProps } from 'antd'
 
@@ -22,6 +22,7 @@ type MultimodalConfigPageProps = {
   saving: boolean
   testing: boolean
   options: MultimodalOption[]
+  onOpenManual: () => void
   onSave: () => void
   onTest: (payload?: { promptText?: string; imageDataUrl?: string; mode?: string }) => void
   result: React.ReactNode
@@ -42,6 +43,7 @@ export default function MultimodalConfigPage({
   saving,
   testing,
   options,
+  onOpenManual,
   onSave,
   onTest,
   result,
@@ -53,6 +55,7 @@ export default function MultimodalConfigPage({
   const [promptText, setPromptText] = useState('')
   const [imageDataUrl, setImageDataUrl] = useState('')
   const [activeMode, setActiveMode] = useState<'caption' | 'ocr' | 'qa' | 'reason'>('caption')
+  const [page, setPage] = useState(1)
 
   const modePresets = {
     caption: '请描述图片中的主要内容。',
@@ -73,6 +76,8 @@ export default function MultimodalConfigPage({
     if (!keyword) return true
     return item.value.toLowerCase().includes(keyword) || (item.provider ?? '').toLowerCase().includes(keyword)
   })
+  const pagedOptions = useMemo(() => filteredOptions.slice((page - 1) * 4, page * 4), [filteredOptions, page])
+  const totalItems = Math.max(filteredOptions.length, 1)
 
   const uploadProps: UploadProps = {
     accept: '.png,.jpg,.jpeg,.webp',
@@ -86,21 +91,24 @@ export default function MultimodalConfigPage({
   }
 
   return (
-    <div className="admin-form-grid">
-      <div className="admin-two-column admin-embedding-layout">
-        <Card title="多模态模型列表" className="admin-settings-panel-card">
+    <div className="admin-form-grid admin-multimodal-page">
+      <div className="admin-two-column admin-embedding-layout admin-multimodal-layout">
+        <Card title="多模态模型列表" className="admin-settings-panel-card admin-settings-panel-card--narrow">
           <div className="admin-form-grid">
-            <Input
-              placeholder="搜索模型名称或标识"
-              value={searchText}
-              onChange={(event) => setSearchText(event.target.value)}
-            />
+            <div className="admin-list-toolbar">
+              <Input
+                placeholder="搜索模型名称或标识"
+                value={searchText}
+                onChange={(event) => setSearchText(event.target.value)}
+              />
+              <Button type="primary" ghost onClick={onOpenManual}>新增模型</Button>
+            </div>
             <div className="admin-embedding-list">
-              {filteredOptions.length ? filteredOptions.map((item) => (
+              {pagedOptions.length ? pagedOptions.map((item) => (
                 <button
                   key={item.value}
                   type="button"
-                  className={`admin-embedding-item ${item.value === selectedModel ? 'admin-embedding-item--active' : ''}`}
+                  className={`admin-embedding-item admin-embedding-item--compact ${item.value === selectedModel ? 'admin-embedding-item--active' : ''}`}
                   onClick={() => form.setFieldValue('multimodalModel', item.value)}
                 >
                   <div className="admin-embedding-item__title">{item.value}</div>
@@ -116,10 +124,20 @@ export default function MultimodalConfigPage({
                 </div>
               )}
             </div>
+            <Pagination
+              current={page}
+              total={totalItems}
+              pageSize={4}
+              size="small"
+              onChange={setPage}
+              className="admin-mini-pagination"
+              hideOnSinglePage={false}
+              showSizeChanger={false}
+            />
           </div>
         </Card>
         <Card title="模型配置" className="admin-settings-panel-card">
-          <div className="admin-form-grid">
+          <div className="admin-form-grid admin-multimodal-config">
             <div className="admin-inline-meta">
               <Tag color={selectedModel ? 'green' : 'default'}>{selectedModel ? '已选择模型' : '未选择模型'}</Tag>
               {currentOption?.provider ? <Tag>{currentOption.provider}</Tag> : null}
@@ -134,105 +152,113 @@ export default function MultimodalConfigPage({
                 <Input placeholder="请选择或输入多模态模型" />
               </Form.Item>
             </Form>
-            <Card size="small" className="admin-build-summary admin-build-summary--muted">
-              当前多模态页签用于图文联合理解、图片问答、OCR、视觉推理等场景。后续如果要完全贴近参考图，可以继续补图片上传和预览测试区。
-            </Card>
             <div className="admin-inline-meta">
               <Tag color="blue">图文联合理解</Tag>
               <Tag color="purple">OCR</Tag>
               <Tag color="cyan">问答</Tag>
               <Tag color="green">推理</Tag>
             </div>
-            <div className="admin-mode-row">
-              <Button
-                type={activeMode === 'caption' ? 'primary' : 'default'}
-                onClick={() => {
-                  setActiveMode('caption')
-                  setPromptText(modePresets.caption)
-                }}
-              >
-                图片描述
-              </Button>
-              <Button
-                type={activeMode === 'ocr' ? 'primary' : 'default'}
-                onClick={() => {
-                  setActiveMode('ocr')
-                  setPromptText(modePresets.ocr)
-                }}
-              >
-                OCR识别
-              </Button>
-              <Button
-                type={activeMode === 'qa' ? 'primary' : 'default'}
-                onClick={() => {
-                  setActiveMode('qa')
-                  setPromptText(modePresets.qa)
-                }}
-              >
-                图片问答
-              </Button>
-              <Button
-                type={activeMode === 'reason' ? 'primary' : 'default'}
-                onClick={() => {
-                  setActiveMode('reason')
-                  setPromptText(modePresets.reason)
-                }}
-              >
-                场景理解
-              </Button>
-            </div>
-            <Card size="small" className="admin-build-summary admin-build-summary--muted">
-              <div className="admin-form-grid">
+            <div className="admin-multimodal-workbench">
+              <div className="admin-multimodal-media">
                 <Upload {...uploadProps}>
-                  <Button>上传测试图片</Button>
+                  <Button className="admin-multimodal-upload-btn">上传测试图片</Button>
                 </Upload>
-                {imageDataUrl ? (
-                  <div className="admin-vision-preview-wrap">
-                    <img src={imageDataUrl} alt="多模态测试预览" className="admin-vision-preview" />
-                    <div className="admin-action-row">
-                      <Button onClick={() => setImageDataUrl('')}>移除图片</Button>
+                <div className="admin-multimodal-media-frame">
+                  {imageDataUrl ? (
+                    <div className="admin-vision-preview-wrap admin-vision-preview-wrap--fixed">
+                      <button type="button" className="admin-preview-remove" onClick={() => setImageDataUrl('')}>
+                        ×
+                      </button>
+                      <img src={imageDataUrl} alt="多模态测试预览" className="admin-vision-preview admin-vision-preview--fixed" />
                     </div>
-                  </div>
-                ) : (
-                  <div className="admin-empty-state">
-                    <strong>暂无测试图片</strong>
-                    <div>上传一张图片后，可结合提示词做图文联合测试。支持 JPG / PNG / WEBP。</div>
-                  </div>
-                )}
+                  ) : (
+                    <div className="admin-empty-state admin-empty-state--media">
+                      <strong>暂无测试图片</strong>
+                      <div>上传一张图片后，可结合提示词做图文联合测试。支持 JPG / PNG / WEBP。</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="admin-multimodal-side">
                 <Input.TextArea
                   rows={4}
                   value={promptText}
                   onChange={(event) => setPromptText(event.target.value)}
                   placeholder="请输入测试问题，例如：请识别图片中的景点并简要介绍。"
                 />
+                <div className="admin-mode-row admin-mode-row--compact">
+                  <Button
+                    type={activeMode === 'caption' ? 'primary' : 'default'}
+                    className={activeMode === 'caption' ? 'admin-mode-btn admin-mode-btn--active' : 'admin-mode-btn'}
+                    onClick={() => {
+                      setActiveMode('caption')
+                      setPromptText(modePresets.caption)
+                    }}
+                  >
+                    图片描述
+                  </Button>
+                  <Button
+                    type={activeMode === 'ocr' ? 'primary' : 'default'}
+                    className={activeMode === 'ocr' ? 'admin-mode-btn admin-mode-btn--active' : 'admin-mode-btn'}
+                    onClick={() => {
+                      setActiveMode('ocr')
+                      setPromptText(modePresets.ocr)
+                    }}
+                  >
+                    OCR识别
+                  </Button>
+                  <Button
+                    type={activeMode === 'qa' ? 'primary' : 'default'}
+                    className={activeMode === 'qa' ? 'admin-mode-btn admin-mode-btn--active' : 'admin-mode-btn'}
+                    onClick={() => {
+                      setActiveMode('qa')
+                      setPromptText(modePresets.qa)
+                    }}
+                  >
+                    图片问答
+                  </Button>
+                  <Button
+                    type={activeMode === 'reason' ? 'primary' : 'default'}
+                    className={activeMode === 'reason' ? 'admin-mode-btn admin-mode-btn--active' : 'admin-mode-btn'}
+                    onClick={() => {
+                      setActiveMode('reason')
+                      setPromptText(modePresets.reason)
+                    }}
+                  >
+                    场景理解
+                  </Button>
+                </div>
                 <div className="admin-build-summary__time">{modeDescriptions[activeMode]}</div>
-              </div>
-            </Card>
-            {imageDataUrl && testResult?.success ? (
-              <Card size="small" className="admin-build-summary">
-                <div className="admin-form-grid">
-                  <strong>结果预览</strong>
-                  <div className="admin-preview-grid">
-                    <div className="admin-preview-block">
+                {imageDataUrl && testResult?.success ? (
+                  <div className="admin-preview-grid admin-preview-grid--fixed">
+                    <div className={`admin-preview-block ${activeMode === 'caption' ? 'admin-preview-block--active' : ''}`}>
+                      <Tag color={activeMode === 'caption' ? 'blue' : 'default'}>图片描述</Tag>
                       <strong>图片描述</strong>
                       <div>{testResult.caption ?? '点击“图片描述”并重新测试可查看此结果。'}</div>
                     </div>
-                    <div className="admin-preview-block">
+                    <div className={`admin-preview-block ${activeMode === 'ocr' ? 'admin-preview-block--active' : ''}`}>
+                      <Tag color={activeMode === 'ocr' ? 'purple' : 'default'}>OCR</Tag>
                       <strong>识别文字</strong>
                       <div>{testResult.ocrText ?? '点击“OCR识别”并重新测试可查看此结果。'}</div>
                     </div>
-                    <div className="admin-preview-block">
+                    <div className={`admin-preview-block ${activeMode === 'qa' ? 'admin-preview-block--active' : ''}`}>
+                      <Tag color={activeMode === 'qa' ? 'cyan' : 'default'}>问答</Tag>
                       <strong>模型回答</strong>
                       <div>{testResult.modelAnswer ?? '点击“图片问答”并重新测试可查看此结果。'}</div>
                     </div>
-                    <div className="admin-preview-block">
+                    <div className={`admin-preview-block ${activeMode === 'reason' ? 'admin-preview-block--active' : ''}`}>
+                      <Tag color={activeMode === 'reason' ? 'green' : 'default'}>场景理解</Tag>
                       <strong>场景理解</strong>
                       <div>{testResult.sceneSummary ?? '点击“场景理解”并重新测试可查看此结果。'}</div>
                     </div>
                   </div>
-                </div>
-              </Card>
-            ) : null}
+                ) : (
+                  <Card size="small" className="admin-build-summary admin-build-summary--muted admin-preview-placeholder">
+                    结果预览区会在你上传图片并执行测试后显示。当前模式下将优先展示对应的结构化结果。
+                  </Card>
+                )}
+              </div>
+            </div>
             <div className="admin-action-row">
               <Button type="primary" onClick={onSave} loading={saving}>
                 保存设置

@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Button, Card, Form, Input, Tag, Upload } from 'antd'
+import { useMemo, useState } from 'react'
+import { Button, Card, Form, Input, Pagination, Tag, Upload } from 'antd'
 import type { FormInstance } from 'antd'
 import type { UploadProps } from 'antd'
 
@@ -22,6 +22,7 @@ type VisionConfigPageProps = {
   saving: boolean
   testing: boolean
   options: VisionOption[]
+  onOpenManual: () => void
   onSave: () => void
   onTest: (payload?: { promptText?: string; imageDataUrl?: string; mode?: string }) => void
   result: React.ReactNode
@@ -42,6 +43,7 @@ export default function VisionConfigPage({
   saving,
   testing,
   options,
+  onOpenManual,
   onSave,
   onTest,
   result,
@@ -53,6 +55,7 @@ export default function VisionConfigPage({
   const [promptText, setPromptText] = useState('')
   const [imageDataUrl, setImageDataUrl] = useState('')
   const [activeMode, setActiveMode] = useState<'caption' | 'ocr' | 'qa' | 'scene'>('caption')
+  const [page, setPage] = useState(1)
 
   const modePresets = {
     caption: '请描述图片中的主要内容。',
@@ -73,6 +76,7 @@ export default function VisionConfigPage({
     if (!keyword) return true
     return item.value.toLowerCase().includes(keyword) || (item.provider ?? '').toLowerCase().includes(keyword)
   })
+  const pagedOptions = useMemo(() => filteredOptions.slice((page - 1) * 4, page * 4), [filteredOptions, page])
 
   const uploadProps: UploadProps = {
     accept: '.png,.jpg,.jpeg,.webp',
@@ -90,13 +94,16 @@ export default function VisionConfigPage({
       <div className="admin-two-column admin-embedding-layout">
         <Card title="视觉模型列表" className="admin-settings-panel-card">
           <div className="admin-form-grid">
-            <Input
-              placeholder="搜索视觉模型名称或标识"
-              value={searchText}
-              onChange={(event) => setSearchText(event.target.value)}
-            />
+            <div className="admin-list-toolbar">
+              <Input
+                placeholder="搜索视觉模型名称或标识"
+                value={searchText}
+                onChange={(event) => setSearchText(event.target.value)}
+              />
+              <Button type="primary" ghost onClick={onOpenManual}>新增模型</Button>
+            </div>
             <div className="admin-embedding-list">
-              {filteredOptions.length ? filteredOptions.map((item) => (
+              {pagedOptions.length ? pagedOptions.map((item) => (
                 <button
                   key={item.value}
                   type="button"
@@ -116,6 +123,16 @@ export default function VisionConfigPage({
                 </div>
               )}
             </div>
+            {filteredOptions.length > 4 ? (
+              <Pagination
+                current={page}
+                total={filteredOptions.length}
+                pageSize={4}
+                size="small"
+                onChange={setPage}
+                className="admin-mini-pagination"
+              />
+            ) : null}
           </div>
         </Card>
         <Card title="模型配置" className="admin-settings-panel-card">
@@ -154,6 +171,7 @@ export default function VisionConfigPage({
             <div className="admin-mode-row">
               <Button
                 type={activeMode === 'caption' ? 'primary' : 'default'}
+                className={activeMode === 'caption' ? 'admin-mode-btn admin-mode-btn--active' : 'admin-mode-btn'}
                 onClick={() => {
                   setActiveMode('caption')
                   setPromptText(modePresets.caption)
@@ -163,6 +181,7 @@ export default function VisionConfigPage({
               </Button>
               <Button
                 type={activeMode === 'ocr' ? 'primary' : 'default'}
+                className={activeMode === 'ocr' ? 'admin-mode-btn admin-mode-btn--active' : 'admin-mode-btn'}
                 onClick={() => {
                   setActiveMode('ocr')
                   setPromptText(modePresets.ocr)
@@ -172,6 +191,7 @@ export default function VisionConfigPage({
               </Button>
               <Button
                 type={activeMode === 'qa' ? 'primary' : 'default'}
+                className={activeMode === 'qa' ? 'admin-mode-btn admin-mode-btn--active' : 'admin-mode-btn'}
                 onClick={() => {
                   setActiveMode('qa')
                   setPromptText(modePresets.qa)
@@ -181,6 +201,7 @@ export default function VisionConfigPage({
               </Button>
               <Button
                 type={activeMode === 'scene' ? 'primary' : 'default'}
+                className={activeMode === 'scene' ? 'admin-mode-btn admin-mode-btn--active' : 'admin-mode-btn'}
                 onClick={() => {
                   setActiveMode('scene')
                   setPromptText(modePresets.scene)
@@ -196,10 +217,10 @@ export default function VisionConfigPage({
                 </Upload>
                 {imageDataUrl ? (
                   <div className="admin-vision-preview-wrap">
+                    <button type="button" className="admin-preview-remove" onClick={() => setImageDataUrl('')}>
+                      ×
+                    </button>
                     <img src={imageDataUrl} alt="视觉测试预览" className="admin-vision-preview" />
-                    <div className="admin-action-row">
-                      <Button onClick={() => setImageDataUrl('')}>移除图片</Button>
-                    </div>
                   </div>
                 ) : (
                   <div className="admin-empty-state">
@@ -221,19 +242,23 @@ export default function VisionConfigPage({
                 <div className="admin-form-grid">
                   <strong>结果预览</strong>
                   <div className="admin-preview-grid">
-                    <div className="admin-preview-block">
+                    <div className={`admin-preview-block ${activeMode === 'caption' ? 'admin-preview-block--active' : ''}`}>
+                      <Tag color={activeMode === 'caption' ? 'blue' : 'default'}>图片描述</Tag>
                       <strong>图片描述</strong>
                       <div>{testResult.caption ?? '点击“图片描述”并重新测试可查看此结果。'}</div>
                     </div>
-                    <div className="admin-preview-block">
+                    <div className={`admin-preview-block ${activeMode === 'ocr' ? 'admin-preview-block--active' : ''}`}>
+                      <Tag color={activeMode === 'ocr' ? 'purple' : 'default'}>OCR</Tag>
                       <strong>识别文字</strong>
                       <div>{testResult.ocrText ?? '点击“OCR识别”并重新测试可查看此结果。'}</div>
                     </div>
-                    <div className="admin-preview-block">
+                    <div className={`admin-preview-block ${activeMode === 'qa' ? 'admin-preview-block--active' : ''}`}>
+                      <Tag color={activeMode === 'qa' ? 'cyan' : 'default'}>问答</Tag>
                       <strong>模型回答</strong>
                       <div>{testResult.modelAnswer ?? '点击“图片问答”并重新测试可查看此结果。'}</div>
                     </div>
-                    <div className="admin-preview-block">
+                    <div className={`admin-preview-block ${activeMode === 'scene' ? 'admin-preview-block--active' : ''}`}>
+                      <Tag color={activeMode === 'scene' ? 'green' : 'default'}>场景理解</Tag>
                       <strong>场景理解</strong>
                       <div>{testResult.sceneSummary ?? '点击“场景理解”并重新测试可查看此结果。'}</div>
                     </div>
