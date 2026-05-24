@@ -33,6 +33,7 @@ import VoiceConfigPage from './pages/settings/VoiceConfigPage'
 import SpotDrawer from './pages/scenic/SpotAddPage'
 import SpotCategoryPage from './pages/scenic/SpotCategoryPage'
 import FacilityListPage from './pages/scenic/FacilityListPage'
+import TravelAnalyticsPage from './pages/scenic/TravelAnalyticsPage'
 import './App.css'
 
 const { Content } = Layout
@@ -55,6 +56,7 @@ type MenuKey =
   | 'routes'
   | 'avatar'
   | 'settings'
+  | 'travel-analytics'
   | 'feedback'
   | 'qa'
 
@@ -69,6 +71,7 @@ const menuPathByKey: Record<MenuKey, string> = {
   routes: '/admin/routes',
   avatar: '/admin/avatar',
   settings: '/admin/setting',
+  'travel-analytics': '/admin/travel-analytics',
   feedback: '/admin/feedback',
   qa: '/admin/qa',
 }
@@ -938,6 +941,8 @@ function renderPanel(activeKey: MenuKey) {
       return <AvatarPanel />
     case 'settings':
       return <SettingsPanel />
+    case 'travel-analytics':
+      return <TravelAnalyticsPage />
     case 'feedback':
       return <FeedbackPanel />
     case 'qa':
@@ -1036,7 +1041,7 @@ function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: () => vo
         onSelect={(key) => navigate(getPathForMenuKey(key as MenuKey))}
       />
       <Layout>
-        <Content className="admin-content">
+        <Content className={activeKey === 'travel-analytics' ? 'admin-content admin-content--fullscreen-table' : 'admin-content'}>
           {activeKey === 'facility-list'
             ? <FacilityListPage onAddFacility={() => setSpotDrawerOpen(true)} />
             : renderPanel(activeKey)}

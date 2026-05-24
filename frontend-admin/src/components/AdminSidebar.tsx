@@ -1,7 +1,8 @@
-import {
+﻿import {
   BarChartOutlined,
   BookOutlined,
   CommentOutlined,
+  DatabaseOutlined,
   EnvironmentOutlined,
   NodeIndexOutlined,
   RobotOutlined,
@@ -38,6 +39,7 @@ const menuItems: MenuProps['items'] = [
   { key: 'avatar', icon: <RobotOutlined />, label: '数字人配置' },
   { key: 'feedback', icon: <CommentOutlined />, label: '游客反馈分析' },
   { key: 'qa', icon: <SearchOutlined />, label: '问答记录查询' },
+  { key: 'travel-analytics', icon: <DatabaseOutlined />, label: '旅游数据行为分析' },
 ]
 
 export default function AdminSidebar({ activeKey, displayName, role, onLogout, onSelect }: AdminSidebarProps) {

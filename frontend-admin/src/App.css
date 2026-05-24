@@ -219,6 +219,12 @@
   overflow: hidden;
 }
 
+.admin-content--fullscreen-table {
+  height: calc(100vh - 56px);
+  min-height: calc(100vh - 56px);
+  overflow: hidden;
+}
+
 .admin-panel-grid {
   display: grid;
   gap: 16px;
@@ -766,11 +772,95 @@
   margin-top: 12px;
 }
 
-.travel-analytics-table-wrap {
-  width: 100%;
-  overflow-x: auto;
+/* 强制恢复表格的原生横向滚动条，不做隐藏 */
+.ant-table-body {
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+  -ms-overflow-style: auto !important;
+  scrollbar-width: auto !important;
+}
+
+/* Chrome/Edge 显示横向滚动条 */
+.ant-table-body::-webkit-scrollbar {
+  display: block !important;
+  height: 12px !important;
+}
+
+.ant-table-body::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 6px;
+}
+
+.travel-analytics-page {
+  height: 100%;
+}
+
+.travel-analytics-card {
+  height: 100%;
+}
+
+.travel-analytics-card .ant-card-body {
+  height: calc(100% - 57px);
+  display: flex;
+}
+
+.travel-analytics-card .travel-analytics-table-wrap {
+  flex: 1;
+  min-height: 0;
 }
 
 .admin-shell > .ant-layout {
   background: #f6f8fb;
+}
+
+/* Travel analytics: keep layout fixed and enable native horizontal scroll only in table area */
+.travel-table-scroll {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0 16px;
+}
+
+/* Do not let ancestors clip table width */
+.ant-layout,
+.ant-layout-content,
+.ant-card,
+.ant-card-body,
+.travel-table-scroll {
+  min-width: 0;
+}
+
+/* Native horizontal scroll in AntD table internals */
+.travel-table .ant-table-content {
+  overflow-x: auto !important;
+}
+
+.travel-table .ant-table-body {
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+  -ms-overflow-style: auto !important;
+  scrollbar-width: auto !important;
+}
+
+.travel-table .ant-table-content::-webkit-scrollbar,
+.travel-table .ant-table-body::-webkit-scrollbar {
+  display: block !important;
+  height: 12px !important;
+}
+
+.travel-table .ant-table-content::-webkit-scrollbar-thumb,
+.travel-table .ant-table-body::-webkit-scrollbar-thumb {
+  background: #c6d0dc;
+  border-radius: 8px;
+}
+
+.travel-table .ant-table-content::-webkit-scrollbar-track,
+.travel-table .ant-table-body::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.travel-table .ant-table-pagination.ant-pagination {
+  justify-content: flex-start;
+  margin-top: 12px;
 }
