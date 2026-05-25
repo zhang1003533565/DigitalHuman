@@ -441,12 +441,6 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     }
   }
 
-  function selectNextModel() {
-    const currentIndex = MODEL_OPTIONS.findIndex((model) => model.id === selectedModelId)
-    const nextModel = MODEL_OPTIONS[(currentIndex + 1) % MODEL_OPTIONS.length] ?? MODEL_OPTIONS[0]
-    setSelectedModelId(nextModel.id)
-  }
-
   function selectNextVoice() {
     const currentIndex = VOICE_OPTIONS.findIndex((voice) => voice.id === config.voiceId)
     const nextVoice = VOICE_OPTIONS[(currentIndex + 1) % VOICE_OPTIONS.length] ?? VOICE_OPTIONS[0]
