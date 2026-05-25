@@ -27,6 +27,10 @@ public class KnowledgeBuildTask {
     private Integer chunksIndexed;
     @Column(length = 1000)
     private String errorMessage;
+    @Column(length = 2000)
+    private String failedFilesJson;
+    @Column(length = 4000)
+    private String taskLog;
     @Column(nullable = false)
     private LocalDateTime createdAt;
     private LocalDateTime startedAt;
@@ -49,6 +53,10 @@ public class KnowledgeBuildTask {
     public void setChunksIndexed(Integer chunksIndexed) { this.chunksIndexed = chunksIndexed; }
     public String getErrorMessage() { return errorMessage; }
     public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
+    public String getFailedFilesJson() { return failedFilesJson; }
+    public void setFailedFilesJson(String failedFilesJson) { this.failedFilesJson = failedFilesJson; }
+    public String getTaskLog() { return taskLog; }
+    public void setTaskLog(String taskLog) { this.taskLog = taskLog; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getStartedAt() { return startedAt; }

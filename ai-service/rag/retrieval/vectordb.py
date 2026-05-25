@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
+import math
+import re
 
 from rag.contracts.schemas import ChunkRecord
 
@@ -80,6 +82,48 @@ class QdrantVectorStore:
                 )
             )
         return results
+
+    def keyword_search(self, query: str, limit: int, metadata_filter: dict[str, object] | None = None) -> list[ChunkRecord]:
+        points, _ = self.client.scroll(
+            collection_name=self.collection_name,
+            scroll_filter=build_metadata_filter(metadata_filter),
+            limit=5000,
+            with_payload=True,
+            with_vectors=False,
+        )
+        terms = tokenize_query(query)
+        if not terms:
+            return []
+        documents: list[tuple[object, dict, str, list[str]]] = []
+        document_frequency: dict[str, int] = {term: 0 for term in terms}
+        for point in points:
+            payload = dict(point.payload or {})
+            text = str(payload.get("text", ""))
+            tokens = tokenize_query(text)
+            token_set = set(tokens)
+            for term in terms:
+                if term in token_set:
+                    document_frequency[term] += 1
+            documents.append((point.id, payload, text, tokens))
+        total = max(1, len(documents))
+        scored: list[ChunkRecord] = []
+        for point_id, payload, text, tokens in documents:
+            if not tokens:
+                continue
+            score = 0.0
+            length_norm = 1.0 + len(tokens) / 200.0
+            for term in terms:
+                tf = tokens.count(term)
+                if tf <= 0:
+                    continue
+                idf = math.log((total + 1) / (document_frequency.get(term, 0) + 1)) + 1
+                score += (tf * idf) / length_norm
+            if score <= 0:
+                continue
+            next_payload = dict(payload)
+            next_payload.pop("text", None)
+            scored.append(ChunkRecord(id=str(point_id), text=text, score=score, payload=next_payload))
+        return sorted(scored, key=lambda item: item.score or 0, reverse=True)[:limit]
 
     def delete_by_source_file(self, file_name: str) -> int | None:
         points, _ = self.client.scroll(
@@ -165,3 +209,10 @@ def build_metadata_filter(metadata_filter: dict[str, object] | None):
         for tag in tags:
             conditions.append(models.FieldCondition(key="tags", match=models.MatchValue(value=str(tag))))
     return models.Filter(must=conditions, must_not=[disabled_condition])
+
+
+def tokenize_query(text: str) -> list[str]:
+    lowered = text.lower()
+    words = re.findall(r"[a-z0-9]+|[\u4e00-\u9fff]{2,}", lowered)
+    char_terms = [char for char in lowered if "\u4e00" <= char <= "\u9fff"]
+    return words + char_terms

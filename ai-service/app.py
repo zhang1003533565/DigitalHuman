@@ -13,6 +13,7 @@ from rag.retrieval.config_store import RetrievalConfig, load_retrieval_config, s
 from rag.application.rag_service import RagService
 from rag.contracts.schemas import ChunkToggleRequest, DeleteKnowledgeResponse, IngestRequest, IngestResponse, KnowledgeChunkListResponse, KnowledgeDocumentDiff, KnowledgeDocumentInfo, KnowledgeDocumentPreview, ModelTestRequest, ModelTestResponse, ProviderConfigRequest, ProviderConfigResponse, ProviderDeleteRequest, QueryRequest, QueryResponse, RetrieveRequest, RetrieveResponse, UploadKnowledgeResponse
 from rag.config.settings import validate_settings
+from rag.provider_runtime import provider_health_summary
 
 
 app = FastAPI(title="DigitalHuman RAG Service")
@@ -35,6 +36,7 @@ def health() -> dict[str, object]:
     checks["knowledgeBaseDir"] = str(rag_service.settings.knowledge_base_dir)
     checks["knowledgeBaseExists"] = rag_service.settings.knowledge_base_dir.exists()
     checks["startupWarnings"] = validate_settings(rag_service.settings)
+    checks["providers"] = provider_health_summary()
     status = "ok" if checks.get("qdrant") == "ok" else "degraded"
     return {"status": status, "checks": checks}
 
@@ -77,6 +79,16 @@ def preview_document(file_name: str) -> KnowledgeDocumentPreview:
 @app.get("/kb/documents/{file_name}/diff", response_model=KnowledgeDocumentDiff)
 def diff_document(file_name: str) -> KnowledgeDocumentDiff:
     return rag_service.diff_document(file_name)
+
+
+@app.get("/kb/documents/{file_name}/versions")
+def list_document_versions(file_name: str) -> list[dict[str, object]]:
+    return rag_service.list_document_versions(file_name)
+
+
+@app.post("/kb/documents/{file_name}/versions/{version}/restore")
+def restore_document_version(file_name: str, version: str) -> dict[str, object]:
+    return rag_service.restore_document_version(file_name, version)
 
 
 @app.put("/kb/chunks/{chunk_id}/disabled")

@@ -32,6 +32,8 @@ class Retriever:
         query_vector = self.embedder.embed_query(question)
         dense_hits = self.vector_store.search(query_vector, limit=retrieve_limit, metadata_filter=metadata_filter)
         if config.hybrid_enabled:
+            keyword_hits = self.vector_store.keyword_search(question, limit=retrieve_limit, metadata_filter=metadata_filter)
+            dense_hits = merge_dense_and_keyword(dense_hits, keyword_hits)
             apply_keyword_bonus(question, dense_hits)
         rerank_input = [chunk.model_copy(deep=True) for chunk in dense_hits]
         rerank_limit = min(effective_top_k, config.rerank_limit or self.rerank_limit)
@@ -49,3 +51,17 @@ def apply_keyword_bonus(question: str, chunks: list[ChunkRecord]) -> None:
     for chunk in chunks:
         overlap = sum(1 for char in terms if char in chunk.text)
         chunk.score = float(chunk.score or 0) + overlap * 0.001
+
+
+def merge_dense_and_keyword(dense_hits: list[ChunkRecord], keyword_hits: list[ChunkRecord]) -> list[ChunkRecord]:
+    merged: dict[str, ChunkRecord] = {chunk.id: chunk for chunk in dense_hits}
+    for rank, chunk in enumerate(keyword_hits):
+        existing = merged.get(chunk.id)
+        keyword_score = float(chunk.score or 0) / max(1.0, float(keyword_hits[0].score or 1))
+        bonus = keyword_score * 0.12 + max(0, 20 - rank) * 0.001
+        if existing:
+            existing.score = float(existing.score or 0) + bonus
+        else:
+            chunk.score = bonus
+            merged[chunk.id] = chunk
+    return sorted(merged.values(), key=lambda item: item.score or 0, reverse=True)

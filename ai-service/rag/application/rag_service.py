@@ -7,6 +7,7 @@ from fastapi import HTTPException
 
 from rag.config.settings import get_settings
 from rag.contracts.schemas import DeleteKnowledgeResponse, IngestRequest, IngestResponse, KnowledgeChunkListResponse, KnowledgeDocumentDiff, KnowledgeDocumentInfo, KnowledgeDocumentPreview, QueryRequest, QueryResponse, RetrieveRequest, RetrieveResponse, UploadKnowledgeResponse
+from rag.content.document_versions import diff_versions, list_document_versions, record_document_version, restore_document_version
 from rag.content.file_store import ensure_directory, is_supported_file_name, save_uploaded_file
 from rag.graph.query_graph import RagQueryGraph, extract_related_spots
 from rag.ingestion.chunker import ChunkingConfig, build_chunks
@@ -122,12 +123,14 @@ class RagService:
             raise HTTPException(status_code=400, detail="仅支持上传 docx、pdf、txt 文件")
 
         saved_path = save_uploaded_file(self.settings.knowledge_base_dir, file_name, file_obj)
+        version = record_document_version(saved_path)
         stat = saved_path.stat()
         return UploadKnowledgeResponse(
             file_name=saved_path.name,
             size_bytes=stat.st_size,
             updated_at=datetime.fromtimestamp(stat.st_mtime).isoformat(),
             supported=True,
+            version=str(version.get("version")),
         )
 
     def delete_document(self, file_name: str) -> DeleteKnowledgeResponse:
@@ -169,16 +172,31 @@ class RagService:
         path = self._resolve_document_path(file_name)
         if not path.exists():
             raise HTTPException(status_code=404, detail="知识文件不存在")
-        preview = self.preview_document(file_name).text.splitlines()[:50]
+        current_text = self.preview_document(file_name).text
+        versions = list_document_versions(file_name)
+        previous_text = ""
+        if len(versions) >= 2:
+            previous_text = self._parse_version_file(file_name, str(versions[1].get("storedName")))
+        preview = diff_versions(file_name, previous_text, current_text) if previous_text else current_text.splitlines()[:50]
         stat = path.stat()
         return KnowledgeDocumentDiff(
             fileName=path.name,
             currentVersion=str(int(stat.st_mtime)),
-            previousVersion=None,
+            previousVersion=str(versions[1].get("version")) if len(versions) >= 2 else None,
             addedLines=len(preview),
             removedLines=0,
             preview=preview,
         )
+
+    def list_document_versions(self, file_name: str) -> list[dict[str, object]]:
+        self._resolve_document_path(file_name)
+        return list_document_versions(file_name)
+
+    def restore_document_version(self, file_name: str, version: str) -> dict[str, object]:
+        self._resolve_document_path(file_name)
+        metadata = restore_document_version(file_name, version, self.settings.knowledge_base_dir)
+        self.rebuild_document(file_name)
+        return metadata
 
     def set_chunk_disabled(self, chunk_id: str, disabled: bool) -> dict[str, object]:
         if not chunk_id:
@@ -200,3 +218,12 @@ class RagService:
             raise HTTPException(status_code=400, detail="文件名不合法")
         ensure_directory(self.settings.knowledge_base_dir)
         return self.settings.knowledge_base_dir / file_name
+
+    def _parse_version_file(self, file_name: str, stored_name: str) -> str:
+        version_path = Path(__file__).resolve().parents[1] / ".runtime" / "document_versions" / file_name.replace("/", "_").replace("\\", "_") / stored_name
+        if not version_path.exists():
+            return ""
+        try:
+            return "\n".join(element.text for element in parse_document(version_path))[:8000]
+        except Exception:
+            return ""

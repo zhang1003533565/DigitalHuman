@@ -91,6 +91,16 @@ public class AdminKnowledgeController {
         return knowledgeBaseService.diffDocument(fileName);
     }
 
+    @GetMapping("/documents/{fileName}/versions")
+    public JsonNode listDocumentVersions(@PathVariable String fileName) {
+        return knowledgeBaseService.listDocumentVersions(fileName);
+    }
+
+    @PostMapping("/documents/{fileName}/versions/{version}/restore")
+    public JsonNode restoreDocumentVersion(@PathVariable String fileName, @PathVariable String version) {
+        return knowledgeBaseService.restoreDocumentVersion(fileName, version);
+    }
+
     @PutMapping("/chunks/{chunkId}/disabled")
     public JsonNode setChunkDisabled(@PathVariable String chunkId, @RequestBody JsonNode request) {
         return knowledgeBaseService.setChunkDisabled(chunkId, request.path("disabled").asBoolean());

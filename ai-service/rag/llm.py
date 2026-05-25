@@ -3,8 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from model_providers.registry import get_provider_client
+from model_providers.config_store import load_provider_configs
 from rag.contracts.schemas import ChunkRecord
 from rag.generation.prompt_store import DEFAULT_SYSTEM_PROMPT, DEFAULT_PROMPT_VERSION, load_prompt_config
+from rag.provider_runtime import check_provider_quota, log_provider_call
 
 
 @dataclass
@@ -39,27 +41,45 @@ class ProviderBackedLlm:
         if not self.is_enabled():
             return None
 
-        provider_client = get_provider_client(
-            self.config.provider or "",
-            {
-                "provider": self.config.provider or "",
-                "baseUrl": self.config.base_url or "",
-                "apiKey": self.config.api_key or "",
-            },
-        )
+        candidates = self._provider_candidates()
         last_error: Exception | None = None
-        for _ in range(2):
-            try:
-                return provider_client.generate_answer(
-                    model_id=self.config.model or "",
-                    messages=messages,
-                    temperature=temperature,
-                )
-            except Exception as exc:
-                last_error = exc
+        for candidate in candidates:
+            provider = candidate["provider"]
+            provider_client = get_provider_client(provider, candidate)
+            for _ in range(2):
+                try:
+                    check_provider_quota(provider)
+                    answer = provider_client.generate_answer(
+                        model_id=self.config.model or "",
+                        messages=messages,
+                        temperature=temperature,
+                    )
+                    log_provider_call(provider, self.config.model or "", True)
+                    return answer
+                except Exception as exc:
+                    last_error = exc
+                    log_provider_call(provider, self.config.model or "", False, str(exc))
         if last_error:
             raise last_error
         return None
+
+    def _provider_candidates(self) -> list[dict[str, str]]:
+        primary = {
+            "provider": self.config.provider or "",
+            "baseUrl": self.config.base_url or "",
+            "apiKey": self.config.api_key or "",
+        }
+        candidates = [primary] if primary["provider"] and primary["baseUrl"] else []
+        for item in load_provider_configs():
+            provider = str(item.get("provider", ""))
+            if not provider or provider.lower() == primary.get("provider", "").lower():
+                continue
+            candidates.append({
+                "provider": provider,
+                "baseUrl": str(item.get("baseUrl", "")),
+                "apiKey": str(item.get("apiKey", "")),
+            })
+        return candidates
 
     def rewrite_question(self, question: str, history: list[dict[str, str]], interest: str | None) -> str | None:
         if not self.is_enabled() or not history:

@@ -12,11 +12,13 @@ public class KnowledgeBuildTaskDto {
     private final Integer filesIndexed;
     private final Integer chunksIndexed;
     private final String errorMessage;
+    private final String failedFilesJson;
+    private final String taskLog;
     private final LocalDateTime createdAt;
     private final LocalDateTime startedAt;
     private final LocalDateTime finishedAt;
 
-    public KnowledgeBuildTaskDto(Long id, String status, String fileName, boolean recreateCollection, int progress, Integer filesSeen, Integer filesIndexed, Integer chunksIndexed, String errorMessage, LocalDateTime createdAt, LocalDateTime startedAt, LocalDateTime finishedAt) {
+    public KnowledgeBuildTaskDto(Long id, String status, String fileName, boolean recreateCollection, int progress, Integer filesSeen, Integer filesIndexed, Integer chunksIndexed, String errorMessage, String failedFilesJson, String taskLog, LocalDateTime createdAt, LocalDateTime startedAt, LocalDateTime finishedAt) {
         this.id = id;
         this.status = status;
         this.fileName = fileName;
@@ -26,6 +28,8 @@ public class KnowledgeBuildTaskDto {
         this.filesIndexed = filesIndexed;
         this.chunksIndexed = chunksIndexed;
         this.errorMessage = errorMessage;
+        this.failedFilesJson = failedFilesJson;
+        this.taskLog = taskLog;
         this.createdAt = createdAt;
         this.startedAt = startedAt;
         this.finishedAt = finishedAt;
@@ -40,6 +44,8 @@ public class KnowledgeBuildTaskDto {
     public Integer getFilesIndexed() { return filesIndexed; }
     public Integer getChunksIndexed() { return chunksIndexed; }
     public String getErrorMessage() { return errorMessage; }
+    public String getFailedFilesJson() { return failedFilesJson; }
+    public String getTaskLog() { return taskLog; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getStartedAt() { return startedAt; }
     public LocalDateTime getFinishedAt() { return finishedAt; }

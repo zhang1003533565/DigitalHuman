@@ -40,6 +40,11 @@ public class AuthInterceptor implements HandlerInterceptor {
             return false;
         }
 
+        if (path.startsWith("/api/admin/") && !isAuthorizedForAdminPath(session.getRole(), request.getMethod(), path)) {
+            response.sendError(HttpStatus.FORBIDDEN.value(), "当前角色无权执行该后台操作");
+            return false;
+        }
+
         if (path.startsWith("/api/user/") && session.getRole() != UserRole.USER) {
             response.sendError(HttpStatus.FORBIDDEN.value(), "需要用户权限");
             return false;
@@ -54,6 +59,23 @@ public class AuthInterceptor implements HandlerInterceptor {
                 || role == UserRole.REVIEWER
                 || role == UserRole.KNOWLEDGE_ADMIN
                 || role == UserRole.OBSERVER;
+    }
+
+    private boolean isAuthorizedForAdminPath(UserRole role, String method, String path) {
+        if (role == UserRole.ADMIN) {
+            return true;
+        }
+        if (role == UserRole.OBSERVER) {
+            return "GET".equalsIgnoreCase(method);
+        }
+        if (role == UserRole.REVIEWER) {
+            return path.startsWith("/api/admin/guide/");
+        }
+        if (role == UserRole.KNOWLEDGE_ADMIN) {
+            return path.startsWith("/api/admin/knowledge/")
+                    || (path.startsWith("/api/admin/settings/") && "GET".equalsIgnoreCase(method));
+        }
+        return false;
     }
 
     private String resolveToken(HttpServletRequest request) {

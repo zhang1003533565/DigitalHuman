@@ -16,9 +16,12 @@ import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.concurrent.ConcurrentHashMap;
 import java.time.LocalDateTime;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
@@ -45,6 +48,7 @@ public class KnowledgeBaseService {
     private final AuditLogService auditLogService;
     private final KnowledgeBuildTaskRepository taskRepository;
     private final ExecutorService buildExecutor = Executors.newSingleThreadExecutor();
+    private final ConcurrentHashMap<Long, Future<?>> runningTasks = new ConcurrentHashMap<>();
 
     public KnowledgeBaseService(AuditLogService auditLogService, KnowledgeBuildTaskRepository taskRepository) {
         this.auditLogService = auditLogService;
@@ -139,7 +143,8 @@ public class KnowledgeBaseService {
         task.setRecreateCollection(Boolean.TRUE.equals(payload.getRecreateCollection()));
         task.setCreatedAt(LocalDateTime.now());
         taskRepository.save(task);
-        buildExecutor.submit(() -> runBuildTask(task.getId()));
+        Future<?> future = buildExecutor.submit(() -> runBuildTask(task.getId()));
+        runningTasks.put(task.getId(), future);
         return toTaskDto(task);
     }
 
@@ -157,11 +162,16 @@ public class KnowledgeBaseService {
 
     public KnowledgeBuildTaskDto cancelBuildTask(Long id) {
         KnowledgeBuildTask task = taskRepository.findById(id).orElseThrow();
-        if ("PENDING".equals(task.getStatus())) {
+        if ("PENDING".equals(task.getStatus()) || "RUNNING".equals(task.getStatus())) {
             task.setStatus("CANCELLED");
             task.setProgress(100);
             task.setFinishedAt(LocalDateTime.now());
+            appendTaskLog(task, "任务已请求取消");
             taskRepository.save(task);
+            Future<?> future = runningTasks.get(id);
+            if (future != null) {
+                future.cancel(true);
+            }
         }
         return toTaskDto(task);
     }
@@ -174,23 +184,65 @@ public class KnowledgeBaseService {
         task.setStatus("RUNNING");
         task.setProgress(10);
         task.setStartedAt(LocalDateTime.now());
+        appendTaskLog(task, "开始构建任务");
         taskRepository.save(task);
         try {
-            KnowledgeBuildResponse response = task.getFileName() != null && !task.getFileName().isBlank()
-                    ? rebuildDocument(task.getFileName())
-                    : buildKnowledgeBase(taskRequest(task));
-            task.setFilesSeen(response.getFilesSeen());
-            task.setFilesIndexed(response.getFilesIndexed());
-            task.setChunksIndexed(response.getChunksIndexed());
+            BuildAccumulator accumulator = runBuildTaskWithProgress(task);
+            task.setFilesSeen(accumulator.filesSeen);
+            task.setFilesIndexed(accumulator.filesIndexed);
+            task.setChunksIndexed(accumulator.chunksIndexed);
+            task.setFailedFilesJson(writeJson(accumulator.failedFiles));
             task.setStatus("SUCCEEDED");
             task.setProgress(100);
         } catch (Exception exception) {
-            task.setStatus("FAILED");
+            if (!"CANCELLED".equals(task.getStatus())) {
+                task.setStatus("FAILED");
+            }
             task.setProgress(100);
             task.setErrorMessage(exception.getMessage());
+            appendTaskLog(task, "构建失败：" + exception.getMessage());
         }
         task.setFinishedAt(LocalDateTime.now());
         taskRepository.save(task);
+        runningTasks.remove(id);
+    }
+
+    private BuildAccumulator runBuildTaskWithProgress(KnowledgeBuildTask task) {
+        BuildAccumulator accumulator = new BuildAccumulator();
+        if (task.getFileName() != null && !task.getFileName().isBlank()) {
+            KnowledgeBuildResponse response = rebuildDocument(task.getFileName());
+            accumulator.filesSeen = response.getFilesSeen();
+            accumulator.filesIndexed = response.getFilesIndexed();
+            accumulator.chunksIndexed = response.getChunksIndexed();
+            return accumulator;
+        }
+        List<KnowledgeDocumentDto> docs = listDocuments().stream().filter(doc -> Boolean.TRUE.equals(doc.getSupported())).toList();
+        accumulator.filesSeen = docs.size();
+        if (docs.isEmpty()) {
+            return accumulator;
+        }
+        for (int index = 0; index < docs.size(); index++) {
+            KnowledgeDocumentDto doc = docs.get(index);
+            KnowledgeBuildTask latest = taskRepository.findById(task.getId()).orElse(task);
+            if ("CANCELLED".equals(latest.getStatus()) || Thread.currentThread().isInterrupted()) {
+                throw new IllegalStateException("构建任务已取消");
+            }
+            try {
+                appendTaskLog(task, "构建文件：" + doc.getFileName());
+                KnowledgeBuildResponse response = rebuildDocument(doc.getFileName());
+                accumulator.filesIndexed += response.getFilesIndexed();
+                accumulator.chunksIndexed += response.getChunksIndexed();
+            } catch (Exception exception) {
+                accumulator.failedFiles.add(doc.getFileName() + "：" + exception.getMessage());
+            }
+            task.setProgress(Math.min(95, 10 + (index + 1) * 85 / docs.size()));
+            task.setFilesSeen(accumulator.filesSeen);
+            task.setFilesIndexed(accumulator.filesIndexed);
+            task.setChunksIndexed(accumulator.chunksIndexed);
+            task.setFailedFilesJson(writeJson(accumulator.failedFiles));
+            taskRepository.save(task);
+        }
+        return accumulator;
     }
 
     private KnowledgeBuildRequest taskRequest(KnowledgeBuildTask task) {
@@ -257,6 +309,27 @@ public class KnowledgeBaseService {
         return getKnowledgeJson("/kb/documents/" + encodePath(fileName) + "/diff", "文档 diff 查询失败");
     }
 
+    public JsonNode listDocumentVersions(String fileName) {
+        return getKnowledgeJson("/kb/documents/" + encodePath(fileName) + "/versions", "文档版本查询失败");
+    }
+
+    public JsonNode restoreDocumentVersion(String fileName, String version) {
+        Request request = new Request.Builder()
+                .url(ragServiceUrl + "/kb/documents/" + encodePath(fileName) + "/versions/" + encodePath(version) + "/restore")
+                .post(RequestBody.create(new byte[0], null))
+                .build();
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful() || response.body() == null) {
+                throw new IOException("RAG document restore request failed: " + response.code());
+            }
+            JsonNode result = objectMapper.readTree(response.body().string());
+            auditLogService.record("admin", "KNOWLEDGE_DOCUMENT_RESTORE", "knowledge_document", fileName + ":" + version, result);
+            return result;
+        } catch (Exception exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "文档版本恢复失败", exception);
+        }
+    }
+
     public JsonNode setChunkDisabled(String chunkId, boolean disabled) {
         try {
             String payload = objectMapper.writeValueAsString(java.util.Map.of("disabled", disabled));
@@ -307,8 +380,23 @@ public class KnowledgeBaseService {
                 task.getFilesIndexed(),
                 task.getChunksIndexed(),
                 task.getErrorMessage(),
+                task.getFailedFilesJson(),
+                task.getTaskLog(),
                 task.getCreatedAt(),
                 task.getStartedAt(),
                 task.getFinishedAt());
+    }
+
+    private void appendTaskLog(KnowledgeBuildTask task, String line) {
+        String current = task.getTaskLog() == null ? "" : task.getTaskLog();
+        String next = current + LocalDateTime.now() + " " + line + "\n";
+        task.setTaskLog(next.length() > 4000 ? next.substring(next.length() - 4000) : next);
+    }
+
+    private static class BuildAccumulator {
+        int filesSeen;
+        int filesIndexed;
+        int chunksIndexed;
+        List<String> failedFiles = new ArrayList<>();
     }
 }

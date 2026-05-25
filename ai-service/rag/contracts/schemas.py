@@ -90,6 +90,7 @@ class UploadKnowledgeResponse(BaseModel):
     size_bytes: int
     updated_at: str
     supported: bool
+    version: str | None = None
 
 
 class RetrieveRequest(BaseModel):
