@@ -918,6 +918,27 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.admin-json-preview {
+  background: #0f172a;
+  border-radius: 6px;
+  color: #e5e7eb;
+  margin-top: 12px;
+  max-height: 460px;
+  overflow: auto;
+  padding: 12px;
+  white-space: pre-wrap;
+}
+
+.admin-metric-row {
+  margin-bottom: 16px;
+}
+
+mark {
+  background: #fde68a;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
 @media (max-width: 900px) {
   .admin-rag-compare {
     grid-template-columns: 1fr;

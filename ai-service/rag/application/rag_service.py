@@ -6,7 +6,7 @@ from datetime import datetime
 from fastapi import HTTPException
 
 from rag.config.settings import get_settings
-from rag.contracts.schemas import DeleteKnowledgeResponse, IngestRequest, IngestResponse, KnowledgeChunkListResponse, KnowledgeDocumentInfo, QueryRequest, QueryResponse, RetrieveRequest, RetrieveResponse, UploadKnowledgeResponse
+from rag.contracts.schemas import DeleteKnowledgeResponse, IngestRequest, IngestResponse, KnowledgeChunkListResponse, KnowledgeDocumentDiff, KnowledgeDocumentInfo, KnowledgeDocumentPreview, QueryRequest, QueryResponse, RetrieveRequest, RetrieveResponse, UploadKnowledgeResponse
 from rag.content.file_store import ensure_directory, is_supported_file_name, save_uploaded_file
 from rag.graph.query_graph import RagQueryGraph, extract_related_spots
 from rag.ingestion.chunker import ChunkingConfig, build_chunks
@@ -111,6 +111,8 @@ class RagService:
                     size_bytes=stat.st_size,
                     updated_at=datetime.fromtimestamp(stat.st_mtime).isoformat(),
                     supported=is_supported_file_name(path.name),
+                    version=str(int(stat.st_mtime)),
+                    status="READY" if is_supported_file_name(path.name) else "UNSUPPORTED",
                 )
             )
         return documents
@@ -150,8 +152,41 @@ class RagService:
         path = self._resolve_document_path(file_name)
         return KnowledgeChunkListResponse(fileName=path.name, chunks=self.vector_store.list_by_source_file(path.name))
 
+    def preview_document(self, file_name: str) -> KnowledgeDocumentPreview:
+        path = self._resolve_document_path(file_name)
+        if not path.exists():
+            raise HTTPException(status_code=404, detail="知识文件不存在")
+        elements = parse_document(path)
+        text = "\n".join(element.text for element in elements)[:8000]
+        sections = []
+        for element in elements:
+            title = " / ".join(element.section_path) if getattr(element, "section_path", None) else getattr(element, "title", "")
+            if title and title not in sections:
+                sections.append(title)
+        return KnowledgeDocumentPreview(fileName=path.name, text=text, sections=sections[:50])
+
+    def diff_document(self, file_name: str) -> KnowledgeDocumentDiff:
+        path = self._resolve_document_path(file_name)
+        if not path.exists():
+            raise HTTPException(status_code=404, detail="知识文件不存在")
+        preview = self.preview_document(file_name).text.splitlines()[:50]
+        stat = path.stat()
+        return KnowledgeDocumentDiff(
+            fileName=path.name,
+            currentVersion=str(int(stat.st_mtime)),
+            previousVersion=None,
+            addedLines=len(preview),
+            removedLines=0,
+            preview=preview,
+        )
+
+    def set_chunk_disabled(self, chunk_id: str, disabled: bool) -> dict[str, object]:
+        if not chunk_id:
+            raise HTTPException(status_code=400, detail="chunkId 不能为空")
+        return {"chunkId": chunk_id, "disabled": self.vector_store.set_chunk_disabled(chunk_id, disabled)}
+
     def retrieve(self, request: RetrieveRequest) -> RetrieveResponse:
-        chunks = self.retriever.retrieve(request.question, top_k=request.top_k)
+        chunks = self.retriever.retrieve(request.question, top_k=request.top_k, metadata_filter=request.metadata_filter)
         return RetrieveResponse(
             chunks=chunks,
             related_spots=extract_related_spots(chunks),

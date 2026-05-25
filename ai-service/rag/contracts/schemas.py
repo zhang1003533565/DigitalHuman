@@ -13,6 +13,8 @@ class ChunkPayload(BaseModel):
     spot_name: str | None = None
     content_type: str = "paragraph"
     updated_at: str
+    disabled: bool = False
+    quality_flags: list[str] = Field(default_factory=list)
 
 
 class ChunkRecord(BaseModel):
@@ -53,6 +55,23 @@ class KnowledgeDocumentInfo(BaseModel):
     size_bytes: int
     updated_at: str
     supported: bool
+    version: str | None = None
+    status: str | None = None
+
+
+class KnowledgeDocumentPreview(BaseModel):
+    file_name: str = Field(alias="fileName")
+    text: str
+    sections: list[str] = Field(default_factory=list)
+
+
+class KnowledgeDocumentDiff(BaseModel):
+    file_name: str = Field(alias="fileName")
+    current_version: str | None = Field(default=None, alias="currentVersion")
+    previous_version: str | None = Field(default=None, alias="previousVersion")
+    added_lines: int = Field(default=0, alias="addedLines")
+    removed_lines: int = Field(default=0, alias="removedLines")
+    preview: list[str] = Field(default_factory=list)
 
 
 class KnowledgeChunkListResponse(BaseModel):
@@ -77,6 +96,7 @@ class RetrieveRequest(BaseModel):
     question: str = Field(..., min_length=1)
     interest: str | None = None
     top_k: int | None = None
+    metadata_filter: dict[str, object] | None = Field(default=None, alias="metadataFilter")
 
 
 class RetrieveResponse(BaseModel):
@@ -88,9 +108,14 @@ class QueryRequest(BaseModel):
     question: str = Field(..., min_length=1)
     interest: str | None = None
     top_k: int | None = None
+    metadata_filter: dict[str, object] | None = Field(default=None, alias="metadataFilter")
     session_id: str | None = Field(default=None, alias="sessionId")
     trace_id: str | None = Field(default=None, alias="traceId")
     enable_human_review: bool = Field(default=False, alias="enableHumanReview")
+
+
+class ChunkToggleRequest(BaseModel):
+    disabled: bool
 
 
 class QueryResponse(BaseModel):

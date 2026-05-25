@@ -47,11 +47,19 @@ class ProviderBackedLlm:
                 "apiKey": self.config.api_key or "",
             },
         )
-        return provider_client.generate_answer(
-            model_id=self.config.model or "",
-            messages=messages,
-            temperature=temperature,
-        )
+        last_error: Exception | None = None
+        for _ in range(2):
+            try:
+                return provider_client.generate_answer(
+                    model_id=self.config.model or "",
+                    messages=messages,
+                    temperature=temperature,
+                )
+            except Exception as exc:
+                last_error = exc
+        if last_error:
+            raise last_error
+        return None
 
     def rewrite_question(self, question: str, history: list[dict[str, str]], interest: str | None) -> str | None:
         if not self.is_enabled() or not history:

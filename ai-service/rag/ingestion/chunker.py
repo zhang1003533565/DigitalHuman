@@ -44,6 +44,7 @@ def build_chunks(path: Path, elements: list[ParsedElement], config: ChunkingConf
                 spot_name=extract_spot_name(section_stack, piece),
                 content_type=content_type,
                 updated_at=updated_at,
+                quality_flags=detect_quality_flags(piece),
             )
             chunks.append(
                 ChunkRecord(
@@ -132,3 +133,17 @@ def extract_spot_name(section_stack: list[str], text: str) -> str | None:
             return value
     match = re.search(r"[一-龥]{2,8}", text)
     return match.group(0) if match else None
+
+
+def detect_quality_flags(text: str) -> list[str]:
+    flags: list[str] = []
+    normalized = text.strip()
+    if not normalized:
+        flags.append("empty")
+    if 0 < len(normalized) < 40:
+        flags.append("too_short")
+    if len(normalized) > 900:
+        flags.append("too_long")
+    if len(normalized) > 20 and len(set(normalized)) < max(8, len(normalized) // 12):
+        flags.append("low_information")
+    return flags

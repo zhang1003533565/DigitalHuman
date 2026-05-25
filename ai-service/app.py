@@ -8,9 +8,11 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from model_capabilities.testing.model_test_service import test_model
 from model_capabilities.tts.router import router as tts_router
 from model_providers.config_store import delete_provider_config, load_provider_configs, save_provider_config
-from rag.generation.prompt_store import PromptConfig, PromptConfigRequest, load_prompt_config, save_prompt_config
+from rag.generation.prompt_store import PromptConfig, PromptConfigRequest, load_prompt_config, load_prompt_versions, publish_prompt_version, save_prompt_config
+from rag.retrieval.config_store import RetrievalConfig, load_retrieval_config, save_retrieval_config
 from rag.application.rag_service import RagService
-from rag.contracts.schemas import DeleteKnowledgeResponse, IngestRequest, IngestResponse, KnowledgeChunkListResponse, KnowledgeDocumentInfo, ModelTestRequest, ModelTestResponse, ProviderConfigRequest, ProviderConfigResponse, ProviderDeleteRequest, QueryRequest, QueryResponse, RetrieveRequest, RetrieveResponse, UploadKnowledgeResponse
+from rag.contracts.schemas import ChunkToggleRequest, DeleteKnowledgeResponse, IngestRequest, IngestResponse, KnowledgeChunkListResponse, KnowledgeDocumentDiff, KnowledgeDocumentInfo, KnowledgeDocumentPreview, ModelTestRequest, ModelTestResponse, ProviderConfigRequest, ProviderConfigResponse, ProviderDeleteRequest, QueryRequest, QueryResponse, RetrieveRequest, RetrieveResponse, UploadKnowledgeResponse
+from rag.config.settings import validate_settings
 
 
 app = FastAPI(title="DigitalHuman RAG Service")
@@ -19,8 +21,22 @@ app.include_router(tts_router)
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health() -> dict[str, object]:
+    checks: dict[str, object] = {"service": "ok"}
+    try:
+        checks["qdrantCollection"] = rag_service.vector_store.collection_status()
+        checks["qdrant"] = "ok"
+    except Exception as exc:
+        checks["qdrant"] = f"error: {exc}"
+    checks["llm"] = "configured" if rag_service.llm.is_enabled() else "not_configured"
+    checks["llmModel"] = rag_service.settings.llm_model or "not_set"
+    checks["embedding"] = rag_service.settings.embedding_model_name
+    checks["reranker"] = rag_service.settings.reranker_model_name
+    checks["knowledgeBaseDir"] = str(rag_service.settings.knowledge_base_dir)
+    checks["knowledgeBaseExists"] = rag_service.settings.knowledge_base_dir.exists()
+    checks["startupWarnings"] = validate_settings(rag_service.settings)
+    status = "ok" if checks.get("qdrant") == "ok" else "degraded"
+    return {"status": status, "checks": checks}
 
 
 @app.post("/kb/ingest", response_model=IngestResponse)
@@ -51,6 +67,21 @@ def rebuild_document(file_name: str) -> IngestResponse:
 @app.get("/kb/documents/{file_name}/chunks", response_model=KnowledgeChunkListResponse)
 def list_document_chunks(file_name: str) -> KnowledgeChunkListResponse:
     return rag_service.list_document_chunks(file_name)
+
+
+@app.get("/kb/documents/{file_name}/preview", response_model=KnowledgeDocumentPreview)
+def preview_document(file_name: str) -> KnowledgeDocumentPreview:
+    return rag_service.preview_document(file_name)
+
+
+@app.get("/kb/documents/{file_name}/diff", response_model=KnowledgeDocumentDiff)
+def diff_document(file_name: str) -> KnowledgeDocumentDiff:
+    return rag_service.diff_document(file_name)
+
+
+@app.put("/kb/chunks/{chunk_id}/disabled")
+def set_chunk_disabled(chunk_id: str, request: ChunkToggleRequest) -> dict[str, object]:
+    return rag_service.set_chunk_disabled(chunk_id, request.disabled)
 
 
 @app.post("/rag/retrieve", response_model=RetrieveResponse)
@@ -110,3 +141,26 @@ def get_rag_prompt() -> PromptConfig:
 @app.put("/admin/rag/prompt", response_model=PromptConfig)
 def update_rag_prompt(request: PromptConfigRequest) -> PromptConfig:
     return save_prompt_config(request)
+
+
+@app.get("/admin/rag/prompts", response_model=list[PromptConfig])
+def list_rag_prompt_versions() -> list[PromptConfig]:
+    return load_prompt_versions()
+
+
+@app.post("/admin/rag/prompts/{version}/publish", response_model=PromptConfig)
+def publish_rag_prompt(version: str) -> PromptConfig:
+    try:
+        return publish_prompt_version(version)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/admin/rag/retrieval-config", response_model=RetrievalConfig)
+def get_retrieval_config() -> RetrievalConfig:
+    return load_retrieval_config()
+
+
+@app.put("/admin/rag/retrieval-config", response_model=RetrievalConfig)
+def update_retrieval_config(request: RetrievalConfig) -> RetrievalConfig:
+    return save_retrieval_config(request)

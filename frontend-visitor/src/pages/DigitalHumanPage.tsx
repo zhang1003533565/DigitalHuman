@@ -31,6 +31,11 @@ type GuideChatResponse = {
   answerText: string
   relatedSpots: string[]
   recommendedRoutes: string[]
+  sources?: Array<{
+    source_file?: string
+    title?: string
+    section_path?: string[]
+  }>
 }
 
 const GUIDE_SESSION_KEY = 'digitalhuman.visitor.guideSessionId'
@@ -136,6 +141,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
   const [answerText, setAnswerText] = useState('')
   const [relatedSpots, setRelatedSpots] = useState<string[]>([])
   const [recommendedRoutes, setRecommendedRoutes] = useState<string[]>([])
+  const [answerSources, setAnswerSources] = useState<GuideChatResponse['sources']>([])
   const [feedbackStatus, setFeedbackStatus] = useState('')
   const [activeMotionKey, setActiveMotionKey] = useState<string | null>(null)
   const [activeMotionTab, setActiveMotionTab] = useState<MotionTabId>('combo')
@@ -431,6 +437,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
       setLastTraceId(chatResponse.data.traceId ?? '')
       setRelatedSpots(chatResponse.data.relatedSpots)
       setRecommendedRoutes(chatResponse.data.recommendedRoutes)
+      setAnswerSources(chatResponse.data.sources ?? [])
 
       const startTime = performance.now()
       const response = await axios.post(
@@ -645,6 +652,18 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
                   <span key={route} className="info-tag info-tag--warm">{route}</span>
                 ))}
               </div>
+              {answerSources?.length ? (
+                <div className="tag-group">
+                  {answerSources.slice(0, 3).map((source, index) => (
+                    <span key={`${source.source_file}-${index}`} className="info-tag">
+                      来源：{source.source_file || source.title || '知识库'}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              {answerText.includes('知识库暂未覆盖') ? (
+                <p className="status">这个问题目前还没有进入景区知识库，我们已经记录下来，后续可以补充资料后再回答得更准。</p>
+              ) : null}
               <div className="feedback-actions">
                 <button type="button" onClick={() => void submitFeedback(true)}>有帮助</button>
                 <button type="button" className="ghost-button" onClick={() => void submitFeedback(false)}>

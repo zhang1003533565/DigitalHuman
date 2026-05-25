@@ -25,6 +25,23 @@ class QdrantVectorStore:
                 vectors_config=models.VectorParams(size=vector_size, distance=models.Distance.COSINE),
             )
 
+    def collection_status(self) -> dict[str, object]:
+        collections = {item.name for item in self.client.get_collections().collections}
+        if self.collection_name not in collections:
+            return {"exists": False, "name": self.collection_name}
+        info = self.client.get_collection(self.collection_name)
+        vector_size = None
+        vectors_config = getattr(info.config.params, "vectors", None)
+        if hasattr(vectors_config, "size"):
+            vector_size = vectors_config.size
+        return {
+            "exists": True,
+            "name": self.collection_name,
+            "pointsCount": getattr(info, "points_count", None),
+            "vectorsCount": getattr(info, "vectors_count", None),
+            "vectorSize": vector_size,
+        }
+
     def upsert(self, chunks: list[ChunkRecord], vectors: list[list[float]]) -> None:
         self.client.upsert(
             collection_name=self.collection_name,
@@ -42,11 +59,12 @@ class QdrantVectorStore:
             ],
         )
 
-    def search(self, query_vector: list[float], limit: int) -> list[ChunkRecord]:
+    def search(self, query_vector: list[float], limit: int, metadata_filter: dict[str, object] | None = None) -> list[ChunkRecord]:
         points = self.client.search(
             collection_name=self.collection_name,
             query_vector=query_vector,
             limit=limit,
+            query_filter=build_metadata_filter(metadata_filter),
             with_payload=True,
         )
         results: list[ChunkRecord] = []
@@ -116,3 +134,34 @@ class QdrantVectorStore:
                 )
             )
         return sorted(chunks, key=lambda chunk: chunk.payload.chunk_index)
+
+    def set_chunk_disabled(self, chunk_id: str, disabled: bool) -> bool:
+        self.client.set_payload(
+            collection_name=self.collection_name,
+            payload={"disabled": disabled},
+            points=[chunk_id],
+            wait=True,
+        )
+        return True
+
+
+def build_metadata_filter(metadata_filter: dict[str, object] | None):
+    conditions = []
+    disabled_condition = models.FieldCondition(key="disabled", match=models.MatchValue(value=True))
+    if not metadata_filter:
+        return models.Filter(must_not=[disabled_condition])
+    for key in ("source_file", "spot_name", "content_type"):
+        value = metadata_filter.get(key)
+        if value:
+            conditions.append(models.FieldCondition(key=key, match=models.MatchValue(value=str(value))))
+    for alias in ("scenic_area", "spot", "file_type"):
+        value = metadata_filter.get(alias)
+        if not value:
+            continue
+        key = {"scenic_area": "tags", "spot": "spot_name", "file_type": "content_type"}[alias]
+        conditions.append(models.FieldCondition(key=key, match=models.MatchValue(value=str(value))))
+    tags = metadata_filter.get("tags")
+    if isinstance(tags, list):
+        for tag in tags:
+            conditions.append(models.FieldCondition(key="tags", match=models.MatchValue(value=str(tag))))
+    return models.Filter(must=conditions, must_not=[disabled_condition])

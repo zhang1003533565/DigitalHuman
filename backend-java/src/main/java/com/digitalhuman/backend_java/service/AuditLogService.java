@@ -4,7 +4,10 @@ import com.digitalhuman.backend_java.model.AuditLog;
 import com.digitalhuman.backend_java.repository.AuditLogRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 @Service
 public class AuditLogService {
@@ -23,6 +26,7 @@ public class AuditLogService {
         log.setAction(action);
         log.setTargetType(targetType);
         log.setTargetId(targetId);
+        log.setActorIp(resolveActorIp());
         log.setDetailJson(writeJson(detail));
         log.setCreatedAt(LocalDateTime.now());
         repository.save(log);
@@ -34,5 +38,17 @@ public class AuditLogService {
         } catch (Exception exception) {
             return "{}";
         }
+    }
+
+    private String resolveActorIp() {
+        if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes) {
+            HttpServletRequest request = attributes.getRequest();
+            String forwardedFor = request.getHeader("X-Forwarded-For");
+            if (forwardedFor != null && !forwardedFor.isBlank()) {
+                return forwardedFor.split(",")[0].trim();
+            }
+            return request.getRemoteAddr();
+        }
+        return "system";
     }
 }

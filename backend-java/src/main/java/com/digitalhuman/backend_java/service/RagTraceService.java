@@ -3,6 +3,7 @@ package com.digitalhuman.backend_java.service;
 import com.digitalhuman.backend_java.dto.GuideChatRequest;
 import com.digitalhuman.backend_java.dto.RagQueryResponse;
 import com.digitalhuman.backend_java.dto.RagMetricsDto;
+import com.digitalhuman.backend_java.dto.RagRankingDto;
 import com.digitalhuman.backend_java.dto.RagReviewActionRequest;
 import com.digitalhuman.backend_java.dto.RagTraceDetailDto;
 import com.digitalhuman.backend_java.dto.RagTraceSummaryDto;
@@ -14,6 +15,8 @@ import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.HashMap;
+import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -121,6 +124,11 @@ public class RagTraceService {
                 .limit(20)
                 .map(this::toSummary)
                 .toList();
+        List<RagTraceSummaryDto> knowledgeMissingTraces = traces.stream()
+                .filter(trace -> trace.isNoAnswer() || "KNOWLEDGE_MISSING".equalsIgnoreCase(trace.getReviewStatus()))
+                .limit(50)
+                .map(this::toSummary)
+                .toList();
         return new RagMetricsDto(
                 total,
                 failed,
@@ -135,7 +143,9 @@ public class RagTraceService {
                 rate(reviewRequired, total),
                 rate(negativeFeedback, total),
                 slowTraces,
-                anomalyTraces);
+                anomalyTraces,
+                knowledgeMissingTraces,
+                topSources(traces));
     }
 
     public RagTraceDetailDto getDetail(String traceId) {
@@ -182,6 +192,28 @@ public class RagTraceService {
                 .toList();
     }
 
+    public Map<String, Object> reviewStats() {
+        List<RagTrace> traces = repository.findAllByOrderByCreatedAtDesc().stream()
+                .filter(RagTrace::isReviewRequired)
+                .toList();
+        long total = traces.size();
+        long approved = traces.stream().filter(trace -> "APPROVED".equalsIgnoreCase(trace.getReviewStatus())).count();
+        long rewritten = traces.stream().filter(trace -> "REWRITTEN".equalsIgnoreCase(trace.getReviewStatus())).count();
+        long rejected = traces.stream().filter(trace -> "REJECTED".equalsIgnoreCase(trace.getReviewStatus())).count();
+        long missing = traces.stream().filter(trace -> "KNOWLEDGE_MISSING".equalsIgnoreCase(trace.getReviewStatus())).count();
+        long pending = traces.stream().filter(trace -> "PENDING".equalsIgnoreCase(trace.getReviewStatus())).count();
+        return Map.of(
+                "total", total,
+                "pending", pending,
+                "approved", approved,
+                "rewritten", rewritten,
+                "rejected", rejected,
+                "knowledgeMissing", missing,
+                "passRate", rate(approved + rewritten, total),
+                "rejectRate", rate(rejected, total),
+                "knowledgeMissingRate", rate(missing, total));
+    }
+
     public RagTraceDetailDto review(String traceId, RagReviewActionRequest request) {
         RagTrace trace = repository.findByTraceId(traceId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "RAG trace 不存在"));
@@ -214,6 +246,20 @@ public class RagTraceService {
         });
     }
 
+    public String findReusableReviewedAnswer(String question) {
+        String normalizedQuestion = normalizeText(question);
+        if (normalizedQuestion.isBlank()) {
+            return null;
+        }
+        return repository.findAllByOrderByCreatedAtDesc().stream()
+                .filter(trace -> List.of("APPROVED", "REWRITTEN").contains(trace.getReviewStatus()))
+                .filter(trace -> trace.getReviewedAnswer() != null && !trace.getReviewedAnswer().isBlank())
+                .filter(trace -> isSimilarQuestion(normalizedQuestion, normalizeText(trace.getQuestion())))
+                .map(RagTrace::getReviewedAnswer)
+                .findFirst()
+                .orElse(null);
+    }
+
     private RagTrace baseTrace(String traceId, String sessionId, GuideChatRequest request) {
         RagTrace trace = new RagTrace();
         trace.setTraceId(traceId);
@@ -241,6 +287,28 @@ public class RagTraceService {
                 trace.getRetrievalAttempts(),
                 trace.getTotalDurationMs(),
                 trace.getCreatedAt());
+    }
+
+    private List<RagRankingDto> topSources(List<RagTrace> traces) {
+        Map<String, Long> counts = new HashMap<>();
+        for (RagTrace trace : traces) {
+            JsonNode response = readJson(trace.getResponseJson());
+            JsonNode sources = response.path("sources");
+            if (!sources.isArray()) {
+                continue;
+            }
+            for (JsonNode source : sources) {
+                String name = source.path("source_file").asText("");
+                if (!name.isBlank()) {
+                    counts.merge(name, 1L, Long::sum);
+                }
+            }
+        }
+        return counts.entrySet().stream()
+                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                .limit(20)
+                .map(entry -> new RagRankingDto(entry.getKey(), entry.getValue()))
+                .toList();
     }
 
     private double rate(long value, long total) {
@@ -289,6 +357,21 @@ public class RagTraceService {
             return current;
         }
         return current + "；" + reason;
+    }
+
+    private static String normalizeText(String value) {
+        return value == null ? "" : value.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
+    }
+
+    private static boolean isSimilarQuestion(String left, String right) {
+        if (left.isBlank() || right.isBlank()) {
+            return false;
+        }
+        if (left.contains(right) || right.contains(left)) {
+            return true;
+        }
+        long overlap = left.chars().filter(ch -> right.indexOf(ch) >= 0).distinct().count();
+        return overlap >= Math.max(4, Math.min(left.length(), right.length()) * 0.6);
     }
 
     private record FailurePayload(String type, String message) {

@@ -45,3 +45,15 @@ app:
         password: user123
         display-name: Visitor User
         role: USER
+      - username: reviewer
+        password: reviewer123
+        display-name: RAG Reviewer
+        role: REVIEWER
+      - username: kbadmin
+        password: kbadmin123
+        display-name: Knowledge Admin
+        role: KNOWLEDGE_ADMIN
+      - username: observer
+        password: observer123
+        display-name: Readonly Observer
+        role: OBSERVER

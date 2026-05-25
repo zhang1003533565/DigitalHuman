@@ -7,6 +7,7 @@ import com.digitalhuman.backend_java.dto.GuideChatResponse;
 import com.digitalhuman.backend_java.dto.GuideMessageDto;
 import com.digitalhuman.backend_java.dto.RagQueryRequest;
 import com.digitalhuman.backend_java.dto.RagQueryResponse;
+import com.digitalhuman.backend_java.dto.RagSourceDto;
 import com.digitalhuman.backend_java.dto.ScenicRouteDto;
 import com.digitalhuman.backend_java.dto.ScenicSpotDto;
 import com.digitalhuman.backend_java.model.GuideMessage;
@@ -99,6 +100,19 @@ public class GuideService {
         }
 
         String traceId = "rag-" + UUID.randomUUID();
+        String reviewedAnswer = ragTraceService.findReusableReviewedAnswer(request.getQuestion());
+        if (reviewedAnswer != null && !reviewedAnswer.isBlank()) {
+            touchSession(sessionId);
+            saveMessage(sessionId, traceId, "user", request.getQuestion());
+            saveMessage(sessionId, traceId, "assistant", reviewedAnswer);
+            return new GuideChatResponse(
+                    sessionId,
+                    traceId,
+                    reviewedAnswer,
+                    spots.stream().map(ScenicSpotDto::getName).limit(2).toList(),
+                    recommendRoutes(request.getInterest()).stream().map(ScenicRouteDto::getName).toList(),
+                    List.of());
+        }
         RagQueryResponse ragResponse = queryRag(request, sessionId, traceId);
         String answerText = ragResponse != null && ragResponse.getAnswer() != null && !ragResponse.getAnswer().isBlank()
                 ? ragResponse.getAnswer()
@@ -109,12 +123,13 @@ public class GuideService {
         List<String> recommendedRoutes = recommendRoutes(request.getInterest()).stream()
                 .map(ScenicRouteDto::getName)
                 .toList();
+        List<RagSourceDto> sources = ragResponse != null && ragResponse.getSources() != null ? ragResponse.getSources() : List.of();
 
         touchSession(sessionId);
         saveMessage(sessionId, traceId, "user", request.getQuestion());
         saveMessage(sessionId, traceId, "assistant", answerText);
 
-        return new GuideChatResponse(sessionId, traceId, answerText, relatedSpots, recommendedRoutes);
+        return new GuideChatResponse(sessionId, traceId, answerText, relatedSpots, recommendedRoutes, sources);
     }
 
     public List<GuideMessageDto> getSessionMessages(String sessionId) {

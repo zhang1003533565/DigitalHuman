@@ -18,6 +18,8 @@ public class RagMetricsDto {
     private final double negativeFeedbackRate;
     private final List<RagTraceSummaryDto> slowTraces;
     private final List<RagTraceSummaryDto> anomalyTraces;
+    private final List<RagTraceSummaryDto> knowledgeMissingTraces;
+    private final List<RagRankingDto> topSources;
 
     public RagMetricsDto(
             long totalTraces,
@@ -33,7 +35,9 @@ public class RagMetricsDto {
             double reviewTriggerRate,
             double negativeFeedbackRate,
             List<RagTraceSummaryDto> slowTraces,
-            List<RagTraceSummaryDto> anomalyTraces) {
+            List<RagTraceSummaryDto> anomalyTraces,
+            List<RagTraceSummaryDto> knowledgeMissingTraces,
+            List<RagRankingDto> topSources) {
         this.totalTraces = totalTraces;
         this.failedTraces = failedTraces;
         this.lowConfidenceTraces = lowConfidenceTraces;
@@ -48,6 +52,8 @@ public class RagMetricsDto {
         this.negativeFeedbackRate = negativeFeedbackRate;
         this.slowTraces = slowTraces;
         this.anomalyTraces = anomalyTraces;
+        this.knowledgeMissingTraces = knowledgeMissingTraces;
+        this.topSources = topSources;
     }
 
     public long getTotalTraces() { return totalTraces; }
@@ -64,4 +70,6 @@ public class RagMetricsDto {
     public double getNegativeFeedbackRate() { return negativeFeedbackRate; }
     public List<RagTraceSummaryDto> getSlowTraces() { return slowTraces; }
     public List<RagTraceSummaryDto> getAnomalyTraces() { return anomalyTraces; }
+    public List<RagTraceSummaryDto> getKnowledgeMissingTraces() { return knowledgeMissingTraces; }
+    public List<RagRankingDto> getTopSources() { return topSources; }
 }

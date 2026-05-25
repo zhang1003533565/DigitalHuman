@@ -8,6 +8,8 @@
   RobotOutlined,
   SearchOutlined,
   SafetyOutlined,
+  ExperimentOutlined,
+  WarningOutlined,
   SettingOutlined,
   UserOutlined,
 } from '@ant-design/icons'
@@ -41,6 +43,8 @@ const menuItems: MenuProps['items'] = [
   { key: 'feedback', icon: <CommentOutlined />, label: '游客反馈分析' },
   { key: 'qa', icon: <SearchOutlined />, label: '问答记录查询' },
   { key: 'review', icon: <SafetyOutlined />, label: '人工审核队列' },
+  { key: 'knowledge-missing', icon: <WarningOutlined />, label: '知识缺失池' },
+  { key: 'eval', icon: <ExperimentOutlined />, label: 'RAG 评测报告' },
   { key: 'travel-analytics', icon: <DatabaseOutlined />, label: '旅游数据行为分析' },
 ]
 

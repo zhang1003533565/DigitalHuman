@@ -6,7 +6,9 @@ import com.digitalhuman.backend_java.dto.RagTraceDetailDto;
 import com.digitalhuman.backend_java.dto.RagTraceSummaryDto;
 import com.digitalhuman.backend_java.dto.RagReviewActionRequest;
 import com.digitalhuman.backend_java.dto.RagMetricsDto;
+import com.digitalhuman.backend_java.dto.RagEvalRunDto;
 import com.digitalhuman.backend_java.service.GuideService;
+import com.digitalhuman.backend_java.service.RagEvalService;
 import com.digitalhuman.backend_java.service.RagTraceService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin/guide")
@@ -24,10 +27,12 @@ public class AdminGuideController {
 
     private final GuideService guideService;
     private final RagTraceService ragTraceService;
+    private final RagEvalService ragEvalService;
 
-    public AdminGuideController(GuideService guideService, RagTraceService ragTraceService) {
+    public AdminGuideController(GuideService guideService, RagTraceService ragTraceService, RagEvalService ragEvalService) {
         this.guideService = guideService;
         this.ragTraceService = ragTraceService;
+        this.ragEvalService = ragEvalService;
     }
 
     @GetMapping("/session/{id}/messages")
@@ -62,8 +67,28 @@ public class AdminGuideController {
         return ragTraceService.listReviewQueue(status);
     }
 
+    @GetMapping("/rag-review-stats")
+    public Map<String, Object> getRagReviewStats() {
+        return ragTraceService.reviewStats();
+    }
+
     @PostMapping("/rag-reviews/{traceId}")
     public RagTraceDetailDto reviewRagTrace(@PathVariable String traceId, @RequestBody RagReviewActionRequest request) {
         return ragTraceService.review(traceId, request);
+    }
+
+    @GetMapping("/rag-evals")
+    public List<RagEvalRunDto> listEvalRuns() {
+        return ragEvalService.listRuns();
+    }
+
+    @GetMapping("/rag-evals/{id}")
+    public RagEvalRunDto getEvalRun(@PathVariable Long id) {
+        return ragEvalService.getRun(id);
+    }
+
+    @PostMapping("/rag-evals/run")
+    public RagEvalRunDto runEval() {
+        return ragEvalService.runEval();
     }
 }

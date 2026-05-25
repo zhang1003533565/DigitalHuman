@@ -7,10 +7,13 @@ import com.digitalhuman.backend_java.dto.AdminProviderConfigDto;
 import com.digitalhuman.backend_java.dto.AdminModelSettingsDto;
 import com.digitalhuman.backend_java.dto.AdminModelTestRequestDto;
 import com.digitalhuman.backend_java.dto.AdminModelTestResponseDto;
+import com.digitalhuman.backend_java.dto.RagPromptConfigDto;
+import com.digitalhuman.backend_java.dto.RagRetrievalConfigDto;
 import com.digitalhuman.backend_java.model.AdminModelConfig;
 import com.digitalhuman.backend_java.model.ModelCategory;
 import com.digitalhuman.backend_java.repository.AdminModelConfigRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -272,6 +275,117 @@ public class AdminSettingsService {
             throw exception;
         } catch (Exception exception) {
             throw new IllegalArgumentException("模型测试失败，请检查 ai-service 配置和 provider 凭证", exception);
+        }
+    }
+
+    public RagPromptConfigDto getRagPrompt() {
+        Request request = new Request.Builder()
+                .url(ragServiceUrl + "/admin/rag/prompt")
+                .get()
+                .build();
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful() || response.body() == null) {
+                throw new IOException("ai-service prompt get failed: " + response.code());
+            }
+            return objectMapper.readValue(response.body().string(), RagPromptConfigDto.class);
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("读取 RAG Prompt 配置失败", exception);
+        }
+    }
+
+    public RagPromptConfigDto updateRagPrompt(RagPromptConfigDto request) {
+        try {
+            String payload = objectMapper.writeValueAsString(request);
+            Request httpRequest = new Request.Builder()
+                    .url(ragServiceUrl + "/admin/rag/prompt")
+                    .put(RequestBody.create(payload, JSON))
+                    .build();
+            try (Response response = httpClient.newCall(httpRequest).execute()) {
+                if (!response.isSuccessful() || response.body() == null) {
+                    throw new IOException("ai-service prompt update failed: " + response.code());
+                }
+                return objectMapper.readValue(response.body().string(), RagPromptConfigDto.class);
+            }
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("保存 RAG Prompt 配置失败", exception);
+        }
+    }
+
+    public List<RagPromptConfigDto> listRagPrompts() {
+        Request request = new Request.Builder()
+                .url(ragServiceUrl + "/admin/rag/prompts")
+                .get()
+                .build();
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful() || response.body() == null) {
+                throw new IOException("ai-service prompt versions get failed: " + response.code());
+            }
+            return objectMapper.readValue(response.body().string(), new TypeReference<>() {});
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("读取 RAG Prompt 版本失败", exception);
+        }
+    }
+
+    public RagPromptConfigDto publishRagPrompt(String version) {
+        Request request = new Request.Builder()
+                .url(ragServiceUrl + "/admin/rag/prompts/" + version + "/publish")
+                .post(RequestBody.create(new byte[0], null))
+                .build();
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful() || response.body() == null) {
+                throw new IOException("ai-service prompt publish failed: " + response.code());
+            }
+            return objectMapper.readValue(response.body().string(), RagPromptConfigDto.class);
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("发布 RAG Prompt 失败", exception);
+        }
+    }
+
+    public RagRetrievalConfigDto getRagRetrievalConfig() {
+        Request request = new Request.Builder()
+                .url(ragServiceUrl + "/admin/rag/retrieval-config")
+                .get()
+                .build();
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful() || response.body() == null) {
+                throw new IOException("ai-service retrieval config get failed: " + response.code());
+            }
+            return objectMapper.readValue(response.body().string(), RagRetrievalConfigDto.class);
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("读取 RAG 检索配置失败", exception);
+        }
+    }
+
+    public RagRetrievalConfigDto updateRagRetrievalConfig(RagRetrievalConfigDto request) {
+        try {
+            String payload = objectMapper.writeValueAsString(request);
+            Request httpRequest = new Request.Builder()
+                    .url(ragServiceUrl + "/admin/rag/retrieval-config")
+                    .put(RequestBody.create(payload, JSON))
+                    .build();
+            try (Response response = httpClient.newCall(httpRequest).execute()) {
+                if (!response.isSuccessful() || response.body() == null) {
+                    throw new IOException("ai-service retrieval config update failed: " + response.code());
+                }
+                return objectMapper.readValue(response.body().string(), RagRetrievalConfigDto.class);
+            }
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("保存 RAG 检索配置失败", exception);
+        }
+    }
+
+    public JsonNode getAiServiceHealth() {
+        Request request = new Request.Builder()
+                .url(ragServiceUrl + "/health")
+                .get()
+                .build();
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (response.body() == null) {
+                throw new IOException("ai-service health returned empty body");
+            }
+            return objectMapper.readTree(response.body().string());
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("读取 ai-service 健康状态失败", exception);
         }
     }
 

@@ -9,13 +9,15 @@ public class GuideChatResponse {
     private final String answerText;
     private final List<String> relatedSpots;
     private final List<String> recommendedRoutes;
+    private final List<RagSourceDto> sources;
 
-    public GuideChatResponse(String sessionId, String traceId, String answerText, List<String> relatedSpots, List<String> recommendedRoutes) {
+    public GuideChatResponse(String sessionId, String traceId, String answerText, List<String> relatedSpots, List<String> recommendedRoutes, List<RagSourceDto> sources) {
         this.sessionId = sessionId;
         this.traceId = traceId;
         this.answerText = answerText;
         this.relatedSpots = relatedSpots;
         this.recommendedRoutes = recommendedRoutes;
+        this.sources = sources;
     }
 
     public String getSessionId() {
@@ -36,5 +38,9 @@ public class GuideChatResponse {
 
     public List<String> getRecommendedRoutes() {
         return recommendedRoutes;
+    }
+
+    public List<RagSourceDto> getSources() {
+        return sources;
     }
 }

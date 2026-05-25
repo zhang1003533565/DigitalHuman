@@ -14,6 +14,7 @@ from rag.contracts.schemas import ChunkPayload, ChunkRecord, QueryRequest, Query
 from rag.generation.prompts import build_grounded_answer
 from rag.graph.memory_store import ConversationMemoryStore
 from rag.llm import ProviderBackedLlm, get_prompt_version
+from rag.retrieval.config_store import load_retrieval_config
 from rag.retrieval.retriever import Retriever
 
 
@@ -23,6 +24,7 @@ class RagQueryState(TypedDict, total=False):
     rewritten_question: str
     interest: str | None
     top_k: int | None
+    metadata_filter: dict[str, object] | None
     session_id: str
     enable_human_review: bool
     history: list[dict[str, str]]
@@ -69,6 +71,7 @@ class RagQueryGraph:
                 "question": request.question,
                 "interest": request.interest,
                 "top_k": request.top_k,
+                "metadata_filter": request.metadata_filter,
                 "session_id": session_id,
                 "enable_human_review": request.enable_human_review,
                 "graph_steps": [],
@@ -209,7 +212,7 @@ class RagQueryGraph:
     def _retrieve(self, state: RagQueryState) -> RagQueryState:
         started = time.perf_counter()
         query = state.get("rewritten_question") or state["question"]
-        stages = self.retriever.retrieve_with_stages(query, top_k=state.get("top_k"))
+        stages = self.retriever.retrieve_with_stages(query, top_k=state.get("top_k"), metadata_filter=state.get("metadata_filter"))
         chunks = stages["reranked"]
         return {
             "chunks": serialize_chunks(chunks),
@@ -222,10 +225,11 @@ class RagQueryGraph:
     def _judge_context(self, state: RagQueryState) -> RagQueryState:
         started = time.perf_counter()
         chunks = deserialize_chunks(state.get("chunks", []))
+        retrieval_config = load_retrieval_config()
         sufficient, reason = judge_context_sufficiency(
             state.get("rewritten_question") or state["question"],
             chunks,
-            self.score_threshold,
+            retrieval_config.score_threshold or self.score_threshold,
         )
         return {
             "context_sufficient": sufficient,
@@ -238,7 +242,7 @@ class RagQueryGraph:
         started = time.perf_counter()
         query = expand_query(state.get("rewritten_question") or state["question"], state.get("interest"))
         limit = max(state.get("top_k") or 5, 8)
-        stages = self.retriever.retrieve_with_stages(query, top_k=limit)
+        stages = self.retriever.retrieve_with_stages(query, top_k=limit, metadata_filter=state.get("metadata_filter"))
         extra_chunks = stages["reranked"]
         merged = merge_chunks(deserialize_chunks(state.get("chunks", [])), extra_chunks)
         return {

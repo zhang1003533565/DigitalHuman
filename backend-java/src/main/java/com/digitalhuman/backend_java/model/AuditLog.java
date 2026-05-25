@@ -29,6 +29,9 @@ public class AuditLog {
     @Column(length = 200)
     private String targetId;
 
+    @Column(length = 80)
+    private String actorIp;
+
     @Lob
     private String detailJson;
 
@@ -49,6 +52,10 @@ public class AuditLog {
 
     public void setTargetId(String targetId) {
         this.targetId = targetId;
+    }
+
+    public void setActorIp(String actorIp) {
+        this.actorIp = actorIp;
     }
 
     public void setDetailJson(String detailJson) {

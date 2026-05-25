@@ -7,6 +7,9 @@ import com.digitalhuman.backend_java.dto.AdminProviderDocDto;
 import com.digitalhuman.backend_java.dto.AdminProviderConfigDto;
 import com.digitalhuman.backend_java.dto.AdminModelTestRequestDto;
 import com.digitalhuman.backend_java.dto.AdminModelTestResponseDto;
+import com.digitalhuman.backend_java.dto.RagPromptConfigDto;
+import com.digitalhuman.backend_java.dto.RagRetrievalConfigDto;
+import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
 import com.digitalhuman.backend_java.service.AdminSettingsService;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -80,5 +83,40 @@ public class AdminSettingsController {
     @GetMapping("/provider-docs/{provider}")
     public AdminProviderDocDto getProviderDoc(@PathVariable String provider) {
         return adminSettingsService.getProviderDoc(provider);
+    }
+
+    @GetMapping("/rag-prompt")
+    public RagPromptConfigDto getRagPrompt() {
+        return adminSettingsService.getRagPrompt();
+    }
+
+    @PutMapping("/rag-prompt")
+    public RagPromptConfigDto updateRagPrompt(@RequestBody RagPromptConfigDto request) {
+        return adminSettingsService.updateRagPrompt(request);
+    }
+
+    @GetMapping("/rag-prompts")
+    public List<RagPromptConfigDto> listRagPrompts() {
+        return adminSettingsService.listRagPrompts();
+    }
+
+    @PostMapping("/rag-prompts/{version}/publish")
+    public RagPromptConfigDto publishRagPrompt(@PathVariable String version) {
+        return adminSettingsService.publishRagPrompt(version);
+    }
+
+    @GetMapping("/rag-retrieval-config")
+    public RagRetrievalConfigDto getRagRetrievalConfig() {
+        return adminSettingsService.getRagRetrievalConfig();
+    }
+
+    @PutMapping("/rag-retrieval-config")
+    public RagRetrievalConfigDto updateRagRetrievalConfig(@RequestBody RagRetrievalConfigDto request) {
+        return adminSettingsService.updateRagRetrievalConfig(request);
+    }
+
+    @GetMapping("/ai-health")
+    public JsonNode getAiServiceHealth() {
+        return adminSettingsService.getAiServiceHealth();
     }
 }

@@ -25,6 +25,9 @@ import {
   Typography,
   Divider,
   Modal,
+  InputNumber,
+  Switch,
+  Progress,
 } from 'antd'
 import type { UploadProps } from 'antd'
 import type { TableColumnsType } from 'antd'
@@ -49,7 +52,7 @@ type LoginResult = {
   userId: number
   username: string
   displayName: string
-  role: 'ADMIN' | 'USER'
+  role: 'ADMIN' | 'REVIEWER' | 'KNOWLEDGE_ADMIN' | 'OBSERVER' | 'USER'
   token: string
 }
 
@@ -66,6 +69,8 @@ type MenuKey =
   | 'feedback'
   | 'qa'
   | 'review'
+  | 'knowledge-missing'
+  | 'eval'
 
 const ADMIN_HOME_PATH = '/admin/dashboard'
 
@@ -82,6 +87,8 @@ const menuPathByKey: Record<MenuKey, string> = {
   feedback: '/admin/feedback',
   qa: '/admin/qa',
   review: '/admin/review',
+  'knowledge-missing': '/admin/knowledge-missing',
+  eval: '/admin/eval',
 }
 
 const menuKeyByPath = new Map<string, MenuKey>(
@@ -190,6 +197,49 @@ type RagMetrics = {
   negativeFeedbackRate: number
   slowTraces: RagTraceSummary[]
   anomalyTraces: RagTraceSummary[]
+  knowledgeMissingTraces: RagTraceSummary[]
+  topSources?: Array<{ name: string; count: number }>
+}
+
+type RagPromptConfig = {
+  version: string
+  systemPrompt: string
+  enabled: boolean
+  createdAt?: string
+  status?: string
+}
+
+type RagRetrievalConfig = {
+  topK: number
+  retrieveLimit: number
+  rerankLimit: number
+  scoreThreshold: number
+  hybridEnabled: boolean
+  rerankerEnabled: boolean
+}
+
+type RagEvalCase = {
+  caseId: string
+  question: string
+  passed: boolean
+  failureReason?: string
+  traceId?: string
+  promptVersion?: string
+  topScore?: number
+  retrievedChunks?: number
+  citationsValid?: boolean
+  lowConfidence?: boolean
+  answerPreview?: string
+}
+
+type RagEvalRun = {
+  id: number
+  promptVersion: string
+  totalCases: number
+  passedCases: number
+  passRate: number
+  createdAt: string
+  cases?: RagEvalCase[]
 }
 
 type KnowledgeDocumentRow = {
@@ -208,6 +258,21 @@ type KnowledgeBuildResult = {
   builtAt: string
 }
 
+type KnowledgeBuildTask = {
+  id: number
+  status: string
+  fileName?: string
+  recreateCollection: boolean
+  progress: number
+  filesSeen?: number
+  filesIndexed?: number
+  chunksIndexed?: number
+  errorMessage?: string
+  createdAt: string
+  startedAt?: string
+  finishedAt?: string
+}
+
 type KnowledgeChunk = {
   id: string
   text: string
@@ -220,6 +285,8 @@ type KnowledgeChunk = {
     tags?: string[]
     spot_name?: string
     updated_at?: string
+    disabled?: boolean
+    quality_flags?: string[]
   }
 }
 
@@ -382,6 +449,14 @@ function DashboardPanel() {
           </Card>
         </Col>
       </Row>
+      <Card title="RAG 链路指标趋势">
+        <Row gutter={[16, 16]}>
+          <Col xs={24} md={6}><Progress type="dashboard" percent={metrics?.providerFailureRate ?? 0} format={(value) => `失败 ${value}%`} /></Col>
+          <Col xs={24} md={6}><Progress type="dashboard" percent={metrics?.lowConfidenceRate ?? 0} format={(value) => `低置信 ${value}%`} /></Col>
+          <Col xs={24} md={6}><Progress type="dashboard" percent={metrics?.noAnswerRate ?? 0} format={(value) => `无答案 ${value}%`} /></Col>
+          <Col xs={24} md={6}><Progress type="dashboard" percent={metrics?.reviewTriggerRate ?? 0} format={(value) => `人审 ${value}%`} /></Col>
+        </Row>
+      </Card>
       <Row gutter={[16, 16]}>
         <Col xs={24} md={8}>
           <Card>
@@ -396,6 +471,16 @@ function DashboardPanel() {
         <Col xs={24} md={8}>
           <Card>
             <Statistic title="差评率" value={metrics?.negativeFeedbackRate ?? 0} suffix="%" />
+          </Card>
+        </Col>
+        <Col xs={24} md={12}>
+          <Card title="Top 命中文档">
+            <ul className="admin-list">
+              {(metrics?.topSources ?? []).map((source) => (
+                <li key={source.name}>{source.count} 次 · {source.name}</li>
+              ))}
+              {!metrics?.topSources?.length ? <li>暂无数据</li> : null}
+            </ul>
           </Card>
         </Col>
       </Row>
@@ -433,6 +518,10 @@ function KnowledgePanel() {
   const [chunkDrawerTitle, setChunkDrawerTitle] = useState('')
   const [chunks, setChunks] = useState<KnowledgeChunk[]>([])
   const [chunkDrawerOpen, setChunkDrawerOpen] = useState(false)
+  const [buildTasks, setBuildTasks] = useState<KnowledgeBuildTask[]>([])
+  const [documentPreview, setDocumentPreview] = useState<{ fileName: string; text: string; sections?: string[] } | null>(null)
+  const [documentDiff, setDocumentDiff] = useState<Record<string, unknown> | null>(null)
+  const [chunkKeyword, setChunkKeyword] = useState('')
 
   async function loadDocuments() {
     const response = await axios.get('/api/admin/knowledge/documents')
@@ -445,6 +534,11 @@ function KnowledgePanel() {
         supported: item.supported,
       })),
     )
+  }
+
+  async function loadBuildTasks() {
+    const response = await axios.get<KnowledgeBuildTask[]>('/api/admin/knowledge/build-tasks')
+    setBuildTasks(response.data)
   }
 
   async function buildKnowledgeBase(recreateCollection: boolean) {
@@ -492,6 +586,22 @@ function KnowledgePanel() {
     }
   }
 
+  async function submitBuildTask(recreateCollection: boolean, fileName?: string) {
+    await axios.post('/api/admin/knowledge/build-tasks', { recreateCollection, fileName })
+    message.success('构建任务已提交')
+    await loadBuildTasks()
+  }
+
+  async function retryBuildTask(id: number) {
+    await axios.post(`/api/admin/knowledge/build-tasks/${id}/retry`)
+    await loadBuildTasks()
+  }
+
+  async function cancelBuildTask(id: number) {
+    await axios.post(`/api/admin/knowledge/build-tasks/${id}/cancel`)
+    await loadBuildTasks()
+  }
+
   async function deleteDocument(fileName: string) {
     Modal.confirm({
       title: '删除知识文件',
@@ -514,8 +624,28 @@ function KnowledgePanel() {
     setChunkDrawerOpen(true)
   }
 
+  async function openPreview(fileName: string) {
+    const response = await axios.get(`/api/admin/knowledge/documents/${encodeURIComponent(fileName)}/preview`)
+    setDocumentPreview(response.data)
+  }
+
+  async function openDiff(fileName: string) {
+    const response = await axios.get(`/api/admin/knowledge/documents/${encodeURIComponent(fileName)}/diff`)
+    setDocumentDiff(response.data)
+  }
+
+  async function toggleChunkDisabled(chunkId: string, disabled: boolean) {
+    if (!chunkId) return
+    await axios.put(`/api/admin/knowledge/chunks/${encodeURIComponent(chunkId)}/disabled`, { disabled })
+    message.success(disabled ? '知识块已禁用' : '知识块已启用')
+    setChunks((current) => current.map((chunk) => (
+      chunk.id === chunkId ? { ...chunk, payload: { ...chunk.payload, disabled } } : chunk
+    )))
+  }
+
   useEffect(() => {
     void loadDocuments()
+    void loadBuildTasks()
   }, [])
 
   const uploadProps: UploadProps = {
@@ -552,6 +682,9 @@ function KnowledgePanel() {
       render: (_, row) => (
         <Space>
           <Button type="link" onClick={() => void openChunks(row.fileName)}>知识块</Button>
+          <Button type="link" onClick={() => void openPreview(row.fileName)}>预览</Button>
+          <Button type="link" onClick={() => void openDiff(row.fileName)}>Diff</Button>
+          <Button type="link" onClick={() => void submitBuildTask(false, row.fileName)}>异步重建</Button>
           <Button type="link" loading={building} onClick={() => void rebuildDocument(row.fileName)}>重建</Button>
           <Button type="link" danger onClick={() => void deleteDocument(row.fileName)}>删除</Button>
         </Space>
@@ -573,6 +706,7 @@ function KnowledgePanel() {
           <Button danger loading={building} onClick={() => void buildKnowledgeBase(true)}>
             全量重建
           </Button>
+          <Button onClick={() => void submitBuildTask(false)}>异步构建</Button>
         </div>
       )}
     >
@@ -618,6 +752,30 @@ function KnowledgePanel() {
           pagination={false}
           locale={{ emptyText: '暂无已上传知识文件，请先上传景区资料。' }}
         />
+        <Card size="small" title="构建任务">
+          <Table
+            rowKey="id"
+            dataSource={buildTasks}
+            pagination={{ pageSize: 5 }}
+            columns={[
+              { title: 'ID', dataIndex: 'id', width: 70 },
+              { title: '状态', dataIndex: 'status', render: (value: string) => <Tag color={value === 'SUCCEEDED' ? 'green' : value === 'FAILED' ? 'red' : value === 'RUNNING' ? 'blue' : 'default'}>{value}</Tag> },
+              { title: '文件', dataIndex: 'fileName', render: (value?: string) => value || '全部文件' },
+              { title: '进度', dataIndex: 'progress', render: (value: number) => <Progress percent={value} size="small" /> },
+              { title: '知识块', dataIndex: 'chunksIndexed', render: (value?: number) => value ?? '-' },
+              { title: '错误', dataIndex: 'errorMessage', ellipsis: true, render: (value?: string) => value || '-' },
+              {
+                title: '操作',
+                render: (_, row: KnowledgeBuildTask) => (
+                  <Space>
+                    {row.status === 'FAILED' ? <Button type="link" onClick={() => void retryBuildTask(row.id)}>重试</Button> : null}
+                    {row.status === 'PENDING' ? <Button type="link" danger onClick={() => void cancelBuildTask(row.id)}>取消</Button> : null}
+                  </Space>
+                ),
+              },
+            ]}
+          />
+        </Card>
       </div>
       <Drawer
         title={`${chunkDrawerTitle} · 知识块`}
@@ -625,12 +783,44 @@ function KnowledgePanel() {
         width={900}
         onClose={() => setChunkDrawerOpen(false)}
       >
+        <Input
+          allowClear
+          placeholder="输入命中词高亮"
+          value={chunkKeyword}
+          onChange={(event) => setChunkKeyword(event.target.value)}
+          style={{ marginBottom: 12 }}
+        />
         {renderChunkList(chunks.map((chunk) => ({
           id: chunk.id,
           text: chunk.text,
           score: chunk.score,
           payload: chunk.payload,
-        })))}
+        })), { highlight: chunkKeyword, onToggleDisabled: (chunkId, disabled) => void toggleChunkDisabled(chunkId, disabled) })}
+      </Drawer>
+      <Drawer
+        title={documentPreview ? `${documentPreview.fileName} · 解析预览` : '解析预览'}
+        open={Boolean(documentPreview)}
+        width={820}
+        onClose={() => setDocumentPreview(null)}
+      >
+        <Space direction="vertical" className="admin-rag-detail">
+          <Space wrap>{(documentPreview?.sections ?? []).slice(0, 20).map((section) => <Tag key={section}>{section}</Tag>)}</Space>
+          <Typography.Paragraph>{documentPreview?.text || '-'}</Typography.Paragraph>
+        </Space>
+      </Drawer>
+      <Drawer
+        title="文档 Diff"
+        open={Boolean(documentDiff)}
+        width={820}
+        onClose={() => setDocumentDiff(null)}
+      >
+        <Descriptions bordered size="small" column={2}>
+          <Descriptions.Item label="当前版本">{String(documentDiff?.currentVersion ?? '-')}</Descriptions.Item>
+          <Descriptions.Item label="上一版本">{String(documentDiff?.previousVersion ?? '-')}</Descriptions.Item>
+          <Descriptions.Item label="新增行">{String(documentDiff?.addedLines ?? 0)}</Descriptions.Item>
+          <Descriptions.Item label="删除行">{String(documentDiff?.removedLines ?? 0)}</Descriptions.Item>
+        </Descriptions>
+        <pre className="admin-json-preview">{Array.isArray(documentDiff?.preview) ? documentDiff.preview.join('\n') : ''}</pre>
       </Drawer>
     </Card>
   )
@@ -802,12 +992,17 @@ function renderTabLabel(label: string, result?: ModelTestResponse | null) {
 function SettingsPanel() {
   const [form] = Form.useForm<AdminModelSettings>()
   const [speechTestForm] = Form.useForm<SpeechTestForm>()
+  const [promptForm] = Form.useForm<RagPromptConfig>()
+  const [retrievalForm] = Form.useForm<RagRetrievalConfig>()
   const [activeSettingsTab, setActiveSettingsTab] = useState('embedding')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [voiceOptions, setVoiceOptions] = useState<{ value: string; label: string }[]>([])
   const [testingCategory, setTestingCategory] = useState<ModelCategory | null>(null)
   const [testResults, setTestResults] = useState<Partial<Record<ModelCategory, ModelTestResponse>>>({})
+  const [promptLoading, setPromptLoading] = useState(false)
+  const [promptVersions, setPromptVersions] = useState<RagPromptConfig[]>([])
+  const [health, setHealth] = useState<Record<string, unknown> | null>(null)
   const [catalog, setCatalog] = useState<AdminModelCatalog>({
     embeddingModels: [],
     speechModels: [],
@@ -857,7 +1052,55 @@ function SettingsPanel() {
 
   useEffect(() => {
     void loadSettings()
+    void loadPrompt()
   }, [])
+
+  async function loadPrompt() {
+    setPromptLoading(true)
+    try {
+      const response = await axios.get<RagPromptConfig>('/api/admin/settings/rag-prompt')
+      promptForm.setFieldsValue(response.data)
+      const [versionsResponse, retrievalResponse, healthResponse] = await Promise.all([
+        axios.get<RagPromptConfig[]>('/api/admin/settings/rag-prompts'),
+        axios.get<RagRetrievalConfig>('/api/admin/settings/rag-retrieval-config'),
+        axios.get<Record<string, unknown>>('/api/admin/settings/ai-health'),
+      ])
+      setPromptVersions(versionsResponse.data)
+      retrievalForm.setFieldsValue(retrievalResponse.data)
+      setHealth(healthResponse.data)
+    } finally {
+      setPromptLoading(false)
+    }
+  }
+
+  async function savePrompt() {
+    const values = await promptForm.validateFields()
+    setPromptLoading(true)
+    try {
+      await axios.put('/api/admin/settings/rag-prompt', values)
+      message.success('RAG Prompt 已保存')
+      await loadPrompt()
+    } finally {
+      setPromptLoading(false)
+    }
+  }
+
+  async function publishPrompt(version: string) {
+    setPromptLoading(true)
+    try {
+      await axios.post(`/api/admin/settings/rag-prompts/${encodeURIComponent(version)}/publish`)
+      message.success('Prompt 版本已发布')
+      await loadPrompt()
+    } finally {
+      setPromptLoading(false)
+    }
+  }
+
+  async function saveRetrievalConfig() {
+    const values = await retrievalForm.validateFields()
+    await axios.put('/api/admin/settings/rag-retrieval-config', values)
+    message.success('检索策略已保存')
+  }
 
   useEffect(() => {
     async function loadVoices() {
@@ -1052,6 +1295,64 @@ function SettingsPanel() {
       label: '手动维护',
       children: <ModelManualPage />,
     },
+    {
+      key: 'rag-prompt',
+      label: 'RAG Prompt',
+      children: (
+        <Space direction="vertical" size="large" className="admin-rag-detail">
+          <Card size="small" extra={<Button type="primary" loading={promptLoading} onClick={() => void savePrompt()}>保存为版本</Button>}>
+            <Form form={promptForm} layout="vertical">
+              <Form.Item name="version" label="版本号" rules={[{ required: true }]}>
+                <Input placeholder="rag-grounded-v2" />
+              </Form.Item>
+              <Form.Item name="enabled" label="保存后立即启用" valuePropName="checked">
+                <Switch />
+              </Form.Item>
+              <Form.Item name="systemPrompt" label="System Prompt" rules={[{ required: true, min: 20 }]}>
+                <Input.TextArea rows={10} />
+              </Form.Item>
+              <Button loading={promptLoading} onClick={() => void loadPrompt()}>重新加载</Button>
+            </Form>
+          </Card>
+          <Card size="small" title="版本发布/回滚">
+            <Table
+              rowKey="version"
+              dataSource={promptVersions}
+              pagination={false}
+              columns={[
+                { title: '版本', dataIndex: 'version' },
+                { title: '状态', dataIndex: 'status', render: (value?: string, row?: RagPromptConfig) => <Tag color={row?.enabled ? 'green' : 'default'}>{value || (row?.enabled ? 'ACTIVE' : 'DRAFT')}</Tag> },
+                { title: '创建时间', dataIndex: 'createdAt', render: (value?: string) => value ? new Date(value).toLocaleString('zh-CN') : '-' },
+                { title: '操作', render: (_, row?: RagPromptConfig) => <Button type="link" disabled={!row || row.enabled} onClick={() => row && void publishPrompt(row.version)}>发布/回滚</Button> },
+              ]}
+            />
+          </Card>
+        </Space>
+      ),
+    },
+    {
+      key: 'rag-retrieval',
+      label: 'RAG 检索策略',
+      children: (
+        <Space direction="vertical" size="large" className="admin-rag-detail">
+          <Card size="small" extra={<Button type="primary" onClick={() => void saveRetrievalConfig()}>保存检索策略</Button>}>
+            <Form form={retrievalForm} layout="vertical">
+              <Row gutter={16}>
+                <Col xs={24} md={8}><Form.Item name="topK" label="topK"><InputNumber min={1} max={50} /></Form.Item></Col>
+                <Col xs={24} md={8}><Form.Item name="retrieveLimit" label="召回上限"><InputNumber min={1} max={100} /></Form.Item></Col>
+                <Col xs={24} md={8}><Form.Item name="rerankLimit" label="rerank 上限"><InputNumber min={1} max={50} /></Form.Item></Col>
+                <Col xs={24} md={8}><Form.Item name="scoreThreshold" label="低置信阈值"><InputNumber min={0} max={1} step={0.01} /></Form.Item></Col>
+                <Col xs={24} md={8}><Form.Item name="hybridEnabled" label="混合检索" valuePropName="checked"><Switch /></Form.Item></Col>
+                <Col xs={24} md={8}><Form.Item name="rerankerEnabled" label="Reranker" valuePropName="checked"><Switch /></Form.Item></Col>
+              </Row>
+            </Form>
+          </Card>
+          <Card size="small" title="ai-service 健康检查">
+            <pre className="admin-json-preview">{JSON.stringify(health, null, 2)}</pre>
+          </Card>
+        </Space>
+      ),
+    },
   ]
 
   return (
@@ -1112,7 +1413,10 @@ function getNumberField(value: unknown) {
   return typeof value === 'number' ? value : undefined
 }
 
-function renderChunkList(chunks?: Array<Record<string, unknown>>) {
+function renderChunkList(
+  chunks?: Array<Record<string, unknown>>,
+  options?: { highlight?: string; onToggleDisabled?: (chunkId: string, disabled: boolean) => void },
+) {
   if (!chunks?.length) {
     return <Typography.Text type="secondary">暂无片段</Typography.Text>
   }
@@ -1124,22 +1428,55 @@ function renderChunkList(chunks?: Array<Record<string, unknown>>) {
         const source = getTextField(payload.source_file)
         const sectionPath = Array.isArray(payload.section_path) ? payload.section_path.join(' / ') : getTextField(payload.title)
         const score = getNumberField(chunk.score)
+        const text = getTextField(chunk.text, '')
+        const disabled = Boolean(payload.disabled)
+        const backendFlags = Array.isArray(payload.quality_flags) ? payload.quality_flags.map(String) : []
+        const qualityIssues = [
+          ...backendFlags,
+          !text.trim() ? '空内容' : '',
+          text.length > 0 && text.length < 40 ? '过短' : '',
+          text.length > 900 ? '过长' : '',
+        ].filter(Boolean)
+        const highlightedText = options?.highlight ? highlightText(text, options.highlight) : text
         return (
           <div className="admin-rag-chunk" key={`${getTextField(chunk.id, String(index))}-${index}`}>
             <div className="admin-rag-chunk__meta">
               <Tag color="blue">#{index + 1}</Tag>
               {score !== undefined ? <Tag color="purple">{score.toFixed(4)}</Tag> : null}
+              {disabled ? <Tag color="red">已禁用</Tag> : null}
+              {qualityIssues.map((issue) => <Tag color="orange" key={issue}>{issue}</Tag>)}
               <span>{source}</span>
               <span>{sectionPath}</span>
+              {options?.onToggleDisabled ? (
+                <Button
+                  size="small"
+                  onClick={() => options.onToggleDisabled?.(getTextField(chunk.id, ''), !disabled)}
+                >
+                  {disabled ? '启用' : '禁用'}
+                </Button>
+              ) : null}
             </div>
             <Typography.Paragraph ellipsis={{ rows: 3, expandable: true, symbol: '展开' }}>
-              {getTextField(chunk.text, '')}
+              {highlightedText}
             </Typography.Paragraph>
           </div>
         )
       })}
     </div>
   )
+}
+
+function highlightText(text: string, keyword: string) {
+  const normalized = keyword.trim()
+  if (!normalized || !text.includes(normalized)) {
+    return text
+  }
+  const parts = text.split(normalized)
+  return parts.flatMap((part, index) => (
+    index === parts.length - 1
+      ? [part]
+      : [part, <mark key={`${normalized}-${index}`}>{normalized}</mark>]
+  ))
 }
 
 function renderRetrievalTrace(trace?: Array<Record<string, unknown>>) {
@@ -1372,6 +1709,7 @@ function ReviewPanel() {
   const [data, setData] = useState<RagTraceSummary[]>([])
   const [detail, setDetail] = useState<RagTraceDetail | null>(null)
   const [loading, setLoading] = useState(false)
+  const [stats, setStats] = useState<Record<string, number>>({})
   const [reviewForm] = Form.useForm()
 
   async function loadQueue(status = 'PENDING') {
@@ -1379,6 +1717,8 @@ function ReviewPanel() {
     try {
       const response = await axios.get<RagTraceSummary[]>('/api/admin/guide/rag-reviews', { params: { status } })
       setData(response.data)
+      const statsResponse = await axios.get<Record<string, number>>('/api/admin/guide/rag-review-stats')
+      setStats(statsResponse.data)
     } finally {
       setLoading(false)
     }
@@ -1420,6 +1760,12 @@ function ReviewPanel() {
 
   return (
     <Card title="人工审核队列">
+      <Row gutter={[16, 16]} className="admin-metric-row">
+        <Col xs={12} md={4}><Statistic title="待处理" value={stats.pending ?? 0} /></Col>
+        <Col xs={12} md={4}><Statistic title="通过率" value={stats.passRate ?? 0} suffix="%" /></Col>
+        <Col xs={12} md={4}><Statistic title="驳回率" value={stats.rejectRate ?? 0} suffix="%" /></Col>
+        <Col xs={12} md={4}><Statistic title="知识缺失率" value={stats.knowledgeMissingRate ?? 0} suffix="%" /></Col>
+      </Row>
       <Form layout="inline" className="admin-filter-row" onFinish={(values) => void loadQueue(values.status)}>
         <Form.Item name="status" label="状态" initialValue="PENDING">
           <Select
@@ -1468,6 +1814,111 @@ function ReviewPanel() {
   )
 }
 
+function EvalPanel() {
+  const [runs, setRuns] = useState<RagEvalRun[]>([])
+  const [detail, setDetail] = useState<RagEvalRun | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  async function loadRuns() {
+    const response = await axios.get<RagEvalRun[]>('/api/admin/guide/rag-evals')
+    setRuns(response.data)
+  }
+
+  async function runEval() {
+    setLoading(true)
+    try {
+      const response = await axios.post<RagEvalRun>('/api/admin/guide/rag-evals/run')
+      setDetail(response.data)
+      await loadRuns()
+      message.success(`评测完成，通过率 ${response.data.passRate}%`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function openRun(id: number) {
+    const response = await axios.get<RagEvalRun>(`/api/admin/guide/rag-evals/${id}`)
+    setDetail(response.data)
+  }
+
+  useEffect(() => {
+    void loadRuns()
+  }, [])
+
+  const runColumns: TableColumnsType<RagEvalRun> = [
+    { title: 'ID', dataIndex: 'id', width: 80 },
+    { title: 'Prompt', dataIndex: 'promptVersion' },
+    { title: '通过', render: (_, row) => `${row.passedCases}/${row.totalCases}` },
+    { title: '通过率', dataIndex: 'passRate', render: (value: number) => `${value}%` },
+    { title: '时间', dataIndex: 'createdAt', render: (value: string) => new Date(value).toLocaleString('zh-CN') },
+    { title: '操作', render: (_, row) => <Button type="link" onClick={() => void openRun(row.id)}>详情</Button> },
+  ]
+
+  const caseColumns: TableColumnsType<RagEvalCase> = [
+    { title: 'Case', dataIndex: 'caseId' },
+    { title: '问题', dataIndex: 'question' },
+    { title: '结果', dataIndex: 'passed', render: (passed: boolean) => <Tag color={passed ? 'green' : 'red'}>{passed ? '通过' : '失败'}</Tag> },
+    { title: '失败原因', dataIndex: 'failureReason', render: (value?: string) => value || '-' },
+    { title: 'TopScore', dataIndex: 'topScore', render: (value?: number) => value?.toFixed?.(4) ?? '-' },
+    { title: 'Trace', dataIndex: 'traceId', render: (value?: string) => value || '-' },
+  ]
+
+  return (
+    <Card title="RAG 评测报告" extra={<Button type="primary" loading={loading} onClick={() => void runEval()}>运行评测</Button>}>
+      <Table rowKey="id" columns={runColumns} dataSource={runs} pagination={{ pageSize: 8 }} />
+      <Drawer title={detail ? `评测 #${detail.id}` : '评测详情'} open={Boolean(detail)} width={1000} onClose={() => setDetail(null)}>
+        {detail ? (
+          <Space direction="vertical" size="large" className="admin-rag-detail">
+            <Descriptions bordered size="small" column={3}>
+              <Descriptions.Item label="Prompt">{detail.promptVersion}</Descriptions.Item>
+              <Descriptions.Item label="通过">{detail.passedCases}/{detail.totalCases}</Descriptions.Item>
+              <Descriptions.Item label="通过率">{detail.passRate}%</Descriptions.Item>
+            </Descriptions>
+            <Table rowKey="caseId" columns={caseColumns} dataSource={detail.cases ?? []} pagination={false} />
+          </Space>
+        ) : null}
+      </Drawer>
+    </Card>
+  )
+}
+
+function KnowledgeMissingPanel() {
+  const [items, setItems] = useState<RagTraceSummary[]>([])
+  const [loading, setLoading] = useState(false)
+
+  async function loadItems() {
+    setLoading(true)
+    try {
+      const response = await axios.get<RagMetrics>('/api/admin/guide/rag-metrics')
+      setItems(response.data.knowledgeMissingTraces ?? [])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadItems()
+  }, [])
+
+  return (
+    <Card title="知识缺失池" extra={<Button onClick={() => void loadItems()} loading={loading}>刷新</Button>}>
+      <Table
+        rowKey="traceId"
+        loading={loading}
+        dataSource={items}
+        pagination={{ pageSize: 10 }}
+        columns={[
+          { title: '问题', dataIndex: 'question' },
+          { title: '原因', dataIndex: 'answerPreview', ellipsis: true },
+          { title: '状态', dataIndex: 'status', render: (value: string) => getRagStatusTag(value) },
+          { title: '审核', dataIndex: 'reviewStatus', render: (value?: string) => value || '-' },
+          { title: '时间', dataIndex: 'createdAt', render: (value: string) => new Date(value).toLocaleString('zh-CN') },
+        ]}
+      />
+    </Card>
+  )
+}
+
 function renderPanel(activeKey: MenuKey) {
   switch (activeKey) {
     case 'knowledge':
@@ -1492,6 +1943,10 @@ function renderPanel(activeKey: MenuKey) {
       return <QaPanel />
     case 'review':
       return <ReviewPanel />
+    case 'knowledge-missing':
+      return <KnowledgeMissingPanel />
+    case 'eval':
+      return <EvalPanel />
     case 'dashboard':
     default:
       return <DashboardPanel />
@@ -1625,7 +2080,7 @@ function App() {
         password,
       })
 
-      if (response.data.role !== 'ADMIN') {
+      if (!['ADMIN', 'REVIEWER', 'KNOWLEDGE_ADMIN', 'OBSERVER'].includes(response.data.role)) {
         setError('当前入口仅允许管理员登录，请使用管理员账号。')
         setUser(null)
         return

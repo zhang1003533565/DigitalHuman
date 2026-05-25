@@ -35,7 +35,7 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
 
         String path = request.getRequestURI();
-        if (path.startsWith("/api/admin/") && session.getRole() != UserRole.ADMIN) {
+        if (path.startsWith("/api/admin/") && !isAdminConsoleRole(session.getRole())) {
             response.sendError(HttpStatus.FORBIDDEN.value(), "需要管理员权限");
             return false;
         }
@@ -47,6 +47,13 @@ public class AuthInterceptor implements HandlerInterceptor {
 
         request.setAttribute(REQUEST_ATTR_AUTH_SESSION, session);
         return true;
+    }
+
+    private boolean isAdminConsoleRole(UserRole role) {
+        return role == UserRole.ADMIN
+                || role == UserRole.REVIEWER
+                || role == UserRole.KNOWLEDGE_ADMIN
+                || role == UserRole.OBSERVER;
     }
 
     private String resolveToken(HttpServletRequest request) {
