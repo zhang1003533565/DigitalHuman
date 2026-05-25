@@ -7,7 +7,10 @@ import com.digitalhuman.backend_java.dto.KnowledgeChunkDto;
 import com.digitalhuman.backend_java.dto.KnowledgeDeleteResponse;
 import com.digitalhuman.backend_java.dto.KnowledgeUploadResponse;
 import com.digitalhuman.backend_java.dto.KnowledgeBuildTaskDto;
+import com.digitalhuman.backend_java.model.AdminModelConfig;
 import com.digitalhuman.backend_java.model.KnowledgeBuildTask;
+import com.digitalhuman.backend_java.model.ModelCategory;
+import com.digitalhuman.backend_java.repository.AdminModelConfigRepository;
 import com.digitalhuman.backend_java.repository.KnowledgeBuildTaskRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -47,12 +50,14 @@ public class KnowledgeBaseService {
     private final ObjectMapper objectMapper;
     private final AuditLogService auditLogService;
     private final KnowledgeBuildTaskRepository taskRepository;
+    private final AdminModelConfigRepository modelConfigRepository;
     private final ExecutorService buildExecutor = Executors.newSingleThreadExecutor();
     private final ConcurrentHashMap<Long, Future<?>> runningTasks = new ConcurrentHashMap<>();
 
-    public KnowledgeBaseService(AuditLogService auditLogService, KnowledgeBuildTaskRepository taskRepository) {
+    public KnowledgeBaseService(AuditLogService auditLogService, KnowledgeBuildTaskRepository taskRepository, AdminModelConfigRepository modelConfigRepository) {
         this.auditLogService = auditLogService;
         this.taskRepository = taskRepository;
+        this.modelConfigRepository = modelConfigRepository;
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(20, TimeUnit.SECONDS)
                 .readTimeout(180, TimeUnit.SECONDS)
@@ -111,8 +116,9 @@ public class KnowledgeBaseService {
     public KnowledgeBuildResponse buildKnowledgeBase(KnowledgeBuildRequest requestPayload) {
         try {
             KnowledgeBuildRequest payload = requestPayload != null ? requestPayload : new KnowledgeBuildRequest();
+            applyDefaultEmbeddingModel(payload);
             if (payload.getFileName() != null && !payload.getFileName().isBlank()) {
-                return rebuildDocument(payload.getFileName());
+                return rebuildDocument(payload.getFileName(), payload.getEmbeddingProvider(), payload.getEmbeddingModel());
             }
             String json = objectMapper.writeValueAsString(payload);
             Request request = new Request.Builder()
@@ -122,7 +128,8 @@ public class KnowledgeBaseService {
 
             try (Response response = httpClient.newCall(request).execute()) {
                 if (!response.isSuccessful() || response.body() == null) {
-                    throw new IOException("RAG knowledge build request failed: " + response.code());
+                    String errorBody = response.body() != null ? response.body().string() : "";
+                    throw new IOException("RAG knowledge build request failed: " + response.code() + " " + errorBody);
                 }
                 KnowledgeBuildResponse result = objectMapper.readValue(response.body().string(), KnowledgeBuildResponse.class);
                 String action = Boolean.TRUE.equals(payload.getRecreateCollection()) ? "KNOWLEDGE_RECREATE" : "KNOWLEDGE_BUILD";
@@ -136,10 +143,13 @@ public class KnowledgeBaseService {
 
     public KnowledgeBuildTaskDto submitBuildTask(KnowledgeBuildRequest requestPayload) {
         KnowledgeBuildRequest payload = requestPayload != null ? requestPayload : new KnowledgeBuildRequest();
+        applyDefaultEmbeddingModel(payload);
         KnowledgeBuildTask task = new KnowledgeBuildTask();
         task.setStatus("PENDING");
         task.setProgress(0);
         task.setFileName(payload.getFileName());
+        task.setEmbeddingProvider(payload.getEmbeddingProvider());
+        task.setEmbeddingModel(payload.getEmbeddingModel());
         task.setRecreateCollection(Boolean.TRUE.equals(payload.getRecreateCollection()));
         task.setCreatedAt(LocalDateTime.now());
         taskRepository.save(task);
@@ -156,6 +166,8 @@ public class KnowledgeBaseService {
         KnowledgeBuildTask source = taskRepository.findById(id).orElseThrow();
         KnowledgeBuildRequest request = new KnowledgeBuildRequest();
         request.setFileName(source.getFileName());
+        request.setEmbeddingProvider(source.getEmbeddingProvider());
+        request.setEmbeddingModel(source.getEmbeddingModel());
         request.setRecreateCollection(source.isRecreateCollection());
         return submitBuildTask(request);
     }
@@ -210,7 +222,7 @@ public class KnowledgeBaseService {
     private BuildAccumulator runBuildTaskWithProgress(KnowledgeBuildTask task) {
         BuildAccumulator accumulator = new BuildAccumulator();
         if (task.getFileName() != null && !task.getFileName().isBlank()) {
-            KnowledgeBuildResponse response = rebuildDocument(task.getFileName());
+            KnowledgeBuildResponse response = rebuildDocument(task.getFileName(), task.getEmbeddingProvider(), task.getEmbeddingModel());
             accumulator.filesSeen = response.getFilesSeen();
             accumulator.filesIndexed = response.getFilesIndexed();
             accumulator.chunksIndexed = response.getChunksIndexed();
@@ -229,7 +241,7 @@ public class KnowledgeBaseService {
             }
             try {
                 appendTaskLog(task, "构建文件：" + doc.getFileName());
-                KnowledgeBuildResponse response = rebuildDocument(doc.getFileName());
+                KnowledgeBuildResponse response = rebuildDocument(doc.getFileName(), task.getEmbeddingProvider(), task.getEmbeddingModel());
                 accumulator.filesIndexed += response.getFilesIndexed();
                 accumulator.chunksIndexed += response.getChunksIndexed();
             } catch (Exception exception) {
@@ -248,13 +260,33 @@ public class KnowledgeBaseService {
     private KnowledgeBuildRequest taskRequest(KnowledgeBuildTask task) {
         KnowledgeBuildRequest request = new KnowledgeBuildRequest();
         request.setRecreateCollection(task.isRecreateCollection());
+        request.setEmbeddingProvider(task.getEmbeddingProvider());
+        request.setEmbeddingModel(task.getEmbeddingModel());
         return request;
     }
 
     public KnowledgeBuildResponse rebuildDocument(String fileName) {
+        return rebuildDocument(fileName, null, null);
+    }
+
+    public KnowledgeBuildResponse rebuildDocument(String fileName, String embeddingModel) {
+        return rebuildDocument(fileName, null, embeddingModel);
+    }
+
+    public KnowledgeBuildResponse rebuildDocument(String fileName, String embeddingProvider, String embeddingModel) {
+        KnowledgeBuildRequest payload = new KnowledgeBuildRequest();
+        payload.setEmbeddingProvider(normalize(embeddingProvider));
+        payload.setEmbeddingModel(normalize(embeddingModel));
+        applyDefaultEmbeddingModel(payload);
+        String json;
+        try {
+            json = objectMapper.writeValueAsString(payload);
+        } catch (Exception exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "构建参数序列化失败", exception);
+        }
         Request request = new Request.Builder()
                 .url(ragServiceUrl + "/kb/documents/" + encodePath(fileName) + "/rebuild")
-                .post(RequestBody.create(new byte[0], null))
+                .post(RequestBody.create(json, MediaType.get("application/json; charset=utf-8")))
                 .build();
         try (Response response = httpClient.newCall(request).execute()) {
             if (!response.isSuccessful() || response.body() == null) {
@@ -374,6 +406,8 @@ public class KnowledgeBaseService {
                 task.getId(),
                 task.getStatus(),
                 task.getFileName(),
+                task.getEmbeddingProvider(),
+                task.getEmbeddingModel(),
                 task.isRecreateCollection(),
                 task.getProgress(),
                 task.getFilesSeen(),
@@ -385,6 +419,35 @@ public class KnowledgeBaseService {
                 task.getCreatedAt(),
                 task.getStartedAt(),
                 task.getFinishedAt());
+    }
+
+    private void applyDefaultEmbeddingModel(KnowledgeBuildRequest payload) {
+        if (payload.getEmbeddingModel() != null && !payload.getEmbeddingModel().isBlank()) {
+            payload.setEmbeddingModel(payload.getEmbeddingModel().trim());
+            if (payload.getEmbeddingProvider() != null && !payload.getEmbeddingProvider().isBlank()) {
+                payload.setEmbeddingProvider(payload.getEmbeddingProvider().trim());
+            }
+            if (payload.getEmbeddingProvider() == null || payload.getEmbeddingProvider().isBlank()) {
+                modelConfigRepository.findByCategoryAndModelIdIgnoreCase(ModelCategory.EMBEDDING, payload.getEmbeddingModel())
+                        .ifPresent(item -> payload.setEmbeddingProvider(item.getProvider()));
+            }
+            return;
+        }
+        modelConfigRepository.findByCategoryOrderByProviderAscModelIdAsc(ModelCategory.EMBEDDING).stream()
+                .filter(AdminModelConfig::isSelected)
+                .findFirst()
+                .ifPresent(item -> {
+                    payload.setEmbeddingProvider(item.getProvider());
+                    payload.setEmbeddingModel(item.getModelId());
+                });
+        if (payload.getEmbeddingProvider() == null && payload.getEmbeddingModel() != null) {
+            modelConfigRepository.findByCategoryAndModelIdIgnoreCase(ModelCategory.EMBEDDING, payload.getEmbeddingModel())
+                    .ifPresent(item -> payload.setEmbeddingProvider(item.getProvider()));
+        }
+    }
+
+    private String normalize(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private void appendTaskLog(KnowledgeBuildTask task, String line) {

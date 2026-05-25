@@ -5,6 +5,7 @@ from datetime import datetime, UTC
 from pathlib import Path
 import hashlib
 import re
+import uuid
 
 from rag.contracts.schemas import ChunkPayload, ChunkRecord
 from rag.ingestion.parser import ParsedElement
@@ -48,7 +49,7 @@ def build_chunks(path: Path, elements: list[ParsedElement], config: ChunkingConf
             )
             chunks.append(
                 ChunkRecord(
-                    id=f"{doc_id}-{chunk_index}",
+                    id=stable_chunk_id(doc_id, chunk_index),
                     text=piece,
                     payload=payload,
                 )
@@ -112,6 +113,10 @@ def split_text(text: str, chunk_size: int, overlap: int) -> list[str]:
 
 def stable_doc_id(path: Path) -> str:
     return hashlib.md5(str(path).encode("utf-8")).hexdigest()
+
+
+def stable_chunk_id(doc_id: str, chunk_index: int) -> str:
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"digitalhuman-rag:{doc_id}:{chunk_index}"))
 
 
 def extract_tags(section_stack: list[str], text: str) -> list[str]:

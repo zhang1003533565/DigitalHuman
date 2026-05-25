@@ -18,6 +18,10 @@ public class KnowledgeBuildTask {
     private String status;
     @Column(length = 200)
     private String fileName;
+    @Column(length = 200)
+    private String embeddingModel;
+    @Column(length = 80)
+    private String embeddingProvider;
     @Column(nullable = false)
     private boolean recreateCollection;
     @Column(nullable = false)
@@ -41,6 +45,10 @@ public class KnowledgeBuildTask {
     public void setStatus(String status) { this.status = status; }
     public String getFileName() { return fileName; }
     public void setFileName(String fileName) { this.fileName = fileName; }
+    public String getEmbeddingModel() { return embeddingModel; }
+    public void setEmbeddingModel(String embeddingModel) { this.embeddingModel = embeddingModel; }
+    public String getEmbeddingProvider() { return embeddingProvider; }
+    public void setEmbeddingProvider(String embeddingProvider) { this.embeddingProvider = embeddingProvider; }
     public boolean isRecreateCollection() { return recreateCollection; }
     public void setRecreateCollection(boolean recreateCollection) { this.recreateCollection = recreateCollection; }
     public int getProgress() { return progress; }

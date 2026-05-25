@@ -1,7 +1,9 @@
 package com.digitalhuman.backend_java.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class KnowledgeUploadResponse {
 
     @JsonProperty("file_name")
@@ -11,6 +13,7 @@ public class KnowledgeUploadResponse {
     @JsonProperty("updated_at")
     private String updatedAt;
     private Boolean supported;
+    private String version;
 
     public String getFileName() {
         return fileName;
@@ -42,5 +45,13 @@ public class KnowledgeUploadResponse {
 
     public void setSupported(Boolean supported) {
         this.supported = supported;
+    }
+
+    public String getVersion() {
+        return version;
+    }
+
+    public void setVersion(String version) {
+        this.version = version;
     }
 }

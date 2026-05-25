@@ -262,6 +262,8 @@ type KnowledgeBuildResult = {
   filesIndexed: number
   chunksIndexed: number
   collection: string
+  embeddingProvider?: string
+  embeddingModel?: string
   builtAt: string
 }
 
@@ -269,6 +271,8 @@ type KnowledgeBuildTask = {
   id: number
   status: string
   fileName?: string
+  embeddingProvider?: string
+  embeddingModel?: string
   recreateCollection: boolean
   progress: number
   filesSeen?: number
@@ -526,6 +530,8 @@ function KnowledgePanel() {
   const [chunks, setChunks] = useState<KnowledgeChunk[]>([])
   const [chunkDrawerOpen, setChunkDrawerOpen] = useState(false)
   const [buildTasks, setBuildTasks] = useState<KnowledgeBuildTask[]>([])
+  const [embeddingOptions, setEmbeddingOptions] = useState<{ value: string; label: string; provider: string; modelId: string }[]>([])
+  const [selectedEmbeddingModel, setSelectedEmbeddingModel] = useState<string>()
   const [documentPreview, setDocumentPreview] = useState<{ fileName: string; text: string; sections?: string[] } | null>(null)
   const [documentDiff, setDocumentDiff] = useState<Record<string, unknown> | null>(null)
   const [chunkKeyword, setChunkKeyword] = useState('')
@@ -548,15 +554,29 @@ function KnowledgePanel() {
     setBuildTasks(response.data)
   }
 
+  async function loadEmbeddingOptions() {
+    const response = await axios.get<AdminModelCatalog>('/api/admin/settings/model-options')
+    const options = (response.data.embeddingModels ?? []).map((item) => ({
+      value: `${item.provider}::${item.modelId}`,
+      label: `${item.provider} · ${item.modelId}`,
+      provider: item.provider,
+      modelId: item.modelId,
+    }))
+    setEmbeddingOptions(options)
+    setSelectedEmbeddingModel((current) => current || options[0]?.value)
+  }
+
   async function buildKnowledgeBase(recreateCollection: boolean) {
     setBuilding(true)
     try {
-      const response = await axios.post('/api/admin/knowledge/build', { recreateCollection })
+      const response = await axios.post('/api/admin/knowledge/build', { recreateCollection, ...selectedEmbeddingPayload(embeddingOptions, selectedEmbeddingModel) })
       const result: KnowledgeBuildResult = {
         filesSeen: response.data.filesSeen,
         filesIndexed: response.data.filesIndexed,
         chunksIndexed: response.data.chunksIndexed,
         collection: response.data.collection,
+        embeddingProvider: response.data.embeddingProvider,
+        embeddingModel: response.data.embeddingModel,
         builtAt: new Date().toISOString(),
       }
       setLastBuildResult(result)
@@ -579,12 +599,14 @@ function KnowledgePanel() {
   async function rebuildDocument(fileName: string) {
     setBuilding(true)
     try {
-      const response = await axios.post(`/api/admin/knowledge/documents/${encodeURIComponent(fileName)}/rebuild`)
+      const response = await axios.post('/api/admin/knowledge/build', { fileName, ...selectedEmbeddingPayload(embeddingOptions, selectedEmbeddingModel) })
       setLastBuildResult({
         filesSeen: response.data.filesSeen,
         filesIndexed: response.data.filesIndexed,
         chunksIndexed: response.data.chunksIndexed,
         collection: response.data.collection,
+        embeddingProvider: response.data.embeddingProvider,
+        embeddingModel: response.data.embeddingModel,
         builtAt: new Date().toISOString(),
       })
       message.success(`已重建 ${fileName}`)
@@ -594,7 +616,7 @@ function KnowledgePanel() {
   }
 
   async function submitBuildTask(recreateCollection: boolean, fileName?: string) {
-    await axios.post('/api/admin/knowledge/build-tasks', { recreateCollection, fileName })
+    await axios.post('/api/admin/knowledge/build-tasks', { recreateCollection, fileName, ...selectedEmbeddingPayload(embeddingOptions, selectedEmbeddingModel) })
     message.success('构建任务已提交')
     await loadBuildTasks()
   }
@@ -653,6 +675,7 @@ function KnowledgePanel() {
   useEffect(() => {
     void loadDocuments()
     void loadBuildTasks()
+    void loadEmbeddingOptions()
   }, [])
 
   const uploadProps: UploadProps = {
@@ -718,6 +741,19 @@ function KnowledgePanel() {
       )}
     >
       <div className="admin-form-grid">
+        <Card size="small">
+          <Space wrap>
+            <Typography.Text strong>构建 Embedding 模型</Typography.Text>
+            <Select
+              style={{ minWidth: 320 }}
+              placeholder="选择后台已配置的 embedding 模型"
+              value={selectedEmbeddingModel}
+              onChange={setSelectedEmbeddingModel}
+              options={embeddingOptions}
+            />
+            <Tag color="blue">构建和后续检索会使用同一个向量模型</Tag>
+          </Space>
+        </Card>
         <Upload {...uploadProps}>
           <Button icon={<DatabaseOutlined />} loading={uploading}>选择景区资料</Button>
         </Upload>
@@ -744,6 +780,7 @@ function KnowledgePanel() {
         {lastBuildResult ? (
           <Card size="small" className="admin-build-summary">
             最近一次构建写入集合 `{lastBuildResult.collection}`，共处理 {lastBuildResult.filesIndexed} 个文件，生成 {lastBuildResult.chunksIndexed} 个知识块。
+            {lastBuildResult.embeddingModel ? <div>Embedding 模型：{lastBuildResult.embeddingProvider ? `${lastBuildResult.embeddingProvider} · ` : ''}{lastBuildResult.embeddingModel}</div> : null}
             <div className="admin-build-summary__time">
               构建时间：{new Date(lastBuildResult.builtAt).toLocaleString('zh-CN')}
             </div>
@@ -768,15 +805,16 @@ function KnowledgePanel() {
               { title: 'ID', dataIndex: 'id', width: 70 },
               { title: '状态', dataIndex: 'status', render: (value: string) => <Tag color={value === 'SUCCEEDED' ? 'green' : value === 'FAILED' ? 'red' : value === 'RUNNING' ? 'blue' : 'default'}>{value}</Tag> },
               { title: '文件', dataIndex: 'fileName', render: (value?: string) => value || '全部文件' },
+              { title: 'Embedding', dataIndex: 'embeddingModel', ellipsis: true, render: (value?: string, row?: KnowledgeBuildTask) => value ? `${row?.embeddingProvider ? `${row.embeddingProvider} · ` : ''}${value}` : '-' },
               { title: '进度', dataIndex: 'progress', render: (value: number) => <Progress percent={value} size="small" /> },
               { title: '知识块', dataIndex: 'chunksIndexed', render: (value?: number) => value ?? '-' },
               { title: '错误', dataIndex: 'errorMessage', ellipsis: true, render: (value?: string) => value || '-' },
               {
                 title: '操作',
-                render: (_, row: KnowledgeBuildTask) => (
+                render: (_, row?: KnowledgeBuildTask) => (
                   <Space>
-                    {row.status === 'FAILED' ? <Button type="link" onClick={() => void retryBuildTask(row.id)}>重试</Button> : null}
-                    {row.status === 'PENDING' ? <Button type="link" danger onClick={() => void cancelBuildTask(row.id)}>取消</Button> : null}
+                    {row?.status === 'FAILED' ? <Button type="link" onClick={() => void retryBuildTask(row.id)}>重试</Button> : null}
+                    {row?.status === 'PENDING' ? <Button type="link" danger onClick={() => void cancelBuildTask(row.id)}>取消</Button> : null}
                   </Space>
                 ),
               },
@@ -2194,4 +2232,14 @@ function formatBytes(sizeBytes: number) {
     return `${(sizeBytes / 1024).toFixed(1)} KB`
   }
   return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function selectedEmbeddingPayload(
+  options: { value: string; provider: string; modelId: string }[],
+  selectedValue?: string,
+) {
+  const selected = options.find((item) => item.value === selectedValue)
+  return selected
+    ? { embeddingProvider: selected.provider, embeddingModel: selected.modelId }
+    : {}
 }

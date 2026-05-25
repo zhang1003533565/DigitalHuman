@@ -11,6 +11,10 @@ public class KnowledgeBuildResponse {
     @JsonProperty("chunks_indexed")
     private Integer chunksIndexed;
     private String collection;
+    @JsonProperty("embeddingProvider")
+    private String embeddingProvider;
+    @JsonProperty("embeddingModel")
+    private String embeddingModel;
 
     public Integer getFilesSeen() {
         return filesSeen;
@@ -42,5 +46,21 @@ public class KnowledgeBuildResponse {
 
     public void setCollection(String collection) {
         this.collection = collection;
+    }
+
+    public String getEmbeddingModel() {
+        return embeddingModel;
+    }
+
+    public void setEmbeddingModel(String embeddingModel) {
+        this.embeddingModel = embeddingModel;
+    }
+
+    public String getEmbeddingProvider() {
+        return embeddingProvider;
+    }
+
+    public void setEmbeddingProvider(String embeddingProvider) {
+        this.embeddingProvider = embeddingProvider;
     }
 }

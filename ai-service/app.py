@@ -3,7 +3,7 @@
 RAG FastAPI service for ingesting the local knowledge base and serving retrieval.
 """
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import Body, FastAPI, File, HTTPException, UploadFile
 
 from model_capabilities.testing.model_test_service import test_model
 from model_capabilities.tts.router import router as tts_router
@@ -31,7 +31,7 @@ def health() -> dict[str, object]:
         checks["qdrant"] = f"error: {exc}"
     checks["llm"] = "configured" if rag_service.llm.is_enabled() else "not_configured"
     checks["llmModel"] = rag_service.settings.llm_model or "not_set"
-    checks["embedding"] = rag_service.settings.embedding_model_name
+    checks["embedding"] = rag_service.embedder.status()
     checks["reranker"] = rag_service.settings.reranker_model_name
     checks["knowledgeBaseDir"] = str(rag_service.settings.knowledge_base_dir)
     checks["knowledgeBaseExists"] = rag_service.settings.knowledge_base_dir.exists()
@@ -43,7 +43,12 @@ def health() -> dict[str, object]:
 
 @app.post("/kb/ingest", response_model=IngestResponse)
 def ingest(request: IngestRequest) -> IngestResponse:
-    return rag_service.ingest(request)
+    try:
+        return rag_service.ingest(request)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"知识库构建失败：{type(exc).__name__}: {exc}") from exc
 
 
 @app.get("/kb/documents", response_model=list[KnowledgeDocumentInfo])
@@ -62,8 +67,17 @@ def delete_document(file_name: str) -> DeleteKnowledgeResponse:
 
 
 @app.post("/kb/documents/{file_name}/rebuild", response_model=IngestResponse)
-def rebuild_document(file_name: str) -> IngestResponse:
-    return rag_service.rebuild_document(file_name)
+def rebuild_document(file_name: str, request: IngestRequest | None = Body(default=None)) -> IngestResponse:
+    try:
+        return rag_service.rebuild_document(
+            file_name,
+            embedding_model=request.embedding_model if request else None,
+            embedding_provider=request.embedding_provider if request else None,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"单文件重建失败：{type(exc).__name__}: {exc}") from exc
 
 
 @app.get("/kb/documents/{file_name}/chunks", response_model=KnowledgeChunkListResponse)

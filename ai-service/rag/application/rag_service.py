@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from datetime import datetime
+import json
 
 from fastapi import HTTPException
 
@@ -13,7 +14,7 @@ from rag.graph.query_graph import RagQueryGraph, extract_related_spots
 from rag.ingestion.chunker import ChunkingConfig, build_chunks
 from rag.ingestion.parser import parse_document
 from rag.llm import LlmConfig, ProviderBackedLlm, infer_provider_name
-from rag.retrieval.embedder import BgeM3Embedder
+from rag.retrieval.embedder import BgeM3Embedder, ProviderEmbedder
 from rag.retrieval.reranker import BgeReranker
 from rag.retrieval.retriever import Retriever
 from rag.retrieval.vectordb import QdrantVectorStore
@@ -22,7 +23,8 @@ from rag.retrieval.vectordb import QdrantVectorStore
 class RagService:
     def __init__(self) -> None:
         self.settings = get_settings()
-        self.embedder = BgeM3Embedder(self.settings.embedding_model_name)
+        self.active_embedding_provider, self.active_embedding_model_name = self._load_active_embedding_model()
+        self.embedder = self._new_embedder(self.active_embedding_provider, self.active_embedding_model_name)
         self.reranker = BgeReranker(self.settings.reranker_model_name)
         self.llm = ProviderBackedLlm(
             LlmConfig(
@@ -54,12 +56,15 @@ class RagService:
 
         files = sorted(
             path
-            for path in source_dir.glob(request.glob)
+            for path in source_dir.glob(request.glob or "*")
             if path.is_file() and path.suffix.lower() in {".docx", ".pdf", ".txt"}
         )
-        return self.ingest_files(files, recreate_collection=request.recreate_collection)
+        return self.ingest_files(files, recreate_collection=request.recreate_collection, embedding_model=request.embedding_model, embedding_provider=request.embedding_provider)
 
-    def ingest_files(self, files: list[Path], recreate_collection: bool) -> IngestResponse:
+    def ingest_files(self, files: list[Path], recreate_collection: bool, embedding_model: str | None = None, embedding_provider: str | None = None) -> IngestResponse:
+        active_embedding_provider = embedding_provider
+        active_embedding_model = embedding_model or self.active_embedding_model_name
+        embedder = self._embedder_for_model(active_embedding_model, active_embedding_provider)
         all_chunks = []
         chunking = ChunkingConfig(
             chunk_size=self.settings.chunk_size,
@@ -83,20 +88,25 @@ class RagService:
                 files_indexed=0,
                 chunks_indexed=0,
                 collection=self.settings.qdrant_collection,
+                embeddingProvider=normalize_provider(active_embedding_provider),
+                embeddingModel=active_embedding_model,
             )
 
-        vectors = self.embedder.embed_documents([chunk.text for chunk in all_chunks])
+        vectors = embedder.embed_documents([chunk.text for chunk in all_chunks])
         if recreate_collection:
             self.vector_store.recreate_collection(len(vectors[0]))
         else:
             self.vector_store.ensure_collection(len(vectors[0]))
         self.vector_store.upsert(all_chunks, vectors)
+        self._activate_embedding_model(active_embedding_model, embedder, active_embedding_provider)
 
         return IngestResponse(
             files_seen=len(files),
             files_indexed=indexed_files,
             chunks_indexed=len(all_chunks),
             collection=self.settings.qdrant_collection,
+            embeddingProvider=normalize_provider(active_embedding_provider),
+            embeddingModel=active_embedding_model,
         )
 
     def list_documents(self) -> list[KnowledgeDocumentInfo]:
@@ -142,14 +152,14 @@ class RagService:
         vectors_deleted = self.vector_store.delete_by_source_file(path.name)
         return DeleteKnowledgeResponse(fileName=path.name, fileDeleted=file_deleted, vectorsDeleted=vectors_deleted)
 
-    def rebuild_document(self, file_name: str) -> IngestResponse:
+    def rebuild_document(self, file_name: str, embedding_model: str | None = None, embedding_provider: str | None = None) -> IngestResponse:
         path = self._resolve_document_path(file_name)
         if not path.exists():
             raise HTTPException(status_code=404, detail="知识文件不存在")
         if not is_supported_file_name(path.name):
             raise HTTPException(status_code=400, detail="文件格式不支持构建")
         self.vector_store.delete_by_source_file(path.name)
-        return self.ingest_files([path], recreate_collection=False)
+        return self.ingest_files([path], recreate_collection=False, embedding_model=embedding_model, embedding_provider=embedding_provider)
 
     def list_document_chunks(self, file_name: str) -> KnowledgeChunkListResponse:
         path = self._resolve_document_path(file_name)
@@ -219,6 +229,56 @@ class RagService:
         ensure_directory(self.settings.knowledge_base_dir)
         return self.settings.knowledge_base_dir / file_name
 
+    def _embedder_for_model(self, model_name: str, provider: str | None = None):
+        provider = normalize_provider(provider)
+        if model_name == self.active_embedding_model_name and provider == self.active_embedding_provider:
+            return self.embedder
+        return self._new_embedder(provider, model_name)
+
+    def _activate_embedding_model(self, model_name: str, embedder, provider: str | None = None) -> None:
+        provider = normalize_provider(provider)
+        if model_name == self.active_embedding_model_name and provider == self.active_embedding_provider:
+            return
+        self.embedder = embedder
+        self.active_embedding_provider = provider
+        self.active_embedding_model_name = model_name
+        self._save_active_embedding_model(model_name, provider)
+        self.retriever = Retriever(
+            vector_store=self.vector_store,
+            embedder=self.embedder,
+            reranker=self.reranker,
+            retrieve_limit=self.settings.retrieve_limit,
+            rerank_limit=self.settings.rerank_limit,
+        )
+        self.query_graph = RagQueryGraph(self.retriever, self.llm, score_threshold=self.settings.score_threshold)
+
+    def _active_embedding_model_path(self) -> Path:
+        return Path(__file__).resolve().parents[1] / ".runtime" / "active_embedding_model.json"
+
+    def _new_embedder(self, provider: str | None, model_name: str):
+        provider = normalize_provider(provider)
+        if provider:
+            return ProviderEmbedder(provider, model_name)
+        return BgeM3Embedder(model_name)
+
+    def _load_active_embedding_model(self) -> tuple[str | None, str]:
+        path = self._active_embedding_model_path()
+        if path.exists():
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                provider = normalize_provider(payload.get("embeddingProvider"))
+                value = payload.get("embeddingModel")
+                if isinstance(value, str) and value.strip():
+                    return provider, value.strip()
+            except Exception:
+                pass
+        return None, self.settings.embedding_model_name
+
+    def _save_active_embedding_model(self, model_name: str, provider: str | None) -> None:
+        path = self._active_embedding_model_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"embeddingProvider": provider, "embeddingModel": model_name}, ensure_ascii=False, indent=2), encoding="utf-8")
+
     def _parse_version_file(self, file_name: str, stored_name: str) -> str:
         version_path = Path(__file__).resolve().parents[1] / ".runtime" / "document_versions" / file_name.replace("/", "_").replace("\\", "_") / stored_name
         if not version_path.exists():
@@ -227,3 +287,12 @@ class RagService:
             return "\n".join(element.text for element in parse_document(version_path))[:8000]
         except Exception:
             return ""
+
+
+def normalize_provider(provider: str | None) -> str | None:
+    if provider is None:
+        return None
+    value = str(provider).strip()
+    if not value or value.lower() in {"custom", "local", "local tts"}:
+        return None
+    return value

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ChunkPayload(BaseModel):
@@ -38,9 +38,13 @@ class RetrievalAttempt(BaseModel):
 
 
 class IngestRequest(BaseModel):
-    source_dir: str | None = None
-    glob: str = "*"
-    recreate_collection: bool = False
+    model_config = ConfigDict(populate_by_name=True)
+
+    source_dir: str | None = Field(default=None, alias="sourceDir")
+    glob: str | None = "*"
+    recreate_collection: bool = Field(default=False, alias="recreateCollection")
+    embedding_provider: str | None = Field(default=None, alias="embeddingProvider")
+    embedding_model: str | None = Field(default=None, alias="embeddingModel")
 
 
 class IngestResponse(BaseModel):
@@ -48,6 +52,8 @@ class IngestResponse(BaseModel):
     files_indexed: int
     chunks_indexed: int
     collection: str
+    embedding_provider: str | None = Field(default=None, alias="embeddingProvider")
+    embedding_model: str | None = Field(default=None, alias="embeddingModel")
 
 
 class KnowledgeDocumentInfo(BaseModel):
