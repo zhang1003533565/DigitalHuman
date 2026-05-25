@@ -103,11 +103,7 @@ function App() {
   const [password, setPassword] = useState('admin123')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [user, setUser] = useState<LoginResult | null>(null)
-
-  useEffect(() => {
-    setUser(getStoredUser())
-  }, [])
+  const [user, setUser] = useState<LoginResult | null>(() => getStoredUser())
 
   useEffect(() => {
     document.body.classList.toggle('admin-page', Boolean(user))

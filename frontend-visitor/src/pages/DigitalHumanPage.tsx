@@ -1,4 +1,4 @@
-import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react'
+import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import axios from 'axios'
 import './DigitalHumanPage.css'
 import {
@@ -57,7 +57,48 @@ type DigitalChatMessage = {
 
 type DigitalChatDropdownKey = 'factory' | 'voice' | 'model'
 
+type RuntimeTriggerRule = {
+  id?: number
+  ruleType: 'MOUSE' | 'KEYWORD'
+  eventCode?: string
+  phrases?: string[]
+  actionId: number
+  actionName?: string
+  motionFilePath?: string
+  groupName?: string
+  actionIndex?: number
+  enabled: boolean
+  priority: number
+}
+
+type RuntimeDigitalHumanModel = {
+  id: number
+  modelKey: string
+  displayName: string
+  modelPath: string
+  status: string
+  triggerRules?: RuntimeTriggerRule[]
+}
+
+type ActionMatchResponse = {
+  matched: boolean
+  actionId?: number
+  actionName?: string
+  motionFilePath?: string
+  groupName?: string
+  actionIndex?: number
+  ruleType?: 'MOUSE' | 'KEYWORD'
+  eventCode?: string
+}
+
+type ActionTriggerPayload = {
+  eventCode?: string
+  text?: string
+}
+
 const GUIDE_SESSION_KEY = 'digitalhuman.visitor.guideSessionId'
+const HIGHEST_TRIGGER_PRIORITY = 1
+const LOWEST_TRIGGER_PRIORITY = 10
 
 const DEFAULT_CONFIG: DigitalHumanConfig = {
   modelId: 'hiyori_pro_zh',
@@ -85,6 +126,29 @@ const CHAT_TIME_FORMATTER = new Intl.DateTimeFormat('zh-CN', {
 
 function formatChatTime(time: Date) {
   return CHAT_TIME_FORMATTER.format(time)
+}
+
+function normalizeTriggerPriority(priority?: number) {
+  if (priority === undefined || priority === null) {
+    return HIGHEST_TRIGGER_PRIORITY
+  }
+  return Math.max(HIGHEST_TRIGGER_PRIORITY, Math.min(LOWEST_TRIGGER_PRIORITY, priority))
+}
+
+function getTriggerWeight(rule: RuntimeTriggerRule) {
+  return LOWEST_TRIGGER_PRIORITY + 1 - normalizeTriggerPriority(rule.priority)
+}
+
+function selectWeightedRule(rules: RuntimeTriggerRule[]) {
+  const totalWeight = rules.reduce((sum, rule) => sum + getTriggerWeight(rule), 0)
+  let cursor = Math.random() * totalWeight
+  for (const rule of rules) {
+    cursor -= getTriggerWeight(rule)
+    if (cursor < 0) {
+      return rule
+    }
+  }
+  return rules[rules.length - 1] ?? null
 }
 
 function buildAssistantContent(response: GuideChatResponse) {
@@ -127,8 +191,12 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
   const appRef = useRef<PixiApplication | null>(null)
   const loadIdRef = useRef(0)
   const isMountedRef = useRef(false)
+  const dragStartXRef = useRef(0)
+  const clickTimerRef = useRef<number | null>(null)
   const [config, setConfig] = useState<DigitalHumanConfig>(DEFAULT_CONFIG)
   const [selectedModelId, setSelectedModelId] = useState(DEFAULT_CONFIG.modelId)
+  const [runtimeModels, setRuntimeModels] = useState<RuntimeDigitalHumanModel[]>([])
+  const [runtimeModelsLoading, setRuntimeModelsLoading] = useState(false)
   const [status, setStatus] = useState('正在加载 Live2D 模型...')
   const [isReady, setIsReady] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
@@ -150,6 +218,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
   const selectedModel =
     MODEL_OPTIONS.find((model) => model.id === selectedModelId) ??
     MODEL_OPTIONS[0]
+  const selectedRuntimeModel = runtimeModels.find((model) => model.modelKey === selectedModel.id)
 
   const selectedVoice =
     VOICE_OPTIONS.find((voice) => voice.id === config.voiceId) ??
@@ -187,6 +256,61 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
   }, [])
 
   useEffect(() => {
+    async function loadRuntimeModels() {
+      try {
+        setRuntimeModelsLoading(true)
+        const response = await axios.get<RuntimeDigitalHumanModel[]>('/api/user/digital-human/models')
+        setRuntimeModels(response.data)
+      } catch (error) {
+        console.warn('Load digital human action rules failed', error)
+        setRuntimeModels([])
+      } finally {
+        setRuntimeModelsLoading(false)
+      }
+    }
+
+    void loadRuntimeModels()
+
+    // 定时刷新配置，每 30 秒检查一次更新
+    const refreshInterval = setInterval(() => {
+      void loadRuntimeModels()
+    }, 30000)
+
+    return () => {
+      clearInterval(refreshInterval)
+    }
+  }, [])
+
+  useEffect(() => {
+    async function refreshDigitalHumanConfig() {
+      try {
+        const response = await axios.get<DigitalHumanConfig>('/api/user/digital-human/config')
+        const nextConfig = { ...DEFAULT_CONFIG, ...response.data }
+        setConfig(nextConfig)
+        setSelectedModelId(nextConfig.modelId)
+      } catch (error) {
+        console.warn('Refresh digital human config failed', error)
+      }
+    }
+
+    const refreshInterval = setInterval(() => {
+      void refreshDigitalHumanConfig()
+    }, 8000)
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') {
+        void refreshDigitalHumanConfig()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      clearInterval(refreshInterval)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [])
+
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ block: 'end' })
   }, [messages.length, isSpeaking])
 
@@ -202,6 +326,129 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     document.addEventListener('pointerdown', handleDocumentPointerDown)
     return () => document.removeEventListener('pointerdown', handleDocumentPointerDown)
   }, [openDropdown])
+
+  const playConfiguredMotion = useCallback((action?: Pick<ActionMatchResponse, 'matched' | 'actionName' | 'groupName' | 'actionIndex'>) => {
+    const model = modelRef.current
+    if (!model || !action?.matched || action.actionIndex === undefined || action.actionIndex === null) {
+      return false
+    }
+
+    try {
+      model.stopMotions?.()
+      ;(model.motion as (groupName: string, index?: number, priority?: number) => void)(
+        action.groupName ?? '',
+        action.actionIndex,
+        3,
+      )
+      if (action.actionName) {
+        setStatus(`已触发动作：${action.actionName}`)
+      }
+      return true
+    } catch (error) {
+      console.warn('Configured action failed', action, error)
+      return false
+    }
+  }, [])
+
+  const findLocalRuleMatch = useCallback((payload: ActionTriggerPayload) => {
+    const rules = [...(selectedRuntimeModel?.triggerRules ?? [])]
+      .filter((rule) => rule.enabled)
+      .sort((left, right) => (left.priority - right.priority) || ((left.id ?? 0) - (right.id ?? 0)))
+
+    const text = payload.text?.trim() ?? ''
+    const eventCode = payload.eventCode?.trim() ?? ''
+
+    const matchedRules = rules.filter((rule) => {
+      if (rule.ruleType === 'MOUSE') {
+        return eventCode && rule.eventCode === eventCode
+      }
+      if (rule.ruleType === 'KEYWORD') {
+        return Boolean(text) && (rule.phrases ?? []).some((phrase) => text.includes(phrase))
+      }
+      return false
+    })
+
+    if (!matchedRules.length) {
+      return null
+    }
+
+    return selectWeightedRule(matchedRules)
+  }, [selectedRuntimeModel])
+
+  const triggerConfiguredAction = useCallback(async (payload: ActionTriggerPayload) => {
+    const modelKey = selectedRuntimeModel?.modelKey ?? selectedModel.id
+    if (!modelKey) {
+      return false
+    }
+
+    try {
+      const response = await axios.post<ActionMatchResponse>('/api/user/digital-human/action-match', {
+        modelKey,
+        ...payload,
+      })
+      if (playConfiguredMotion(response.data)) {
+        return true
+      }
+    } catch (error) {
+      console.warn('Action match API failed, falling back to local rules', error)
+    }
+
+    const localRule = findLocalRuleMatch(payload)
+    return playConfiguredMotion(localRule ? { matched: true, ...localRule } : undefined)
+  }, [findLocalRuleMatch, playConfiguredMotion, selectedModel.id, selectedRuntimeModel])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) {
+      return
+    }
+
+    function clearClickTimer() {
+      if (clickTimerRef.current !== null) {
+        window.clearTimeout(clickTimerRef.current)
+        clickTimerRef.current = null
+      }
+    }
+
+    function handleClick(event: MouseEvent) {
+      if (event.button === 0 && event.detail === 1) {
+        clearClickTimer()
+        clickTimerRef.current = window.setTimeout(() => {
+          clickTimerRef.current = null
+          void triggerConfiguredAction({ eventCode: 'CLICK_LEFT' })
+        }, 240)
+      }
+    }
+
+    function handleDoubleClick() {
+      clearClickTimer()
+      void triggerConfiguredAction({ eventCode: 'DOUBLE_CLICK_LEFT' })
+    }
+
+    function handleContextMenu(event: MouseEvent) {
+      clearClickTimer()
+      event.preventDefault()
+      void triggerConfiguredAction({ eventCode: 'RIGHT_CLICK' })
+    }
+
+    function handleWheel(event: WheelEvent) {
+      if (event.deltaY < 0) {
+        void triggerConfiguredAction({ eventCode: 'WHEEL_UP' })
+      }
+    }
+
+    canvas.addEventListener('click', handleClick)
+    canvas.addEventListener('dblclick', handleDoubleClick)
+    canvas.addEventListener('contextmenu', handleContextMenu)
+    canvas.addEventListener('wheel', handleWheel, { passive: true })
+    return () => {
+      clearClickTimer()
+      canvas.removeEventListener('click', handleClick)
+      canvas.removeEventListener('dblclick', handleDoubleClick)
+      canvas.removeEventListener('contextmenu', handleContextMenu)
+      canvas.removeEventListener('wheel', handleWheel)
+    }
+  }, [triggerConfiguredAction])
 
   useEffect(() => {
     isMountedRef.current = true
@@ -299,13 +546,27 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
         model.x = stageCenterX - model.width / 2
         model.y = window.innerHeight * yOffsetRatio
 
-        makeDraggable(model)
+        makeDraggable(model, {
+          onDragStart: () => {
+            dragStartXRef.current = model.x
+          },
+          onDragEnd: () => {
+            const deltaX = model.x - dragStartXRef.current
+            if (Math.abs(deltaX) >= 24) {
+              void triggerConfiguredAction({ eventCode: deltaX < 0 ? 'SLIDE_LEFT' : 'SLIDE_RIGHT' })
+            }
+          },
+        })
 
         model.on('hit', (...args: unknown[]) => {
           const hitAreas = Array.isArray(args[0]) ? (args[0] as string[]) : []
 
           if (hitAreas.includes('Body') && selectedModel.bodyMotionGroup) {
-            model.motion(selectedModel.bodyMotionGroup)
+            const hasConfiguredClick = (selectedRuntimeModel?.triggerRules ?? [])
+              .some((rule) => rule.enabled && rule.ruleType === 'MOUSE' && rule.eventCode === 'CLICK_LEFT')
+            if (!hasConfiguredClick) {
+              model.motion(selectedModel.bodyMotionGroup)
+            }
           }
 
           if (hitAreas.includes('Head')) {
@@ -338,6 +599,8 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     selectedModel.scaleMultiplier,
     selectedModel.xOffsetRatio,
     selectedModel.yOffsetRatio,
+    selectedRuntimeModel?.triggerRules,
+    triggerConfiguredAction,
   ])
 
   async function speakAnswer(answerText: string) {
@@ -391,6 +654,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     setDraft('')
     setIsSpeaking(true)
     setStatus('正在生成导览回答...')
+    void triggerConfiguredAction({ text: question })
 
     try {
       const chatResponse = await axios.post<GuideChatResponse>('/api/user/guide/chat', {
@@ -412,6 +676,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
       }
       setMessages((current) => [...current, assistantMessage])
       setStatus('导览回答已生成，正在驱动数字人口型。')
+      void triggerConfiguredAction({ text: `${question}\n${chatResponse.data.answerText}` })
       await speakAnswer(chatResponse.data.answerText)
     } catch (error) {
       console.error(error)
@@ -456,6 +721,26 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     const model = MODEL_OPTIONS.find((item) => item.id === modelId) ?? MODEL_OPTIONS[0]
     setSelectedModelId(model.id)
     setOpenDropdown(null)
+  }
+
+  async function handleRefreshConfig() {
+    try {
+      setRuntimeModelsLoading(true)
+      const [modelsResponse, configResponse] = await Promise.all([
+        axios.get<RuntimeDigitalHumanModel[]>('/api/user/digital-human/models'),
+        axios.get<DigitalHumanConfig>('/api/user/digital-human/config'),
+      ])
+      setRuntimeModels(modelsResponse.data)
+      const nextConfig = { ...DEFAULT_CONFIG, ...configResponse.data }
+      setConfig(nextConfig)
+      setSelectedModelId(nextConfig.modelId)
+      setStatus('配置已刷新，动作触发规则已更新。')
+    } catch (error) {
+      console.warn('Refresh config failed', error)
+      setStatus('配置刷新失败。')
+    } finally {
+      setRuntimeModelsLoading(false)
+    }
   }
 
   return (
@@ -567,6 +852,17 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
                   </div>
                 ) : null}
               </div>
+
+              <button
+                type="button"
+                className={`digital-chat-refresh${runtimeModelsLoading ? ' loading' : ''}`}
+                disabled={isSpeaking || runtimeModelsLoading}
+                onClick={() => void handleRefreshConfig()}
+                title="刷新动作配置"
+                aria-label="刷新动作配置"
+              >
+                <span aria-hidden>{runtimeModelsLoading ? '↻' : '⟳'}</span>
+              </button>
             </div>
           </header>
 

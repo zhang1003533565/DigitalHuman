@@ -743,6 +743,112 @@
   gap: 12px;
 }
 
+.model-action-page {
+  display: grid;
+  grid-template-columns: 290px minmax(0, 1fr);
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+}
+
+.model-action-side,
+.model-action-main {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  min-height: 0;
+}
+
+.model-action-main {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.model-action-card {
+  border-radius: 8px;
+  border-color: #e4ebf5;
+  box-shadow: 0 10px 28px rgba(25, 45, 80, 0.05);
+}
+
+.model-action-avatar {
+  width: 176px;
+  aspect-ratio: 1;
+  margin: 4px auto 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 30%, #ffffff 0 18%, transparent 19%),
+    linear-gradient(150deg, #dfe8f5, #f9fbff 52%, #d6e4f8);
+  color: #24539a;
+  font-size: 34px;
+  font-weight: 800;
+  box-shadow: inset 0 -16px 34px rgba(47, 109, 255, 0.12);
+}
+
+.model-action-meta {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 12px 10px;
+  margin: 0;
+  color: #53667f;
+}
+
+.model-action-meta dt {
+  color: #23364d;
+  font-weight: 700;
+}
+
+.model-action-meta dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.model-action-mode-card .ant-card-body {
+  padding: 18px;
+}
+
+.model-action-mode {
+  width: 100%;
+  min-height: 82px;
+  border: 1px solid #dfe7f3;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 16px 18px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.model-action-mode strong {
+  display: block;
+  color: #21364f;
+  font-size: 16px;
+}
+
+.model-action-mode span {
+  display: block;
+  margin-top: 8px;
+  color: #6a7d95;
+  line-height: 1.45;
+}
+
+.model-action-mode.is-active {
+  border-color: #2f6dff;
+  background: linear-gradient(180deg, #f8fbff, #ffffff);
+  box-shadow: 0 10px 24px rgba(47, 109, 255, 0.12);
+}
+
+.model-action-footer {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #e4ebf5;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
 @media (max-width: 900px) {
   .shell {
     grid-template-columns: 1fr;
@@ -764,6 +870,11 @@
 
   .admin-multimodal-media-frame {
     min-height: 240px;
+  }
+
+  .model-action-page {
+    grid-template-columns: 1fr;
+    height: auto;
   }
 }
 

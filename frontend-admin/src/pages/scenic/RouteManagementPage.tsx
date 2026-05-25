@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import axios from 'axios'
 import {
   Button,
@@ -19,6 +19,7 @@ import {
   Popconfirm,
 } from 'antd'
 import type { TableColumnsType } from 'antd'
+import { useDeferredMount } from '../../hooks/useDeferredMount'
 
 type RouteNodeRow = {
   id?: string
@@ -121,9 +122,9 @@ export default function RouteManagementPage() {
       setData(response.data.map(mapRouteResponse))
   }
 
-  useEffect(() => {
+  useDeferredMount(() => {
     void loadRoutes()
-  }, [])
+  })
 
   function openRouteEditor(route?: RouteRow) {
     const nextRoute = route ?? {

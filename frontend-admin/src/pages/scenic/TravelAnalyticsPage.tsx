@@ -75,6 +75,13 @@ export default function TravelAnalyticsPage() {
   const colDragRef = useRef<{ header: string; startX: number; startWidth: number } | null>(null)
   const rowDragRef = useRef<{ rowKey: string; startY: number; startHeight: number } | null>(null)
 
+  function setRowHeightDragStart(event: ReactMouseEvent<HTMLDivElement>, rowKey: string, currentHeight: number) {
+    event.preventDefault()
+    rowDragRef.current = { rowKey, startY: event.clientY, startHeight: currentHeight }
+    document.body.style.userSelect = 'none'
+    document.body.style.cursor = 'row-resize'
+  }
+
   useEffect(() => {
     function onMouseMove(event: MouseEvent) {
       if (colDragRef.current) {
@@ -205,13 +212,6 @@ export default function TravelAnalyticsPage() {
     setColumns(builtColumns)
     setRows(sourceRows)
   }, [headers, sourceRows, columnWidths, rowHeights, fontSize, baseColumnWidths])
-
-  function setRowHeightDragStart(event: ReactMouseEvent<HTMLDivElement>, rowKey: string, currentHeight: number) {
-    event.preventDefault()
-    rowDragRef.current = { rowKey, startY: event.clientY, startHeight: currentHeight }
-    document.body.style.userSelect = 'none'
-    document.body.style.cursor = 'row-resize'
-  }
 
   return (
     <div className="admin-panel-grid travel-analytics-page">

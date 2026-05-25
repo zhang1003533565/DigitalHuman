@@ -1,4 +1,4 @@
-# Haru Greeter 动作命名对照
+# 春迎面者动作命名对照
 
 这个文件用于维护 `haru_greeter_pro_jp` 的动作命名，并和前端按钮、模型 JSON 中的动作顺序保持一致。
 

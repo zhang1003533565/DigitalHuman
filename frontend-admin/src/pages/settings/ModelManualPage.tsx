@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import axios from 'axios'
 import { AutoComplete, Button, Card, Form, Input, Select, Table, message } from 'antd'
 import type { TableColumnsType } from 'antd'
+import { useDeferredMount } from '../../hooks/useDeferredMount'
 
 type ModelCategory = 'embedding' | 'speech' | 'vision' | 'chat' | 'multimodal'
 
@@ -191,11 +192,11 @@ export default function ModelManualPage() {
     })
   }
 
-  useEffect(() => {
+  useDeferredMount(() => {
     void loadPage().catch(() => {
       message.error('手动维护页面加载失败，请检查后端服务。')
     })
-  }, [])
+  })
 
   useEffect(() => {
     async function loadProviderDoc() {
