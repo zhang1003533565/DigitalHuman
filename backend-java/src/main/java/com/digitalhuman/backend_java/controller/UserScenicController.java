@@ -3,6 +3,7 @@ package com.digitalhuman.backend_java.controller;
 import com.digitalhuman.backend_java.dto.ScenicRouteDto;
 import com.digitalhuman.backend_java.dto.ScenicSpotDto;
 import com.digitalhuman.backend_java.service.GuideService;
+import com.digitalhuman.backend_java.service.ScenicRouteService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -15,9 +16,11 @@ import java.util.List;
 public class UserScenicController {
 
     private final GuideService guideService;
+    private final ScenicRouteService scenicRouteService;
 
-    public UserScenicController(GuideService guideService) {
+    public UserScenicController(GuideService guideService, ScenicRouteService scenicRouteService) {
         this.guideService = guideService;
+        this.scenicRouteService = scenicRouteService;
     }
 
     @GetMapping("/spots")
@@ -27,6 +30,6 @@ public class UserScenicController {
 
     @GetMapping("/routes/recommend")
     public List<ScenicRouteDto> recommendRoutes(@RequestParam(required = false) String interest) {
-        return guideService.recommendRoutes(interest);
+        return scenicRouteService.recommendRoutes(interest);
     }
 }
