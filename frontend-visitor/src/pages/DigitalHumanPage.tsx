@@ -1,15 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react'
 import axios from 'axios'
 import '../App.css'
 import {
   type Live2DModel,
-  type MotionOption,
   type PixiApplication,
   DEFAULT_PITCH,
   DEFAULT_RATE,
-  DEFAULT_TEXT,
   DEFAULT_VOLUME,
-  DEMO_AUDIO_URL,
   MODEL_OPTIONS,
   TTS_ENDPOINT,
   VOICE_OPTIONS,
@@ -25,6 +22,17 @@ type DigitalHumanPageProps = {
   onLogout: () => void
 }
 
+type DigitalHumanConfig = {
+  modelId: string
+  voiceId: string
+  rate: number
+  volume: number
+  pitch: number
+  welcomeText: string
+  guideStyle: string
+  broadcastStrategy: string
+}
+
 type GuideChatResponse = {
   sessionId: string
   traceId?: string
@@ -38,148 +46,179 @@ type GuideChatResponse = {
   }>
 }
 
+type DigitalChatMessage = {
+  id: string
+  sender: 'guide' | 'me'
+  name: string
+  content: ReactNode
+  time: Date
+  status?: 'sent' | 'read' | 'failed'
+}
+
+type DigitalChatDropdownKey = 'factory' | 'voice' | 'model'
+
 const GUIDE_SESSION_KEY = 'digitalhuman.visitor.guideSessionId'
 
-type MotionTabId = 'combo' | 'expression' | 'micro'
-
-type FaceControlState = {
-  eyeOpen: number
-  eyeSmile: number
-  eyeballX: number
-  eyeballY: number
-  mouthOpen: number
-  mouthForm: number
-  blush: number
-  angleX: number
-  angleY: number
-  angleZ: number
+const DEFAULT_CONFIG: DigitalHumanConfig = {
+  modelId: 'hiyori_pro_zh',
+  voiceId: VOICE_OPTIONS[0].id,
+  rate: DEFAULT_RATE,
+  volume: DEFAULT_VOLUME,
+  pitch: DEFAULT_PITCH,
+  welcomeText: '您好，欢迎来到灵山胜境，我可以为您介绍景点、路线和活动安排。',
+  guideStyle: 'friendly',
+  broadcastStrategy: 'standard',
 }
 
-const DEFAULT_FACE_CONTROLS: FaceControlState = {
-  eyeOpen: 1,
-  eyeSmile: 0,
-  eyeballX: 0,
-  eyeballY: 0,
-  mouthOpen: 0,
-  mouthForm: 0,
-  blush: 0,
-  angleX: 0,
-  angleY: 0,
-  angleZ: 0,
-}
-
-const FACE_CONTROL_CONFIG: Array<{
-  key: keyof FaceControlState
-  label: string
-  min: number
-  max: number
-  step: number
-}> = [
-  { key: 'eyeOpen', label: '睁眼程度', min: 0, max: 1, step: 0.01 },
-  { key: 'eyeSmile', label: '笑眼程度', min: 0, max: 1, step: 0.01 },
-  { key: 'eyeballX', label: '眼球左右', min: -1, max: 1, step: 0.01 },
-  { key: 'eyeballY', label: '眼球上下', min: -1, max: 1, step: 0.01 },
-  { key: 'mouthOpen', label: '嘴巴开合', min: 0, max: 1, step: 0.01 },
-  { key: 'mouthForm', label: '嘴型变化', min: -1, max: 1, step: 0.01 },
-  { key: 'blush', label: '脸红程度', min: 0, max: 1, step: 0.01 },
-  { key: 'angleX', label: '头部左右', min: -30, max: 30, step: 1 },
-  { key: 'angleY', label: '头部上下', min: -30, max: 30, step: 1 },
-  { key: 'angleZ', label: '头部倾斜', min: -30, max: 30, step: 1 },
+const FACTORY_OPTIONS = [
+  { id: 'lingshan', name: '灵山官方' },
+  { id: 'qwen', name: '通义千问' },
+  { id: 'deepseek', name: 'DeepSeek' },
+  { id: 'volcengine', name: '火山引擎' },
+  { id: 'xunfei', name: '讯飞星火' },
 ]
 
-function applyFaceControls(model: Live2DModel, controls: FaceControlState) {
-  const coreModel = model.internalModel?.coreModel
+const CHAT_TIME_FORMATTER = new Intl.DateTimeFormat('zh-CN', {
+  hour: '2-digit',
+  minute: '2-digit',
+})
 
-  coreModel?.setParameterValueById?.('ParamEyeLOpen', controls.eyeOpen)
-  coreModel?.setParameterValueById?.('ParamEyeROpen', controls.eyeOpen)
-  coreModel?.setParameterValueById?.('ParamEyeLSmile', controls.eyeSmile)
-  coreModel?.setParameterValueById?.('ParamEyeRSmile', controls.eyeSmile)
-  coreModel?.setParameterValueById?.('ParamEyeBallX', controls.eyeballX)
-  coreModel?.setParameterValueById?.('ParamEyeBallY', controls.eyeballY)
-  coreModel?.setParameterValueById?.('ParamTere', controls.blush)
-  coreModel?.setParameterValueById?.('ParamAngleX', controls.angleX)
-  coreModel?.setParameterValueById?.('ParamAngleY', controls.angleY)
-  coreModel?.setParameterValueById?.('ParamAngleZ', controls.angleZ)
+function formatChatTime(time: Date) {
+  return CHAT_TIME_FORMATTER.format(time)
 }
 
-function applyMouthControls(model: Live2DModel, controls: FaceControlState) {
-  const coreModel = model.internalModel?.coreModel
-
-  coreModel?.setParameterValueById?.('ParamMouthOpenY', controls.mouthOpen)
-  coreModel?.setParameterValueById?.('ParamMouthForm', controls.mouthForm)
-}
-
-function formatFaceControlValue(key: keyof FaceControlState, value: number) {
-  if (key.startsWith('angle')) {
-    return `${value > 0 ? '+' : ''}${Math.round(value)}`
-  }
-
-  if (key === 'eyeballX' || key === 'eyeballY' || key === 'mouthForm') {
-    return value.toFixed(2)
-  }
-
-  return `${Math.round(value * 100)}%`
+function buildAssistantContent(response: GuideChatResponse) {
+  return (
+    <div className="digital-human-answer">
+      <p>{response.answerText}</p>
+      {response.answerText.includes('知识库暂未覆盖') ? (
+        <p className="digital-human-answer__hint">
+          这个问题目前还没有进入景区知识库，后台可以在知识缺失池中补充资料。
+        </p>
+      ) : null}
+      {response.relatedSpots.length || response.recommendedRoutes.length ? (
+        <div className="digital-human-answer__tags">
+          {response.relatedSpots.map((spot) => (
+            <span key={spot}>{spot}</span>
+          ))}
+          {response.recommendedRoutes.map((route) => (
+            <span key={route}>{route}</span>
+          ))}
+        </div>
+      ) : null}
+      {response.sources?.length ? (
+        <div className="digital-human-answer__sources">
+          {response.sources.slice(0, 3).map((source, index) => (
+            <span key={`${source.source_file ?? source.title ?? 'source'}-${index}`}>
+              来源：{source.source_file || source.title || '知识库'}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  )
 }
 
 export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const messagesEndRef = useRef<HTMLDivElement | null>(null)
+  const chatActionsRef = useRef<HTMLDivElement | null>(null)
   const modelRef = useRef<Live2DModel | null>(null)
   const appRef = useRef<PixiApplication | null>(null)
   const loadIdRef = useRef(0)
   const isMountedRef = useRef(false)
-  const [selectedModelId, setSelectedModelId] = useState('haru_greeter_pro_jp')
-  const [selectedVoiceId, setSelectedVoiceId] = useState(VOICE_OPTIONS[0].id)
-  const [text, setText] = useState(DEFAULT_TEXT)
-  const [rate, setRate] = useState(DEFAULT_RATE)
-  const [volume, setVolume] = useState(DEFAULT_VOLUME)
-  const [pitch, setPitch] = useState(DEFAULT_PITCH)
+  const [config, setConfig] = useState<DigitalHumanConfig>(DEFAULT_CONFIG)
+  const [selectedModelId, setSelectedModelId] = useState(DEFAULT_CONFIG.modelId)
   const [status, setStatus] = useState('正在加载 Live2D 模型...')
   const [isReady, setIsReady] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [sessionId, setSessionId] = useState(() => window.sessionStorage.getItem(GUIDE_SESSION_KEY) ?? '')
-  const [lastTraceId, setLastTraceId] = useState('')
-  const [answerText, setAnswerText] = useState('')
-  const [relatedSpots, setRelatedSpots] = useState<string[]>([])
-  const [recommendedRoutes, setRecommendedRoutes] = useState<string[]>([])
-  const [answerSources, setAnswerSources] = useState<GuideChatResponse['sources']>([])
-  const [feedbackStatus, setFeedbackStatus] = useState('')
-  const [activeMotionKey, setActiveMotionKey] = useState<string | null>(null)
-  const [activeMotionTab, setActiveMotionTab] = useState<MotionTabId>('combo')
-  const [faceControls, setFaceControls] = useState<FaceControlState>(DEFAULT_FACE_CONTROLS)
-  const [isModelSpeaking, setIsModelSpeaking] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [selectedFactoryId, setSelectedFactoryId] = useState(FACTORY_OPTIONS[0].id)
+  const [openDropdown, setOpenDropdown] = useState<DigitalChatDropdownKey | null>(null)
+  const [messages, setMessages] = useState<DigitalChatMessage[]>([
+    {
+      id: 'welcome',
+      sender: 'guide',
+      name: '灵山导览数字人',
+      content: DEFAULT_CONFIG.welcomeText,
+      time: new Date(),
+      status: 'read',
+    },
+  ])
 
   const selectedModel =
     MODEL_OPTIONS.find((model) => model.id === selectedModelId) ??
     MODEL_OPTIONS[0]
 
-  const motionOptions = selectedModel.motionOptions ?? []
-  const microMotionOptions = selectedModel.microMotionOptions ?? []
-
-  const motionTabs = [
-    { id: 'combo' as const, label: '组合动作' },
-    { id: 'expression' as const, label: '表情' },
-    { id: 'micro' as const, label: '细微动作' },
-  ]
-
   const selectedVoice =
-    VOICE_OPTIONS.find((voice) => voice.id === selectedVoiceId) ??
+    VOICE_OPTIONS.find((voice) => voice.id === config.voiceId) ??
     VOICE_OPTIONS[0]
 
-  const visibleMotionOptions =
-    activeMotionTab === 'combo'
-      ? motionOptions
-      : activeMotionTab === 'micro'
-        ? microMotionOptions
-        : []
+  const selectedFactory =
+    FACTORY_OPTIONS.find((factory) => factory.id === selectedFactoryId) ??
+    FACTORY_OPTIONS[0]
+
+  const canSend = isReady && !isSpeaking && draft.trim().length > 0
+
+  useEffect(() => {
+    async function loadConfig() {
+      try {
+        const response = await axios.get<DigitalHumanConfig>('/api/user/digital-human/config')
+        const nextConfig = { ...DEFAULT_CONFIG, ...response.data }
+        setConfig(nextConfig)
+        setSelectedModelId(nextConfig.modelId)
+        setMessages((current) => {
+          if (current.length !== 1 || current[0]?.id !== 'welcome') {
+            return current
+          }
+          return [{
+            ...current[0],
+            content: nextConfig.welcomeText,
+          }]
+        })
+      } catch (error) {
+        console.error(error)
+        setStatus('数字人配置读取失败，已使用默认展示配置。')
+      }
+    }
+
+    void loadConfig()
+  }, [])
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ block: 'end' })
+  }, [messages.length, isSpeaking])
+
+  useEffect(() => {
+    if (!openDropdown) return
+
+    function handleDocumentPointerDown(event: PointerEvent) {
+      if (!chatActionsRef.current?.contains(event.target as Node)) {
+        setOpenDropdown(null)
+      }
+    }
+
+    document.addEventListener('pointerdown', handleDocumentPointerDown)
+    return () => document.removeEventListener('pointerdown', handleDocumentPointerDown)
+  }, [openDropdown])
+
+  useEffect(() => {
+    document.documentElement.classList.add('digital-human-page-lock')
+    document.body.classList.add('digital-human-page-lock')
+
+    return () => {
+      document.documentElement.classList.remove('digital-human-page-lock')
+      document.body.classList.remove('digital-human-page-lock')
+    }
+  }, [])
 
   useEffect(() => {
     isMountedRef.current = true
 
     async function initPixiApp() {
       const canvas = canvasRef.current
-      if (!canvas) {
-        return
-      }
+      if (!canvas) return
 
       try {
         await loadLive2dScripts()
@@ -214,58 +253,6 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
   }, [])
 
   useEffect(() => {
-    const model = modelRef.current
-
-    if (!model || selectedModel.id !== 'haru_greeter_pro_jp') {
-      return
-    }
-
-    let frameId = 0
-
-    const apply = () => {
-      const currentModel = modelRef.current
-
-      if (currentModel && selectedModel.id === 'haru_greeter_pro_jp') {
-        applyFaceControls(currentModel, faceControls)
-      }
-
-      frameId = window.requestAnimationFrame(apply)
-    }
-
-    apply()
-
-    return () => {
-      window.cancelAnimationFrame(frameId)
-    }
-  }, [faceControls, selectedModel.id, isReady])
-
-  useEffect(() => {
-    const model = modelRef.current
-
-    if (!model || selectedModel.id !== 'haru_greeter_pro_jp' || isModelSpeaking) {
-      return
-    }
-
-    let frameId = 0
-
-    const apply = () => {
-      const currentModel = modelRef.current
-
-      if (currentModel && selectedModel.id === 'haru_greeter_pro_jp' && !isModelSpeaking) {
-        applyMouthControls(currentModel, faceControls)
-      }
-
-      frameId = window.requestAnimationFrame(apply)
-    }
-
-    apply()
-
-    return () => {
-      window.cancelAnimationFrame(frameId)
-    }
-  }, [faceControls, isModelSpeaking, selectedModel.id, isReady])
-
-  useEffect(() => {
     const loadId = loadIdRef.current + 1
     loadIdRef.current = loadId
 
@@ -284,9 +271,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
         let app = appRef.current
 
         if (!app) {
-          if (!canvas) {
-            return
-          }
+          if (!canvas) return
 
           app = new window.PIXI.Application({
             view: canvas,
@@ -317,11 +302,11 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
         const scaleX = window.innerWidth / model.width
         const scaleY = window.innerHeight / model.height
         const scaleMultiplier = selectedModel.scaleMultiplier ?? 0.84
-        const xOffsetRatio = selectedModel.xOffsetRatio ?? 0
         const yOffsetRatio = selectedModel.yOffsetRatio ?? 0.08
+        const stageCenterX = window.innerWidth >= 980 ? window.innerWidth * 0.22 : window.innerWidth * 0.5
 
         model.scale.set(Math.min(scaleX, scaleY) * scaleMultiplier)
-        model.x = (window.innerWidth - model.width) / 2 + window.innerWidth * xOffsetRatio
+        model.x = stageCenterX - model.width / 2
         model.y = window.innerHeight * yOffsetRatio
 
         makeDraggable(model)
@@ -341,7 +326,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
         modelRef.current = model
         app.start()
         setIsReady(true)
-        setStatus(`${selectedModel.name} 已加载，可以测试说话。`)
+        setStatus(`${selectedModel.name} 已就绪，可以开始导览问答。`)
       } catch (error) {
         console.error(error)
         appRef.current?.start()
@@ -365,419 +350,291 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     selectedModel.yOffsetRatio,
   ])
 
-  function handlePlayDemo() {
+  async function speakAnswer(answerText: string) {
     const model = modelRef.current
-    if (!model) {
-      return
-    }
+    if (!model || !answerText.trim()) return
 
+    const response = await axios.post(
+      TTS_ENDPOINT,
+      {
+        text: answerText,
+        voice: selectedVoice.id,
+        rate: formatPercent(config.rate),
+        volume: formatPercent(config.volume),
+        pitch: formatPitch(config.pitch),
+      },
+      {
+        responseType: 'blob',
+      },
+    )
+
+    const audioUrl = URL.createObjectURL(response.data)
     model.stopMotions?.()
-    setIsModelSpeaking(true)
-    speak(model, `${DEMO_AUDIO_URL}?v=${Date.now()}`, {
+    speak(model, audioUrl, {
       onFinish: () => {
-        setIsModelSpeaking(false)
+        setIsSpeaking(false)
+        URL.revokeObjectURL(audioUrl)
       },
       onError: () => {
-        setIsModelSpeaking(false)
+        setIsSpeaking(false)
+        URL.revokeObjectURL(audioUrl)
       },
     })
   }
 
-  function getMotionKey(motion: MotionOption) {
-    return `${motion.group}:${motion.index ?? 'random'}`
-  }
+  async function handleSend(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault()
 
-  function handlePlayMotion(motion: MotionOption) {
-    const model = modelRef.current
+    const question = draft.trim()
+    if (!question) return
 
-    if (!model) {
-      setStatus('模型还没有加载完成。')
-      return
+    const userMessage: DigitalChatMessage = {
+      id: `user-${Date.now()}`,
+      sender: 'me',
+      name: '我',
+      content: question,
+      time: new Date(),
+      status: 'sent',
     }
 
-    model.motion(motion.group, motion.index)
-    setActiveMotionKey(getMotionKey(motion))
-    setStatus(`正在播放 ${selectedModel.name} 动作：${motion.label}`)
-  }
-
-  function handleFaceControlChange(key: keyof FaceControlState, value: number) {
-    setFaceControls((current) => ({
-      ...current,
-      [key]: value,
-    }))
-  }
-
-  function handleResetFaceControls() {
-    setFaceControls(DEFAULT_FACE_CONTROLS)
-    setStatus('已重置表情和头部参数。')
-  }
-
-  async function handleStartSpeaking() {
-    const model = modelRef.current
-    const content = text.trim()
-
-    if (!model || !content) {
-      setStatus(content ? '模型还没有加载完成。' : '请输入要说的内容。')
-      return
-    }
-
+    setMessages((current) => [...current, userMessage])
+    setDraft('')
     setIsSpeaking(true)
-    setStatus('正在请求后端导览问答...')
+    setStatus('正在生成导览回答...')
 
     try {
       const chatResponse = await axios.post<GuideChatResponse>('/api/user/guide/chat', {
         sessionId: sessionId || undefined,
-        question: content,
+        question,
       })
 
       const nextSessionId = chatResponse.data.sessionId
       setSessionId(nextSessionId)
       window.sessionStorage.setItem(GUIDE_SESSION_KEY, nextSessionId)
-      setAnswerText(chatResponse.data.answerText)
-      setLastTraceId(chatResponse.data.traceId ?? '')
-      setRelatedSpots(chatResponse.data.relatedSpots)
-      setRecommendedRoutes(chatResponse.data.recommendedRoutes)
-      setAnswerSources(chatResponse.data.sources ?? [])
 
-      const startTime = performance.now()
-      const response = await axios.post(
-        TTS_ENDPOINT,
-        {
-          text: chatResponse.data.answerText,
-          voice: selectedVoice.id,
-          rate: formatPercent(rate),
-          volume: formatPercent(volume),
-          pitch: formatPitch(pitch),
-        },
-        {
-          responseType: 'blob',
-        },
-      )
-
-      const audioUrl = URL.createObjectURL(response.data)
-      const durationMs = Math.round(performance.now() - startTime)
-
-      model.stopMotions?.()
-      setIsModelSpeaking(true)
-      speak(model, audioUrl, {
-        onFinish: () => {
-          setIsModelSpeaking(false)
-          URL.revokeObjectURL(audioUrl)
-        },
-        onError: () => {
-          setIsModelSpeaking(false)
-          URL.revokeObjectURL(audioUrl)
-        },
-      })
-      setStatus(`导览回答已生成，正在驱动口型。耗时: ${durationMs}ms`)
+      const assistantMessage: DigitalChatMessage = {
+        id: `guide-${Date.now()}`,
+        sender: 'guide',
+        name: '灵山导览数字人',
+        content: buildAssistantContent(chatResponse.data),
+        time: new Date(),
+        status: 'read',
+      }
+      setMessages((current) => [...current, assistantMessage])
+      setStatus('导览回答已生成，正在驱动数字人口型。')
+      await speakAnswer(chatResponse.data.answerText)
     } catch (error) {
       console.error(error)
-      if (axios.isAxiosError(error) && error.response?.data instanceof Blob) {
-        try {
-          const detailText = await error.response.data.text()
-          const detailJson = JSON.parse(detailText) as { detail?: string }
-          setStatus(`请求 TTS 接口失败: ${detailJson.detail || error.message}`)
-        } catch {
-          setStatus(`请求 TTS 接口失败: ${error.message}`)
-        }
-      } else {
-        setStatus(
-          `请求 TTS 接口失败: ${error instanceof Error ? error.message : '请确认 Python TTS 服务已启动。'}`,
-        )
-      }
-    } finally {
       setIsSpeaking(false)
+      setStatus('导览请求失败，请确认问答服务和 TTS 服务已启动。')
+      setMessages((current) => [
+        ...current,
+        {
+          id: `guide-error-${Date.now()}`,
+          sender: 'guide',
+          name: '灵山导览数字人',
+          content: '这次导览请求失败了，请稍后再试。',
+          time: new Date(),
+          status: 'failed',
+        },
+      ])
     }
   }
 
-  async function submitFeedback(helpful: boolean) {
-    if (!sessionId || !text.trim()) {
-      setFeedbackStatus('请先完成一次导览提问。')
-      return
-    }
+  function selectNextModel() {
+    const currentIndex = MODEL_OPTIONS.findIndex((model) => model.id === selectedModelId)
+    const nextModel = MODEL_OPTIONS[(currentIndex + 1) % MODEL_OPTIONS.length] ?? MODEL_OPTIONS[0]
+    setSelectedModelId(nextModel.id)
+  }
 
-    try {
-      await axios.post('/api/user/guide/feedback', {
-        sessionId,
-        traceId: lastTraceId || undefined,
-        question: text.trim(),
-        answer: answerText,
-        helpful,
-        rating: helpful ? 5 : 2,
-        comment: helpful ? '导览回答有帮助' : '需要补充更准确的景点信息',
-      })
-      setFeedbackStatus(helpful ? '已提交正向反馈。' : '已提交待优化反馈。')
-    } catch (error) {
-      console.error(error)
-      setFeedbackStatus('反馈提交失败，请稍后重试。')
-    }
+  function selectNextVoice() {
+    const currentIndex = VOICE_OPTIONS.findIndex((voice) => voice.id === config.voiceId)
+    const nextVoice = VOICE_OPTIONS[(currentIndex + 1) % VOICE_OPTIONS.length] ?? VOICE_OPTIONS[0]
+    setConfig((current) => ({ ...current, voiceId: nextVoice.id }))
+    setStatus(`已切换音色：${nextVoice.name}`)
+  }
+
+  function handleSelectFactory(factoryId: string) {
+    const factory = FACTORY_OPTIONS.find((item) => item.id === factoryId) ?? FACTORY_OPTIONS[0]
+    setSelectedFactoryId(factory.id)
+    setOpenDropdown(null)
+    setStatus(`已切换厂家：${factory.name}`)
+  }
+
+  function handleSelectVoice(voiceId: string) {
+    const voice = VOICE_OPTIONS.find((item) => item.id === voiceId) ?? VOICE_OPTIONS[0]
+    setConfig((current) => ({ ...current, voiceId: voice.id }))
+    setOpenDropdown(null)
+    setStatus(`已切换音色：${voice.name}`)
+  }
+
+  function handleSelectModel(modelId: string) {
+    const model = MODEL_OPTIONS.find((item) => item.id === modelId) ?? MODEL_OPTIONS[0]
+    setSelectedModelId(model.id)
+    setOpenDropdown(null)
   }
 
   return (
     <main className="module-screen">
       <AppTopNav onLogout={onLogout} />
 
-      <section className="live2d-page">
+      <section className="live2d-page live2d-page--presentation">
         <canvas ref={canvasRef} className="live2d-canvas" />
+        <div className="digital-human-stage-glow" aria-hidden />
+        <div className="digital-human-status" aria-live="polite">
+          <span className={isReady ? 'digital-human-status__dot digital-human-status__dot--ready' : 'digital-human-status__dot'} />
+          <span>{status}</span>
+        </div>
 
-        <section className="control-panel" aria-label="数字人控制面板">
-          <p className="eyebrow">Digital Human Module</p>
-          <h1>数字人口型驱动</h1>
-          <p className="description">
-            当前模块是独立路由页面，后面可以被首页、景点页、活动页或任何其他入口直接跳转进入。
-          </p>
-
-          <div className="control-group">
-            <label className="label" htmlFor="model-select">
-              选择模型
-            </label>
-            <select
-              id="model-select"
-              value={selectedModelId}
-              disabled={isSpeaking}
-              onChange={(event) => setSelectedModelId(event.target.value)}
-            >
-              {MODEL_OPTIONS.map((model) => (
-                <option key={model.id} value={model.id}>
-                  {model.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="control-group">
-            <label className="label" htmlFor="voice-select">
-              选择声音
-            </label>
-            <select
-              id="voice-select"
-              value={selectedVoiceId}
-              disabled={isSpeaking}
-              onChange={(event) => setSelectedVoiceId(event.target.value)}
-            >
-              {VOICE_OPTIONS.map((voice) => (
-                <option key={voice.id} value={voice.id}>
-                  {voice.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="control-group">
-            <span className="label">1. 本地音频测试</span>
-            <button type="button" disabled={!isReady} onClick={handlePlayDemo}>
-              测试音频
-            </button>
-          </div>
-
-          <div className="control-group">
-            <label className="label" htmlFor="speech-text">
-              2. 发起导览提问
-            </label>
-            <textarea
-              id="speech-text"
-              value={text}
-              onChange={(event) => setText(event.target.value)}
-            />
-            <div className="tts-tuning">
-              <div className="slider-group">
-                <label className="slider-label" htmlFor="rate-range">
-                  <span>语速</span>
-                  <span>{formatPercent(rate)}</span>
-                </label>
-                <input
-                  id="rate-range"
-                  type="range"
-                  min={-50}
-                  max={100}
-                  step={5}
-                  value={rate}
-                  disabled={isSpeaking}
-                  onChange={(event) => setRate(Number(event.target.value))}
-                />
-              </div>
-
-              <div className="slider-group">
-                <label className="slider-label" htmlFor="volume-range">
-                  <span>音量</span>
-                  <span>{formatPercent(volume)}</span>
-                </label>
-                <input
-                  id="volume-range"
-                  type="range"
-                  min={-50}
-                  max={50}
-                  step={5}
-                  value={volume}
-                  disabled={isSpeaking}
-                  onChange={(event) => setVolume(Number(event.target.value))}
-                />
-              </div>
-
-              <div className="slider-group">
-                <label className="slider-label" htmlFor="pitch-range">
-                  <span>音高</span>
-                  <span>{formatPitch(pitch)}</span>
-                </label>
-                <input
-                  id="pitch-range"
-                  type="range"
-                  min={-50}
-                  max={50}
-                  step={5}
-                  value={pitch}
-                  disabled={isSpeaking}
-                  onChange={(event) => setPitch(Number(event.target.value))}
-                />
-              </div>
-            </div>
-            <button
-              type="button"
-              disabled={!isReady || isSpeaking}
-              onClick={handleStartSpeaking}
-            >
-              {isSpeaking ? '生成中...' : '开始导览'}
-            </button>
-          </div>
-
-          {answerText ? (
-            <div className="control-group answer-panel">
-              <span className="label">导览回答</span>
-              <p className="answer-text">{answerText}</p>
-              <div className="tag-group">
-                {relatedSpots.map((spot) => (
-                  <span key={spot} className="info-tag">{spot}</span>
-                ))}
-                {recommendedRoutes.map((route) => (
-                  <span key={route} className="info-tag info-tag--warm">{route}</span>
-                ))}
-              </div>
-              {answerSources?.length ? (
-                <div className="tag-group">
-                  {answerSources.slice(0, 3).map((source, index) => (
-                    <span key={`${source.source_file}-${index}`} className="info-tag">
-                      来源：{source.source_file || source.title || '知识库'}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-              {answerText.includes('知识库暂未覆盖') ? (
-                <p className="status">这个问题目前还没有进入景区知识库，我们已经记录下来，后续可以补充资料后再回答得更准。</p>
-              ) : null}
-              <div className="feedback-actions">
-                <button type="button" onClick={() => void submitFeedback(true)}>有帮助</button>
-                <button type="button" className="ghost-button" onClick={() => void submitFeedback(false)}>
-                  待优化
-                </button>
-              </div>
-              {feedbackStatus ? <p className="status">{feedbackStatus}</p> : null}
-            </div>
-          ) : null}
-
-          <p className="status">{status}</p>
-        </section>
-
-        <aside
-          className="motion-drawer motion-drawer--open"
-          aria-label="动作抽屉"
-        >
-          <div id="motion-drawer-panel" className="motion-drawer__panel">
-            <p className="motion-drawer__eyebrow">Motion Preview</p>
-            <h2>{selectedModel.name} 动作列表</h2>
-            <p className="motion-drawer__description">
-              通过页签切换不同动作层级，直接预览当前模型能播放的动画效果。
-            </p>
-
-            <div className="motion-tabs" role="tablist" aria-label="动作分类">
-              {motionTabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={activeMotionTab === tab.id}
-                  className={`motion-tab ${activeMotionTab === tab.id ? 'motion-tab--active' : ''}`}
-                  onClick={() => setActiveMotionTab(tab.id)}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            {activeMotionTab === 'expression' ? (
-              <div className="expression-panel">
-                <p className="motion-drawer__description">
-                  直接调 Haru 的眼睛、嘴、脸红和头部朝向参数，适合做表情调试。
+        <aside className="digital-human-chat" aria-label="灵山景区智能导览助手">
+          <header className="digital-chat-header">
+            <div className="digital-chat-profile">
+              <span className="digital-chat-avatar" aria-hidden>灵</span>
+              <div className="digital-chat-profile__copy">
+                <h1>灵山景区智能导览助手</h1>
+                <p>
+                  <span className="digital-chat-online-dot" aria-hidden />
+                  在线为您服务
                 </p>
+              </div>
+            </div>
 
-                <div className="expression-panel__grid">
-                  {FACE_CONTROL_CONFIG.map((control) => (
-                    <div key={control.key} className="slider-group">
-                      <label className="slider-label" htmlFor={`face-${control.key}`}>
-                        <span>{control.label}</span>
-                        <span>{formatFaceControlValue(control.key, faceControls[control.key])}</span>
-                      </label>
-                      <input
-                        id={`face-${control.key}`}
-                        type="range"
-                        min={control.min}
-                        max={control.max}
-                        step={control.step}
-                        value={faceControls[control.key]}
-                        disabled={!isReady || selectedModel.id !== 'haru_greeter_pro_jp'}
-                        onChange={(event) =>
-                          handleFaceControlChange(control.key, Number(event.target.value))
-                        }
-                      />
-                    </div>
-                  ))}
-                </div>
-
+            <div ref={chatActionsRef} className="digital-chat-actions" aria-label="导览设置">
+              <div className="digital-chat-select">
                 <button
                   type="button"
-                  className="expression-panel__reset"
-                  disabled={!isReady || selectedModel.id !== 'haru_greeter_pro_jp'}
-                  onClick={handleResetFaceControls}
+                  disabled={isSpeaking}
+                  aria-expanded={openDropdown === 'factory'}
+                  onClick={() => setOpenDropdown((current) => (current === 'factory' ? null : 'factory'))}
                 >
-                  重置表情参数
+                  <span>{selectedFactory.name}</span>
+                  <span aria-hidden>⌄</span>
                 </button>
-
-                {selectedModel.id !== 'haru_greeter_pro_jp' ? (
-                  <p className="motion-drawer__empty">
-                    当前表情面板先只对 Haru 模型开放。
-                  </p>
+                {openDropdown === 'factory' ? (
+                  <div className="digital-chat-select__menu" role="listbox" aria-label="选择厂家">
+                    {FACTORY_OPTIONS.map((factory) => (
+                      <button
+                        key={factory.id}
+                        type="button"
+                        className={factory.id === selectedFactory.id ? 'is-active' : undefined}
+                        onClick={() => handleSelectFactory(factory.id)}
+                        role="option"
+                        aria-selected={factory.id === selectedFactory.id}
+                      >
+                        {factory.name}
+                      </button>
+                    ))}
+                  </div>
                 ) : null}
               </div>
-            ) : visibleMotionOptions.length > 0 ? (
-              <div className="motion-drawer__grid">
-                {visibleMotionOptions.map((motion) => {
-                  const motionKey = getMotionKey(motion)
-                  const isActive = activeMotionKey === motionKey
 
-                  return (
-                    <button
-                      key={motionKey}
-                      type="button"
-                      className={`motion-chip ${isActive ? 'motion-chip--active' : ''}`}
-                      disabled={!isReady}
-                      onClick={() => handlePlayMotion(motion)}
-                    >
-                      {motion.label}
-                    </button>
-                  )
-                })}
+              <div className="digital-chat-select">
+                <button
+                  type="button"
+                  disabled={isSpeaking}
+                  aria-expanded={openDropdown === 'voice'}
+                  onClick={() => setOpenDropdown((current) => (current === 'voice' ? null : 'voice'))}
+                >
+                  <span>{selectedVoice.name}</span>
+                  <span aria-hidden>⌄</span>
+                </button>
+                {openDropdown === 'voice' ? (
+                  <div className="digital-chat-select__menu" role="listbox" aria-label="选择音色">
+                    {VOICE_OPTIONS.map((voice) => (
+                      <button
+                        key={voice.id}
+                        type="button"
+                        className={voice.id === selectedVoice.id ? 'is-active' : undefined}
+                        onClick={() => handleSelectVoice(voice.id)}
+                        role="option"
+                        aria-selected={voice.id === selectedVoice.id}
+                      >
+                        {voice.name}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
-            ) : (
-              <p className="motion-drawer__empty">
-                当前模型还没有配置可直接预览的动作清单。
-              </p>
-            )}
 
-            {activeMotionTab !== 'expression' && motionOptions.length > 0 && visibleMotionOptions.length === 0 ? (
-              <p className="motion-drawer__empty">
-                这个分类下暂时没有可播放动作。
-              </p>
-            ) : null}
-          </div>
+              <div className="digital-chat-select">
+                <button
+                  type="button"
+                  disabled={isSpeaking}
+                  aria-expanded={openDropdown === 'model'}
+                  onClick={() => setOpenDropdown((current) => (current === 'model' ? null : 'model'))}
+                >
+                  <span>{selectedModel.name}</span>
+                  <span aria-hidden>⌄</span>
+                </button>
+                {openDropdown === 'model' ? (
+                  <div className="digital-chat-select__menu" role="listbox" aria-label="选择模型">
+                    {MODEL_OPTIONS.map((model) => (
+                      <button
+                        key={model.id}
+                        type="button"
+                        className={model.id === selectedModel.id ? 'is-active' : undefined}
+                        onClick={() => handleSelectModel(model.id)}
+                        role="option"
+                        aria-selected={model.id === selectedModel.id}
+                      >
+                        {model.name}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </header>
+
+          <main className="digital-chat-body" aria-live="polite">
+            {messages.map((message) => {
+              const isOwn = message.sender === 'me'
+              return (
+                <article
+                  key={message.id}
+                  className={isOwn ? 'digital-chat-message digital-chat-message--own' : 'digital-chat-message'}
+                >
+                  {!isOwn ? <span className="digital-chat-message__avatar" aria-hidden>灵</span> : null}
+                  <div className="digital-chat-message__bubble">
+                    <div className="digital-chat-message__content">{message.content}</div>
+                  </div>
+                  <time className="digital-chat-message__time">{formatChatTime(message.time)}</time>
+                  {isOwn ? <span className="digital-chat-message__avatar digital-chat-message__avatar--own" aria-hidden>我</span> : null}
+                </article>
+              )
+            })}
+            <div ref={messagesEndRef} />
+          </main>
+
+          <footer className="digital-chat-composer">
+            <form className="digital-chat-form" onSubmit={(event) => void handleSend(event)}>
+              <textarea
+                value={draft}
+                placeholder="请输入您的问题..."
+                rows={2}
+                disabled={!isReady || isSpeaking}
+                onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault()
+                    void handleSend()
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="digital-chat-voice"
+                disabled={isSpeaking}
+                onClick={selectNextVoice}
+              >
+                <span aria-hidden>◉</span>
+                <span>语音</span>
+              </button>
+              <button type="submit" className="digital-chat-send" disabled={!canSend}>
+                {isSpeaking ? '发送中' : '发送'}
+              </button>
+            </form>
+          </footer>
         </aside>
       </section>
     </main>

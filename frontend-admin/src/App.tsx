@@ -334,7 +334,42 @@ type AdminModelSettings = {
   multimodalModel: string
 }
 
+type DigitalHumanConfig = {
+  modelId: string
+  voiceId: string
+  rate: number
+  volume: number
+  pitch: number
+  welcomeText: string
+  guideStyle: string
+  broadcastStrategy: string
+}
+
 type ModelCategory = 'embedding' | 'speech' | 'vision' | 'chat' | 'multimodal'
+
+const DIGITAL_HUMAN_MODEL_OPTIONS = [
+  { value: 'hiyori_pro_zh', label: 'Hiyori 中文模型' },
+  { value: 'kei_vowels_pro', label: 'Kei 中文口型模型' },
+  { value: 'haru_greeter_pro_jp', label: 'Haru Greeter' },
+  { value: 'mark_free_zh', label: 'Mark 中文模型' },
+]
+
+const DIGITAL_HUMAN_VOICE_OPTIONS = [
+  { value: 'zh-CN-XiaoxiaoNeural', label: '晓晓 (女声)' },
+  { value: 'zh-CN-XiaoyiNeural', label: '小艺 (女声)' },
+  { value: 'zh-CN-YunjianNeural', label: '云渐 (男声)' },
+  { value: 'zh-CN-YunxiNeural', label: '云希 (男声)' },
+  { value: 'zh-CN-YunxiaNeural', label: '云夏 (女声)' },
+  { value: 'zh-CN-YunyangNeural', label: '云扬 (男声)' },
+  { value: 'zh-CN-liaoning-XiaobeiNeural', label: '小北 (东北话)' },
+  { value: 'zh-CN-shaanxi-XiaoniNeural', label: '小妮 (陕西话)' },
+  { value: 'zh-HK-HiuGaaiNeural', label: 'Hiugaai (粤语女声)' },
+  { value: 'zh-HK-HiuMaanNeural', label: 'Hiumaan (粤语女声)' },
+  { value: 'zh-HK-WanLungNeural', label: 'Wanlung (粤语男声)' },
+  { value: 'zh-TW-HsiaoChenNeural', label: '晓珍 (台湾女声)' },
+  { value: 'zh-TW-HsiaoYuNeural', label: '晓瑜 (台湾女声)' },
+  { value: 'zh-TW-YunJheNeural', label: '云哲 (台湾男声)' },
+]
 
 type AdminModelOption = {
   category: ModelCategory
@@ -1017,23 +1052,91 @@ function RoutesPanel() {
 }
 
 function AvatarPanel() {
+  const [form] = Form.useForm<DigitalHumanConfig>()
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  async function loadConfig() {
+    setLoading(true)
+    try {
+      const response = await axios.get<DigitalHumanConfig>('/api/admin/settings/digital-human-config')
+      form.setFieldsValue(response.data)
+    } catch (error) {
+      const description = axios.isAxiosError(error)
+        ? error.response?.data?.message ?? '数字人配置加载失败，请检查后端服务。'
+        : '数字人配置加载失败，请稍后重试。'
+      message.error(description)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function saveConfig() {
+    const values = await form.validateFields()
+    setSaving(true)
+    try {
+      const response = await axios.put<DigitalHumanConfig>('/api/admin/settings/digital-human-config', values)
+      form.setFieldsValue(response.data)
+      message.success('数字人配置已保存')
+    } catch (error) {
+      const description = axios.isAxiosError(error)
+        ? error.response?.data?.message ?? '数字人配置保存失败，请检查后端服务。'
+        : '数字人配置保存失败，请稍后重试。'
+      message.error(description)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadConfig()
+  }, [])
+
   return (
     <div className="admin-panel-grid">
-      <Card title="数字人基础配置" extra={<Tag color="blue">业务配置</Tag>}>
+      <Card title="数字人展示配置" extra={<Tag color="blue">游客端生效</Tag>}>
         <div className="admin-form-grid">
           <Card size="small" className="admin-build-summary">
-            当前页只保留数字人的业务侧配置，比如欢迎词、讲解风格、默认角色和播报策略。
+            这里配置游客端 `/modules/digital-human` 的默认 Live2D 模型、音色、播报参数和欢迎话术。游客端只负责展示数字人和聊天。
           </Card>
-          <Form layout="vertical">
-            <Form.Item label="默认欢迎词">
+          <Form form={form} layout="vertical" disabled={loading}>
+            <Row gutter={16}>
+              <Col xs={24} md={12}>
+                <Form.Item label="默认 Live2D 模型" name="modelId" rules={[{ required: true, message: '请选择默认模型' }]}>
+                  <Select options={DIGITAL_HUMAN_MODEL_OPTIONS} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item label="默认音色" name="voiceId" rules={[{ required: true, message: '请选择默认音色' }]}>
+                  <Select options={DIGITAL_HUMAN_VOICE_OPTIONS} />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Row gutter={16}>
+              <Col xs={24} md={8}>
+                <Form.Item label="语速" name="rate" rules={[{ required: true }]}>
+                  <InputNumber min={-50} max={100} step={5} addonAfter="%" style={{ width: '100%' }} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={8}>
+                <Form.Item label="音量" name="volume" rules={[{ required: true }]}>
+                  <InputNumber min={-50} max={50} step={5} addonAfter="%" style={{ width: '100%' }} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={8}>
+                <Form.Item label="音高" name="pitch" rules={[{ required: true }]}>
+                  <InputNumber min={-50} max={50} step={5} addonAfter="Hz" style={{ width: '100%' }} />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Form.Item label="默认欢迎词" name="welcomeText" rules={[{ required: true, message: '请输入默认欢迎词' }]}>
               <Input.TextArea
                 rows={4}
                 placeholder="例如：您好，欢迎来到灵山胜境，我可以为您介绍景点、路线和活动安排。"
               />
             </Form.Item>
-            <Form.Item label="讲解风格">
+            <Form.Item label="讲解风格" name="guideStyle" rules={[{ required: true, message: '请选择讲解风格' }]}>
               <Select
-                placeholder="请选择讲解风格"
                 options={[
                   { value: 'friendly', label: '亲切讲解' },
                   { value: 'professional', label: '专业导览' },
@@ -1041,9 +1144,8 @@ function AvatarPanel() {
                 ]}
               />
             </Form.Item>
-            <Form.Item label="默认播报策略">
+            <Form.Item label="默认播报策略" name="broadcastStrategy" rules={[{ required: true, message: '请选择播报策略' }]}>
               <Select
-                placeholder="请选择播报策略"
                 options={[
                   { value: 'standard', label: '标准播报' },
                   { value: 'brief', label: '简洁播报' },
@@ -1052,16 +1154,17 @@ function AvatarPanel() {
               />
             </Form.Item>
             <div className="admin-action-row">
-              <Button type="primary">保存数字人配置</Button>
+              <Button type="primary" loading={saving} onClick={() => void saveConfig()}>保存数字人配置</Button>
+              <Button disabled={loading || saving} onClick={() => void loadConfig()}>重新加载</Button>
             </div>
           </Form>
         </div>
       </Card>
       <Card title="配置说明">
         <ul className="admin-list">
-          <li>模型能力配置已统一迁移到左下角“设置”。</li>
-          <li>这里建议只放数字人角色、话术、动作策略等业务参数。</li>
-          <li>后续如果接真实接口，可以直接沿用当前表单结构。</li>
+          <li>游客端数字人页面不再展示调试配置，只展示数字人和导览聊天。</li>
+          <li>模型能力配置仍在“设置”里维护，这里只管理数字人的展示与播报默认值。</li>
+          <li>保存后刷新游客端页面即可读取最新配置。</li>
         </ul>
       </Card>
     </div>

@@ -23,3 +23,16 @@ body,
 body {
   min-height: 100vh;
 }
+
+html.digital-human-page-lock,
+body.digital-human-page-lock {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body.digital-human-page-lock {
+  position: fixed;
+  inset: 0;
+}
