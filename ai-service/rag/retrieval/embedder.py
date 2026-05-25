@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from functools import cached_property
 
-from model_providers.config_store import find_provider_config
-from model_providers.registry import get_provider_client
+from model_capabilities.embedding.service import embed_query, embed_texts
 
 
 class BgeM3Embedder:
@@ -43,17 +42,14 @@ class ProviderEmbedder:
         self.model_name = model_name
 
     @cached_property
-    def _client(self):
-        config = find_provider_config(self.provider)
-        if not config:
-            raise RuntimeError(f"Embedding provider is not configured: {self.provider}")
-        return get_provider_client(self.provider, config)
+    def _status(self):
+        return {"mode": "provider", "provider": self.provider, "model": self.model_name}
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        return [self._client.test_embedding(self.model_name, text) for text in texts]
+        return embed_texts(self.provider, self.model_name, texts)
 
     def embed_query(self, text: str) -> list[float]:
-        return self.embed_documents([text])[0]
+        return embed_query(self.provider, self.model_name, text)
 
     def status(self) -> dict[str, str]:
-        return {"mode": "provider", "provider": self.provider, "model": self.model_name}
+        return self._status

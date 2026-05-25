@@ -257,6 +257,16 @@ type KnowledgeDocumentRow = {
   supported: boolean
 }
 
+type KnowledgeDocumentApiItem = {
+  fileName?: string
+  file_name?: string
+  sizeBytes?: number
+  size_bytes?: number
+  updatedAt?: string
+  updated_at?: string
+  supported?: boolean
+}
+
 type KnowledgeBuildResult = {
   filesSeen: number
   filesIndexed: number
@@ -265,6 +275,20 @@ type KnowledgeBuildResult = {
   embeddingProvider?: string
   embeddingModel?: string
   builtAt: string
+}
+
+type KnowledgeBuildResponseApi = {
+  filesSeen?: number
+  files_seen?: number
+  filesIndexed?: number
+  files_indexed?: number
+  chunksIndexed?: number
+  chunks_indexed?: number
+  collection?: string
+  embeddingProvider?: string
+  embedding_provider?: string
+  embeddingModel?: string
+  embedding_model?: string
 }
 
 type KnowledgeBuildTask = {
@@ -539,13 +563,18 @@ function KnowledgePanel() {
   async function loadDocuments() {
     const response = await axios.get('/api/admin/knowledge/documents')
     setDocuments(
-      response.data.map((item: { fileName: string; sizeBytes: number; updatedAt: string; supported: boolean }) => ({
-        key: `${item.fileName}-${item.updatedAt}`,
-        fileName: item.fileName,
-        sizeText: formatBytes(item.sizeBytes),
-        updatedAt: new Date(item.updatedAt).toLocaleString('zh-CN'),
-        supported: item.supported,
-      })),
+      response.data.map((item: KnowledgeDocumentApiItem) => {
+        const fileName = item.fileName ?? item.file_name ?? ''
+        const updatedAt = item.updatedAt ?? item.updated_at ?? ''
+        const sizeBytes = item.sizeBytes ?? item.size_bytes ?? 0
+        return {
+          key: `${fileName}-${updatedAt}`,
+          fileName,
+          sizeText: formatBytes(sizeBytes),
+          updatedAt: updatedAt ? new Date(updatedAt).toLocaleString('zh-CN') : '-',
+          supported: Boolean(item.supported),
+        }
+      }).filter((item: KnowledgeDocumentRow) => item.fileName),
     )
   }
 
@@ -570,15 +599,7 @@ function KnowledgePanel() {
     setBuilding(true)
     try {
       const response = await axios.post('/api/admin/knowledge/build', { recreateCollection, ...selectedEmbeddingPayload(embeddingOptions, selectedEmbeddingModel) })
-      const result: KnowledgeBuildResult = {
-        filesSeen: response.data.filesSeen,
-        filesIndexed: response.data.filesIndexed,
-        chunksIndexed: response.data.chunksIndexed,
-        collection: response.data.collection,
-        embeddingProvider: response.data.embeddingProvider,
-        embeddingModel: response.data.embeddingModel,
-        builtAt: new Date().toISOString(),
-      }
+      const result = normalizeBuildResponse(response.data)
       setLastBuildResult(result)
       message.success(
         recreateCollection
@@ -600,15 +621,7 @@ function KnowledgePanel() {
     setBuilding(true)
     try {
       const response = await axios.post('/api/admin/knowledge/build', { fileName, ...selectedEmbeddingPayload(embeddingOptions, selectedEmbeddingModel) })
-      setLastBuildResult({
-        filesSeen: response.data.filesSeen,
-        filesIndexed: response.data.filesIndexed,
-        chunksIndexed: response.data.chunksIndexed,
-        collection: response.data.collection,
-        embeddingProvider: response.data.embeddingProvider,
-        embeddingModel: response.data.embeddingModel,
-        builtAt: new Date().toISOString(),
-      })
+      setLastBuildResult(normalizeBuildResponse(response.data))
       message.success(`已重建 ${fileName}`)
     } finally {
       setBuilding(false)
@@ -640,7 +653,7 @@ function KnowledgePanel() {
       cancelText: '取消',
       onOk: async () => {
         const response = await axios.delete(`/api/admin/knowledge/documents/${encodeURIComponent(fileName)}`)
-        message.success(`已删除 ${response.data.fileName}，同步移除 ${response.data.vectorsDeleted ?? 0} 个向量`)
+        message.success(`已删除 ${response.data.fileName ?? response.data.file_name}，同步移除 ${response.data.vectorsDeleted ?? response.data.vectors_deleted ?? 0} 个向量`)
         await loadDocuments()
       },
     })
@@ -689,7 +702,7 @@ function KnowledgePanel() {
         const response = await axios.post('/api/admin/knowledge/documents/upload', formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
         })
-        message.success(`上传成功，文件 ${response.data.fileName} 已加入待构建列表`)
+        message.success(`上传成功，文件 ${response.data.fileName ?? response.data.file_name} 已加入待构建列表`)
         await loadDocuments()
         onSuccess?.(response.data)
       } catch (error) {
@@ -2232,6 +2245,18 @@ function formatBytes(sizeBytes: number) {
     return `${(sizeBytes / 1024).toFixed(1)} KB`
   }
   return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function normalizeBuildResponse(data: KnowledgeBuildResponseApi): KnowledgeBuildResult {
+  return {
+    filesSeen: data.filesSeen ?? data.files_seen ?? 0,
+    filesIndexed: data.filesIndexed ?? data.files_indexed ?? 0,
+    chunksIndexed: data.chunksIndexed ?? data.chunks_indexed ?? 0,
+    collection: data.collection ?? '-',
+    embeddingProvider: data.embeddingProvider ?? data.embedding_provider,
+    embeddingModel: data.embeddingModel ?? data.embedding_model,
+    builtAt: new Date().toISOString(),
+  }
 }
 
 function selectedEmbeddingPayload(

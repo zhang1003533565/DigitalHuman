@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from fastapi import HTTPException
 
 from model_capabilities.tts.edge_tts_adapter import synthesize_voice_to_file
+from model_capabilities.embedding.service import embed_query
 from model_providers.config_store import find_provider_config
 from model_providers.registry import get_provider_client
 from rag.retrieval.embedder import BgeM3Embedder
@@ -47,11 +48,7 @@ def test_embedding_model(provider: str, model_id: str) -> ModelTestResult:
         except Exception as exc:
             raise HTTPException(status_code=400, detail=f"本地嵌入模型测试失败：{exc}") from exc
 
-    config = require_provider_config(provider)
-    if get_protocol(config) != "openai_compatible":
-        raise HTTPException(status_code=400, detail=f"{provider} 当前未配置可测试的 embedding 协议")
-    client = get_provider_client(provider, config)
-    embedding = client.test_embedding(model_id, "灵山胜境模型测试")
+    embedding = embed_query(provider, model_id, "灵山胜境模型测试")
     return ModelTestResult(True, "Embedding 接口调用成功", f"返回向量维度：{len(embedding)}")
 
 
