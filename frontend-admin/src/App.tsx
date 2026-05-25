@@ -28,6 +28,7 @@ import {
   InputNumber,
   Switch,
   Progress,
+  Pagination,
 } from 'antd'
 import type { UploadProps } from 'antd'
 import type { TableColumnsType } from 'antd'
@@ -559,6 +560,8 @@ function KnowledgePanel() {
   const [documentPreview, setDocumentPreview] = useState<{ fileName: string; text: string; sections?: string[] } | null>(null)
   const [documentDiff, setDocumentDiff] = useState<Record<string, unknown> | null>(null)
   const [chunkKeyword, setChunkKeyword] = useState('')
+  const [chunkPage, setChunkPage] = useState(1)
+  const [chunkPageSize, setChunkPageSize] = useState(10)
 
   async function loadDocuments() {
     const response = await axios.get('/api/admin/knowledge/documents')
@@ -592,13 +595,20 @@ function KnowledgePanel() {
       modelId: item.modelId,
     }))
     setEmbeddingOptions(options)
-    setSelectedEmbeddingModel((current) => current || options[0]?.value)
+    setSelectedEmbeddingModel((current) => (
+      current && options.some((item) => item.value === current) ? current : options[0]?.value
+    ))
   }
 
   async function buildKnowledgeBase(recreateCollection: boolean) {
+    const embeddingPayload = selectedEmbeddingPayload(embeddingOptions, selectedEmbeddingModel)
+    if (!embeddingPayload) {
+      message.warning('请先选择后台已配置的 embedding 模型')
+      return
+    }
     setBuilding(true)
     try {
-      const response = await axios.post('/api/admin/knowledge/build', { recreateCollection, ...selectedEmbeddingPayload(embeddingOptions, selectedEmbeddingModel) })
+      const response = await axios.post('/api/admin/knowledge/build', { recreateCollection, ...embeddingPayload })
       const result = normalizeBuildResponse(response.data)
       setLastBuildResult(result)
       message.success(
@@ -618,9 +628,18 @@ function KnowledgePanel() {
   }
 
   async function rebuildDocument(fileName: string) {
+    if (!fileName) {
+      message.warning('文件名为空，无法重建')
+      return
+    }
+    const embeddingPayload = selectedEmbeddingPayload(embeddingOptions, selectedEmbeddingModel)
+    if (!embeddingPayload) {
+      message.warning('请先选择后台已配置的 embedding 模型')
+      return
+    }
     setBuilding(true)
     try {
-      const response = await axios.post('/api/admin/knowledge/build', { fileName, ...selectedEmbeddingPayload(embeddingOptions, selectedEmbeddingModel) })
+      const response = await axios.post('/api/admin/knowledge/build', { fileName, ...embeddingPayload })
       setLastBuildResult(normalizeBuildResponse(response.data))
       message.success(`已重建 ${fileName}`)
     } finally {
@@ -629,7 +648,16 @@ function KnowledgePanel() {
   }
 
   async function submitBuildTask(recreateCollection: boolean, fileName?: string) {
-    await axios.post('/api/admin/knowledge/build-tasks', { recreateCollection, fileName, ...selectedEmbeddingPayload(embeddingOptions, selectedEmbeddingModel) })
+    if (fileName !== undefined && !fileName) {
+      message.warning('文件名为空，无法提交构建任务')
+      return
+    }
+    const embeddingPayload = selectedEmbeddingPayload(embeddingOptions, selectedEmbeddingModel)
+    if (!embeddingPayload) {
+      message.warning('请先选择后台已配置的 embedding 模型')
+      return
+    }
+    await axios.post('/api/admin/knowledge/build-tasks', { recreateCollection, fileName, ...embeddingPayload })
     message.success('构建任务已提交')
     await loadBuildTasks()
   }
@@ -645,6 +673,10 @@ function KnowledgePanel() {
   }
 
   async function deleteDocument(fileName: string) {
+    if (!fileName) {
+      message.warning('文件名为空，无法删除')
+      return
+    }
     Modal.confirm({
       title: '删除知识文件',
       content: `确认删除 ${fileName} 并同步删除向量库中的对应知识块吗？`,
@@ -660,18 +692,31 @@ function KnowledgePanel() {
   }
 
   async function openChunks(fileName: string) {
+    if (!fileName) {
+      message.warning('文件名为空，无法查看知识块')
+      return
+    }
     const response = await axios.get(`/api/admin/knowledge/documents/${encodeURIComponent(fileName)}/chunks`)
     setChunkDrawerTitle(fileName)
     setChunks(response.data.chunks ?? [])
+    setChunkPage(1)
     setChunkDrawerOpen(true)
   }
 
   async function openPreview(fileName: string) {
+    if (!fileName) {
+      message.warning('文件名为空，无法预览')
+      return
+    }
     const response = await axios.get(`/api/admin/knowledge/documents/${encodeURIComponent(fileName)}/preview`)
     setDocumentPreview(response.data)
   }
 
   async function openDiff(fileName: string) {
+    if (!fileName) {
+      message.warning('文件名为空，无法查看 Diff')
+      return
+    }
     const response = await axios.get(`/api/admin/knowledge/documents/${encodeURIComponent(fileName)}/diff`)
     setDocumentDiff(response.data)
   }
@@ -690,6 +735,18 @@ function KnowledgePanel() {
     void loadBuildTasks()
     void loadEmbeddingOptions()
   }, [])
+
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil(chunks.length / chunkPageSize))
+    if (chunkPage > maxPage) {
+      setChunkPage(maxPage)
+    }
+  }, [chunks.length, chunkPage, chunkPageSize])
+
+  const pagedChunks = useMemo(() => {
+    const start = (chunkPage - 1) * chunkPageSize
+    return chunks.slice(start, start + chunkPageSize)
+  }, [chunks, chunkPage, chunkPageSize])
 
   const uploadProps: UploadProps = {
     accept: '.docx,.pdf,.txt',
@@ -848,12 +905,34 @@ function KnowledgePanel() {
           onChange={(event) => setChunkKeyword(event.target.value)}
           style={{ marginBottom: 12 }}
         />
-        {renderChunkList(chunks.map((chunk) => ({
+        <div className="admin-inline-meta" style={{ marginBottom: 12 }}>
+          <Tag color="blue">共 {chunks.length} 个知识块</Tag>
+          <Tag color="cyan">第 {chunkPage} 页</Tag>
+        </div>
+        {renderChunkList(pagedChunks.map((chunk) => ({
           id: chunk.id,
           text: chunk.text,
           score: chunk.score,
           payload: chunk.payload,
-        })), { highlight: chunkKeyword, onToggleDisabled: (chunkId, disabled) => void toggleChunkDisabled(chunkId, disabled) })}
+        })), {
+          highlight: chunkKeyword,
+          maxItems: 0,
+          itemOffset: (chunkPage - 1) * chunkPageSize,
+          onToggleDisabled: (chunkId, disabled) => void toggleChunkDisabled(chunkId, disabled),
+        })}
+        <Pagination
+          current={chunkPage}
+          pageSize={chunkPageSize}
+          total={chunks.length}
+          showSizeChanger
+          pageSizeOptions={[5, 10, 20, 50]}
+          showTotal={(total, range) => `第 ${range[0]}-${range[1]} 条 / 共 ${total} 条`}
+          onChange={(page, pageSize) => {
+            setChunkPage(page)
+            setChunkPageSize(pageSize)
+          }}
+          style={{ marginTop: 16, textAlign: 'right' }}
+        />
       </Drawer>
       <Drawer
         title={documentPreview ? `${documentPreview.fileName} · 解析预览` : '解析预览'}
@@ -1057,6 +1136,7 @@ function SettingsPanel() {
   const [saving, setSaving] = useState(false)
   const [voiceOptions, setVoiceOptions] = useState<{ value: string; label: string }[]>([])
   const [testingCategory, setTestingCategory] = useState<ModelCategory | null>(null)
+  const [deletingModelOption, setDeletingModelOption] = useState<string | null>(null)
   const [testResults, setTestResults] = useState<Partial<Record<ModelCategory, ModelTestResponse>>>({})
   const [promptLoading, setPromptLoading] = useState(false)
   const [promptVersions, setPromptVersions] = useState<RagPromptConfig[]>([])
@@ -1186,6 +1266,30 @@ function SettingsPanel() {
     multimodal: 'multimodalModel',
   }
 
+  const handleDeleteModelOption = async (category: ModelCategory, option: { value: string; provider?: string }) => {
+    setDeletingModelOption(`${category}:${option.provider ?? ''}:${option.value}`)
+    try {
+      const response = await axios.post<AdminModelCatalog>('/api/admin/settings/model-options/delete', {
+        category,
+        provider: option.provider,
+        modelId: option.value,
+      })
+      setCatalog(response.data)
+      const fieldName = fieldNameByCategory[category]
+      if (form.getFieldValue(fieldName) === option.value) {
+        form.setFieldValue(fieldName, '')
+      }
+      message.success(`已删除模型 ${option.value}`)
+    } catch (error) {
+      const description = axios.isAxiosError(error)
+        ? error.response?.data?.message ?? '删除模型失败，请检查后端服务。'
+        : '删除模型失败，请稍后重试。'
+      message.error(description)
+    } finally {
+      setDeletingModelOption(null)
+    }
+  }
+
   const handleSave = async () => {
     const values = await form.validateFields()
     setSaving(true)
@@ -1271,6 +1375,8 @@ function SettingsPanel() {
           options={embeddingOptions.map((item) => ({ value: item.value, provider: item.label.split(' · ')[0] }))}
           onSave={() => void handleSave()}
           onTest={() => void handleTestModel('embedding')}
+          onDeleteOption={(option) => void handleDeleteModelOption('embedding', option)}
+          deletingModel={deletingModelOption?.startsWith('embedding:') ? deletingModelOption.split(':').slice(2).join(':') : null}
           result={renderTestResult('embedding', testResults.embedding)}
         />
       ),
@@ -1473,15 +1579,23 @@ function getNumberField(value: unknown) {
 
 function renderChunkList(
   chunks?: Array<Record<string, unknown>>,
-  options?: { highlight?: string; onToggleDisabled?: (chunkId: string, disabled: boolean) => void },
+  options?: {
+    highlight?: string
+    maxItems?: number
+    itemOffset?: number
+    onToggleDisabled?: (chunkId: string, disabled: boolean) => void
+  },
 ) {
   if (!chunks?.length) {
     return <Typography.Text type="secondary">暂无片段</Typography.Text>
   }
 
+  const visibleChunks = options?.maxItems === 0 ? chunks : chunks.slice(0, options?.maxItems ?? 8)
+  const itemOffset = options?.itemOffset ?? 0
+
   return (
     <div className="admin-rag-chunk-list">
-      {chunks.slice(0, 8).map((chunk, index) => {
+      {visibleChunks.map((chunk, index) => {
         const payload = (chunk.payload ?? {}) as Record<string, unknown>
         const source = getTextField(payload.source_file)
         const sectionPath = Array.isArray(payload.section_path) ? payload.section_path.join(' / ') : getTextField(payload.title)
@@ -1499,7 +1613,7 @@ function renderChunkList(
         return (
           <div className="admin-rag-chunk" key={`${getTextField(chunk.id, String(index))}-${index}`}>
             <div className="admin-rag-chunk__meta">
-              <Tag color="blue">#{index + 1}</Tag>
+              <Tag color="blue">#{itemOffset + index + 1}</Tag>
               {score !== undefined ? <Tag color="purple">{score.toFixed(4)}</Tag> : null}
               {disabled ? <Tag color="red">已禁用</Tag> : null}
               {qualityIssues.map((issue) => <Tag color="orange" key={issue}>{issue}</Tag>)}
@@ -2266,5 +2380,5 @@ function selectedEmbeddingPayload(
   const selected = options.find((item) => item.value === selectedValue)
   return selected
     ? { embeddingProvider: selected.provider, embeddingModel: selected.modelId }
-    : {}
+    : null
 }

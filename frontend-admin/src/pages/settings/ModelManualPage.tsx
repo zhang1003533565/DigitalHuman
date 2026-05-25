@@ -158,6 +158,7 @@ export default function ModelManualPage() {
   const [savingProvider, setSavingProvider] = useState(false)
   const [addingOption, setAddingOption] = useState(false)
   const [deletingProvider, setDeletingProvider] = useState<string | null>(null)
+  const [deletingOption, setDeletingOption] = useState<string | null>(null)
   const [providerDocSelection, setProviderDocSelection] = useState('DeepSeek')
   const [providerDoc, setProviderDoc] = useState<ProviderDoc | null>(null)
   const [providerDocLoading, setProviderDocLoading] = useState(false)
@@ -325,6 +326,26 @@ export default function ModelManualPage() {
     }
   }
 
+  const handleDeleteOption = async (row: ModelCatalogRow) => {
+    setDeletingOption(row.key)
+    try {
+      const response = await axios.post<AdminModelCatalog>('/api/admin/settings/model-options/delete', {
+        category: row.category,
+        provider: row.provider,
+        modelId: row.modelId,
+      })
+      setCatalog(response.data)
+      message.success(`已删除模型 ${row.modelId}`)
+    } catch (error) {
+      const description = axios.isAxiosError(error)
+        ? error.response?.data?.message ?? '删除模型失败，请检查后端服务。'
+        : '删除模型失败，请稍后重试。'
+      message.error(description)
+    } finally {
+      setDeletingOption(null)
+    }
+  }
+
   const providerColumns: TableColumnsType<ProviderConfig> = [
     { title: '提供方', dataIndex: 'provider' },
     { title: '协议', dataIndex: 'protocol' },
@@ -354,6 +375,15 @@ export default function ModelManualPage() {
     },
     { title: '提供方', dataIndex: 'provider' },
     { title: '模型 ID', dataIndex: 'modelId' },
+    {
+      title: '操作',
+      key: 'actions',
+      render: (_, row) => (
+        <Button size="small" danger loading={deletingOption === row.key} onClick={() => void handleDeleteOption(row)}>
+          删除
+        </Button>
+      ),
+    },
   ]
 
   return (

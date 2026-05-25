@@ -73,11 +73,11 @@ public class AdminSettingsService {
 
     @Transactional
     public AdminModelSettingsDto updateModelSettings(AdminModelSettingsDto request) {
-        updateSelectedModel(ModelCategory.EMBEDDING, "Custom", normalize(request.getEmbeddingModel(), ""));
-        updateSelectedModel(ModelCategory.SPEECH, "Custom", normalize(request.getSpeechModel(), ""));
-        updateSelectedModel(ModelCategory.VISION, "Custom", normalize(request.getVisionModel(), ""));
-        updateSelectedModel(ModelCategory.CHAT, "Custom", normalize(request.getChatModel(), ""));
-        updateSelectedModel(ModelCategory.MULTIMODAL, "Custom", normalize(request.getMultimodalModel(), ""));
+        updateSelectedModel(ModelCategory.EMBEDDING, normalize(request.getEmbeddingModel(), ""));
+        updateSelectedModel(ModelCategory.SPEECH, normalize(request.getSpeechModel(), ""));
+        updateSelectedModel(ModelCategory.VISION, normalize(request.getVisionModel(), ""));
+        updateSelectedModel(ModelCategory.CHAT, normalize(request.getChatModel(), ""));
+        updateSelectedModel(ModelCategory.MULTIMODAL, normalize(request.getMultimodalModel(), ""));
         return getModelSettings();
     }
 
@@ -142,7 +142,7 @@ public class AdminSettingsService {
         }
         ensureProviderConfigured(provider);
 
-        updateSelectedModel(category, provider, modelId);
+        updateSelectedModel(category, modelId);
         return getModelSettings();
     }
 
@@ -408,7 +408,7 @@ public class AdminSettingsService {
                 .orElse(fallback);
     }
 
-    private void updateSelectedModel(ModelCategory category, String fallbackProvider, String modelId) {
+    private void updateSelectedModel(ModelCategory category, String modelId) {
         if (modelId.isBlank()) {
             clearSelectedModel(category);
             return;
@@ -418,14 +418,7 @@ public class AdminSettingsService {
         AdminModelConfig selectedItem = items.stream()
                 .filter(item -> item.getModelId().equalsIgnoreCase(modelId))
                 .findFirst()
-                .orElseGet(() -> {
-                    AdminModelConfig item = new AdminModelConfig();
-                    item.setCategory(category);
-                    item.setProvider(fallbackProvider);
-                    item.setModelId(modelId);
-                    item.setSelected(false);
-                    return adminModelConfigRepository.save(item);
-                });
+                .orElseThrow(() -> new IllegalArgumentException("请先在候选列表中添加该模型，再选择启用"));
 
         items.forEach(item -> item.setSelected(item.getId().equals(selectedItem.getId())));
         selectedItem.setSelected(true);

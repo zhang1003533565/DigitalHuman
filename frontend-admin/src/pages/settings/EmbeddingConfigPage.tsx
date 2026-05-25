@@ -22,6 +22,8 @@ type EmbeddingConfigPageProps = {
   options: EmbeddingOption[]
   onSave: () => void
   onTest: () => void
+  onDeleteOption?: (option: EmbeddingOption) => void
+  deletingModel?: string | null
   result: React.ReactNode
 }
 
@@ -33,6 +35,8 @@ export default function EmbeddingConfigPage({
   options,
   onSave,
   onTest,
+  onDeleteOption,
+  deletingModel,
   result,
 }: EmbeddingConfigPageProps) {
   const selectedModel = Form.useWatch('embeddingModel', form)
@@ -46,18 +50,37 @@ export default function EmbeddingConfigPage({
             <Input placeholder="搜索嵌入模型名称" disabled />
             <div className="admin-embedding-list">
               {options.length ? options.map((item) => (
-                <button
+                <div
                   key={item.value}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
                   className={`admin-embedding-item ${item.value === selectedModel ? 'admin-embedding-item--active' : ''}`}
                   onClick={() => form.setFieldValue('embeddingModel', item.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      form.setFieldValue('embeddingModel', item.value)
+                    }
+                  }}
                 >
                   <div className="admin-embedding-item__title">{item.value}</div>
                   <div className="admin-embedding-item__meta">
                     <span>提供方：{item.provider ?? '未标注'}</span>
                     {item.value === selectedModel ? <Tag color="blue">当前候选</Tag> : null}
+                    {onDeleteOption ? (
+                      <Button
+                        size="small"
+                        danger
+                        loading={deletingModel === item.value}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onDeleteOption(item)
+                        }}
+                      >
+                        删除
+                      </Button>
+                    ) : null}
                   </div>
-                </button>
+                </div>
               )) : (
                 <div className="admin-empty-state">
                   <strong>暂无嵌入模型</strong>
