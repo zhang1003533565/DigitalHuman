@@ -7,7 +7,10 @@ import com.digitalhuman.backend_java.dto.RagTraceSummaryDto;
 import com.digitalhuman.backend_java.dto.RagReviewActionRequest;
 import com.digitalhuman.backend_java.dto.RagMetricsDto;
 import com.digitalhuman.backend_java.dto.RagEvalRunDto;
+import com.digitalhuman.backend_java.dto.RagPromptCompareDto;
+import com.digitalhuman.backend_java.dto.RagPromptCompareRequest;
 import com.digitalhuman.backend_java.service.GuideService;
+import com.digitalhuman.backend_java.service.AdminSettingsService;
 import com.digitalhuman.backend_java.service.RagEvalService;
 import com.digitalhuman.backend_java.service.RagTraceService;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,11 +31,13 @@ public class AdminGuideController {
     private final GuideService guideService;
     private final RagTraceService ragTraceService;
     private final RagEvalService ragEvalService;
+    private final AdminSettingsService adminSettingsService;
 
-    public AdminGuideController(GuideService guideService, RagTraceService ragTraceService, RagEvalService ragEvalService) {
+    public AdminGuideController(GuideService guideService, RagTraceService ragTraceService, RagEvalService ragEvalService, AdminSettingsService adminSettingsService) {
         this.guideService = guideService;
         this.ragTraceService = ragTraceService;
         this.ragEvalService = ragEvalService;
+        this.adminSettingsService = adminSettingsService;
     }
 
     @GetMapping("/session/{id}/messages")
@@ -90,5 +95,10 @@ public class AdminGuideController {
     @PostMapping("/rag-evals/run")
     public RagEvalRunDto runEval() {
         return ragEvalService.runEval();
+    }
+
+    @PostMapping("/rag-evals/compare-prompts")
+    public RagPromptCompareDto comparePromptVersions(@RequestBody RagPromptCompareRequest request) {
+        return ragEvalService.comparePromptVersions(request.getLeftVersion(), request.getRightVersion(), adminSettingsService);
     }
 }

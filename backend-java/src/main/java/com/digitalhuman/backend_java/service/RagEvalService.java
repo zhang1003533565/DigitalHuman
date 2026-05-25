@@ -2,6 +2,7 @@ package com.digitalhuman.backend_java.service;
 
 import com.digitalhuman.backend_java.dto.RagEvalCaseDto;
 import com.digitalhuman.backend_java.dto.RagEvalRunDto;
+import com.digitalhuman.backend_java.dto.RagPromptCompareDto;
 import com.digitalhuman.backend_java.model.RagEvalCaseResult;
 import com.digitalhuman.backend_java.model.RagEvalRun;
 import com.digitalhuman.backend_java.repository.RagEvalCaseResultRepository;
@@ -56,6 +57,27 @@ public class RagEvalService {
     }
 
     public RagEvalRunDto runEval() {
+        return runEvalForCurrentPrompt();
+    }
+
+    public RagPromptCompareDto comparePromptVersions(String leftVersion, String rightVersion, AdminSettingsService settingsService) {
+        RagPromptConfigSnapshot snapshot = new RagPromptConfigSnapshot(settingsService.getRagPrompt());
+        try {
+            settingsService.publishRagPrompt(leftVersion);
+            RagEvalRunDto left = runEvalForCurrentPrompt();
+            settingsService.publishRagPrompt(rightVersion);
+            RagEvalRunDto right = runEvalForCurrentPrompt();
+            return new RagPromptCompareDto(
+                    left,
+                    right,
+                    Math.round((right.getPassRate() - left.getPassRate()) * 100.0) / 100.0,
+                    right.getPassedCases() - left.getPassedCases());
+        } finally {
+            settingsService.updateRagPrompt(snapshot.toDto());
+        }
+    }
+
+    private RagEvalRunDto runEvalForCurrentPrompt() {
         RagEvalRun run = new RagEvalRun();
         run.setPromptVersion("unknown");
         run.setTotalCases(CASES.size());
@@ -126,4 +148,10 @@ public class RagEvalService {
 
     private record EvalCase(String id, String question, List<String> keywords) {}
     private record RagEvalRequest(String question, Integer topK, String sessionId, String traceId) {}
+
+    private record RagPromptConfigSnapshot(com.digitalhuman.backend_java.dto.RagPromptConfigDto dto) {
+        com.digitalhuman.backend_java.dto.RagPromptConfigDto toDto() {
+            return dto;
+        }
+    }
 }

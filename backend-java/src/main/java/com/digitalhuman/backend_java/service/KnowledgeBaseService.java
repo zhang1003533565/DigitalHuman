@@ -393,6 +393,14 @@ public class KnowledgeBaseService {
         task.setTaskLog(next.length() > 4000 ? next.substring(next.length() - 4000) : next);
     }
 
+    private String writeJson(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception exception) {
+            return "[]";
+        }
+    }
+
     private static class BuildAccumulator {
         int filesSeen;
         int filesIndexed;

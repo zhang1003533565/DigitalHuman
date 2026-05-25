@@ -242,6 +242,13 @@ type RagEvalRun = {
   cases?: RagEvalCase[]
 }
 
+type RagPromptCompare = {
+  left: RagEvalRun
+  right: RagEvalRun
+  passRateDelta: number
+  passedCasesDelta: number
+}
+
 type KnowledgeDocumentRow = {
   key: string
   fileName: string
@@ -1818,10 +1825,18 @@ function EvalPanel() {
   const [runs, setRuns] = useState<RagEvalRun[]>([])
   const [detail, setDetail] = useState<RagEvalRun | null>(null)
   const [loading, setLoading] = useState(false)
+  const [promptVersions, setPromptVersions] = useState<RagPromptConfig[]>([])
+  const [compareVersions, setCompareVersions] = useState<{ leftVersion?: string; rightVersion?: string }>({})
+  const [compareResult, setCompareResult] = useState<RagPromptCompare | null>(null)
 
   async function loadRuns() {
     const response = await axios.get<RagEvalRun[]>('/api/admin/guide/rag-evals')
     setRuns(response.data)
+  }
+
+  async function loadPromptVersions() {
+    const response = await axios.get<RagPromptConfig[]>('/api/admin/settings/rag-prompts')
+    setPromptVersions(response.data)
   }
 
   async function runEval() {
@@ -1836,6 +1851,22 @@ function EvalPanel() {
     }
   }
 
+  async function comparePrompts() {
+    if (!compareVersions.leftVersion || !compareVersions.rightVersion) {
+      message.warning('请选择两个 Prompt 版本')
+      return
+    }
+    setLoading(true)
+    try {
+      const response = await axios.post<RagPromptCompare>('/api/admin/guide/rag-evals/compare-prompts', compareVersions)
+      setCompareResult(response.data)
+      await loadRuns()
+      message.success(`对比完成，通过率变化 ${response.data.passRateDelta}%`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function openRun(id: number) {
     const response = await axios.get<RagEvalRun>(`/api/admin/guide/rag-evals/${id}`)
     setDetail(response.data)
@@ -1843,6 +1874,7 @@ function EvalPanel() {
 
   useEffect(() => {
     void loadRuns()
+    void loadPromptVersions()
   }, [])
 
   const runColumns: TableColumnsType<RagEvalRun> = [
@@ -1865,6 +1897,30 @@ function EvalPanel() {
 
   return (
     <Card title="RAG 评测报告" extra={<Button type="primary" loading={loading} onClick={() => void runEval()}>运行评测</Button>}>
+      <Card size="small" title="Prompt 对比评测" className="admin-build-summary">
+        <Space wrap>
+          <Select
+            placeholder="基准版本"
+            style={{ width: 220 }}
+            value={compareVersions.leftVersion}
+            onChange={(leftVersion) => setCompareVersions((current) => ({ ...current, leftVersion }))}
+            options={promptVersions.map((item) => ({ value: item.version, label: item.version }))}
+          />
+          <Select
+            placeholder="对比版本"
+            style={{ width: 220 }}
+            value={compareVersions.rightVersion}
+            onChange={(rightVersion) => setCompareVersions((current) => ({ ...current, rightVersion }))}
+            options={promptVersions.map((item) => ({ value: item.version, label: item.version }))}
+          />
+          <Button loading={loading} onClick={() => void comparePrompts()}>开始对比</Button>
+          {compareResult ? (
+            <Tag color={compareResult.passRateDelta >= 0 ? 'green' : 'red'}>
+              通过率变化 {compareResult.passRateDelta}% / 通过数变化 {compareResult.passedCasesDelta}
+            </Tag>
+          ) : null}
+        </Space>
+      </Card>
       <Table rowKey="id" columns={runColumns} dataSource={runs} pagination={{ pageSize: 8 }} />
       <Drawer title={detail ? `评测 #${detail.id}` : '评测详情'} open={Boolean(detail)} width={1000} onClose={() => setDetail(null)}>
         {detail ? (
