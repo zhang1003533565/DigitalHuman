@@ -25,7 +25,8 @@
   position: relative;
   isolation: isolate;
   z-index: 1;
-  min-height: calc(100vh - 44px);
+  height: calc(100dvh - 44px);
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }

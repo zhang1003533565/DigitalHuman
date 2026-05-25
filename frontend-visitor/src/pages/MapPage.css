@@ -17,8 +17,8 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
   gap: 18px;
-  height: calc(100vh - 130px);
-  min-height: 640px;
+  height: 100%;
+  min-height: 0;
 }
 
 /* ---------- 左侧：地图区 ---------- */

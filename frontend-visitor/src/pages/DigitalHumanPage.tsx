@@ -204,16 +204,6 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
   }, [openDropdown])
 
   useEffect(() => {
-    document.documentElement.classList.add('digital-human-page-lock')
-    document.body.classList.add('digital-human-page-lock')
-
-    return () => {
-      document.documentElement.classList.remove('digital-human-page-lock')
-      document.body.classList.remove('digital-human-page-lock')
-    }
-  }, [])
-
-  useEffect(() => {
     isMountedRef.current = true
 
     async function initPixiApp() {

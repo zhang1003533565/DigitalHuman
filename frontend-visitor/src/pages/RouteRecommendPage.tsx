@@ -119,6 +119,8 @@ export function RouteRecommendPage({ onLogout }: Props) {
   const [routes, setRoutes] = useState<ScenicRoute[]>([])
   const [selectedRouteId, setSelectedRouteId] = useState('')
   const [loadError, setLoadError] = useState('')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [amapApi, setAmapApi] = useState<any>(null)
   const mapContainerRef = useRef<HTMLDivElement | null>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapInstanceRef = useRef<any>(null)
@@ -156,10 +158,14 @@ export function RouteRecommendPage({ onLogout }: Props) {
         if (cancelled || !mapContainerRef.current || mapInstanceRef.current) return
 
         mapInstanceRef.current = new AMap.Map(mapContainerRef.current, {
-          zoom: 16,
+          zoom: 14,
           center: LINGSHAN_CENTER,
           viewMode: '2D',
-          mapStyle: 'amap://styles/normal',
+        })
+        setAmapApi(AMap)
+
+        requestAnimationFrame(() => {
+          mapInstanceRef.current?.resize?.()
         })
       })
       .catch((error) => {
@@ -197,15 +203,25 @@ export function RouteRecommendPage({ onLogout }: Props) {
 
   useEffect(() => {
     const map = mapInstanceRef.current
-    const AMap = window.AMap
-    if (!map || !AMap || !selectedRoute) return
+    const AMap = amapApi
+    if (!map || !AMap) return
 
     if (mapOverlaysRef.current.length) {
       map.remove?.(mapOverlaysRef.current)
       mapOverlaysRef.current = []
     }
 
-    const path = (selectedRoute.polyline.length ? selectedRoute.polyline : selectedRoute.nodes.map((node) => node.coordinate))
+    if (!selectedRoute) {
+      map.setZoomAndCenter?.(14, LINGSHAN_CENTER)
+      return
+    }
+
+    map.resize?.()
+
+    const routeNodes = selectedRoute.nodes ?? []
+    const routeFacilities = selectedRoute.facilities ?? []
+    const routePolyline = selectedRoute.polyline ?? []
+    const path = (routePolyline.length ? routePolyline : routeNodes.map((node) => node.coordinate))
       .map(coordinateToLngLat)
 
     if (path.length > 1) {
@@ -221,7 +237,7 @@ export function RouteRecommendPage({ onLogout }: Props) {
       mapOverlaysRef.current.push(polyline)
     }
 
-    selectedRoute.nodes.forEach((node, index) => {
+    routeNodes.forEach((node, index) => {
       const marker = new AMap.Marker({
         position: coordinateToLngLat(node.coordinate),
         title: node.name,
@@ -234,7 +250,7 @@ export function RouteRecommendPage({ onLogout }: Props) {
       mapOverlaysRef.current.push(marker)
     })
 
-    selectedRoute.facilities.forEach((facility) => {
+    routeFacilities.forEach((facility) => {
       const marker = new AMap.Marker({
         position: coordinateToLngLat(facility.coordinate),
         title: facility.name,
@@ -248,11 +264,11 @@ export function RouteRecommendPage({ onLogout }: Props) {
     })
 
     if (path.length > 1) {
-      map.setFitView?.(mapOverlaysRef.current, false, [42, 42, 42, 42])
+      map.setFitView?.(mapOverlaysRef.current, false, [82, 82, 82, 82], 14)
     } else {
-      map.setCenter?.(LINGSHAN_CENTER)
+      map.setZoomAndCenter?.(14, LINGSHAN_CENTER)
     }
-  }, [selectedRoute])
+  }, [amapApi, selectedRoute])
 
   return (
     <main className="page-shell route-shell">
@@ -352,14 +368,14 @@ export function RouteRecommendPage({ onLogout }: Props) {
                     <span>{selectedRoute.bestTime}</span>
                   </div>
                   <div className="tag-group">
-                    {selectedRoute.tags.map((tag) => (
+                    {(selectedRoute.tags ?? []).map((tag) => (
                       <span key={tag} className="info-tag">{tag}</span>
                     ))}
                   </div>
                 </div>
 
                 <div className="route-timeline">
-                  {selectedRoute.nodes.map((node, index) => (
+                  {(selectedRoute.nodes ?? []).map((node, index) => (
                     <article key={node.id} className="route-node">
                       <span className="route-node__index">{index + 1}</span>
                       <div>
@@ -373,7 +389,7 @@ export function RouteRecommendPage({ onLogout }: Props) {
 
                 <aside className="route-facilities">
                   <h3>沿途服务</h3>
-                  {selectedRoute.facilities.map((facility) => (
+                  {(selectedRoute.facilities ?? []).map((facility) => (
                     <div key={facility.id} className="route-facility">
                       <span>{getFacilityLabel(facility.category)}</span>
                       <strong>{facility.name}</strong>
