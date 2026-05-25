@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
-import '../App.css'
+import './FeedbackPage.css'
 import { AppTopNav } from '../components/AppTopNav'
 
 type Props = {
@@ -30,7 +30,7 @@ export function FeedbackPage({ onLogout }: Props) {
   }, [])
 
   return (
-    <main className="page-shell">
+    <main className="page-shell feedback-page">
       <AppTopNav onLogout={onLogout} />
       <section className="page-content">
         <header className="page-heading">

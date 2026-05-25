@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
-import '../App.css'
+import './HistoryPage.css'
 import { AppTopNav } from '../components/AppTopNav'
 
 type Props = {
@@ -33,7 +33,7 @@ export function HistoryPage({ onLogout }: Props) {
   }, [sessionId])
 
   return (
-    <main className="page-shell">
+    <main className="page-shell history-page">
       <AppTopNav onLogout={onLogout} />
       <section className="page-content">
         <header className="page-heading">

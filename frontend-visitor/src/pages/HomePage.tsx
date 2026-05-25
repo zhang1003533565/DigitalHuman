@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import '../App.css'
+import './HomePage.css'
 import { type SessionUser } from '../auth/session'
 import { DIGITAL_HUMAN_ROUTE } from '../digitalHuman/shared'
 import { AppTopNav } from '../components/AppTopNav'
@@ -13,7 +13,7 @@ export function HomePage({ user, onLogout }: HomePageProps) {
   const navigate = useNavigate()
 
   return (
-    <main className="page-shell">
+    <main className="page-shell home-page">
       <AppTopNav onLogout={onLogout} />
       <section className="page-content">
         <header className="hero-panel">

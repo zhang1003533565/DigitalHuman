@@ -3,8 +3,14 @@ import { createPortal } from 'react-dom'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { DIGITAL_HUMAN_ROUTE } from '../digitalHuman/shared'
 import { getStoredUser, type SessionUser } from '../auth/session'
+import './AppTopNav.css'
 
-const NAV_ITEMS = [
+type TopNavItem = {
+  to: string
+  label: string
+}
+
+const DEFAULT_NAV_ITEMS: TopNavItem[] = [
   { to: '/home', label: '首页' },
   { to: DIGITAL_HUMAN_ROUTE, label: '数字人导览' },
   { to: '/routes', label: '路线推荐' },
@@ -15,6 +21,8 @@ const NAV_ITEMS = [
 
 type AppTopNavProps = {
   onLogout: () => void
+  title?: string
+  items?: TopNavItem[]
 }
 
 function getInitials(name: string): string {
@@ -22,7 +30,11 @@ function getInitials(name: string): string {
   return name.charAt(0).toUpperCase()
 }
 
-export function AppTopNav({ onLogout }: AppTopNavProps) {
+export function AppTopNav({
+  onLogout,
+  title = '景区导览服务AI数字人',
+  items = DEFAULT_NAV_ITEMS,
+}: AppTopNavProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const navigate = useNavigate()
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -56,10 +68,10 @@ export function AppTopNav({ onLogout }: AppTopNavProps) {
   return (
     <header className="app-topbar">
       <div className="app-topbar__brand">
-        <Link to="/home">景区导览服务AI数字人</Link>
+        <Link to="/home">{title}</Link>
       </div>
       <nav className="app-topbar__nav" aria-label="主导航">
-        {NAV_ITEMS.map((item) => (
+        {items.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}

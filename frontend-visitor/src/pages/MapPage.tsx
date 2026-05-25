@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import axios from 'axios'
-import '../App.css'
 import './MapPage.css'
 import { AppTopNav } from '../components/AppTopNav'
 

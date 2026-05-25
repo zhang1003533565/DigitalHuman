@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import axios from 'axios'
-import '../App.css'
+import './RouteRecommendPage.css'
 import { AppTopNav } from '../components/AppTopNav'
 
 type Props = {

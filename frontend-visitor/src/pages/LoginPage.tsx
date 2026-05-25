@@ -1,7 +1,7 @@
 import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react'
 import axios from 'axios'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import '../App.css'
+import './LoginPage.css'
 import loginBgDayImage from '../assets/login/login.png'
 import loginBgNightImage from '../assets/login/login_night.png'
 import loginTitleImage from '../assets/login/Tittle.png'

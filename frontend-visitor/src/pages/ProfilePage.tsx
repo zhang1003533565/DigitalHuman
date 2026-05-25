@@ -1,6 +1,6 @@
 import { getStoredUser } from '../auth/session'
 import { AppTopNav } from '../components/AppTopNav'
-import '../App.css'
+import './ProfilePage.css'
 
 type ProfilePageProps = {
   onLogout: () => void

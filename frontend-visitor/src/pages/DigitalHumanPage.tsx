@@ -1,6 +1,6 @@
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react'
 import axios from 'axios'
-import '../App.css'
+import './DigitalHumanPage.css'
 import {
   type Live2DModel,
   type PixiApplication,
