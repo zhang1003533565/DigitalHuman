@@ -760,7 +760,7 @@
 }
 
 .model-action-main {
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .model-action-card {
@@ -783,6 +783,65 @@
   font-size: 34px;
   font-weight: 800;
   box-shadow: inset 0 -16px 34px rgba(47, 109, 255, 0.12);
+}
+
+.model-action-preview {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.model-action-preview-frame {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  height: 310px;
+  overflow: hidden;
+  border: 1px solid #dfe7f3;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(244, 248, 255, 0.96)),
+    linear-gradient(135deg, rgba(47, 109, 255, 0.1), rgba(34, 197, 94, 0.08));
+}
+
+.model-action-preview-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+  touch-action: none;
+}
+
+.model-action-preview-canvas:active {
+  cursor: grabbing;
+}
+
+.model-action-preview-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #6a7d95;
+  font-weight: 700;
+}
+
+.model-action-preview-status {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-height: 28px;
+  color: #53667f;
+  font-size: 13px;
+}
+
+.model-action-preview-status span {
+  flex: 1 1 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .model-action-meta {

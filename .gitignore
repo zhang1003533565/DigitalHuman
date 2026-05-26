@@ -15,3 +15,6 @@ Thumbs.db
 # OS and editor noise
 *.swp
 *.swo
+
+# Maven local repository
+backend-java/.m2/

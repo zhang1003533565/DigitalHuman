@@ -10,6 +10,10 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
       },
+      '/live2d': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
     },
   },
 })

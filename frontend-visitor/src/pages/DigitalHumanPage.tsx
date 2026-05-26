@@ -59,7 +59,7 @@ type DigitalChatDropdownKey = 'factory' | 'voice' | 'model'
 
 type RuntimeTriggerRule = {
   id?: number
-  ruleType: 'MOUSE' | 'KEYWORD'
+  ruleType: 'MOUSE' | 'KEYWORD' | 'IDLE'
   eventCode?: string
   phrases?: string[]
   actionId: number
@@ -87,7 +87,7 @@ type ActionMatchResponse = {
   motionFilePath?: string
   groupName?: string
   actionIndex?: number
-  ruleType?: 'MOUSE' | 'KEYWORD'
+  ruleType?: 'MOUSE' | 'KEYWORD' | 'IDLE'
   eventCode?: string
 }
 
@@ -97,8 +97,10 @@ type ActionTriggerPayload = {
 }
 
 const GUIDE_SESSION_KEY = 'digitalhuman.visitor.guideSessionId'
+const SELECTED_MODEL_KEY = 'digitalhuman.visitor.selectedModelId'
 const HIGHEST_TRIGGER_PRIORITY = 1
 const LOWEST_TRIGGER_PRIORITY = 10
+const IDLE_TRIGGER_DELAY_MS = 12000
 
 const DEFAULT_CONFIG: DigitalHumanConfig = {
   modelId: 'hiyori_pro_zh',
@@ -126,6 +128,11 @@ const CHAT_TIME_FORMATTER = new Intl.DateTimeFormat('zh-CN', {
 
 function formatChatTime(time: Date) {
   return CHAT_TIME_FORMATTER.format(time)
+}
+
+function getStoredSelectedModelId() {
+  const modelId = window.sessionStorage.getItem(SELECTED_MODEL_KEY)
+  return MODEL_OPTIONS.some((model) => model.id === modelId) ? modelId : null
 }
 
 function normalizeTriggerPriority(priority?: number) {
@@ -193,10 +200,10 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
   const isMountedRef = useRef(false)
   const dragStartXRef = useRef(0)
   const clickTimerRef = useRef<number | null>(null)
+  const lastInteractionAtRef = useRef(0)
   const [config, setConfig] = useState<DigitalHumanConfig>(DEFAULT_CONFIG)
-  const [selectedModelId, setSelectedModelId] = useState(DEFAULT_CONFIG.modelId)
+  const [selectedModelId, setSelectedModelId] = useState(() => getStoredSelectedModelId() ?? DEFAULT_CONFIG.modelId)
   const [runtimeModels, setRuntimeModels] = useState<RuntimeDigitalHumanModel[]>([])
-  const [runtimeModelsLoading, setRuntimeModelsLoading] = useState(false)
   const [status, setStatus] = useState('正在加载 Live2D 模型...')
   const [isReady, setIsReady] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
@@ -204,7 +211,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
   const [draft, setDraft] = useState('')
   const [selectedFactoryId, setSelectedFactoryId] = useState(FACTORY_OPTIONS[0].id)
   const [openDropdown, setOpenDropdown] = useState<DigitalChatDropdownKey | null>(null)
-  const [messages, setMessages] = useState<DigitalChatMessage[]>([
+  const [messages, setMessages] = useState<DigitalChatMessage[]>(() => [
     {
       id: 'welcome',
       sender: 'guide',
@@ -230,13 +237,23 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
 
   const canSend = isReady && !isSpeaking && draft.trim().length > 0
 
+  const markInteraction = useCallback(() => {
+    lastInteractionAtRef.current = Date.now()
+  }, [])
+
+  useEffect(() => {
+    markInteraction()
+  }, [markInteraction])
+
   useEffect(() => {
     async function loadConfig() {
       try {
         const response = await axios.get<DigitalHumanConfig>('/api/user/digital-human/config')
         const nextConfig = { ...DEFAULT_CONFIG, ...response.data }
         setConfig(nextConfig)
-        setSelectedModelId(nextConfig.modelId)
+        if (!getStoredSelectedModelId()) {
+          setSelectedModelId(nextConfig.modelId)
+        }
         setMessages((current) => {
           if (current.length !== 1 || current[0]?.id !== 'welcome') {
             return current
@@ -258,14 +275,11 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
   useEffect(() => {
     async function loadRuntimeModels() {
       try {
-        setRuntimeModelsLoading(true)
         const response = await axios.get<RuntimeDigitalHumanModel[]>('/api/user/digital-human/models')
         setRuntimeModels(response.data)
       } catch (error) {
         console.warn('Load digital human action rules failed', error)
         setRuntimeModels([])
-      } finally {
-        setRuntimeModelsLoading(false)
       }
     }
 
@@ -287,7 +301,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
         const response = await axios.get<DigitalHumanConfig>('/api/user/digital-human/config')
         const nextConfig = { ...DEFAULT_CONFIG, ...response.data }
         setConfig(nextConfig)
-        setSelectedModelId(nextConfig.modelId)
+        setSelectedModelId(getStoredSelectedModelId() ?? nextConfig.modelId)
       } catch (error) {
         console.warn('Refresh digital human config failed', error)
       }
@@ -362,6 +376,9 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
       if (rule.ruleType === 'MOUSE') {
         return eventCode && rule.eventCode === eventCode
       }
+      if (rule.ruleType === 'IDLE') {
+        return eventCode === 'IDLE'
+      }
       if (rule.ruleType === 'KEYWORD') {
         return Boolean(text) && (rule.phrases ?? []).some((phrase) => text.includes(phrase))
       }
@@ -398,6 +415,28 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
   }, [findLocalRuleMatch, playConfiguredMotion, selectedModel.id, selectedRuntimeModel])
 
   useEffect(() => {
+    if (!isReady || isSpeaking) {
+      return
+    }
+
+    const hasIdleRule = (selectedRuntimeModel?.triggerRules ?? [])
+      .some((rule) => rule.enabled && rule.ruleType === 'IDLE')
+    if (!hasIdleRule) {
+      return
+    }
+
+    const intervalId = window.setInterval(() => {
+      if (Date.now() - lastInteractionAtRef.current < IDLE_TRIGGER_DELAY_MS) {
+        return
+      }
+      lastInteractionAtRef.current = Date.now()
+      void triggerConfiguredAction({ eventCode: 'IDLE' })
+    }, 1000)
+
+    return () => window.clearInterval(intervalId)
+  }, [isReady, isSpeaking, selectedRuntimeModel?.triggerRules, triggerConfiguredAction])
+
+  useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) {
       return
@@ -412,6 +451,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
 
     function handleClick(event: MouseEvent) {
       if (event.button === 0 && event.detail === 1) {
+        markInteraction()
         clearClickTimer()
         clickTimerRef.current = window.setTimeout(() => {
           clickTimerRef.current = null
@@ -421,17 +461,20 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     }
 
     function handleDoubleClick() {
+      markInteraction()
       clearClickTimer()
       void triggerConfiguredAction({ eventCode: 'DOUBLE_CLICK_LEFT' })
     }
 
     function handleContextMenu(event: MouseEvent) {
+      markInteraction()
       clearClickTimer()
       event.preventDefault()
       void triggerConfiguredAction({ eventCode: 'RIGHT_CLICK' })
     }
 
     function handleWheel(event: WheelEvent) {
+      markInteraction()
       if (event.deltaY < 0) {
         void triggerConfiguredAction({ eventCode: 'WHEEL_UP' })
       }
@@ -448,7 +491,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
       canvas.removeEventListener('contextmenu', handleContextMenu)
       canvas.removeEventListener('wheel', handleWheel)
     }
-  }, [triggerConfiguredAction])
+  }, [markInteraction, triggerConfiguredAction])
 
   useEffect(() => {
     isMountedRef.current = true
@@ -548,9 +591,11 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
 
         makeDraggable(model, {
           onDragStart: () => {
+            markInteraction()
             dragStartXRef.current = model.x
           },
           onDragEnd: () => {
+            markInteraction()
             const deltaX = model.x - dragStartXRef.current
             if (Math.abs(deltaX) >= 24) {
               void triggerConfiguredAction({ eventCode: deltaX < 0 ? 'SLIDE_LEFT' : 'SLIDE_RIGHT' })
@@ -600,6 +645,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     selectedModel.xOffsetRatio,
     selectedModel.yOffsetRatio,
     selectedRuntimeModel?.triggerRules,
+    markInteraction,
     triggerConfiguredAction,
   ])
 
@@ -625,10 +671,12 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     model.stopMotions?.()
     speak(model, audioUrl, {
       onFinish: () => {
+        markInteraction()
         setIsSpeaking(false)
         URL.revokeObjectURL(audioUrl)
       },
       onError: () => {
+        markInteraction()
         setIsSpeaking(false)
         URL.revokeObjectURL(audioUrl)
       },
@@ -640,6 +688,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
 
     const question = draft.trim()
     if (!question) return
+    markInteraction()
 
     const userMessage: DigitalChatMessage = {
       id: `user-${Date.now()}`,
@@ -719,28 +768,9 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
 
   function handleSelectModel(modelId: string) {
     const model = MODEL_OPTIONS.find((item) => item.id === modelId) ?? MODEL_OPTIONS[0]
+    window.sessionStorage.setItem(SELECTED_MODEL_KEY, model.id)
     setSelectedModelId(model.id)
     setOpenDropdown(null)
-  }
-
-  async function handleRefreshConfig() {
-    try {
-      setRuntimeModelsLoading(true)
-      const [modelsResponse, configResponse] = await Promise.all([
-        axios.get<RuntimeDigitalHumanModel[]>('/api/user/digital-human/models'),
-        axios.get<DigitalHumanConfig>('/api/user/digital-human/config'),
-      ])
-      setRuntimeModels(modelsResponse.data)
-      const nextConfig = { ...DEFAULT_CONFIG, ...configResponse.data }
-      setConfig(nextConfig)
-      setSelectedModelId(nextConfig.modelId)
-      setStatus('配置已刷新，动作触发规则已更新。')
-    } catch (error) {
-      console.warn('Refresh config failed', error)
-      setStatus('配置刷新失败。')
-    } finally {
-      setRuntimeModelsLoading(false)
-    }
   }
 
   return (
@@ -853,16 +883,6 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
                 ) : null}
               </div>
 
-              <button
-                type="button"
-                className={`digital-chat-refresh${runtimeModelsLoading ? ' loading' : ''}`}
-                disabled={isSpeaking || runtimeModelsLoading}
-                onClick={() => void handleRefreshConfig()}
-                title="刷新动作配置"
-                aria-label="刷新动作配置"
-              >
-                <span aria-hidden>{runtimeModelsLoading ? '↻' : '⟳'}</span>
-              </button>
             </div>
           </header>
 

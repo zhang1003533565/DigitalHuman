@@ -5,19 +5,11 @@ import com.digitalhuman.backend_java.dto.ActionMatchResponse;
 import com.digitalhuman.backend_java.dto.ActionTriggerConfigDto;
 import com.digitalhuman.backend_java.dto.ActionTriggerRuleDto;
 import com.digitalhuman.backend_java.model.ActionTriggerRule;
-import com.digitalhuman.backend_java.model.DigitalHumanConfig;
 import com.digitalhuman.backend_java.model.DigitalHumanModel;
-import com.digitalhuman.backend_java.model.Emotion;
 import com.digitalhuman.backend_java.model.ModelAction;
-import com.digitalhuman.backend_java.model.ModelEmotion;
-import com.digitalhuman.backend_java.model.ModelEmotionAction;
 import com.digitalhuman.backend_java.repository.ActionTriggerRuleRepository;
-import com.digitalhuman.backend_java.repository.DigitalHumanConfigRepository;
 import com.digitalhuman.backend_java.repository.DigitalHumanModelRepository;
-import com.digitalhuman.backend_java.repository.EmotionRepository;
 import com.digitalhuman.backend_java.repository.ModelActionRepository;
-import com.digitalhuman.backend_java.repository.ModelEmotionActionRepository;
-import com.digitalhuman.backend_java.repository.ModelEmotionRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -29,7 +21,6 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -48,7 +39,7 @@ public class ModelEmotionService {
     private static final Pattern ACTION_TABLE_PATTERN = Pattern.compile(
             "\\|\\s*([^|]+?)\\s*\\|\\s*`([^`]+)`\\s*\\|\\s*(\\d+)\\s*\\|\\s*`([^`]+)`\\s*\\|"
     );
-    private static final Set<String> RULE_TYPES = Set.of("MOUSE", "KEYWORD");
+    private static final Set<String> RULE_TYPES = Set.of("MOUSE", "KEYWORD", "IDLE");
     private static final Set<String> MOUSE_EVENT_CODES = Set.of(
             "CLICK_LEFT",
             "DOUBLE_CLICK_LEFT",
@@ -62,29 +53,17 @@ public class ModelEmotionService {
 
     private final DigitalHumanModelRepository modelRepository;
     private final ModelActionRepository actionRepository;
-    private final EmotionRepository emotionRepository;
-    private final ModelEmotionRepository modelEmotionRepository;
-    private final ModelEmotionActionRepository modelEmotionActionRepository;
     private final ActionTriggerRuleRepository actionTriggerRuleRepository;
-    private final DigitalHumanConfigRepository digitalHumanConfigRepository;
     private final ObjectMapper objectMapper;
 
     public ModelEmotionService(
             DigitalHumanModelRepository modelRepository,
             ModelActionRepository actionRepository,
-            EmotionRepository emotionRepository,
-            ModelEmotionRepository modelEmotionRepository,
-            ModelEmotionActionRepository modelEmotionActionRepository,
             ActionTriggerRuleRepository actionTriggerRuleRepository,
-            DigitalHumanConfigRepository digitalHumanConfigRepository,
             ObjectMapper objectMapper) {
         this.modelRepository = modelRepository;
         this.actionRepository = actionRepository;
-        this.emotionRepository = emotionRepository;
-        this.modelEmotionRepository = modelEmotionRepository;
-        this.modelEmotionActionRepository = modelEmotionActionRepository;
         this.actionTriggerRuleRepository = actionTriggerRuleRepository;
-        this.digitalHumanConfigRepository = digitalHumanConfigRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -107,7 +86,7 @@ public class ModelEmotionService {
     @Transactional
     public List<Map<String, Object>> scanModels() throws IOException {
         if (!Files.isDirectory(LIVE2D_ROOT)) {
-            throw new IOException("Live2D 目录不存在: " + LIVE2D_ROOT);
+            throw new IOException("Live2D 鐩綍涓嶅瓨鍦? " + LIVE2D_ROOT);
         }
 
         List<Map<String, Object>> scannedModels = new ArrayList<>();
@@ -163,7 +142,7 @@ public class ModelEmotionService {
                     .map(String::trim)
                     .filter(line -> line.startsWith("#"))
                     .map(line -> line.replaceFirst("^#+\\s*", "").trim())
-                    .map(line -> line.replaceFirst("动作命名对照$", "").trim())
+                    .map(line -> line.replaceFirst("鍔ㄤ綔鍛藉悕瀵圭収$", "").trim())
                     .filter(line -> !line.isBlank())
                     .findFirst()
                     .orElse(fallback);
@@ -193,7 +172,6 @@ public class ModelEmotionService {
         actionRepository.saveAll(actionsToSave);
 
         for (ModelAction staleAction : existingByKey.values()) {
-            modelEmotionActionRepository.deleteByModelActionId(staleAction.getId());
             actionTriggerRuleRepository.deleteByModelActionId(staleAction.getId());
             actionRepository.delete(staleAction);
         }
@@ -269,16 +247,14 @@ public class ModelEmotionService {
     @Transactional(readOnly = true)
     public Map<String, Object> getModelDetail(Long modelId) {
         DigitalHumanModel model = modelRepository.findById(modelId)
-                .orElseThrow(() -> new IllegalArgumentException("模型不存在: " + modelId));
+                .orElseThrow(() -> new IllegalArgumentException("妯″瀷涓嶅瓨鍦? " + modelId));
 
         List<ModelAction> allActions = actionRepository.findByModelId(modelId);
         List<ModelAction> enabledActions = actionRepository.findByModelIdAndEnabledTrue(modelId);
-        List<ModelEmotion> modelEmotions = modelEmotionRepository.findByModelIdAndEnabledTrue(modelId);
 
         Map<String, Object> result = new LinkedHashMap<>(toModelDto(model));
         result.put("allActions", allActions.stream().map(this::toActionDto).toList());
         result.put("enabledActions", enabledActions.stream().map(this::toActionDto).toList());
-        result.put("emotions", modelEmotions.stream().map(this::toModelEmotionDto).toList());
         return result;
     }
 
@@ -320,6 +296,9 @@ public class ModelEmotionService {
         dto.setTextRules(rules.stream()
                 .filter(rule -> "KEYWORD".equals(rule.getRuleType()))
                 .toList());
+        dto.setIdleRules(rules.stream()
+                .filter(rule -> "IDLE".equals(rule.getRuleType()))
+                .toList());
         return dto;
     }
 
@@ -333,13 +312,13 @@ public class ModelEmotionService {
         if (request != null) {
             incoming.addAll(request.getMouseRules());
             incoming.addAll(request.getTextRules());
+            incoming.addAll(request.getIdleRules());
         }
 
         List<ActionTriggerRule> rules = incoming.stream()
                 .map(ruleDto -> toActionTriggerRule(model, ruleDto))
                 .toList();
         actionTriggerRuleRepository.saveAll(rules);
-        syncActiveDigitalHumanModel(model.getModelKey());
         return getTriggerConfig(modelId);
     }
 
@@ -368,136 +347,6 @@ public class ModelEmotionService {
         return toActionMatchResponse(selectWeightedRule(matchedRules));
     }
 
-    @Transactional(readOnly = true)
-    public List<Map<String, Object>> getEmotions() {
-        return emotionRepository.findAll().stream()
-                .sorted(Comparator.comparing(Emotion::getSortOrder, Comparator.nullsLast(Integer::compareTo)))
-                .map(this::toEmotionDto)
-                .toList();
-    }
-
-    @Transactional
-    public Map<String, Object> createEmotion(Map<String, Object> data) {
-        String emotionKey = stringValue(data.get("emotionKey"));
-        String emotionName = stringValue(data.get("emotionName"));
-        if (emotionKey.isBlank() || emotionName.isBlank()) {
-            throw new IllegalArgumentException("情绪 Key 和名称不能为空");
-        }
-        if (emotionRepository.findByEmotionKey(emotionKey).isPresent()) {
-            throw new IllegalArgumentException("情绪 Key 已存在: " + emotionKey);
-        }
-
-        Emotion emotion = new Emotion();
-        emotion.setEmotionKey(emotionKey);
-        emotion.setEmotionName(emotionName);
-        emotion.setEmotionIcon(stringValue(data.getOrDefault("emotionIcon", "")));
-        emotion.setSortOrder(intValue(data.get("sortOrder"), 0));
-        emotion.setVoicePromptTemplate(stringValue(data.getOrDefault("voicePromptTemplate", "")));
-        emotion.setEnabled(true);
-        return toEmotionDto(emotionRepository.save(emotion));
-    }
-
-    @Transactional
-    public Map<String, Object> updateEmotion(Long id, Map<String, Object> data) {
-        Emotion emotion = emotionRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("情绪不存在: " + id));
-
-        if (data.containsKey("emotionName")) {
-            String emotionName = stringValue(data.get("emotionName"));
-            if (emotionName.isBlank()) {
-                throw new IllegalArgumentException("情绪名称不能为空");
-            }
-            emotion.setEmotionName(emotionName);
-        }
-        if (data.containsKey("emotionIcon")) {
-            emotion.setEmotionIcon(stringValue(data.get("emotionIcon")));
-        }
-        if (data.containsKey("sortOrder")) {
-            emotion.setSortOrder(intValue(data.get("sortOrder"), 0));
-        }
-        if (data.containsKey("enabled")) {
-            emotion.setEnabled(Boolean.TRUE.equals(data.get("enabled")));
-        }
-        if (data.containsKey("voicePromptTemplate")) {
-            emotion.setVoicePromptTemplate(stringValue(data.get("voicePromptTemplate")));
-        }
-
-        return toEmotionDto(emotionRepository.save(emotion));
-    }
-
-    @Transactional
-    public void deleteEmotion(Long id) {
-        emotionRepository.deleteById(id);
-    }
-
-    @Transactional
-    public Map<String, Object> addModelEmotion(Long modelId, Long emotionId) {
-        ModelEmotion modelEmotion = modelEmotionRepository.findByModelIdAndEmotionId(modelId, emotionId)
-                .orElseGet(() -> {
-                    DigitalHumanModel model = modelRepository.findById(modelId)
-                            .orElseThrow(() -> new IllegalArgumentException("模型不存在: " + modelId));
-                    Emotion emotion = emotionRepository.findById(emotionId)
-                            .orElseThrow(() -> new IllegalArgumentException("情绪不存在: " + emotionId));
-
-                    ModelEmotion newModelEmotion = new ModelEmotion();
-                    newModelEmotion.setModel(model);
-                    newModelEmotion.setEmotion(emotion);
-                    newModelEmotion.setEnabled(true);
-                    return newModelEmotion;
-                });
-
-        modelEmotion.setEnabled(true);
-        return toModelEmotionDto(modelEmotionRepository.save(modelEmotion));
-    }
-
-    @Transactional
-    public void removeModelEmotion(Long modelId, Long emotionId) {
-        modelEmotionRepository.findByModelIdAndEmotionId(modelId, emotionId)
-                .ifPresent(modelEmotionRepository::delete);
-    }
-
-    @Transactional(readOnly = true)
-    public List<Map<String, Object>> getModelEmotions(Long modelId) {
-        return modelEmotionRepository.findByModelId(modelId).stream()
-                .map(this::toModelEmotionDto)
-                .toList();
-    }
-
-    @Transactional
-    public Map<String, Object> addModelEmotionAction(Long modelEmotionId, Long modelActionId, Integer priority) {
-        ModelEmotion modelEmotion = modelEmotionRepository.findById(modelEmotionId)
-                .orElseThrow(() -> new IllegalArgumentException("模型情绪不存在: " + modelEmotionId));
-        ModelAction modelAction = actionRepository.findById(modelActionId)
-                .orElseThrow(() -> new IllegalArgumentException("动作不存在: " + modelActionId));
-
-        if (!modelAction.getModel().getId().equals(modelEmotion.getModel().getId())) {
-            throw new IllegalArgumentException("动作不属于该模型");
-        }
-        if (!Boolean.TRUE.equals(modelAction.getEnabled())) {
-            throw new IllegalArgumentException("该动作未启用");
-        }
-
-        ModelEmotionAction emotionAction = modelEmotionActionRepository
-                .findByModelEmotionIdAndModelActionId(modelEmotionId, modelActionId)
-                .orElseGet(ModelEmotionAction::new);
-        emotionAction.setModelEmotion(modelEmotion);
-        emotionAction.setModelAction(modelAction);
-        emotionAction.setPriority(priority != null ? priority : 0);
-        return toModelEmotionActionDto(modelEmotionActionRepository.save(emotionAction));
-    }
-
-    @Transactional
-    public void removeModelEmotionAction(Long modelEmotionActionId) {
-        modelEmotionActionRepository.deleteById(modelEmotionActionId);
-    }
-
-    @Transactional(readOnly = true)
-    public List<Map<String, Object>> getModelEmotionActions(Long modelEmotionId) {
-        return modelEmotionActionRepository.findByModelEmotionId(modelEmotionId).stream()
-                .map(this::toModelEmotionActionDto)
-                .toList();
-    }
-
     private ActionTriggerRule toActionTriggerRule(DigitalHumanModel model, ActionTriggerRuleDto dto) {
         if (dto == null) {
             throw new IllegalArgumentException("Trigger rule cannot be null");
@@ -521,6 +370,9 @@ public class ModelEmotionService {
                 throw new IllegalArgumentException("Unsupported mouse event: " + dto.getEventCode());
             }
             phrases = List.of();
+        } else if ("IDLE".equals(ruleType)) {
+            eventCode = "IDLE";
+            phrases = List.of();
         } else if (phrases.isEmpty()) {
             throw new IllegalArgumentException("Keyword rule requires at least one phrase");
         }
@@ -529,22 +381,11 @@ public class ModelEmotionService {
         rule.setModel(model);
         rule.setModelAction(action);
         rule.setRuleType(ruleType);
-        rule.setEventCode("MOUSE".equals(ruleType) ? eventCode : "");
+        rule.setEventCode(("MOUSE".equals(ruleType) || "IDLE".equals(ruleType)) ? eventCode : "");
         rule.setPhrasesJson(writePhrases(phrases));
         rule.setEnabled(dto.getEnabled() == null || Boolean.TRUE.equals(dto.getEnabled()));
         rule.setPriority(normalizePriority(dto.getPriority()));
         return rule;
-    }
-
-    private void syncActiveDigitalHumanModel(String modelKey) {
-        DigitalHumanConfig config = digitalHumanConfigRepository.findById(1L)
-                .orElseGet(() -> {
-                    DigitalHumanConfig newConfig = new DigitalHumanConfig();
-                    newConfig.setId(1L);
-                    return newConfig;
-                });
-        config.setModelId(modelKey);
-        digitalHumanConfigRepository.save(config);
     }
 
     private boolean ruleMatches(ActionTriggerRule rule, String eventCode, String text) {
@@ -554,6 +395,9 @@ public class ModelEmotionService {
         String ruleType = rule.getRuleType();
         if ("MOUSE".equals(ruleType)) {
             return !eventCode.isBlank() && eventCode.equalsIgnoreCase(stringValue(rule.getEventCode()));
+        }
+        if ("IDLE".equals(ruleType)) {
+            return "IDLE".equalsIgnoreCase(eventCode);
         }
 
         List<String> phrases = parsePhrases(rule.getPhrasesJson());
@@ -676,49 +520,8 @@ public class ModelEmotionService {
         return dto;
     }
 
-    private Map<String, Object> toEmotionDto(Emotion emotion) {
-        Map<String, Object> dto = new LinkedHashMap<>();
-        dto.put("id", emotion.getId());
-        dto.put("emotionKey", emotion.getEmotionKey());
-        dto.put("emotionName", emotion.getEmotionName());
-        dto.put("emotionIcon", emotion.getEmotionIcon());
-        dto.put("sortOrder", emotion.getSortOrder());
-        dto.put("enabled", emotion.getEnabled());
-        dto.put("voicePromptTemplate", emotion.getVoicePromptTemplate());
-        return dto;
-    }
-
-    private Map<String, Object> toModelEmotionDto(ModelEmotion modelEmotion) {
-        Map<String, Object> dto = new LinkedHashMap<>();
-        dto.put("id", modelEmotion.getId());
-        dto.put("emotion", toEmotionDto(modelEmotion.getEmotion()));
-        dto.put("enabled", modelEmotion.getEnabled());
-        dto.put("emotionActions", modelEmotionActionRepository.findByModelEmotionId(modelEmotion.getId()).stream()
-                .map(this::toModelEmotionActionDto)
-                .toList());
-        return dto;
-    }
-
-    private Map<String, Object> toModelEmotionActionDto(ModelEmotionAction emotionAction) {
-        Map<String, Object> dto = new LinkedHashMap<>();
-        dto.put("id", emotionAction.getId());
-        dto.put("priority", emotionAction.getPriority());
-        dto.put("action", toActionDto(emotionAction.getModelAction()));
-        return dto;
-    }
-
     private String stringValue(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
-    }
-
-    private Integer intValue(Object value, int defaultValue) {
-        if (value instanceof Number number) {
-            return number.intValue();
-        }
-        if (value instanceof String text && !text.isBlank()) {
-            return Integer.parseInt(text);
-        }
-        return defaultValue;
     }
 
     private String normalizeGroupName(String groupName) {
