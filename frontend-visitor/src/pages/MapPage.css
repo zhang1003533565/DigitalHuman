@@ -36,6 +36,189 @@
   inset: 0;
 }
 
+.map-facility-marker {
+  position: relative;
+  width: 28px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+}
+
+.map-facility-marker__dot {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border-radius: 50% 50% 50% 8%;
+  transform: rotate(-45deg);
+  background: linear-gradient(135deg, #4ed7ff, #1f7aff);
+  border: 3px solid #ffffff;
+  box-shadow: 0 10px 24px rgba(31, 122, 255, 0.45);
+}
+
+.map-facility-marker__dot::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ffffff;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.map-facility-label {
+  padding: 6px 10px;
+  border-radius: 12px;
+  color: #f5fbff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.1;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+  background: linear-gradient(180deg, rgba(9, 26, 44, 0.92), rgba(7, 20, 34, 0.9));
+  border: 0;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(10px);
+}
+
+.amap-marker-label {
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.map-search-marker {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+}
+
+.map-search-marker__dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff8c5a, #ff4d4f);
+  border: 2px solid #ffffff;
+  box-shadow: 0 6px 18px rgba(255, 77, 79, 0.42);
+}
+
+.map-search-label {
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: #fff6f2;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  background: rgba(61, 17, 17, 0.84);
+  border: 1px solid rgba(255, 128, 128, 0.28);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.24);
+}
+
+.map-center-marker {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+}
+
+.map-center-marker__dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ffb357, #ff6a3d);
+  border: 3px solid #ffffff;
+  box-shadow: 0 10px 22px rgba(255, 106, 61, 0.38);
+}
+
+.map-spot-card {
+  position: absolute;
+  z-index: 4;
+  width: min(260px, calc(100% - 32px));
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid rgba(102, 189, 255, 0.3);
+  background: linear-gradient(180deg, rgba(11, 32, 52, 0.95), rgba(8, 23, 39, 0.96));
+  box-shadow:
+    0 0 0 1px rgba(33, 119, 153, 0.2),
+    0 18px 40px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px);
+}
+
+.map-spot-card__cover {
+  height: 104px;
+  overflow: hidden;
+}
+
+.map-spot-card__cover img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.map-spot-card__body {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.map-spot-card__title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.map-spot-card__title-row h3 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.2;
+  color: #f7fbff;
+}
+
+.map-spot-card__category {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(255, 131, 82, 0.2);
+  color: #ffb378;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.map-spot-card__meta {
+  display: grid;
+  gap: 3px;
+  color: rgba(219, 236, 255, 0.82);
+  font-size: 11px;
+}
+
+.map-spot-card__meta strong {
+  color: #ffffff;
+  font-size: 12px;
+}
+
+.map-spot-card__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  border: 0;
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  background: linear-gradient(135deg, #3294ff, #1f6fff);
+  box-shadow: 0 10px 24px rgba(31, 111, 255, 0.34);
+}
+
 /* 分类竖向侧边栏 */
 .map-sidebar {
   position: absolute;
@@ -68,6 +251,13 @@
   transition: background 0.18s ease, color 0.18s ease;
 }
 
+.map-sidebar__item span:last-child {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .map-sidebar__item:hover {
   background: rgba(255, 255, 255, 0.06);
 }
@@ -81,6 +271,11 @@
 .map-sidebar__icon {
   font-size: 18px;
   line-height: 1;
+}
+
+.map-sidebar__item--more .map-sidebar__icon {
+  font-size: 20px;
+  font-weight: 800;
 }
 
 /* 顶部搜索框 */
@@ -745,5 +940,8 @@
   }
   .map-page__main {
     height: 560px;
+  }
+  .map-spot-card {
+    width: min(320px, calc(100% - 32px));
   }
 }
