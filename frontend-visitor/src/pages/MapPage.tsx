@@ -98,8 +98,8 @@ function formatOpenHours(openTime?: string | null, closeTime?: string | null) {
   return `${openTime ?? '--:--:--'} - ${closeTime ?? '--:--:--'}`
 }
 
-function buildMarkerContent(className: string) {
-  if (className === 'map-facility-marker') {
+function buildMarkerContent(kind: 'facility' | 'center' | 'search') {
+  if (kind === 'facility') {
     return `
       <div style="position:relative;width:30px;height:40px;display:flex;align-items:flex-start;justify-content:center;">
         <div style="width:24px;height:24px;border-radius:50% 50% 50% 8%;transform:rotate(-45deg);background:linear-gradient(135deg,#4ed7ff,#1f7aff);border:3px solid #ffffff;box-shadow:0 10px 24px rgba(31,122,255,0.45);position:relative;">
@@ -109,7 +109,7 @@ function buildMarkerContent(className: string) {
     `
   }
 
-  if (className === 'map-center-marker') {
+  if (kind === 'center') {
     return `
       <div style="position:relative;width:24px;height:24px;display:grid;place-items:center;">
         <div style="width:18px;height:18px;border-radius:50%;background:linear-gradient(135deg,#ffb357,#ff6a3d);border:3px solid #ffffff;box-shadow:0 10px 22px rgba(255,106,61,0.38);"></div>
@@ -117,23 +117,31 @@ function buildMarkerContent(className: string) {
     `
   }
 
-  if (className === 'map-search-marker') {
-    return `
-      <div style="position:relative;width:18px;height:18px;display:grid;place-items:center;">
-        <div style="width:14px;height:14px;border-radius:50%;background:linear-gradient(135deg,#ff8c5a,#ff4d4f);border:2px solid #ffffff;box-shadow:0 6px 18px rgba(255,77,79,0.42);"></div>
-      </div>
-    `
-  }
-
   return `
-    <div class="${className}">
-      <span class="${className}__dot"></span>
+    <div style="position:relative;width:18px;height:18px;display:grid;place-items:center;">
+      <div style="width:14px;height:14px;border-radius:50%;background:linear-gradient(135deg,#ff8c5a,#ff4d4f);border:2px solid #ffffff;box-shadow:0 6px 18px rgba(255,77,79,0.42);"></div>
     </div>
   `
 }
 
 function toValidFacilities(items: ScenicFacility[]) {
   return items.filter((item) => Number.isFinite(Number(item.longitude)) && Number.isFinite(Number(item.latitude)))
+}
+
+function buildFallbackCategories(facilities: ScenicFacility[]): ScenicCategory[] {
+  const categoryMap = new Map<number, ScenicCategory>()
+
+  facilities.forEach((facility) => {
+    if (!categoryMap.has(facility.categoryId)) {
+      categoryMap.set(facility.categoryId, {
+        id: facility.categoryId,
+        name: facility.categoryName,
+        sortOrder: categoryMap.size,
+      })
+    }
+  })
+
+  return Array.from(categoryMap.values())
 }
 
 export function MapPage({ onLogout }: Props) {
@@ -224,6 +232,7 @@ export function MapPage({ onLogout }: Props) {
         setCategories(nextCategories)
       } catch (error) {
         console.warn('load map data failed', error)
+        setSpots([])
         setFacilities([])
         setCategories([])
       }
@@ -285,7 +294,7 @@ export function MapPage({ onLogout }: Props) {
           title: '景区中心',
           anchor: 'bottom-center',
           offset: new AMap.Pixel(0, -6),
-          content: buildMarkerContent('map-center-marker'),
+          content: buildMarkerContent('center'),
         })
         map.add(scenicCenterMarkerRef.current)
 
@@ -371,7 +380,7 @@ export function MapPage({ onLogout }: Props) {
         title: facility.name,
         anchor: 'bottom-center',
         offset: new AMap.Pixel(0, -10),
-        content: buildMarkerContent('map-facility-marker'),
+        content: buildMarkerContent('facility'),
         label: {
           content: `<div class="map-facility-label">${facility.name}</div>`,
           direction: 'right',
@@ -470,7 +479,7 @@ export function MapPage({ onLogout }: Props) {
           title: poi.name,
           anchor: 'bottom-center',
           offset: new window.AMap.Pixel(0, -6),
-          content: buildMarkerContent('map-search-marker'),
+          content: buildMarkerContent('search'),
           label: {
             content: `<div class="map-search-label">${poi.name}</div>`,
             direction: 'right',
@@ -528,27 +537,30 @@ export function MapPage({ onLogout }: Props) {
             ) : null}
 
             <aside className="map-sidebar" aria-label="分类筛选">
-              {sidebarCategories.map((category) => (
-                <button
-                  key={category.key}
-                  type="button"
-                  className={`map-sidebar__item${activeCategory === (category.categoryId ? String(category.categoryId) : category.key) ? ' map-sidebar__item--active' : ''}${category.isMore ? ' map-sidebar__item--more' : ''}`}
-                  onClick={() => {
-                    if (category.isMore) {
-                      const pageSize = MAX_SIDEBAR_BUTTONS - FIXED_SIDEBAR_BUTTONS - MORE_BUTTON_SLOTS
-                      const pageCount = Math.max(1, Math.ceil(categories.length / pageSize))
-                      setCategoryPage((current) => (current + 1) % pageCount)
-                      return
-                    }
-                    setActiveCategory(category.categoryId ? String(category.categoryId) : category.key)
-                  }}
-                >
-                  <span className="map-sidebar__icon" aria-hidden>
-                    {category.icon}
-                  </span>
-                  <span>{category.label}</span>
-                </button>
-              ))}
+              {sidebarCategories.map((category) => {
+                const currentKey = category.categoryId ? String(category.categoryId) : category.key
+                return (
+                  <button
+                    key={category.key}
+                    type="button"
+                    className={`map-sidebar__item${activeCategory === currentKey ? ' map-sidebar__item--active' : ''}${category.isMore ? ' map-sidebar__item--more' : ''}`}
+                    onClick={() => {
+                      if (category.isMore) {
+                        const pageSize = MAX_SIDEBAR_BUTTONS - FIXED_SIDEBAR_BUTTONS - MORE_BUTTON_SLOTS
+                        const pageCount = Math.max(1, Math.ceil(categories.length / pageSize))
+                        setCategoryPage((current) => (current + 1) % pageCount)
+                        return
+                      }
+                      setActiveCategory(currentKey)
+                    }}
+                  >
+                    <span className="map-sidebar__icon" aria-hidden>
+                      {category.icon}
+                    </span>
+                    <span>{category.label}</span>
+                  </button>
+                )
+              })}
             </aside>
 
             <div className="map-search">
@@ -686,20 +698,4 @@ export function MapPage({ onLogout }: Props) {
       </section>
     </main>
   )
-}
-
-function buildFallbackCategories(facilities: ScenicFacility[]): ScenicCategory[] {
-  const categoryMap = new Map<number, ScenicCategory>()
-
-  facilities.forEach((facility) => {
-    if (!categoryMap.has(facility.categoryId)) {
-      categoryMap.set(facility.categoryId, {
-        id: facility.categoryId,
-        name: facility.categoryName,
-        sortOrder: categoryMap.size,
-      })
-    }
-  })
-
-  return Array.from(categoryMap.values())
 }
