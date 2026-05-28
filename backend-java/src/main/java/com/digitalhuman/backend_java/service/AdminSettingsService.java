@@ -7,6 +7,7 @@ import com.digitalhuman.backend_java.dto.AdminProviderConfigDto;
 import com.digitalhuman.backend_java.dto.AdminModelSettingsDto;
 import com.digitalhuman.backend_java.dto.AdminModelTestRequestDto;
 import com.digitalhuman.backend_java.dto.AdminModelTestResponseDto;
+import com.digitalhuman.backend_java.dto.AgentCatalogItemDto;
 import com.digitalhuman.backend_java.dto.AgentCatalogResponseDto;
 import com.digitalhuman.backend_java.dto.AgentModelBindingItemDto;
 import com.digitalhuman.backend_java.dto.AgentModelBindingPayloadDto;
@@ -22,6 +23,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -478,7 +480,7 @@ public class AdminSettingsService {
             }
             return objectMapper.readValue(response.body().string(), AgentCatalogResponseDto.class);
         } catch (Exception exception) {
-            throw new IllegalArgumentException("读取智能体目录失败", exception);
+            return scanLocalAgentCatalog();
         }
     }
 
@@ -489,11 +491,42 @@ public class AdminSettingsService {
                 .build();
         try (Response response = httpClient.newCall(request).execute()) {
             if (response.body() == null) {
-                throw new IOException("ai-service health returned empty body");
+                return objectMapper.readTree("{\"status\":\"degraded\",\"message\":\"ai-service health returned empty body\"}");
             }
-            return objectMapper.readTree(response.body().string());
+            String body = response.body().string();
+            if (body == null || body.isBlank()) {
+                return objectMapper.readTree("{\"status\":\"degraded\",\"message\":\"ai-service health returned blank body\"}");
+            }
+            try {
+                JsonNode parsed = objectMapper.readTree(body);
+                if (parsed != null && !parsed.isNull()) {
+                    return parsed;
+                }
+            } catch (Exception ignored) {
+                // Fallback to wrapped text payload below.
+            }
+            String escaped = body
+                    .replace("\\", "\\\\")
+                    .replace("\"", "\\\"")
+                    .replace("\n", "\\n")
+                    .replace("\r", "\\r");
+            int code = response.code();
+            return objectMapper.readTree(
+                    "{\"status\":\"degraded\",\"httpStatus\":" + code + ",\"message\":\"ai-service health returned non-json body\",\"raw\":\"" + escaped + "\"}"
+            );
         } catch (Exception exception) {
-            throw new IllegalArgumentException("读取 ai-service 健康状态失败", exception);
+            try {
+                String escaped = String.valueOf(exception.getMessage())
+                        .replace("\\", "\\\\")
+                        .replace("\"", "\\\"")
+                        .replace("\n", "\\n")
+                        .replace("\r", "\\r");
+                return objectMapper.readTree(
+                        "{\"status\":\"down\",\"message\":\"读取 ai-service 健康状态失败\",\"error\":\"" + escaped + "\"}"
+                );
+            } catch (Exception secondary) {
+                throw new IllegalArgumentException("读取 ai-service 健康状态失败", exception);
+            }
         }
     }
 
@@ -621,6 +654,51 @@ public class AdminSettingsService {
         if (timeout < 1 || timeout > 600) {
             throw new IllegalArgumentException("智能体 " + agent + " 的 timeoutSeconds 必须在 1-600 之间");
         }
+    }
+
+    private AgentCatalogResponseDto scanLocalAgentCatalog() {
+        Path agentsRoot = AI_SERVICE_ROOT.resolve("agents");
+        List<AgentCatalogItemDto> items = new ArrayList<>();
+        if (Files.isDirectory(agentsRoot)) {
+            try (var stream = Files.list(agentsRoot)) {
+                stream
+                        .filter(Files::isDirectory)
+                        .filter(path -> {
+                            String name = path.getFileName().toString();
+                            return name.endsWith("_agent");
+                        })
+                        .sorted((left, right) -> left.getFileName().toString().compareToIgnoreCase(right.getFileName().toString()))
+                        .forEach(path -> {
+                            String name = path.getFileName().toString();
+                            Path skill = path.resolve("SKILL.md");
+                            Path soul = path.resolve("SOUL.md");
+                            Path agentPy = path.resolve("agent.py");
+                            if (!Files.exists(skill) || !Files.exists(soul) || !Files.exists(agentPy)) {
+                                return;
+                            }
+                            AgentCatalogItemDto dto = new AgentCatalogItemDto();
+                            dto.setName(name);
+                            dto.setSkill("agents/" + name + "/SKILL.md");
+                            dto.setSoul("agents/" + name + "/SOUL.md");
+                            dto.setCategoryHint(guessAgentCategory(name));
+                            items.add(dto);
+                        });
+            } catch (Exception ignored) {
+                // Return what we can.
+            }
+        }
+
+        AgentCatalogResponseDto response = new AgentCatalogResponseDto();
+        response.setStatus("ok");
+        response.setAgents(items);
+        return response;
+    }
+
+    private String guessAgentCategory(String agentName) {
+        return switch (agentName) {
+            case "travel_analytics_agent" -> "multimodal";
+            default -> "chat";
+        };
     }
 
     private record AiModelTestRequest(String provider, String category, String modelId) {
