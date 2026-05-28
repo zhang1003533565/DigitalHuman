@@ -41,7 +41,6 @@ import ModelManualPage from './settings/ModelManualPage'
 import MultimodalConfigPage from './settings/MultimodalConfigPage'
 import VisionConfigPage from './settings/VisionConfigPage'
 import VoiceConfigPage from './settings/VoiceConfigPage'
-import SpotDrawer from './scenic/SpotAddPage'
 import SpotCategoryPage from './scenic/SpotCategoryPage'
 import FacilityListPage from './scenic/FacilityListPage'
 import TravelAnalyticsPage from './scenic/TravelAnalyticsPage'
@@ -2207,7 +2206,6 @@ function renderPanel(activeKey: MenuKey) {
 }
 
 export function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: () => void }) {
-  const [spotDrawerOpen, setSpotDrawerOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
   const activeKey = getMenuKeyFromPath(location.pathname)
@@ -2220,16 +2218,6 @@ export function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: (
 
   return (
     <Layout className="admin-shell">
-      <SpotDrawer
-        open={spotDrawerOpen}
-        onClose={() => setSpotDrawerOpen(false)}
-        title="新增景点"
-        actionText="发布景点"
-        onAction={() => {
-          message.success('发布成功')
-          setSpotDrawerOpen(false)
-        }}
-      />
       <AdminSidebar
         activeKey={activeKey}
         displayName={user.displayName}
@@ -2239,9 +2227,7 @@ export function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: (
       />
       <Layout>
         <Content className={activeKey === 'travel-analytics' ? 'admin-content admin-content--fullscreen-table' : 'admin-content'}>
-          {activeKey === 'facility-list'
-            ? <FacilityListPage onAddFacility={() => setSpotDrawerOpen(true)} />
-            : renderPanel(activeKey)}
+          {renderPanel(activeKey)}
         </Content>
       </Layout>
     </Layout>

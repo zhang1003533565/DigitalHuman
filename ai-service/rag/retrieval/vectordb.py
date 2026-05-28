@@ -72,13 +72,14 @@ class QdrantVectorStore:
             raise RuntimeError(f"Qdrant 写入失败，请确认向量库已启动并可访问：{exc}") from exc
 
     def search(self, query_vector: list[float], limit: int, metadata_filter: dict[str, object] | None = None) -> list[ChunkRecord]:
-        points = self.client.search(
+        response = self.client.query_points(
             collection_name=self.collection_name,
-            query_vector=query_vector,
+            query=query_vector,
             limit=limit,
             query_filter=build_metadata_filter(metadata_filter),
             with_payload=True,
         )
+        points = response.points
         results: list[ChunkRecord] = []
         for point in points:
             payload = dict(point.payload or {})

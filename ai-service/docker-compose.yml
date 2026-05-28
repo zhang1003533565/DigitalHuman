@@ -17,7 +17,7 @@ services:
   ai-service:
     build:
       context: .
-      dockerfile: ai-service/Dockerfile
+      dockerfile: Dockerfile
     container_name: digitalhuman-ai-service
     depends_on:
       qdrant:

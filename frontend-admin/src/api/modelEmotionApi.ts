@@ -60,29 +60,6 @@ export type ModelAction = {
   enabled: boolean;
 };
 
-export type Emotion = {
-  id: number;
-  emotionKey: string;
-  emotionName: string;
-  emotionIcon?: string;
-  sortOrder: number;
-  enabled: boolean;
-  voicePromptTemplate?: string;
-};
-
-export type ModelEmotionAction = {
-  id: number;
-  priority: number;
-  action: ModelAction;
-};
-
-export type ModelEmotion = {
-  id: number;
-  emotion: Emotion;
-  enabled: boolean;
-  emotionActions: ModelEmotionAction[];
-};
-
 export type DigitalHumanModel = {
   id: number;
   modelKey: string;
@@ -92,7 +69,7 @@ export type DigitalHumanModel = {
   updatedAt?: string;
 };
 
-export type ActionRuleType = 'MOUSE' | 'KEYWORD';
+export type ActionRuleType = 'MOUSE' | 'KEYWORD' | 'IDLE';
 
 export type ActionTriggerRule = {
   id?: number;
@@ -111,7 +88,6 @@ export type ActionTriggerRule = {
 export type ModelDetail = DigitalHumanModel & {
   allActions: ModelAction[];
   enabledActions: ModelAction[];
-  emotions: ModelEmotion[];
 };
 
 export type ActionTriggerConfig = {
@@ -119,6 +95,7 @@ export type ActionTriggerConfig = {
   actions: ModelAction[];
   mouseRules: ActionTriggerRule[];
   textRules: ActionTriggerRule[];
+  idleRules: ActionTriggerRule[];
 };
 
 export const modelEmotionApi = {
@@ -140,7 +117,7 @@ export const modelEmotionApi = {
 
   getTriggerConfig: (id: number) => fetchJson<ActionTriggerConfig>(`${API_BASE}/models/${id}/trigger-config`),
 
-  saveTriggerConfig: (id: number, data: Pick<ActionTriggerConfig, 'mouseRules' | 'textRules'>) => fetchJson<ActionTriggerConfig>(
+  saveTriggerConfig: (id: number, data: Pick<ActionTriggerConfig, 'mouseRules' | 'textRules' | 'idleRules'>) => fetchJson<ActionTriggerConfig>(
     `${API_BASE}/models/${id}/trigger-config`,
     {
       method: 'PUT',
@@ -148,55 +125,4 @@ export const modelEmotionApi = {
     },
   ),
 
-  getEmotions: () => fetchJson<Emotion[]>(`${API_BASE}/emotions`),
-
-  createEmotion: (data: {
-    emotionKey: string;
-    emotionName: string;
-    emotionIcon?: string;
-    sortOrder?: number;
-    voicePromptTemplate?: string;
-  }) => fetchJson<Emotion>(`${API_BASE}/emotions`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }),
-
-  updateEmotion: (id: number, data: Record<string, unknown>) => fetchJson<Emotion>(`${API_BASE}/emotions/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  }),
-
-  deleteEmotion: (id: number) => fetchJson<{ success: boolean }>(`${API_BASE}/emotions/${id}`, { method: 'DELETE' }),
-
-  getModelEmotions: (modelId: number) => fetchJson<ModelEmotion[]>(`${API_BASE}/models/${modelId}/emotions`),
-
-  addModelEmotion: (modelId: number, emotionId: number) => fetchJson<ModelEmotion>(
-    `${API_BASE}/models/${modelId}/emotions`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ emotionId }),
-    },
-  ),
-
-  removeModelEmotion: (modelId: number, emotionId: number) => fetchJson<{ success: boolean }>(
-    `${API_BASE}/models/${modelId}/emotions/${emotionId}`,
-    { method: 'DELETE' },
-  ),
-
-  getEmotionActions: (modelEmotionId: number) => fetchJson<ModelEmotionAction[]>(
-    `${API_BASE}/model-emotions/${modelEmotionId}/actions`,
-  ),
-
-  addEmotionAction: (modelEmotionId: number, modelActionId: number, priority = 0) => fetchJson<ModelEmotionAction>(
-    `${API_BASE}/model-emotions/${modelEmotionId}/actions`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ modelActionId, priority }),
-    },
-  ),
-
-  removeEmotionAction: (modelEmotionId: number, emotionActionId: number) => fetchJson<{ success: boolean }>(
-    `${API_BASE}/model-emotions/${modelEmotionId}/actions/${emotionActionId}`,
-    { method: 'DELETE' },
-  ),
 };

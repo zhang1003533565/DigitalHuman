@@ -1,5 +1,8 @@
 package com.digitalhuman.backend_java.config;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
@@ -34,5 +37,23 @@ public class WebConfig implements WebMvcConfigurer {
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         registry.addResourceHandler("/api/tts/audio/**")
                 .addResourceLocations("file:tts/");
+        Path live2dRoot = resolveLive2dRoot();
+        if (Files.isDirectory(live2dRoot)) {
+            registry.addResourceHandler("/live2d/**")
+                    .addResourceLocations(live2dRoot.toUri().toString());
+        }
+    }
+
+    private Path resolveLive2dRoot() {
+        Path current = Path.of("").toAbsolutePath();
+        Path candidate = current.resolve("frontend-visitor").resolve("public").resolve("live2d");
+        if (Files.isDirectory(candidate)) {
+            return candidate;
+        }
+        Path parent = current.getParent();
+        if (parent != null) {
+            return parent.resolve("frontend-visitor").resolve("public").resolve("live2d");
+        }
+        return candidate;
     }
 }

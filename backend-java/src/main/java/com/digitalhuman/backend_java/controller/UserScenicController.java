@@ -1,7 +1,10 @@
 package com.digitalhuman.backend_java.controller;
 
+import com.digitalhuman.backend_java.dto.FacilityCategoryDto;
+import com.digitalhuman.backend_java.dto.ScenicFacilityDto;
 import com.digitalhuman.backend_java.dto.ScenicRouteDto;
 import com.digitalhuman.backend_java.dto.ScenicSpotDto;
+import com.digitalhuman.backend_java.service.AdminScenicFacilityService;
 import com.digitalhuman.backend_java.service.GuideService;
 import com.digitalhuman.backend_java.service.ScenicRouteService;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,15 +20,30 @@ public class UserScenicController {
 
     private final GuideService guideService;
     private final ScenicRouteService scenicRouteService;
+    private final AdminScenicFacilityService adminScenicFacilityService;
 
-    public UserScenicController(GuideService guideService, ScenicRouteService scenicRouteService) {
+    public UserScenicController(
+            GuideService guideService,
+            ScenicRouteService scenicRouteService,
+            AdminScenicFacilityService adminScenicFacilityService) {
         this.guideService = guideService;
         this.scenicRouteService = scenicRouteService;
+        this.adminScenicFacilityService = adminScenicFacilityService;
     }
 
     @GetMapping("/spots")
     public List<ScenicSpotDto> getSpots() {
         return guideService.getAllSpots();
+    }
+
+    @GetMapping("/facilities")
+    public List<ScenicFacilityDto> getFacilities() {
+        return adminScenicFacilityService.getFacilities();
+    }
+
+    @GetMapping("/categories")
+    public List<FacilityCategoryDto> getCategories() {
+        return adminScenicFacilityService.getCategories();
     }
 
     @GetMapping("/routes/recommend")

@@ -36,9 +36,6 @@ public class DigitalHumanModel {
     @OneToMany(mappedBy = "model", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ModelAction> actions;
 
-    @OneToMany(mappedBy = "model", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<ModelEmotion> emotions;
-
     public DigitalHumanModel() {
     }
 
@@ -123,13 +120,5 @@ public class DigitalHumanModel {
 
     public void setActions(List<ModelAction> actions) {
         this.actions = actions;
-    }
-
-    public List<ModelEmotion> getEmotions() {
-        return emotions;
-    }
-
-    public void setEmotions(List<ModelEmotion> emotions) {
-        this.emotions = emotions;
     }
 }

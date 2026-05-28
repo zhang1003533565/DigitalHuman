@@ -9,6 +9,7 @@ public class ActionTriggerConfigDto {
     private List<Map<String, Object>> actions = new ArrayList<>();
     private List<ActionTriggerRuleDto> mouseRules = new ArrayList<>();
     private List<ActionTriggerRuleDto> textRules = new ArrayList<>();
+    private List<ActionTriggerRuleDto> idleRules = new ArrayList<>();
 
     public Map<String, Object> getModel() {
         return model;
@@ -40,5 +41,13 @@ public class ActionTriggerConfigDto {
 
     public void setTextRules(List<ActionTriggerRuleDto> textRules) {
         this.textRules = textRules == null ? new ArrayList<>() : textRules;
+    }
+
+    public List<ActionTriggerRuleDto> getIdleRules() {
+        return idleRules;
+    }
+
+    public void setIdleRules(List<ActionTriggerRuleDto> idleRules) {
+        this.idleRules = idleRules == null ? new ArrayList<>() : idleRules;
     }
 }

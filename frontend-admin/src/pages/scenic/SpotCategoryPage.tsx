@@ -1,209 +1,263 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Button,
   Card,
+  ConfigProvider,
+  Drawer,
   Form,
   Input,
   InputNumber,
-  Radio,
-  Select,
+  Pagination,
+  Popconfirm,
+  Space,
   Table,
-  Tag,
-  Row,
-  Col,
+  message,
 } from 'antd'
-import { SearchOutlined } from '@ant-design/icons'
 import type { TableColumnsType } from 'antd'
+import zhCN from 'antd/locale/zh_CN'
+import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import {
+  createScenicCategory,
+  deleteScenicCategory,
+  getScenicCategories,
+  type ScenicCategory,
+  updateScenicCategory,
+} from '../../api/scenic'
 
-type CategoryRow = {
-  key: string
+type CategoryFormValues = {
   name: string
-  code: string
-  sort: number
-  spotCount: number
-  status: '启用' | '停用'
-  createdAt: string
+  sortOrder?: number
 }
 
-const mockData: CategoryRow[] = [
-  { key: '1', name: '历史文化', code: 'CAT001', sort: 1, spotCount: 28, status: '启用', createdAt: '2024-05-10 10:23' },
-  { key: '2', name: '自然风光', code: 'CAT002', sort: 2, spotCount: 32, status: '启用', createdAt: '2024-05-10 10:25' },
-  { key: '3', name: '亲子研学', code: 'CAT003', sort: 3, spotCount: 18, status: '启用', createdAt: '2024-05-11 09:15' },
-  { key: '4', name: '网红打卡', code: 'CAT004', sort: 4, spotCount: 22, status: '启用', createdAt: '2024-05-11 09:18' },
-  { key: '5', name: '夜游演艺', code: 'CAT005', sort: 5, spotCount: 12, status: '启用', createdAt: '2024-05-12 14:32' },
-]
+export default function SpotCategoryPage() {
+  const [form] = Form.useForm<CategoryFormValues>()
+  const [categories, setCategories] = useState<ScenicCategory[]>([])
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [keyword, setKeyword] = useState('')
+  const [editingCategory, setEditingCategory] = useState<ScenicCategory | null>(null)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
 
-const columns: TableColumnsType<CategoryRow> = [
-  { title: '分类名称', dataIndex: 'name', width: 120 },
-  { title: '分类编码', dataIndex: 'code', width: 120 },
-  { title: '排序', dataIndex: 'sort', width: 70, align: 'center' },
-  { title: '关联景点数', dataIndex: 'spotCount', width: 100, align: 'center' },
-  {
-    title: '状态',
-    dataIndex: 'status',
-    width: 80,
-    render: (status: string) => (
-      <Tag color={status === '启用' ? 'blue' : 'default'}>{status}</Tag>
-    ),
-  },
-  { title: '创建时间', dataIndex: 'createdAt', width: 160 },
-  {
-    title: '操作',
-    width: 160,
-    render: () => (
-      <div className="spot-cat__actions">
-        <a className="spot-cat__action-link">查看</a>
-        <a className="spot-cat__action-link">编辑</a>
-        <a className="spot-cat__action-link spot-cat__action-link--danger">删除</a>
-      </div>
-    ),
-  },
-]
+  async function loadCategories() {
+    setLoading(true)
+    try {
+      setCategories(await getScenicCategories())
+    } catch {
+      message.error('加载分类失败')
+    } finally {
+      setLoading(false)
+    }
+  }
 
-function SpotCategoryPage() {
-  const [form] = Form.useForm()
-  const [showForm, setShowForm] = useState(true)
+  useEffect(() => {
+    void loadCategories()
+  }, [])
 
-  const handleCancel = () => {
+  const filteredCategories = useMemo(() => {
+    const normalized = keyword.trim().toLowerCase()
+    if (!normalized) {
+      return categories
+    }
+    return categories.filter((item) => item.name.toLowerCase().includes(normalized))
+  }, [categories, keyword])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [keyword, categories.length])
+
+  const pagedCategories = useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return filteredCategories.slice(start, start + pageSize)
+  }, [currentPage, filteredCategories, pageSize])
+
+  const nextSortOrder = useMemo(() => {
+    if (!categories.length) {
+      return 1
+    }
+    return Math.max(...categories.map((item) => item.sortOrder ?? 0)) + 1
+  }, [categories])
+
+  const openCreateDrawer = () => {
+    setEditingCategory(null)
+    form.resetFields()
+    form.setFieldsValue({ sortOrder: nextSortOrder })
+    setDrawerOpen(true)
+  }
+
+  const openEditDrawer = (record: ScenicCategory) => {
+    setEditingCategory(record)
+    form.setFieldsValue({
+      name: record.name,
+      sortOrder: record.sortOrder,
+    })
+    setDrawerOpen(true)
+  }
+
+  const closeDrawer = () => {
+    setDrawerOpen(false)
+    setEditingCategory(null)
     form.resetFields()
   }
 
-  const handleSave = () => {
-    // 纯前端，暂不提交
+  const handleSubmit = async (values: CategoryFormValues) => {
+    setSaving(true)
+    try {
+      if (editingCategory) {
+        await updateScenicCategory(editingCategory.id, values)
+        message.success('分类更新成功')
+      } else {
+        await createScenicCategory(values)
+        message.success('分类创建成功')
+      }
+      closeDrawer()
+      await loadCategories()
+    } catch (error) {
+      if (error instanceof Error) {
+        message.error(error.message)
+      } else {
+        message.error('保存分类失败')
+      }
+    } finally {
+      setSaving(false)
+    }
   }
 
+  const handleDelete = async (record: ScenicCategory) => {
+    try {
+      await deleteScenicCategory(record.id)
+      message.success('分类删除成功')
+      if (editingCategory?.id === record.id) {
+        closeDrawer()
+      }
+      await loadCategories()
+    } catch (error) {
+      if (error instanceof Error) {
+        message.error(error.message)
+      } else {
+        message.error('删除分类失败')
+      }
+    }
+  }
+
+  const columns: TableColumnsType<ScenicCategory> = [
+    { title: '排序值', dataIndex: 'sortOrder', width: 160 },
+    { title: '分类名称', dataIndex: 'name', width: 320 },
+    {
+      title: '操作',
+      width: 180,
+      render: (_, record) => (
+        <Space size="middle">
+          <Button type="link" icon={<EditOutlined />} onClick={() => openEditDrawer(record)}>
+            编辑
+          </Button>
+          <Popconfirm
+            title="确认删除该分类吗？"
+            description="如果该分类下仍有关联设施，后端会阻止删除。"
+            onConfirm={() => void handleDelete(record)}
+            okText="删除"
+            cancelText="取消"
+          >
+            <Button type="link" danger icon={<DeleteOutlined />}>
+              删除
+            </Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ]
+
   return (
-    <div className="spot-cat">
-      <style>{styles}</style>
+    <ConfigProvider locale={zhCN}>
+      <div className="spot-cat">
+        <style>{styles}</style>
+        <h1 className="spot-cat__title">景点分类</h1>
 
-      {/* 页面标题 */}
-      <h1 className="spot-cat__title">景点分类管理</h1>
+        <Card className="spot-cat__card">
+          <div className="spot-cat__toolbar">
+            <Input
+              value={keyword}
+              onChange={(event) => setKeyword(event.target.value)}
+              placeholder="搜索分类名称"
+              allowClear
+              style={{ width: 260 }}
+            />
+            <Button icon={<ReloadOutlined />} onClick={() => void loadCategories()} loading={loading}>
+              刷新
+            </Button>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              className="spot-cat__btn-add"
+              onClick={openCreateDrawer}
+            >
+              新增分类
+            </Button>
+          </div>
 
-      <Row gutter={16} className="spot-cat__row">
-        {/* 左侧：搜索 + 表格 */}
-        <Col span={16} className="spot-cat__col">
-          <Card className="spot-cat__card spot-cat__card--main">
-            {/* 搜索栏 */}
-            <div className="spot-cat__filter-bar">
-              <div className="spot-cat__filter-item">
-                <span className="spot-cat__filter-label">分类名称</span>
-                <Input
-                  placeholder="请输入分类名称"
-                  suffix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
-                  style={{ width: 200 }}
-                />
-              </div>
-              <div className="spot-cat__filter-item">
-                <span className="spot-cat__filter-label">状态</span>
-                <Select
-                  placeholder="全部状态"
-                  defaultValue="all"
-                  style={{ width: 140 }}
-                  options={[
-                    { value: 'all', label: '全部状态' },
-                    { value: 'enabled', label: '启用' },
-                    { value: 'disabled', label: '停用' },
-                  ]}
-                />
-              </div>
-              <Button type="primary">查询</Button>
-              <Button>重置</Button>
-              <Button
-                type="primary"
-                className="spot-cat__btn-add"
-                onClick={() => setShowForm(true)}
-              >
-                新增分类
+          <Table
+            rowKey="id"
+            columns={columns}
+            dataSource={pagedCategories}
+            loading={loading}
+            pagination={false}
+            locale={{ emptyText: '暂无分类数据' }}
+          />
+
+          <div className="spot-cat__pagination">
+            <Pagination
+              current={currentPage}
+              pageSize={pageSize}
+              total={filteredCategories.length}
+              showSizeChanger
+              pageSizeOptions={['10', '20', '50']}
+              showTotal={(total) => `共 ${total} 条`}
+              onChange={(page, size) => {
+                setCurrentPage(page)
+                setPageSize(size)
+              }}
+              onShowSizeChange={(_, size) => {
+                setCurrentPage(1)
+                setPageSize(size)
+              }}
+            />
+          </div>
+        </Card>
+
+        <Drawer
+          title={editingCategory ? '编辑分类' : '新增分类'}
+          open={drawerOpen}
+          width={420}
+          onClose={closeDrawer}
+          destroyOnClose
+        >
+          <Form
+            form={form}
+            layout="vertical"
+            initialValues={{ sortOrder: nextSortOrder }}
+            onFinish={(values) => void handleSubmit(values)}
+          >
+            <Form.Item label="分类名称" name="name" rules={[{ required: true, message: '请输入分类名称' }]}>
+              <Input placeholder="例如：游客服务、卫生设施" />
+            </Form.Item>
+
+            <Form.Item label="排序值" name="sortOrder">
+              <InputNumber min={0} style={{ width: '100%' }} placeholder="默认 0" />
+            </Form.Item>
+
+            <div className="spot-cat__form-footer">
+              <Button onClick={closeDrawer}>
+                取消
+              </Button>
+              <Button type="primary" htmlType="submit" loading={saving}>
+                {editingCategory ? '保存修改' : '创建分类'}
               </Button>
             </div>
-
-            {/* 表格 */}
-            <Table
-              columns={columns}
-              dataSource={mockData}
-              pagination={{
-                total: 5,
-                pageSize: 10,
-                showTotal: (total) => `共 ${total} 条`,
-                showSizeChanger: true,
-                showQuickJumper: true,
-              }}
-              size="middle"
-            />
-          </Card>
-        </Col>
-
-        {/* 右侧：新增分类表单 */}
-        {showForm && (
-          <Col span={8} className="spot-cat__col">
-            <Card className="spot-cat__card spot-cat__card--side" title="新增分类">
-              <Form
-                form={form}
-                layout="vertical"
-                initialValues={{ sort: 1, status: 'enabled' }}
-              >
-                <Form.Item
-                  label="分类名称"
-                  name="name"
-                  required
-                >
-                  <Input placeholder="请输入分类名称" />
-                </Form.Item>
-
-                <Form.Item
-                  label="分类编码"
-                  name="code"
-                  required
-                >
-                  <Input placeholder="请输入分类编码 (如: CAT001)" />
-                </Form.Item>
-
-                <Form.Item
-                  label="排序"
-                  name="sort"
-                  required
-                >
-                  <InputNumber min={1} style={{ width: 140 }} />
-                </Form.Item>
-
-                <Form.Item
-                  label="父级分类（可选）"
-                  name="parentId"
-                >
-                  <Select
-                    placeholder="请选择父级分类"
-                    allowClear
-                    options={[
-                      { value: '1', label: '历史文化' },
-                      { value: '2', label: '自然风光' },
-                      { value: '3', label: '亲子研学' },
-                      { value: '4', label: '网红打卡' },
-                      { value: '5', label: '夜游演艺' },
-                    ]}
-                  />
-                </Form.Item>
-
-                <Form.Item
-                  label="状态"
-                  name="status"
-                  required
-                >
-                  <Radio.Group>
-                    <Radio value="enabled">启用</Radio>
-                    <Radio value="disabled">停用</Radio>
-                  </Radio.Group>
-                </Form.Item>
-
-                <div className="spot-cat__form-footer">
-                  <Button onClick={handleCancel}>取消</Button>
-                  <Button type="primary" onClick={handleSave}>保存分类</Button>
-                </div>
-              </Form>
-            </Card>
-          </Col>
-        )}
-      </Row>
-    </div>
+          </Form>
+        </Drawer>
+      </div>
+    </ConfigProvider>
   )
 }
 
@@ -221,129 +275,30 @@ const styles = `
   font-weight: 700;
   margin: 0 0 20px;
   color: #1f1f1f;
-  line-height: 1.2;
-}
-.spot-cat__row {
-  flex: 1 1 auto;
-  align-items: stretch;
-}
-.spot-cat__col {
-  display: flex;
 }
 .spot-cat__card {
+  width: 100%;
   border-radius: 12px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  width: 100%;
+}
+.spot-cat__toolbar {
   display: flex;
-  flex-direction: column;
-}
-.spot-cat__card :where(.ant-card-body) {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  padding: 24px 28px;
-}
-.spot-cat__card--main :where(.ant-table-wrapper) {
-  flex: 1 1 auto;
-}
-.spot-cat__card--side :where(.ant-card-head) {
-  padding: 16px 28px;
-  font-size: 18px;
-}
-.spot-cat__card--side :where(.ant-form-item-label) > label {
-  font-size: 15px;
-  height: 32px;
-}
-.spot-cat__card--side :where(.ant-input),
-.spot-cat__card--side :where(.ant-select-selector),
-.spot-cat__card--side :where(.ant-input-number) {
-  height: 40px;
-  font-size: 14px;
-}
-.spot-cat__card--side :where(.ant-select-selection-item),
-.spot-cat__card--side :where(.ant-select-selection-placeholder) {
-  line-height: 38px !important;
-}
-.spot-cat__card--side :where(.ant-input-number-input) {
-  height: 38px;
-}
-.spot-cat__filter-bar {
-  display: flex;
+  gap: 12px;
   align-items: center;
-  gap: 14px;
-  margin-bottom: 24px;
-  flex-wrap: wrap;
-}
-.spot-cat__filter-bar :where(.ant-btn) {
-  height: 38px;
-  padding: 0 20px;
-  font-size: 14px;
-}
-.spot-cat__filter-bar :where(.ant-input-affix-wrapper),
-.spot-cat__filter-bar :where(.ant-select-selector) {
-  height: 38px !important;
-}
-.spot-cat__filter-bar :where(.ant-select-selection-item),
-.spot-cat__filter-bar :where(.ant-select-selection-placeholder) {
-  line-height: 36px !important;
-}
-.spot-cat__filter-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.spot-cat__filter-label {
-  font-size: 14px;
-  color: #333;
-  white-space: nowrap;
+  margin-bottom: 20px;
 }
 .spot-cat__btn-add {
   margin-left: auto;
-  background: #1d2b4f !important;
-  border-color: #1d2b4f !important;
 }
-.spot-cat__btn-add:hover {
-  background: #2a3d6b !important;
-  border-color: #2a3d6b !important;
-}
-.spot-cat__actions {
+.spot-cat__pagination {
   display: flex;
-  gap: 12px;
-}
-.spot-cat__action-link {
-  color: #1677ff;
-  cursor: pointer;
-}
-.spot-cat__action-link:hover {
-  color: #4096ff;
-}
-.spot-cat__action-link--danger {
-  color: #ff4d4f;
-}
-.spot-cat__action-link--danger:hover {
-  color: #ff7875;
+  justify-content: flex-end;
+  margin-top: 20px;
 }
 .spot-cat__form-footer {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  margin-top: auto;
-  padding-top: 16px;
-}
-.spot-cat__form-footer :where(.ant-btn) {
-  height: 40px;
-  padding: 0 24px;
-  font-size: 15px;
-}
-.spot-cat :where(.ant-table-thead) > tr > th {
-  font-size: 14px;
-  padding: 14px 12px;
-  background: #fafbfc;
-}
-.spot-cat :where(.ant-table-tbody) > tr > td {
-  padding: 16px 12px;
-  font-size: 14px;
+  margin-top: 24px;
 }
 `
-
-export default SpotCategoryPage
