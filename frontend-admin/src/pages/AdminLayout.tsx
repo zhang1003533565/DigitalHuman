@@ -235,8 +235,19 @@ type AgentModelBindingPayload = {
   items: AgentModelBindingItem[]
 }
 
+type AgentHealthTestResponse = {
+  success: boolean
+  agent: string
+  message: string
+  detail?: string
+  provider?: string
+  model?: string
+  result?: string
+}
+
 type AgentCatalogItem = {
   name: string
+  displayName?: string
   soul: string
   skill: string
   categoryHint?: ModelCategory
@@ -1225,6 +1236,10 @@ function SettingsPanel() {
   const [providerConfigs, setProviderConfigs] = useState<ProviderConfig[]>([])
   const [agentBindings, setAgentBindings] = useState<AgentModelBindingItem[]>([])
   const [agentCatalog, setAgentCatalog] = useState<AgentCatalogItem[]>([])
+  const [testingAgent, setTestingAgent] = useState<string | null>(null)
+  const [agentTestModalOpen, setAgentTestModalOpen] = useState(false)
+  const [agentTestInput, setAgentTestInput] = useState<{ agent: string; task: string }>({ agent: '', task: '' })
+  const [agentTestResult, setAgentTestResult] = useState<AgentHealthTestResponse | null>(null)
   const [catalog, setCatalog] = useState<AdminModelCatalog>({
     embeddingModels: [],
     speechModels: [],
@@ -1376,6 +1391,35 @@ function SettingsPanel() {
 
   const updateBinding = (agent: string, patch: Partial<AgentModelBindingItem>) => {
     setAgentBindings((current) => current.map((item) => (item.agent === agent ? { ...item, ...patch } : item)))
+  }
+
+  async function testAgent(agent: string, task: string) {
+    setTestingAgent(agent)
+    try {
+      const response = await axios.post<AgentHealthTestResponse>('/api/admin/settings/agent-test', { agent, task })
+      setAgentTestResult(response.data)
+      if (response.data.success) {
+        message.success(`${response.data.message}：${agent}`)
+      } else {
+        message.warning(`${response.data.message}：${response.data.detail ?? ''}`)
+      }
+    } catch (error) {
+      const description = axios.isAxiosError(error)
+        ? error.response?.data?.message ?? '智能体测试失败'
+        : '智能体测试失败'
+      message.error(description)
+    } finally {
+      setTestingAgent(null)
+    }
+  }
+
+  const openAgentTestModal = (agent: string) => {
+    setAgentTestInput({
+      agent,
+      task: `请以${agent}身份执行一次简短测试，并返回结构化结果。`,
+    })
+    setAgentTestResult(null)
+    setAgentTestModalOpen(true)
   }
 
   useEffect(() => {
@@ -1714,9 +1758,15 @@ function SettingsPanel() {
                 {
                   title: '智能体',
                   dataIndex: 'agent',
-                  render: (value: string) => (
-                    <Tag color="blue">{value}</Tag>
-                  ),
+                  render: (value: string) => {
+                    const meta = agentCatalog.find((item) => item.name === value)
+                    return (
+                      <Space direction="vertical" size={2}>
+                        <Tag color="blue">{meta?.displayName || value}</Tag>
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>{value}</Typography.Text>
+                      </Space>
+                    )
+                  },
                 },
                 {
                   title: '模型分类',
@@ -1786,6 +1836,19 @@ function SettingsPanel() {
                     <Switch checked={value} onChange={(next) => updateBinding(row.agent, { enabled: next })} />
                   ),
                 },
+                {
+                  title: '测试',
+                  key: 'test',
+                  width: 100,
+                  render: (_, row: AgentModelBindingItem) => (
+                    <Button
+                      size="small"
+                      onClick={() => openAgentTestModal(row.agent)}
+                    >
+                      测试
+                    </Button>
+                  ),
+                },
               ]}
               expandable={{
                 expandedRowRender: (row) => {
@@ -1811,6 +1874,41 @@ function SettingsPanel() {
       <Card title="系统设置" extra={<Tag color="blue">左下角入口</Tag>} className="admin-settings-card">
         <Tabs activeKey={activeSettingsTab} onChange={setActiveSettingsTab} items={settingsTabs} />
       </Card>
+      <Modal
+        title="智能体任务测试"
+        open={agentTestModalOpen}
+        onCancel={() => setAgentTestModalOpen(false)}
+        onOk={() => void testAgent(agentTestInput.agent, agentTestInput.task)}
+        confirmLoading={testingAgent === agentTestInput.agent}
+        okText="执行测试"
+      >
+        <Form layout="vertical">
+          <Form.Item label="智能体">
+            <Input value={agentTestInput.agent} disabled />
+          </Form.Item>
+          <Form.Item label="测试任务">
+            <Input.TextArea
+              rows={5}
+              value={agentTestInput.task}
+              onChange={(event) => setAgentTestInput((current) => ({ ...current, task: event.target.value }))}
+              placeholder="输入要发给该智能体的任务"
+            />
+          </Form.Item>
+          {agentTestResult ? (
+            <Card size="small" title={agentTestResult.success ? '测试成功' : '测试失败'}>
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Typography.Text>消息：{agentTestResult.message}</Typography.Text>
+                {agentTestResult.provider ? <Typography.Text>Provider：{agentTestResult.provider}</Typography.Text> : null}
+                {agentTestResult.model ? <Typography.Text>模型：{agentTestResult.model}</Typography.Text> : null}
+                {agentTestResult.detail ? <Typography.Text type="secondary">详情：{agentTestResult.detail}</Typography.Text> : null}
+                {agentTestResult.result ? (
+                  <Input.TextArea value={agentTestResult.result} rows={8} readOnly />
+                ) : null}
+              </Space>
+            </Card>
+          ) : null}
+        </Form>
+      </Modal>
     </div>
   )
 }

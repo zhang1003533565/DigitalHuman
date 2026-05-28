@@ -8,6 +8,8 @@ import com.digitalhuman.backend_java.dto.AdminProviderConfigDto;
 import com.digitalhuman.backend_java.dto.AdminModelTestRequestDto;
 import com.digitalhuman.backend_java.dto.AdminModelTestResponseDto;
 import com.digitalhuman.backend_java.dto.AgentCatalogResponseDto;
+import com.digitalhuman.backend_java.dto.AgentHealthTestRequestDto;
+import com.digitalhuman.backend_java.dto.AgentHealthTestResponseDto;
 import com.digitalhuman.backend_java.dto.AgentModelBindingPayloadDto;
 import com.digitalhuman.backend_java.dto.RagLlmConfigDto;
 import com.digitalhuman.backend_java.dto.RagPromptConfigDto;
@@ -141,6 +143,11 @@ public class AdminSettingsController {
     @GetMapping("/agent-catalog")
     public AgentCatalogResponseDto getAgentCatalog() {
         return adminSettingsService.getAgentCatalog();
+    }
+
+    @PostMapping("/agent-test")
+    public AgentHealthTestResponseDto testAgent(@RequestBody AgentHealthTestRequestDto request) {
+        return adminSettingsService.testAgent(request);
     }
 
     @GetMapping("/ai-health")

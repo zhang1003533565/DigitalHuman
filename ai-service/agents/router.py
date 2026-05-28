@@ -11,6 +11,7 @@ from agents.model_binding_service import (
     get_agent_bindings,
     update_agent_bindings,
 )
+from agents.runtime_test_service import test_agent_runtime
 from agents.common.types import AgentContext
 from rag.config.settings import get_settings
 from rag.content.file_store import ensure_directory
@@ -29,6 +30,7 @@ def health() -> dict[str, object]:
         "agents": [
             {
                 "name": item.name,
+                "displayName": item.display_name,
                 "soul": item.soul,
                 "skill": item.skill,
                 "categoryHint": item.category_hint,
@@ -82,5 +84,13 @@ def list_model_bindings() -> AgentModelBindingPayload:
 def save_model_bindings(payload: AgentModelBindingPayload) -> AgentModelBindingPayload:
     try:
         return update_agent_bindings(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/runtime-test")
+def runtime_test(agent: str = Form(...), task: str = Form(...)) -> dict[str, object]:
+    try:
+        return test_agent_runtime(agent, task)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

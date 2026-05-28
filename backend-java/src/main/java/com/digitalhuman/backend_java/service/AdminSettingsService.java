@@ -9,6 +9,8 @@ import com.digitalhuman.backend_java.dto.AdminModelTestRequestDto;
 import com.digitalhuman.backend_java.dto.AdminModelTestResponseDto;
 import com.digitalhuman.backend_java.dto.AgentCatalogItemDto;
 import com.digitalhuman.backend_java.dto.AgentCatalogResponseDto;
+import com.digitalhuman.backend_java.dto.AgentHealthTestRequestDto;
+import com.digitalhuman.backend_java.dto.AgentHealthTestResponseDto;
 import com.digitalhuman.backend_java.dto.AgentModelBindingItemDto;
 import com.digitalhuman.backend_java.dto.AgentModelBindingPayloadDto;
 import com.digitalhuman.backend_java.dto.RagLlmConfigDto;
@@ -28,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import okhttp3.MediaType;
+import okhttp3.MultipartBody;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
@@ -484,6 +487,50 @@ public class AdminSettingsService {
         }
     }
 
+    public AgentHealthTestResponseDto testAgent(AgentHealthTestRequestDto request) {
+        String agent = normalize(request.getAgent(), "");
+        String task = normalize(request.getTask(), "");
+        if (agent.isBlank()) {
+            throw new IllegalArgumentException("agent 不能为空");
+        }
+        if (task.isBlank()) {
+            throw new IllegalArgumentException("task 不能为空");
+        }
+
+        RequestBody formBody = new MultipartBody.Builder()
+                .setType(MultipartBody.FORM)
+                .addFormDataPart("agent", agent)
+                .addFormDataPart("task", task)
+                .build();
+        Request runtimeRequest = new Request.Builder()
+                .url(ragServiceUrl + "/agents/runtime-test")
+                .post(formBody)
+                .build();
+
+        try (Response response = httpClient.newCall(runtimeRequest).execute()) {
+            if (!response.isSuccessful() || response.body() == null) {
+                throw new IOException("agents health request failed: " + response.code());
+            }
+            JsonNode payload = objectMapper.readTree(response.body().string());
+            AgentHealthTestResponseDto result = new AgentHealthTestResponseDto();
+            result.setAgent(payload.path("agent").asText(agent));
+            result.setSuccess(payload.path("success").asBoolean(true));
+            result.setMessage("智能体任务执行成功");
+            result.setDetail("已通过绑定模型执行任务");
+            result.setProvider(payload.path("provider").asText(""));
+            result.setModel(payload.path("model").asText(""));
+            result.setResult(payload.path("result").asText(""));
+            return result;
+        } catch (Exception exception) {
+            AgentHealthTestResponseDto result = new AgentHealthTestResponseDto();
+            result.setAgent(agent);
+            result.setSuccess(false);
+            result.setMessage("智能体任务测试失败");
+            result.setDetail(String.valueOf(exception.getMessage()));
+            return result;
+        }
+    }
+
     public JsonNode getAiServiceHealth() {
         Request request = new Request.Builder()
                 .url(ragServiceUrl + "/health")
@@ -678,6 +725,7 @@ public class AdminSettingsService {
                             }
                             AgentCatalogItemDto dto = new AgentCatalogItemDto();
                             dto.setName(name);
+                            dto.setDisplayName(toAgentDisplayName(name));
                             dto.setSkill("agents/" + name + "/SKILL.md");
                             dto.setSoul("agents/" + name + "/SOUL.md");
                             dto.setCategoryHint(guessAgentCategory(name));
@@ -698,6 +746,16 @@ public class AdminSettingsService {
         return switch (agentName) {
             case "travel_analytics_agent" -> "multimodal";
             default -> "chat";
+        };
+    }
+
+    private String toAgentDisplayName(String agentName) {
+        return switch (agentName) {
+            case "leader_agent" -> "总控对话智能体";
+            case "travel_analytics_agent" -> "旅游行为数据编排智能体";
+            case "scenic_structured_agent" -> "景点结构化数据智能体";
+            case "guide_script_agent" -> "口播脚本生成智能体";
+            default -> agentName;
         };
     }
 

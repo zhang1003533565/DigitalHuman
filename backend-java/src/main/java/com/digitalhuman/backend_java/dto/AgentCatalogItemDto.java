@@ -3,6 +3,7 @@ package com.digitalhuman.backend_java.dto;
 public class AgentCatalogItemDto {
 
     private String name;
+    private String displayName;
     private String soul;
     private String skill;
     private String categoryHint;
@@ -17,6 +18,14 @@ public class AgentCatalogItemDto {
 
     public String getSoul() {
         return soul;
+    }
+
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
     }
 
     public void setSoul(String soul) {

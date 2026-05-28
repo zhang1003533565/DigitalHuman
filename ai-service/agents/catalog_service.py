@@ -7,9 +7,20 @@ from pathlib import Path
 @dataclass
 class AgentCatalogItem:
     name: str
+    display_name: str
     soul: str
     skill: str
     category_hint: str
+
+
+def _display_name(agent_name: str) -> str:
+    mapping = {
+        "leader_agent": "总控对话智能体",
+        "travel_analytics_agent": "旅游行为数据编排智能体",
+        "scenic_structured_agent": "景点结构化数据智能体",
+        "guide_script_agent": "口播脚本生成智能体",
+    }
+    return mapping.get(agent_name, agent_name)
 
 
 def _category_hint(agent_name: str) -> str:
@@ -44,6 +55,7 @@ def load_agent_catalog() -> list[AgentCatalogItem]:
         items.append(
             AgentCatalogItem(
                 name=agent_name,
+                display_name=_display_name(agent_name),
                 soul=str(Path("agents") / agent_name / "SOUL.md"),
                 skill=str(Path("agents") / agent_name / "SKILL.md"),
                 category_hint=_category_hint(agent_name),
