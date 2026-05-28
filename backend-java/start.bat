@@ -8,7 +8,7 @@ if "%DB_HOST%"=="" set DB_HOST=127.0.0.1
 if "%DB_PORT%"=="" set DB_PORT=3306
 if "%DB_USERNAME%"=="" set DB_USERNAME=root
 if "%DB_PASSWORD%"=="" set DB_PASSWORD=123456
-if "%WAIT_SECONDS%"=="" set WAIT_SECONDS=180
+if "%DB_NAME%"=="" set DB_NAME=digitalhuman
 
 where docker >nul 2>nul
 if errorlevel 1 (
@@ -35,9 +35,27 @@ if errorlevel 1 (
   set "DOCKER_COMPOSE_CMD=docker-compose"
 )
 
-echo Starting mysql and redis with Docker ...
-%DOCKER_COMPOSE_CMD% up -d mysql redis
-if errorlevel 1 exit /b 1
+set "MYSQL_RUNNING="
+for /f "delims=" %%i in ('%DOCKER_COMPOSE_CMD% ps --services --status running 2^>nul') do (
+  if /i "%%i"=="mysql" set "MYSQL_RUNNING=1"
+)
+
+if "%MYSQL_RUNNING%"=="1" (
+  echo MySQL container is already running. Skip Docker startup.
+) else (
+  echo MySQL is not running. Starting backend Docker services ...
+  %DOCKER_COMPOSE_CMD% up -d
+  if errorlevel 1 exit /b 1
+)
+
+echo Ensuring MySQL database exists: %DB_NAME%
+%DOCKER_COMPOSE_CMD% exec -T mysql mysql -uroot -p%DB_PASSWORD% -e "CREATE DATABASE IF NOT EXISTS `%DB_NAME%` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" >nul 2>nul
+if errorlevel 1 (
+  echo MySQL is not ready yet. Waiting briefly and retrying database initialization ...
+  timeout /t 5 >nul
+  %DOCKER_COMPOSE_CMD% exec -T mysql mysql -uroot -p%DB_PASSWORD% -e "CREATE DATABASE IF NOT EXISTS `%DB_NAME%` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+  if errorlevel 1 exit /b 1
+)
 
 set "MVN_CMD="
 if exist "mvnw.cmd" (
@@ -54,28 +72,7 @@ if "%MVN_CMD%"=="" (
   exit /b 1
 )
 
-echo Waiting for MySQL to be healthy (timeout: %WAIT_SECONDS%s) ...
-set /a ELAPSED=0
-:wait_mysql
-set "MYSQL_STATE="
-for /f "tokens=2 delims=:," %%i in ('%DOCKER_COMPOSE_CMD% ps --format json mysql ^| findstr /i "\"Health\""') do (
-  set "MYSQL_STATE=%%~i"
-)
-set "MYSQL_STATE=%MYSQL_STATE: =%"
-set "MYSQL_STATE=%MYSQL_STATE:\"=%"
-
-if /i "%MYSQL_STATE%"=="healthy" goto mysql_ready
-if %ELAPSED% GEQ %WAIT_SECONDS% (
-  echo Error: MySQL did not become healthy within %WAIT_SECONDS%s.
-  %DOCKER_COMPOSE_CMD% ps
-  exit /b 1
-)
-timeout /t 2 >nul
-set /a ELAPSED+=2
-goto wait_mysql
-
-:mysql_ready
 echo Starting backend-java on http://127.0.0.1:%PORT%
 echo Using Maven command: %MVN_CMD%
 
-%MVN_CMD% spring-boot:run -Dspring-boot.run.jvmArguments="-Dserver.port=%PORT% -DDB_HOST=%DB_HOST% -DDB_PORT=%DB_PORT% -DDB_USERNAME=%DB_USERNAME% -DDB_PASSWORD=%DB_PASSWORD%"
+%MVN_CMD% spring-boot:run -Dspring-boot.run.jvmArguments="-Dserver.port=%PORT% -DDB_HOST=%DB_HOST% -DDB_PORT=%DB_PORT% -DDB_NAME=%DB_NAME% -DDB_USERNAME=%DB_USERNAME% -DDB_PASSWORD=%DB_PASSWORD%"

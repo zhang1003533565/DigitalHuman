@@ -2,13 +2,13 @@ name: backend
 
 services:
   adminer:
-    image: adminer
+    image: docker.m.daocloud.io/library/adminer:latest
     restart: always
     ports:
       - 7070:8080
 
   mysql:
-    image: mysql:8
+    image: docker.m.daocloud.io/library/mysql:8
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: "123456"
@@ -18,7 +18,7 @@ services:
       - ./.data:/var/lib/mysql
 
   redis:
-    image: redis:7-alpine
+    image: docker.m.daocloud.io/library/redis:7-alpine
     restart: always
     ports:
       - "6379:6379"

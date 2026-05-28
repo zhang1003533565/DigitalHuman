@@ -8,6 +8,7 @@ cd "$SCRIPT_DIR"
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-18755}"
 VENV_DIR="${VENV_DIR:-.venv}"
+RUN_MODE="${RUN_MODE:-docker}"
 
 if [ -x "$SCRIPT_DIR/${VENV_DIR}/bin/python" ]; then
   PYTHON_BIN="$SCRIPT_DIR/${VENV_DIR}/bin/python"
@@ -55,7 +56,15 @@ else
   exit 1
 fi
 
-echo "Starting qdrant with Docker ..."
+if [ "$RUN_MODE" = "docker" ]; then
+  echo "Starting all ai-service Docker services ..."
+  "${DOCKER_COMPOSE[@]}" up -d
+  echo "ai-service is running in Docker. Local uvicorn startup is skipped."
+  echo "Visit: http://${HOST}:${PORT}/health"
+  exit 0
+fi
+
+echo "Starting qdrant with Docker (local ai-service mode) ..."
 "${DOCKER_COMPOSE[@]}" up -d qdrant
 
 echo "Starting ai-service on http://${HOST}:${PORT}"

@@ -10,7 +10,7 @@ DB_HOST="${DB_HOST:-127.0.0.1}"
 DB_PORT="${DB_PORT:-3306}"
 DB_USERNAME="${DB_USERNAME:-root}"
 DB_PASSWORD="${DB_PASSWORD:-123456}"
-WAIT_SECONDS="${WAIT_SECONDS:-180}"
+DB_NAME="${DB_NAME:-digitalhuman}"
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "Error: docker command not found."
@@ -33,8 +33,19 @@ else
   exit 1
 fi
 
-echo "Starting mysql and redis with Docker ..."
-"${DOCKER_COMPOSE[@]}" up -d mysql redis
+if "${DOCKER_COMPOSE[@]}" ps --services --status running | grep -qx "mysql"; then
+  echo "MySQL container is already running. Skip Docker startup."
+else
+  echo "MySQL is not running. Starting backend Docker services ..."
+  "${DOCKER_COMPOSE[@]}" up -d
+fi
+
+echo "Ensuring MySQL database exists: ${DB_NAME}"
+if ! "${DOCKER_COMPOSE[@]}" exec -T mysql mysql -uroot -p"${DB_PASSWORD}" -e "CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" >/dev/null 2>&1; then
+  echo "MySQL is not ready yet. Waiting briefly and retrying database initialization ..."
+  sleep 5
+  "${DOCKER_COMPOSE[@]}" exec -T mysql mysql -uroot -p"${DB_PASSWORD}" -e "CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+fi
 
 if [ -x "$SCRIPT_DIR/mvnw" ]; then
   MVN_CMD=("$SCRIPT_DIR/mvnw")
@@ -46,25 +57,8 @@ else
   exit 1
 fi
 
-echo "Waiting for MySQL to be healthy (timeout: ${WAIT_SECONDS}s) ..."
-start_ts="$(date +%s)"
-while true; do
-  mysql_state="$("${DOCKER_COMPOSE[@]}" ps --format json mysql 2>/dev/null | sed -n 's/.*"Health":"\([^"]*\)".*/\1/p' | head -n 1 || true)"
-  if [ "$mysql_state" = "healthy" ]; then
-    break
-  fi
-  now_ts="$(date +%s)"
-  elapsed="$((now_ts - start_ts))"
-  if [ "$elapsed" -ge "$WAIT_SECONDS" ]; then
-    echo "Error: MySQL did not become healthy within ${WAIT_SECONDS}s."
-    "${DOCKER_COMPOSE[@]}" ps
-    exit 1
-  fi
-  sleep 2
-done
-
 echo "Starting backend-java on http://127.0.0.1:${PORT}"
 echo "Using Maven command: ${MVN_CMD[*]}"
 
 exec "${MVN_CMD[@]}" spring-boot:run \
-  -Dspring-boot.run.jvmArguments="-Dserver.port=${PORT} -DDB_HOST=${DB_HOST} -DDB_PORT=${DB_PORT} -DDB_USERNAME=${DB_USERNAME} -DDB_PASSWORD=${DB_PASSWORD}"
+  -Dspring-boot.run.jvmArguments="-Dserver.port=${PORT} -DDB_HOST=${DB_HOST} -DDB_PORT=${DB_PORT} -DDB_NAME=${DB_NAME} -DDB_USERNAME=${DB_USERNAME} -DDB_PASSWORD=${DB_PASSWORD}"

@@ -6,6 +6,7 @@ cd /d "%~dp0"
 if "%HOST%"=="" set HOST=127.0.0.1
 if "%PORT%"=="" set PORT=18755
 if "%VENV_DIR%"=="" set "VENV_DIR=.venv"
+if "%RUN_MODE%"=="" set "RUN_MODE=docker"
 
 set "PYTHON_BIN=%VENV_DIR%\Scripts\python.exe"
 if not exist "%PYTHON_BIN%" (
@@ -68,7 +69,16 @@ if errorlevel 1 (
   set "DOCKER_COMPOSE_CMD=docker-compose"
 )
 
-echo Starting qdrant with Docker ...
+if /i "%RUN_MODE%"=="docker" (
+  echo Starting all ai-service Docker services ...
+  %DOCKER_COMPOSE_CMD% up -d
+  if errorlevel 1 exit /b 1
+  echo ai-service is running in Docker. Local uvicorn startup is skipped.
+  echo Visit: http://%HOST%:%PORT%/health
+  exit /b 0
+)
+
+echo Starting qdrant with Docker ^(local ai-service mode^) ...
 %DOCKER_COMPOSE_CMD% up -d qdrant
 if errorlevel 1 exit /b 1
 
