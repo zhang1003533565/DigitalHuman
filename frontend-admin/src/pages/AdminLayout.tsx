@@ -47,12 +47,14 @@ import FacilityListPage from './scenic/FacilityListPage'
 import TravelAnalyticsPage from './scenic/TravelAnalyticsPage'
 import RouteManagementPage from './scenic/RouteManagementPage'
 import ModelEmotionPage from './ModelEmotionPage'
+import HomeConfigPage from './HomeConfigPage'
 import type { LoginResult } from '../types/admin'
 
 const { Content } = Layout
 
 type MenuKey =
   | 'dashboard'
+  | 'home-config'
   | 'knowledge'
   | 'spots'
   | 'spot-category'
@@ -72,6 +74,7 @@ const ADMIN_HOME_PATH = '/admin/dashboard'
 
 const menuPathByKey: Record<MenuKey, string> = {
   dashboard: ADMIN_HOME_PATH,
+  'home-config': '/admin/home-config',
   knowledge: '/admin/knowledge',
   spots: '/admin/spots',
   'spot-category': '/admin/spots/categories',
@@ -2167,6 +2170,8 @@ function KnowledgeMissingPanel() {
 
 function renderPanel(activeKey: MenuKey) {
   switch (activeKey) {
+    case 'home-config':
+      return <HomeConfigPage />
     case 'knowledge':
       return <KnowledgePanel />
     case 'spots':

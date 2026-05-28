@@ -4,6 +4,7 @@
   CommentOutlined,
   DatabaseOutlined,
   EnvironmentOutlined,
+  HomeOutlined,
   NodeIndexOutlined,
   RobotOutlined,
   SearchOutlined,
@@ -28,6 +29,7 @@ const { Sider } = Layout
 
 const menuItems: MenuProps['items'] = [
   { key: 'dashboard', icon: <BarChartOutlined />, label: '数据总览' },
+  { key: 'home-config', icon: <HomeOutlined />, label: '首页配置' },
   { key: 'knowledge', icon: <BookOutlined />, label: '知识库管理' },
   {
     key: 'spots',
