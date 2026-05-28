@@ -134,7 +134,7 @@ export function HomePage({ user, onLogout }: HomePageProps) {
           <section className="hp-block">
             <div className="hp-block__head">
               <h2>🏯 今日景点推荐</h2>
-              <span onClick={() => navigate('/map')}>查看全部 →</span>
+              <span onClick={() => navigate('/spot-recommend')}>查看全部 →</span>
             </div>
             <div className="hp-cards hp-cards--spot">
               {homeData.spotRecommends.map(spot => (
@@ -155,7 +155,7 @@ export function HomePage({ user, onLogout }: HomePageProps) {
           <section className="hp-block">
             <div className="hp-block__head">
               <h2>🚶 今日路线推荐</h2>
-              <span onClick={() => navigate('/routes')}>查看全部 →</span>
+              <span onClick={() => navigate('/route-recommend')}>查看全部 →</span>
             </div>
             <div className="hp-cards hp-cards--route">
               {homeData.routeRecommends.map(route => (

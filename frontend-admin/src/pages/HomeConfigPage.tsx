@@ -97,8 +97,12 @@ export default function HomeConfigPage() {
   }
 
   const handleToggle = async (id: string, enabled: boolean) => {
-    await axios.patch(`/api/admin/home-config/${id}/toggle`, { enabled })
-    void loadItems()
+    try {
+      await axios.patch(`/api/admin/home-config/${id}/toggle`, { enabled })
+      void loadItems()
+    } catch (e: any) {
+      message.error('切换失败: ' + (e?.response?.data?.message || e.message))
+    }
   }
 
   const handleDelete = (id: string) => {
