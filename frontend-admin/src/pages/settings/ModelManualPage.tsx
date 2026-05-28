@@ -53,6 +53,11 @@ type ModelCatalogRow = {
   modelId: string
 }
 
+type ModelManualPageProps = {
+  onCatalogChange?: (catalog: AdminModelCatalog) => void
+  onProviderConfigsChange?: (providers: ProviderConfig[]) => void
+}
+
 const PROVIDER_OPTIONS = [
   { value: 'DeepSeek', label: 'DeepSeek' },
   { value: 'Qwen', label: 'Qwen' },
@@ -153,7 +158,7 @@ function renderMarkdown(markdown: string) {
   return elements
 }
 
-export default function ModelManualPage() {
+export default function ModelManualPage({ onCatalogChange, onProviderConfigsChange }: ModelManualPageProps) {
   const [addOptionForm] = Form.useForm<AddModelOptionForm>()
   const [providerForm] = Form.useForm<ProviderConfigForm>()
   const [savingProvider, setSavingProvider] = useState(false)
@@ -179,6 +184,8 @@ export default function ModelManualPage() {
     ])
     setCatalog(catalogResponse.data)
     setProviderConfigs(providerResponse.data)
+    onCatalogChange?.(catalogResponse.data)
+    onProviderConfigsChange?.(providerResponse.data)
     addOptionForm.setFieldsValue({
       category: 'multimodal',
       provider: providerResponse.data[0]?.provider ?? '',
@@ -256,7 +263,9 @@ export default function ModelManualPage() {
       const response = await axios.put<ProviderConfig>('/api/admin/settings/providers', values)
       setProviderConfigs((current) => {
         const next = current.filter((item) => item.provider !== response.data.provider)
-        return [...next, response.data].sort((left, right) => left.provider.localeCompare(right.provider))
+        const sorted = [...next, response.data].sort((left, right) => left.provider.localeCompare(right.provider))
+        onProviderConfigsChange?.(sorted)
+        return sorted
       })
       providerForm.setFieldsValue({
         provider: '',
@@ -282,7 +291,11 @@ export default function ModelManualPage() {
     setDeletingProvider(provider)
     try {
       await axios.post('/api/admin/settings/providers/delete', { provider })
-      setProviderConfigs((current) => current.filter((item) => item.provider !== provider))
+      setProviderConfigs((current) => {
+        const next = current.filter((item) => item.provider !== provider)
+        onProviderConfigsChange?.(next)
+        return next
+      })
       if (addOptionForm.getFieldValue('provider') === provider) {
         addOptionForm.setFieldValue('provider', '')
       }
@@ -312,6 +325,7 @@ export default function ModelManualPage() {
     try {
       const response = await axios.post<AdminModelCatalog>('/api/admin/settings/model-options', values)
       setCatalog(response.data)
+      onCatalogChange?.(response.data)
       message.success(`模型 ${values.modelId} 已加入候选列表`)
       addOptionForm.setFieldsValue({
         ...values,
@@ -336,6 +350,7 @@ export default function ModelManualPage() {
         modelId: row.modelId,
       })
       setCatalog(response.data)
+      onCatalogChange?.(response.data)
       message.success(`已删除模型 ${row.modelId}`)
     } catch (error) {
       const description = axios.isAxiosError(error)

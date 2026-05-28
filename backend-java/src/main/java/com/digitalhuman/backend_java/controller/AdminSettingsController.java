@@ -7,6 +7,7 @@ import com.digitalhuman.backend_java.dto.AdminProviderDocDto;
 import com.digitalhuman.backend_java.dto.AdminProviderConfigDto;
 import com.digitalhuman.backend_java.dto.AdminModelTestRequestDto;
 import com.digitalhuman.backend_java.dto.AdminModelTestResponseDto;
+import com.digitalhuman.backend_java.dto.RagLlmConfigDto;
 import com.digitalhuman.backend_java.dto.RagPromptConfigDto;
 import com.digitalhuman.backend_java.dto.RagRetrievalConfigDto;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -113,6 +114,16 @@ public class AdminSettingsController {
     @PutMapping("/rag-retrieval-config")
     public RagRetrievalConfigDto updateRagRetrievalConfig(@RequestBody RagRetrievalConfigDto request) {
         return adminSettingsService.updateRagRetrievalConfig(request);
+    }
+
+    @GetMapping("/rag-llm-config")
+    public RagLlmConfigDto getRagLlmConfig() {
+        return adminSettingsService.getRagLlmConfig();
+    }
+
+    @PutMapping("/rag-llm-config")
+    public RagLlmConfigDto updateRagLlmConfig(@RequestBody RagLlmConfigDto request) {
+        return adminSettingsService.updateRagLlmConfig(request);
     }
 
     @GetMapping("/ai-health")

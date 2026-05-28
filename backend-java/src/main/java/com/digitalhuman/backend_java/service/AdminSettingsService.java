@@ -7,6 +7,7 @@ import com.digitalhuman.backend_java.dto.AdminProviderConfigDto;
 import com.digitalhuman.backend_java.dto.AdminModelSettingsDto;
 import com.digitalhuman.backend_java.dto.AdminModelTestRequestDto;
 import com.digitalhuman.backend_java.dto.AdminModelTestResponseDto;
+import com.digitalhuman.backend_java.dto.RagLlmConfigDto;
 import com.digitalhuman.backend_java.dto.RagPromptConfigDto;
 import com.digitalhuman.backend_java.dto.RagRetrievalConfigDto;
 import com.digitalhuman.backend_java.model.AdminModelConfig;
@@ -371,6 +372,52 @@ public class AdminSettingsService {
             }
         } catch (Exception exception) {
             throw new IllegalArgumentException("保存 RAG 检索配置失败", exception);
+        }
+    }
+
+    public RagLlmConfigDto getRagLlmConfig() {
+        Request request = new Request.Builder()
+                .url(ragServiceUrl + "/admin/rag/llm-config")
+                .get()
+                .build();
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful() || response.body() == null) {
+                throw new IOException("ai-service llm config get failed: " + response.code());
+            }
+            return objectMapper.readValue(response.body().string(), RagLlmConfigDto.class);
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("读取 LLM 运行配置失败", exception);
+        }
+    }
+
+    public RagLlmConfigDto updateRagLlmConfig(RagLlmConfigDto request) {
+        String provider = normalize(request.getProvider(), "");
+        String model = normalize(request.getModel(), "");
+        int timeoutSeconds = request.getTimeoutSeconds();
+        if (provider.isBlank() || model.isBlank()) {
+            throw new IllegalArgumentException("provider/model 不能为空");
+        }
+        if (timeoutSeconds < 1 || timeoutSeconds > 600) {
+            throw new IllegalArgumentException("timeoutSeconds 必须在 1-600 之间");
+        }
+
+        try {
+            String payload = objectMapper.writeValueAsString(request);
+            Request httpRequest = new Request.Builder()
+                    .url(ragServiceUrl + "/admin/rag/llm-config")
+                    .put(RequestBody.create(payload, JSON))
+                    .build();
+            try (Response response = httpClient.newCall(httpRequest).execute()) {
+                if (!response.isSuccessful() || response.body() == null) {
+                    String errorBody = response.body() != null ? response.body().string() : "";
+                    throw new IllegalArgumentException(extractAiServiceErrorMessage(errorBody, "保存 LLM 运行配置失败"));
+                }
+                return objectMapper.readValue(response.body().string(), RagLlmConfigDto.class);
+            }
+        } catch (IllegalArgumentException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("保存 LLM 运行配置失败", exception);
         }
     }
 

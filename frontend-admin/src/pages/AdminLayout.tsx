@@ -216,6 +216,19 @@ type RagRetrievalConfig = {
   rerankerEnabled: boolean
 }
 
+type RagLlmConfig = {
+  provider: string
+  model: string
+  timeoutSeconds: number
+}
+
+type ProviderConfig = {
+  provider: string
+  baseUrl: string
+  apiKey: string
+  protocol: string
+}
+
 type RagEvalCase = {
   caseId: string
   question: string
@@ -1164,6 +1177,7 @@ function SettingsPanel() {
   const [speechTestForm] = Form.useForm<SpeechTestForm>()
   const [promptForm] = Form.useForm<RagPromptConfig>()
   const [retrievalForm] = Form.useForm<RagRetrievalConfig>()
+  const [llmConfigForm] = Form.useForm<RagLlmConfig>()
   const [activeSettingsTab, setActiveSettingsTab] = useState('embedding')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -1174,6 +1188,7 @@ function SettingsPanel() {
   const [promptLoading, setPromptLoading] = useState(false)
   const [promptVersions, setPromptVersions] = useState<RagPromptConfig[]>([])
   const [health, setHealth] = useState<Record<string, unknown> | null>(null)
+  const [providerConfigs, setProviderConfigs] = useState<ProviderConfig[]>([])
   const [catalog, setCatalog] = useState<AdminModelCatalog>({
     embeddingModels: [],
     speechModels: [],
@@ -1198,6 +1213,10 @@ function SettingsPanel() {
     () => catalog.multimodalModels.map((item) => ({ value: item.modelId, label: `${item.provider} · ${item.modelId}` })),
     [catalog.multimodalModels],
   )
+  const manualSpeechOptions = useMemo(
+    () => catalog.speechModels.map((item) => ({ value: item.modelId, label: `${item.provider} · ${item.modelId}` })),
+    [catalog.speechModels],
+  )
 
   async function loadSettings() {
     setLoading(true)
@@ -1208,6 +1227,8 @@ function SettingsPanel() {
       ])
       form.setFieldsValue(settingsResponse.data)
       setCatalog(catalogResponse.data)
+      const providerResponse = await axios.get<ProviderConfig[]>('/api/admin/settings/providers')
+      setProviderConfigs(providerResponse.data)
       speechTestForm.setFieldsValue({
         speechTestText: '您好，欢迎来到灵山胜境，这是一段语音测试。',
       })
@@ -1231,13 +1252,15 @@ function SettingsPanel() {
     try {
       const response = await axios.get<RagPromptConfig>('/api/admin/settings/rag-prompt')
       promptForm.setFieldsValue(response.data)
-      const [versionsResponse, retrievalResponse, healthResponse] = await Promise.all([
+      const [versionsResponse, retrievalResponse, llmConfigResponse, healthResponse] = await Promise.all([
         axios.get<RagPromptConfig[]>('/api/admin/settings/rag-prompts'),
         axios.get<RagRetrievalConfig>('/api/admin/settings/rag-retrieval-config'),
+        axios.get<RagLlmConfig>('/api/admin/settings/rag-llm-config'),
         axios.get<Record<string, unknown>>('/api/admin/settings/ai-health'),
       ])
       setPromptVersions(versionsResponse.data)
       retrievalForm.setFieldsValue(retrievalResponse.data)
+      llmConfigForm.setFieldsValue(llmConfigResponse.data)
       setHealth(healthResponse.data)
     } finally {
       setPromptLoading(false)
@@ -1271,6 +1294,13 @@ function SettingsPanel() {
     const values = await retrievalForm.validateFields()
     await axios.put('/api/admin/settings/rag-retrieval-config', values)
     message.success('检索策略已保存')
+  }
+
+  async function saveLlmConfig() {
+    const values = await llmConfigForm.validateFields()
+    await axios.put('/api/admin/settings/rag-llm-config', values)
+    message.success('LLM 运行配置已保存')
+    await loadPrompt()
   }
 
   useEffect(() => {
@@ -1418,13 +1448,15 @@ function SettingsPanel() {
       key: 'speech',
       label: renderTabLabel('语音音色', testResults.speech),
       children: (
-        <VoiceConfigPage
+      <VoiceConfigPage
           form={form}
           speechTestForm={speechTestForm}
           loading={loading}
           saving={saving}
           testing={testingCategory === 'speech'}
-          options={voiceOptions}
+          options={manualSpeechOptions.length
+            ? manualSpeechOptions
+            : voiceOptions}
           onSave={() => void handleSave()}
           onTest={() => void handleTestModel('speech')}
           onReset={() => {
@@ -1490,7 +1522,12 @@ function SettingsPanel() {
     {
       key: 'model-catalog',
       label: '手动维护',
-      children: <ModelManualPage />,
+      children: (
+        <ModelManualPage
+          onCatalogChange={(nextCatalog) => setCatalog(nextCatalog)}
+          onProviderConfigsChange={(nextProviders) => setProviderConfigs(nextProviders)}
+        />
+      ),
     },
     {
       key: 'rag-prompt',
@@ -1546,6 +1583,48 @@ function SettingsPanel() {
           </Card>
           <Card size="small" title="ai-service 健康检查">
             <pre className="admin-json-preview">{JSON.stringify(health, null, 2)}</pre>
+          </Card>
+        </Space>
+      ),
+    },
+    {
+      key: 'rag-llm',
+      label: 'RAG LLM 配置',
+      children: (
+        <Space direction="vertical" size="large" className="admin-rag-detail">
+          <Card
+            size="small"
+            title="LLM 运行配置（落库）"
+            extra={<Button type="primary" loading={promptLoading} onClick={() => void saveLlmConfig()}>保存 LLM 配置</Button>}
+          >
+            <Form form={llmConfigForm} layout="vertical">
+              <Row gutter={16}>
+                <Col xs={24} md={8}>
+                  <Form.Item name="provider" label="Provider" rules={[{ required: true, message: '请输入 provider' }]}>
+                    <Select
+                      options={providerConfigs.map((item) => ({ value: item.provider, label: item.provider }))}
+                      placeholder="请选择已配置的 provider"
+                      showSearch
+                      optionFilterProp="label"
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={10}>
+                  <Form.Item name="model" label="模型 ID" rules={[{ required: true, message: '请输入模型 ID' }]}>
+                    <Input placeholder="deepseek-v4-flash" />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={6}>
+                  <Form.Item
+                    name="timeoutSeconds"
+                    label="超时秒数"
+                    rules={[{ required: true, message: '请输入超时秒数' }]}
+                  >
+                    <InputNumber min={1} max={600} style={{ width: '100%' }} />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </Form>
           </Card>
         </Space>
       ),

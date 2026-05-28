@@ -610,12 +610,22 @@
 }
 
 .admin-settings-card .ant-tabs-tabpane {
-  overflow: hidden;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .admin-settings-card .ant-tabs-tab {
   padding: 8px 4px 14px;
   font-weight: 600;
+}
+
+.admin-settings-card .ant-tabs-nav-wrap {
+  overflow-x: auto !important;
+  overflow-y: hidden;
+}
+
+.admin-settings-card .ant-tabs-nav-list {
+  flex-wrap: nowrap;
 }
 
 .admin-tab-label {
