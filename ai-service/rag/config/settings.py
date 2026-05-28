@@ -26,10 +26,7 @@ class RagSettings:
     qdrant_collection: str = os.getenv("QDRANT_COLLECTION") or os.getenv("qdrant.collection", "scenic_kb")
     embedding_model_name: str = os.getenv("RAG_EMBEDDING_MODEL") or os.getenv("rag.embedding-model", "BAAI/bge-m3")
     reranker_model_name: str = os.getenv("RAG_RERANKER_MODEL") or os.getenv("rag.reranker-model", "BAAI/bge-reranker-v2-m3")
-    llm_base_url: str | None = os.getenv("RAG_LLM_BASE_URL") or os.getenv("rag.llm.base-url")
-    llm_api_key: str | None = os.getenv("RAG_LLM_API_KEY") or os.getenv("rag.llm.api-key")
-    llm_model: str | None = os.getenv("RAG_LLM_MODEL") or os.getenv("rag.llm.model")
-    llm_timeout_seconds: int = int(os.getenv("RAG_LLM_TIMEOUT_SECONDS") or os.getenv("rag.llm.timeout-seconds", "90"))
+    llm_timeout_seconds: int = 90
     chunk_size: int = int(os.getenv("RAG_CHUNK_SIZE") or os.getenv("rag.chunk-size", "420"))
     chunk_overlap: int = int(os.getenv("RAG_CHUNK_OVERLAP") or os.getenv("rag.chunk-overlap", "90"))
     retrieve_limit: int = int(os.getenv("RAG_RETRIEVE_LIMIT") or os.getenv("rag.retrieve-limit", "12"))
@@ -47,9 +44,6 @@ def validate_settings(settings: RagSettings) -> list[str]:
         warnings.append("RAG_CHUNK_OVERLAP 应小于 RAG_CHUNK_SIZE")
     if not settings.qdrant_url:
         warnings.append("QDRANT_URL 不能为空")
-    llm_values = [settings.llm_base_url, settings.llm_model]
-    if any(llm_values) and not all(llm_values):
-        warnings.append("RAG_LLM_BASE_URL 和 RAG_LLM_MODEL 需要同时配置；API Key 视 provider 要求配置")
     if not settings.knowledge_base_dir.exists():
         warnings.append(f"知识库目录不存在，将在上传时创建：{settings.knowledge_base_dir}")
     return warnings

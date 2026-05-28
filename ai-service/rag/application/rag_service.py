@@ -13,26 +13,38 @@ from rag.content.file_store import ensure_directory, is_supported_file_name, sav
 from rag.graph.query_graph import RagQueryGraph, extract_related_spots
 from rag.ingestion.chunker import ChunkingConfig, build_chunks
 from rag.ingestion.parser import parse_document
-from rag.llm import LlmConfig, ProviderBackedLlm, infer_provider_name
+from rag.llm import LlmConfig, ProviderBackedLlm
 from rag.retrieval.embedder import BgeM3Embedder, ProviderEmbedder
 from rag.retrieval.reranker import BgeReranker
 from rag.retrieval.retriever import Retriever
 from rag.retrieval.vectordb import QdrantVectorStore
+from model_providers.config_store import ensure_default_deepseek_config, find_provider_config, load_llm_runtime_config
 
 
 class RagService:
     def __init__(self) -> None:
+        ensure_default_deepseek_config()
         self.settings = get_settings()
+        llm_runtime = load_llm_runtime_config()
+        provider_config = find_provider_config(llm_runtime.provider)
+        if not provider_config:
+            raise RuntimeError(f"LLM provider not configured in database: {llm_runtime.provider}")
+
+        llm_base_url = str(provider_config.get("baseUrl", "")).strip()
+        llm_api_key = str(provider_config.get("apiKey", "")).strip()
+        if not llm_base_url or not llm_api_key:
+            raise RuntimeError(f"LLM provider credentials missing in database: {llm_runtime.provider}")
+
         self.active_embedding_provider, self.active_embedding_model_name = self._load_active_embedding_model()
         self.embedder = self._new_embedder(self.active_embedding_provider, self.active_embedding_model_name)
         self.reranker = BgeReranker(self.settings.reranker_model_name)
         self.llm = ProviderBackedLlm(
             LlmConfig(
-                provider=infer_provider_name(self.settings.llm_base_url),
-                base_url=self.settings.llm_base_url,
-                api_key=self.settings.llm_api_key,
-                model=self.settings.llm_model,
-                timeout_seconds=self.settings.llm_timeout_seconds,
+                provider=llm_runtime.provider,
+                base_url=llm_base_url,
+                api_key=llm_api_key,
+                model=llm_runtime.model,
+                timeout_seconds=llm_runtime.timeout_seconds,
             )
         )
         self.vector_store = QdrantVectorStore(

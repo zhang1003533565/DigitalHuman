@@ -11,6 +11,12 @@ from model_capabilities.tts.router import router as tts_router
 from model_providers.config_store import delete_provider_config, load_provider_configs, save_provider_config
 from rag.generation.prompt_store import PromptConfig, PromptConfigRequest, load_prompt_config, load_prompt_versions, publish_prompt_version, save_prompt_config
 from rag.retrieval.config_store import RetrievalConfig, load_retrieval_config, save_retrieval_config
+from rag.llm_config_service import (
+    LlmRuntimeConfigRequest,
+    LlmRuntimeConfigResponse,
+    get_llm_runtime_config,
+    update_llm_runtime_config,
+)
 from rag.application.rag_service import RagService
 from rag.contracts.schemas import ChunkToggleRequest, DeleteKnowledgeResponse, IngestRequest, IngestResponse, KnowledgeChunkListResponse, KnowledgeDocumentDiff, KnowledgeDocumentInfo, KnowledgeDocumentPreview, ModelTestRequest, ModelTestResponse, ProviderConfigRequest, ProviderConfigResponse, ProviderDeleteRequest, QueryRequest, QueryResponse, RetrieveRequest, RetrieveResponse, UploadKnowledgeResponse
 from rag.config.settings import validate_settings
@@ -192,3 +198,16 @@ def get_retrieval_config() -> RetrievalConfig:
 @app.put("/admin/rag/retrieval-config", response_model=RetrievalConfig)
 def update_retrieval_config(request: RetrievalConfig) -> RetrievalConfig:
     return save_retrieval_config(request)
+
+
+@app.get("/admin/rag/llm-config", response_model=LlmRuntimeConfigResponse)
+def get_llm_config() -> LlmRuntimeConfigResponse:
+    return get_llm_runtime_config()
+
+
+@app.put("/admin/rag/llm-config", response_model=LlmRuntimeConfigResponse)
+def set_llm_config(request: LlmRuntimeConfigRequest) -> LlmRuntimeConfigResponse:
+    try:
+        return update_llm_runtime_config(request)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
