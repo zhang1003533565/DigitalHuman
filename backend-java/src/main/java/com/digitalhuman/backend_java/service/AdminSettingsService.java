@@ -508,10 +508,14 @@ public class AdminSettingsService {
                 .build();
 
         try (Response response = httpClient.newCall(runtimeRequest).execute()) {
-            if (!response.isSuccessful() || response.body() == null) {
-                throw new IOException("agents health request failed: " + response.code());
+            String responseBody = response.body() == null ? "" : response.body().string();
+            if (!response.isSuccessful()) {
+                throw new IllegalArgumentException(extractAiServiceErrorMessage(responseBody, "智能体任务测试失败: HTTP " + response.code()));
             }
-            JsonNode payload = objectMapper.readTree(response.body().string());
+            if (responseBody.isBlank()) {
+                throw new IOException("智能体任务测试返回空响应");
+            }
+            JsonNode payload = objectMapper.readTree(responseBody);
             AgentHealthTestResponseDto result = new AgentHealthTestResponseDto();
             result.setAgent(payload.path("agent").asText(agent));
             result.setSuccess(payload.path("success").asBoolean(true));

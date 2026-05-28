@@ -38,9 +38,10 @@ def health() -> dict[str, object]:
     except Exception as exc:
         checks["qdrant"] = f"error: {exc}"
     checks["llm"] = "configured" if rag_service.llm.is_enabled() else "not_configured"
-    checks["llmModel"] = rag_service.settings.llm_model or "not_set"
+    checks["llmProvider"] = rag_service.llm.config.provider or "not_set"
+    checks["llmModel"] = rag_service.llm.config.model or "not_set"
     checks["embedding"] = rag_service.embedder.status()
-    checks["reranker"] = rag_service.settings.reranker_model_name
+    checks["reranker"] = rag_service.settings.reranker_model_name or "disabled"
     checks["knowledgeBaseDir"] = str(rag_service.settings.knowledge_base_dir)
     checks["knowledgeBaseExists"] = rag_service.settings.knowledge_base_dir.exists()
     checks["startupWarnings"] = validate_settings(rag_service.settings)
