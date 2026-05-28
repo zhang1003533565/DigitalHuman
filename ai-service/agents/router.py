@@ -5,6 +5,12 @@ from pathlib import Path
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from agents import LeaderAgent
+from agents.catalog_service import load_agent_catalog
+from agents.model_binding_service import (
+    AgentModelBindingPayload,
+    get_agent_bindings,
+    update_agent_bindings,
+)
 from agents.common.types import AgentContext
 from rag.config.settings import get_settings
 from rag.content.file_store import ensure_directory
@@ -15,29 +21,20 @@ leader = LeaderAgent()
 
 @router.get("/health")
 def health() -> dict[str, object]:
+    bindings = get_agent_bindings()
+    by_agent = {item.agent: item for item in bindings.items}
+    catalog = load_agent_catalog()
     return {
         "status": "ok",
         "agents": [
             {
-                "name": "leader_agent",
-                "soul": "agents/leader_agent/SOUL.md",
-                "skill": "agents/leader_agent/SKILL.md",
-            },
-            {
-                "name": "travel_analytics_agent",
-                "soul": "agents/travel_analytics_agent/SOUL.md",
-                "skill": "agents/travel_analytics_agent/SKILL.md",
-            },
-            {
-                "name": "scenic_structured_agent",
-                "soul": "agents/scenic_structured_agent/SOUL.md",
-                "skill": "agents/scenic_structured_agent/SKILL.md",
-            },
-            {
-                "name": "guide_script_agent",
-                "soul": "agents/guide_script_agent/SOUL.md",
-                "skill": "agents/guide_script_agent/SKILL.md",
-            },
+                "name": item.name,
+                "soul": item.soul,
+                "skill": item.skill,
+                "categoryHint": item.category_hint,
+                "modelBinding": by_agent.get(item.name),
+            }
+            for item in catalog
         ],
     }
 
@@ -74,3 +71,16 @@ async def transform(file: UploadFile = File(...), save_to_kb: bool = Form(defaul
         "warnings": result.warnings,
         "output": result.output,
     }
+
+
+@router.get("/model-bindings", response_model=AgentModelBindingPayload)
+def list_model_bindings() -> AgentModelBindingPayload:
+    return get_agent_bindings()
+
+
+@router.put("/model-bindings", response_model=AgentModelBindingPayload)
+def save_model_bindings(payload: AgentModelBindingPayload) -> AgentModelBindingPayload:
+    try:
+        return update_agent_bindings(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

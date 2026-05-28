@@ -14,7 +14,7 @@ from rag.graph.query_graph import RagQueryGraph, extract_related_spots
 from rag.ingestion.chunker import ChunkingConfig, build_chunks
 from rag.ingestion.parser import parse_document
 from rag.llm import LlmConfig, ProviderBackedLlm
-from rag.retrieval.embedder import BgeM3Embedder, ProviderEmbedder
+from rag.retrieval.embedder import ProviderEmbedder, UnconfiguredEmbedder
 from rag.retrieval.reranker import BgeReranker
 from rag.retrieval.retriever import Retriever
 from rag.retrieval.vectordb import QdrantVectorStore
@@ -275,9 +275,9 @@ class RagService:
 
     def _new_embedder(self, provider: str | None, model_name: str):
         provider = normalize_provider(provider)
-        if provider:
-            return ProviderEmbedder(provider, model_name)
-        return BgeM3Embedder(model_name)
+        if not provider:
+            return UnconfiguredEmbedder("当前为纯线上模型模式：请先在后台选择并保存 embedding provider + model")
+        return ProviderEmbedder(provider, model_name)
 
     def _load_active_embedding_model(self) -> tuple[str | None, str]:
         path = self._active_embedding_model_path()

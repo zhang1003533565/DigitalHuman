@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from functools import cached_property
 
+from fastapi import HTTPException
+
 from model_capabilities.embedding.service import embed_query, embed_texts
 
 
@@ -53,3 +55,17 @@ class ProviderEmbedder:
 
     def status(self) -> dict[str, str]:
         return self._status
+
+
+class UnconfiguredEmbedder:
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        raise HTTPException(status_code=400, detail=self.reason)
+
+    def embed_query(self, text: str) -> list[float]:
+        raise HTTPException(status_code=400, detail=self.reason)
+
+    def status(self) -> dict[str, str]:
+        return {"mode": "unconfigured", "reason": self.reason}

@@ -16,6 +16,4 @@ python-docx==1.2.0
 edge-tts==7.2.8
 numpy==2.4.6
 qdrant-client==1.18.0
-FlagEmbedding==1.4.0
-transformers==5.9.0
 python-dotenv==1.2.2

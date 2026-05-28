@@ -18,6 +18,52 @@ class LlmRuntimeConfig:
     timeout_seconds: int
 
 
+@dataclass
+class AgentModelBinding:
+    agent: str
+    category: str
+    provider: str
+    model: str
+    timeout_seconds: int
+    enabled: bool
+
+
+AGENT_MODEL_DEFAULTS: list[AgentModelBinding] = [
+    AgentModelBinding(
+        agent="leader_agent",
+        category="chat",
+        provider="DeepSeek",
+        model="deepseek-v4-flash",
+        timeout_seconds=90,
+        enabled=True,
+    ),
+    AgentModelBinding(
+        agent="travel_analytics_agent",
+        category="multimodal",
+        provider="DeepSeek",
+        model="deepseek-v4-flash",
+        timeout_seconds=90,
+        enabled=False,
+    ),
+    AgentModelBinding(
+        agent="scenic_structured_agent",
+        category="chat",
+        provider="DeepSeek",
+        model="deepseek-v4-flash",
+        timeout_seconds=90,
+        enabled=False,
+    ),
+    AgentModelBinding(
+        agent="guide_script_agent",
+        category="chat",
+        provider="DeepSeek",
+        model="deepseek-v4-flash",
+        timeout_seconds=90,
+        enabled=False,
+    ),
+]
+
+
 def provider_key(provider: str) -> str:
     return provider.strip().lower().replace(" ", "_").replace("-", "_")
 
@@ -53,6 +99,18 @@ def _ensure_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS agent_model_bindings (
+                agent TEXT PRIMARY KEY,
+                category TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                model TEXT NOT NULL,
+                timeout_seconds INTEGER NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1
+            )
+            """
+        )
         conn.commit()
 
 
@@ -76,6 +134,27 @@ def ensure_default_deepseek_config() -> None:
                 VALUES(1, ?, ?, ?)
                 """,
                 ("DeepSeek", "deepseek-v4-flash", 90),
+            )
+        existing_agents = {
+            str(row["agent"]).strip()
+            for row in conn.execute("SELECT agent FROM agent_model_bindings").fetchall()
+        }
+        for item in AGENT_MODEL_DEFAULTS:
+            if item.agent in existing_agents:
+                continue
+            conn.execute(
+                """
+                INSERT INTO agent_model_bindings(agent, category, provider, model, timeout_seconds, enabled)
+                VALUES(?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    item.agent,
+                    item.category,
+                    item.provider,
+                    item.model,
+                    int(item.timeout_seconds),
+                    1 if item.enabled else 0,
+                ),
             )
         conn.commit()
 
@@ -180,3 +259,104 @@ def save_llm_runtime_config(provider: str, model: str, timeout_seconds: int) -> 
         )
         conn.commit()
     return LlmRuntimeConfig(provider=normalized_provider, model=normalized_model, timeout_seconds=int(timeout_seconds))
+
+
+def list_agent_model_bindings() -> list[AgentModelBinding]:
+    _ensure_db()
+    ensure_default_deepseek_config()
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT agent, category, provider, model, timeout_seconds, enabled
+            FROM agent_model_bindings
+            ORDER BY agent
+            """
+        ).fetchall()
+    return [
+        AgentModelBinding(
+            agent=str(row["agent"]),
+            category=str(row["category"]),
+            provider=str(row["provider"]),
+            model=str(row["model"]),
+            timeout_seconds=int(row["timeout_seconds"]),
+            enabled=bool(int(row["enabled"])),
+        )
+        for row in rows
+    ]
+
+
+def save_agent_model_bindings(items: list[AgentModelBinding]) -> list[AgentModelBinding]:
+    _ensure_db()
+    with _connect() as conn:
+        for item in items:
+            conn.execute(
+                """
+                INSERT INTO agent_model_bindings(agent, category, provider, model, timeout_seconds, enabled)
+                VALUES(?, ?, ?, ?, ?, ?)
+                ON CONFLICT(agent) DO UPDATE SET
+                    category=excluded.category,
+                    provider=excluded.provider,
+                    model=excluded.model,
+                    timeout_seconds=excluded.timeout_seconds,
+                    enabled=excluded.enabled
+                """,
+                (
+                    item.agent.strip(),
+                    item.category.strip(),
+                    item.provider.strip(),
+                    item.model.strip(),
+                    int(item.timeout_seconds),
+                    1 if item.enabled else 0,
+                ),
+            )
+        conn.commit()
+    return list_agent_model_bindings()
+
+
+def get_agent_model_binding(agent: str) -> AgentModelBinding | None:
+    normalized = agent.strip()
+    if not normalized:
+        return None
+    return next((item for item in list_agent_model_bindings() if item.agent == normalized), None)
+
+
+def ensure_agent_model_defaults(agent_names: list[str]) -> None:
+    _ensure_db()
+    if not agent_names:
+        return
+
+    default_by_agent = {item.agent: item for item in AGENT_MODEL_DEFAULTS}
+    with _connect() as conn:
+        existing = {
+            str(row["agent"]).strip()
+            for row in conn.execute("SELECT agent FROM agent_model_bindings").fetchall()
+        }
+        for agent in agent_names:
+            normalized = agent.strip()
+            if not normalized or normalized in existing:
+                continue
+            default = default_by_agent.get(normalized)
+            if default is None:
+                default = AgentModelBinding(
+                    agent=normalized,
+                    category="chat",
+                    provider="DeepSeek",
+                    model="deepseek-v4-flash",
+                    timeout_seconds=90,
+                    enabled=False,
+                )
+            conn.execute(
+                """
+                INSERT INTO agent_model_bindings(agent, category, provider, model, timeout_seconds, enabled)
+                VALUES(?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    default.agent,
+                    default.category,
+                    default.provider,
+                    default.model,
+                    int(default.timeout_seconds),
+                    1 if default.enabled else 0,
+                ),
+            )
+        conn.commit()

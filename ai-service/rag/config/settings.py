@@ -24,8 +24,8 @@ class RagSettings:
     qdrant_url: str = os.getenv("QDRANT_URL") or os.getenv("qdrant.url", "http://127.0.0.1:6333")
     qdrant_api_key: str | None = os.getenv("QDRANT_API_KEY")
     qdrant_collection: str = os.getenv("QDRANT_COLLECTION") or os.getenv("qdrant.collection", "scenic_kb")
-    embedding_model_name: str = os.getenv("RAG_EMBEDDING_MODEL") or os.getenv("rag.embedding-model", "BAAI/bge-m3")
-    reranker_model_name: str = os.getenv("RAG_RERANKER_MODEL") or os.getenv("rag.reranker-model", "BAAI/bge-reranker-v2-m3")
+    embedding_model_name: str = os.getenv("RAG_EMBEDDING_MODEL") or os.getenv("rag.embedding-model", "")
+    reranker_model_name: str = os.getenv("RAG_RERANKER_MODEL") or os.getenv("rag.reranker-model", "")
     llm_timeout_seconds: int = 90
     chunk_size: int = int(os.getenv("RAG_CHUNK_SIZE") or os.getenv("rag.chunk-size", "420"))
     chunk_overlap: int = int(os.getenv("RAG_CHUNK_OVERLAP") or os.getenv("rag.chunk-overlap", "90"))

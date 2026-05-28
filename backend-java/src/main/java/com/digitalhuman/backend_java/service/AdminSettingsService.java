@@ -7,6 +7,9 @@ import com.digitalhuman.backend_java.dto.AdminProviderConfigDto;
 import com.digitalhuman.backend_java.dto.AdminModelSettingsDto;
 import com.digitalhuman.backend_java.dto.AdminModelTestRequestDto;
 import com.digitalhuman.backend_java.dto.AdminModelTestResponseDto;
+import com.digitalhuman.backend_java.dto.AgentCatalogResponseDto;
+import com.digitalhuman.backend_java.dto.AgentModelBindingItemDto;
+import com.digitalhuman.backend_java.dto.AgentModelBindingPayloadDto;
 import com.digitalhuman.backend_java.dto.RagLlmConfigDto;
 import com.digitalhuman.backend_java.dto.RagPromptConfigDto;
 import com.digitalhuman.backend_java.dto.RagRetrievalConfigDto;
@@ -421,6 +424,64 @@ public class AdminSettingsService {
         }
     }
 
+    public AgentModelBindingPayloadDto getAgentModelBindings() {
+        Request request = new Request.Builder()
+                .url(ragServiceUrl + "/agents/model-bindings")
+                .get()
+                .build();
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful() || response.body() == null) {
+                throw new IOException("ai-service agent model bindings get failed: " + response.code());
+            }
+            return objectMapper.readValue(response.body().string(), AgentModelBindingPayloadDto.class);
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("读取智能体模型编排配置失败", exception);
+        }
+    }
+
+    public AgentModelBindingPayloadDto updateAgentModelBindings(AgentModelBindingPayloadDto request) {
+        if (request.getItems() == null || request.getItems().isEmpty()) {
+            throw new IllegalArgumentException("智能体模型编排不能为空");
+        }
+        for (AgentModelBindingItemDto item : request.getItems()) {
+            validateAgentBindingModel(item);
+        }
+
+        try {
+            String payload = objectMapper.writeValueAsString(request);
+            Request httpRequest = new Request.Builder()
+                    .url(ragServiceUrl + "/agents/model-bindings")
+                    .put(RequestBody.create(payload, JSON))
+                    .build();
+            try (Response response = httpClient.newCall(httpRequest).execute()) {
+                if (!response.isSuccessful() || response.body() == null) {
+                    String errorBody = response.body() != null ? response.body().string() : "";
+                    throw new IllegalArgumentException(extractAiServiceErrorMessage(errorBody, "保存智能体模型编排失败"));
+                }
+                return objectMapper.readValue(response.body().string(), AgentModelBindingPayloadDto.class);
+            }
+        } catch (IllegalArgumentException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("保存智能体模型编排失败", exception);
+        }
+    }
+
+    public AgentCatalogResponseDto getAgentCatalog() {
+        Request request = new Request.Builder()
+                .url(ragServiceUrl + "/agents/health")
+                .get()
+                .build();
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful() || response.body() == null) {
+                throw new IOException("ai-service agents health get failed: " + response.code());
+            }
+            return objectMapper.readValue(response.body().string(), AgentCatalogResponseDto.class);
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("读取智能体目录失败", exception);
+        }
+    }
+
     public JsonNode getAiServiceHealth() {
         Request request = new Request.Builder()
                 .url(ragServiceUrl + "/health")
@@ -534,6 +595,31 @@ public class AdminSettingsService {
     private void ensureProviderConfigured(String provider) {
         if (getProviderConfigs().stream().noneMatch(item -> provider.equalsIgnoreCase(item.getProvider()))) {
             throw new IllegalArgumentException("请先配置该模型提供方的 Base URL 和 API Key，再添加模型");
+        }
+    }
+
+    private void validateAgentBindingModel(AgentModelBindingItemDto item) {
+        if (item == null) {
+            throw new IllegalArgumentException("智能体模型配置项不能为空");
+        }
+        String agent = normalize(item.getAgent(), "");
+        String categoryRaw = normalize(item.getCategory(), "");
+        String provider = normalize(item.getProvider(), "");
+        String model = normalize(item.getModel(), "");
+        if (agent.isBlank() || categoryRaw.isBlank() || provider.isBlank() || model.isBlank()) {
+            throw new IllegalArgumentException("智能体模型编排中存在空字段（agent/category/provider/model）");
+        }
+        ModelCategory category = normalizeCategory(categoryRaw);
+        boolean matched = adminModelConfigRepository
+                .findByCategoryAndProviderIgnoreCaseAndModelIdIgnoreCase(category, provider, model)
+                .isPresent();
+        if (!matched) {
+            throw new IllegalArgumentException("智能体 " + agent + " 绑定模型未在手动维护中配置："
+                    + categoryRaw + " / " + provider + " / " + model);
+        }
+        int timeout = item.getTimeoutSeconds();
+        if (timeout < 1 || timeout > 600) {
+            throw new IllegalArgumentException("智能体 " + agent + " 的 timeoutSeconds 必须在 1-600 之间");
         }
     }
 

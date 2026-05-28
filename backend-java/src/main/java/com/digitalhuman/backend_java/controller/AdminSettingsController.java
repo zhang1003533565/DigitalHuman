@@ -7,6 +7,8 @@ import com.digitalhuman.backend_java.dto.AdminProviderDocDto;
 import com.digitalhuman.backend_java.dto.AdminProviderConfigDto;
 import com.digitalhuman.backend_java.dto.AdminModelTestRequestDto;
 import com.digitalhuman.backend_java.dto.AdminModelTestResponseDto;
+import com.digitalhuman.backend_java.dto.AgentCatalogResponseDto;
+import com.digitalhuman.backend_java.dto.AgentModelBindingPayloadDto;
 import com.digitalhuman.backend_java.dto.RagLlmConfigDto;
 import com.digitalhuman.backend_java.dto.RagPromptConfigDto;
 import com.digitalhuman.backend_java.dto.RagRetrievalConfigDto;
@@ -124,6 +126,21 @@ public class AdminSettingsController {
     @PutMapping("/rag-llm-config")
     public RagLlmConfigDto updateRagLlmConfig(@RequestBody RagLlmConfigDto request) {
         return adminSettingsService.updateRagLlmConfig(request);
+    }
+
+    @GetMapping("/agent-model-bindings")
+    public AgentModelBindingPayloadDto getAgentModelBindings() {
+        return adminSettingsService.getAgentModelBindings();
+    }
+
+    @PutMapping("/agent-model-bindings")
+    public AgentModelBindingPayloadDto updateAgentModelBindings(@RequestBody AgentModelBindingPayloadDto request) {
+        return adminSettingsService.updateAgentModelBindings(request);
+    }
+
+    @GetMapping("/agent-catalog")
+    public AgentCatalogResponseDto getAgentCatalog() {
+        return adminSettingsService.getAgentCatalog();
     }
 
     @GetMapping("/ai-health")

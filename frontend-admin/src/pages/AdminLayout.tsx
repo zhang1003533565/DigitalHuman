@@ -222,6 +222,31 @@ type RagLlmConfig = {
   timeoutSeconds: number
 }
 
+type AgentModelBindingItem = {
+  agent: string
+  category: ModelCategory
+  provider: string
+  model: string
+  timeoutSeconds: number
+  enabled: boolean
+}
+
+type AgentModelBindingPayload = {
+  items: AgentModelBindingItem[]
+}
+
+type AgentCatalogItem = {
+  name: string
+  soul: string
+  skill: string
+  categoryHint?: ModelCategory
+}
+
+type AgentCatalogResponse = {
+  status: string
+  agents: AgentCatalogItem[]
+}
+
 type ProviderConfig = {
   provider: string
   baseUrl: string
@@ -380,6 +405,14 @@ const DIGITAL_HUMAN_VOICE_OPTIONS = [
   { value: 'zh-TW-HsiaoYuNeural', label: '晓瑜 (台湾女声)' },
   { value: 'zh-TW-YunJheNeural', label: '云哲 (台湾男声)' },
 ]
+
+const MODEL_OPTIONS_BY_CATEGORY_FIELD: Record<ModelCategory, keyof AdminModelCatalog> = {
+  embedding: 'embeddingModels',
+  speech: 'speechModels',
+  vision: 'visionModels',
+  chat: 'chatModels',
+  multimodal: 'multimodalModels',
+}
 
 type AdminModelOption = {
   category: ModelCategory
@@ -1186,9 +1219,12 @@ function SettingsPanel() {
   const [deletingModelOption, setDeletingModelOption] = useState<string | null>(null)
   const [testResults, setTestResults] = useState<Partial<Record<ModelCategory, ModelTestResponse>>>({})
   const [promptLoading, setPromptLoading] = useState(false)
+  const [agentBindingLoading, setAgentBindingLoading] = useState(false)
   const [promptVersions, setPromptVersions] = useState<RagPromptConfig[]>([])
   const [health, setHealth] = useState<Record<string, unknown> | null>(null)
   const [providerConfigs, setProviderConfigs] = useState<ProviderConfig[]>([])
+  const [agentBindings, setAgentBindings] = useState<AgentModelBindingItem[]>([])
+  const [agentCatalog, setAgentCatalog] = useState<AgentCatalogItem[]>([])
   const [catalog, setCatalog] = useState<AdminModelCatalog>({
     embeddingModels: [],
     speechModels: [],
@@ -1252,15 +1288,33 @@ function SettingsPanel() {
     try {
       const response = await axios.get<RagPromptConfig>('/api/admin/settings/rag-prompt')
       promptForm.setFieldsValue(response.data)
-      const [versionsResponse, retrievalResponse, llmConfigResponse, healthResponse] = await Promise.all([
+      const [versionsResponse, retrievalResponse, llmConfigResponse, bindingsResponse, catalogResponse, healthResponse] = await Promise.all([
         axios.get<RagPromptConfig[]>('/api/admin/settings/rag-prompts'),
         axios.get<RagRetrievalConfig>('/api/admin/settings/rag-retrieval-config'),
         axios.get<RagLlmConfig>('/api/admin/settings/rag-llm-config'),
+        axios.get<AgentModelBindingPayload>('/api/admin/settings/agent-model-bindings'),
+        axios.get<AgentCatalogResponse>('/api/admin/settings/agent-catalog'),
         axios.get<Record<string, unknown>>('/api/admin/settings/ai-health'),
       ])
       setPromptVersions(versionsResponse.data)
       retrievalForm.setFieldsValue(retrievalResponse.data)
       llmConfigForm.setFieldsValue(llmConfigResponse.data)
+      setAgentCatalog(catalogResponse.data.agents ?? [])
+      const defaultByAgent = new Map((catalogResponse.data.agents ?? []).map((item) => [
+        item.name,
+        {
+          agent: item.name,
+          category: item.categoryHint ?? 'chat',
+          provider: '',
+          model: '',
+          timeoutSeconds: 90,
+          enabled: false,
+        } as AgentModelBindingItem,
+      ]))
+      for (const item of bindingsResponse.data.items ?? []) {
+        defaultByAgent.set(item.agent, item)
+      }
+      setAgentBindings(Array.from(defaultByAgent.values()))
       setHealth(healthResponse.data)
     } finally {
       setPromptLoading(false)
@@ -1301,6 +1355,27 @@ function SettingsPanel() {
     await axios.put('/api/admin/settings/rag-llm-config', values)
     message.success('LLM 运行配置已保存')
     await loadPrompt()
+  }
+
+  async function saveAgentBindings() {
+    setAgentBindingLoading(true)
+    try {
+      const payload: AgentModelBindingPayload = { items: agentBindings }
+      const response = await axios.put<AgentModelBindingPayload>('/api/admin/settings/agent-model-bindings', payload)
+      setAgentBindings(response.data.items)
+      message.success('智能体模型编排已保存')
+    } catch (error) {
+      const description = axios.isAxiosError(error)
+        ? error.response?.data?.message ?? '保存智能体模型编排失败，请检查后端服务。'
+        : '保存智能体模型编排失败，请稍后重试。'
+      message.error(description)
+    } finally {
+      setAgentBindingLoading(false)
+    }
+  }
+
+  const updateBinding = (agent: string, patch: Partial<AgentModelBindingItem>) => {
+    setAgentBindings((current) => current.map((item) => (item.agent === agent ? { ...item, ...patch } : item)))
   }
 
   useEffect(() => {
@@ -1625,6 +1700,106 @@ function SettingsPanel() {
                 </Col>
               </Row>
             </Form>
+          </Card>
+          <Card
+            size="small"
+            title="智能体模型编排"
+            extra={<Button type="primary" loading={agentBindingLoading} onClick={() => void saveAgentBindings()}>保存智能体编排</Button>}
+          >
+            <Table
+              rowKey="agent"
+              pagination={false}
+              dataSource={agentBindings}
+              columns={[
+                {
+                  title: '智能体',
+                  dataIndex: 'agent',
+                  render: (value: string) => (
+                    <Tag color="blue">{value}</Tag>
+                  ),
+                },
+                {
+                  title: '模型分类',
+                  dataIndex: 'category',
+                  render: (value: ModelCategory, row: AgentModelBindingItem) => (
+                    <Select
+                      value={value}
+                      options={[
+                        { value: 'chat', label: '对话模型' },
+                        { value: 'multimodal', label: '多模态模型' },
+                        { value: 'vision', label: '视觉模型' },
+                        { value: 'embedding', label: '嵌入模型' },
+                        { value: 'speech', label: '语音音色' },
+                      ]}
+                      style={{ width: 160 }}
+                      onChange={(next) => updateBinding(row.agent, { category: next })}
+                    />
+                  ),
+                },
+                {
+                  title: 'Provider',
+                  dataIndex: 'provider',
+                  render: (value: string, row: AgentModelBindingItem) => (
+                    <Select
+                      value={value}
+                      options={providerConfigs.map((item) => ({ value: item.provider, label: item.provider }))}
+                      style={{ width: 160 }}
+                      onChange={(next) => updateBinding(row.agent, { provider: next })}
+                    />
+                  ),
+                },
+                {
+                  title: '模型 ID',
+                  dataIndex: 'model',
+                  render: (value: string, row: AgentModelBindingItem) => (
+                    <Select
+                      value={value}
+                      options={(catalog[MODEL_OPTIONS_BY_CATEGORY_FIELD[row.category]] ?? [])
+                        .filter((item) => item.provider === row.provider)
+                        .map((item) => ({ value: item.modelId, label: item.modelId }))}
+                      placeholder="请选择手动维护里已配置的模型"
+                      showSearch
+                      optionFilterProp="label"
+                      onChange={(next) => updateBinding(row.agent, { model: next })}
+                    />
+                  ),
+                },
+                {
+                  title: '超时秒数',
+                  dataIndex: 'timeoutSeconds',
+                  width: 140,
+                  render: (value: number, row: AgentModelBindingItem) => (
+                    <InputNumber
+                      value={value}
+                      min={1}
+                      max={600}
+                      style={{ width: '100%' }}
+                      onChange={(next) => updateBinding(row.agent, { timeoutSeconds: Number(next || 90) })}
+                    />
+                  ),
+                },
+                {
+                  title: '启用',
+                  dataIndex: 'enabled',
+                  width: 100,
+                  render: (value: boolean, row: AgentModelBindingItem) => (
+                    <Switch checked={value} onChange={(next) => updateBinding(row.agent, { enabled: next })} />
+                  ),
+                },
+              ]}
+              expandable={{
+                expandedRowRender: (row) => {
+                  const meta = agentCatalog.find((item) => item.name === row.agent)
+                  if (!meta) return null
+                  return (
+                    <div className="admin-form-grid">
+                      <div><strong>SOUL:</strong> {meta.soul}</div>
+                      <div><strong>SKILL:</strong> {meta.skill}</div>
+                    </div>
+                  )
+                },
+              }}
+            />
           </Card>
         </Space>
       ),

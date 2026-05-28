@@ -12,7 +12,7 @@ class RetrievalConfig(BaseModel):
     rerank_limit: int = Field(default=5, alias="rerankLimit")
     score_threshold: float = Field(default=0.15, alias="scoreThreshold")
     hybrid_enabled: bool = Field(default=True, alias="hybridEnabled")
-    reranker_enabled: bool = Field(default=True, alias="rerankerEnabled")
+    reranker_enabled: bool = Field(default=False, alias="rerankerEnabled")
 
 
 def config_path() -> Path:

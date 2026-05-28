@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from rag.contracts.schemas import ChunkRecord
 from rag.retrieval.config_store import load_retrieval_config
-from rag.retrieval.embedder import BgeM3Embedder
+from rag.retrieval.embedder import ProviderEmbedder
 from rag.retrieval.reranker import BgeReranker
 from rag.retrieval.vectordb import QdrantVectorStore
 
@@ -11,7 +11,7 @@ class Retriever:
     def __init__(
         self,
         vector_store: QdrantVectorStore,
-        embedder: BgeM3Embedder,
+        embedder: ProviderEmbedder,
         reranker: BgeReranker,
         retrieve_limit: int,
         rerank_limit: int,
