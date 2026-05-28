@@ -1,10 +1,16 @@
 package com.digitalhuman.backend_java.controller;
 
+import com.digitalhuman.backend_java.dto.FacilityCategoryDto;
+import com.digitalhuman.backend_java.dto.FacilityCategoryRequestDto;
+import com.digitalhuman.backend_java.dto.ScenicFacilityDto;
+import com.digitalhuman.backend_java.dto.ScenicFacilityRequestDto;
 import com.digitalhuman.backend_java.dto.ScenicRouteDto;
 import com.digitalhuman.backend_java.dto.ScenicRouteSaveRequest;
 import com.digitalhuman.backend_java.dto.ScenicSpotDto;
+import com.digitalhuman.backend_java.service.AdminScenicFacilityService;
 import com.digitalhuman.backend_java.service.GuideService;
 import com.digitalhuman.backend_java.service.ScenicRouteService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -23,15 +29,69 @@ public class AdminScenicController {
 
     private final GuideService guideService;
     private final ScenicRouteService scenicRouteService;
+    private final AdminScenicFacilityService adminScenicFacilityService;
 
-    public AdminScenicController(GuideService guideService, ScenicRouteService scenicRouteService) {
+    public AdminScenicController(
+            GuideService guideService,
+            ScenicRouteService scenicRouteService,
+            AdminScenicFacilityService adminScenicFacilityService) {
         this.guideService = guideService;
         this.scenicRouteService = scenicRouteService;
+        this.adminScenicFacilityService = adminScenicFacilityService;
     }
 
     @GetMapping("/spots")
     public List<ScenicSpotDto> getSpots() {
         return guideService.getAllSpots();
+    }
+
+    @GetMapping("/categories")
+    public List<FacilityCategoryDto> getCategories() {
+        return adminScenicFacilityService.getCategories();
+    }
+
+    @PostMapping("/categories")
+    public FacilityCategoryDto createCategory(@Valid @RequestBody FacilityCategoryRequestDto request) {
+        return adminScenicFacilityService.createCategory(request);
+    }
+
+    @PutMapping("/categories/{id}")
+    public FacilityCategoryDto updateCategory(
+            @PathVariable Long id,
+            @Valid @RequestBody FacilityCategoryRequestDto request) {
+        return adminScenicFacilityService.updateCategory(id, request);
+    }
+
+    @DeleteMapping("/categories/{id}")
+    public void deleteCategory(@PathVariable Long id) {
+        adminScenicFacilityService.deleteCategory(id);
+    }
+
+    @GetMapping("/facilities")
+    public List<ScenicFacilityDto> getFacilities() {
+        return adminScenicFacilityService.getFacilities();
+    }
+
+    @GetMapping("/facilities/{id}")
+    public ScenicFacilityDto getFacility(@PathVariable Long id) {
+        return adminScenicFacilityService.getFacility(id);
+    }
+
+    @PostMapping("/facilities")
+    public ScenicFacilityDto createFacility(@Valid @RequestBody ScenicFacilityRequestDto request) {
+        return adminScenicFacilityService.createFacility(request);
+    }
+
+    @PutMapping("/facilities/{id}")
+    public ScenicFacilityDto updateFacility(
+            @PathVariable Long id,
+            @Valid @RequestBody ScenicFacilityRequestDto request) {
+        return adminScenicFacilityService.updateFacility(id, request);
+    }
+
+    @DeleteMapping("/facilities/{id}")
+    public void deleteFacility(@PathVariable Long id) {
+        adminScenicFacilityService.deleteFacility(id);
     }
 
     @GetMapping("/routes")

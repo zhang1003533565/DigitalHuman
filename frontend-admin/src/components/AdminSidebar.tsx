@@ -39,7 +39,15 @@ const menuItems: MenuProps['items'] = [
     ],
   },
   { key: 'routes', icon: <NodeIndexOutlined />, label: '路线管理' },
-  { key: 'avatar', icon: <RobotOutlined />, label: '数字人配置' },
+  {
+    key: 'avatar-group',
+    icon: <RobotOutlined />,
+    label: '数字人配置',
+    children: [
+      { key: 'avatar', label: '基础配置' },
+      { key: 'model-emotion', label: '动作配置' },
+    ],
+  },
   { key: 'feedback', icon: <CommentOutlined />, label: '游客反馈分析' },
   { key: 'qa', icon: <SearchOutlined />, label: '问答记录查询' },
   { key: 'review', icon: <SafetyOutlined />, label: '人工审核队列' },
@@ -60,9 +68,10 @@ export default function AdminSidebar({ activeKey, displayName, role, onLogout, o
           theme="dark"
           mode="inline"
           selectedKeys={[activeKey]}
+          defaultOpenKeys={['avatar-group']}
           items={menuItems}
           onClick={({ key }) => {
-            if (key === 'spots') {
+            if (key === 'spots' || key === 'avatar-group') {
               return
             }
             onSelect(key)

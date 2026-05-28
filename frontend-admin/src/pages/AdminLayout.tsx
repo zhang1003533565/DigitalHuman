@@ -34,17 +34,18 @@ import type { UploadProps } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { useLocation, useNavigate } from 'react-router-dom'
 import AdminSidebar from '../components/AdminSidebar'
+import { useDeferredMount } from '../hooks/useDeferredMount'
 import ChatConfigPage from './settings/ChatConfigPage'
 import EmbeddingConfigPage from './settings/EmbeddingConfigPage'
 import ModelManualPage from './settings/ModelManualPage'
 import MultimodalConfigPage from './settings/MultimodalConfigPage'
 import VisionConfigPage from './settings/VisionConfigPage'
 import VoiceConfigPage from './settings/VoiceConfigPage'
-import SpotDrawer from './scenic/SpotAddPage'
 import SpotCategoryPage from './scenic/SpotCategoryPage'
 import FacilityListPage from './scenic/FacilityListPage'
 import TravelAnalyticsPage from './scenic/TravelAnalyticsPage'
 import RouteManagementPage from './scenic/RouteManagementPage'
+import ModelEmotionPage from './ModelEmotionPage'
 import type { LoginResult } from '../types/admin'
 
 const { Content } = Layout
@@ -57,6 +58,7 @@ type MenuKey =
   | 'facility-list'
   | 'routes'
   | 'avatar'
+  | 'model-emotion'
   | 'settings'
   | 'travel-analytics'
   | 'feedback'
@@ -75,6 +77,7 @@ const menuPathByKey: Record<MenuKey, string> = {
   'facility-list': '/admin/spots/facilities',
   routes: '/admin/routes',
   avatar: '/admin/avatar',
+  'model-emotion': '/admin/model-emotion',
   settings: '/admin/setting',
   'travel-analytics': '/admin/travel-analytics',
   feedback: '/admin/feedback',
@@ -708,16 +711,17 @@ function KnowledgePanel() {
     )))
   }
 
-  useEffect(() => {
+  useDeferredMount(() => {
     void loadDocuments()
     void loadBuildTasks()
     void loadEmbeddingOptions()
-  }, [])
+  })
 
   useEffect(() => {
     const maxPage = Math.max(1, Math.ceil(chunks.length / chunkPageSize))
     if (chunkPage > maxPage) {
-      setChunkPage(maxPage)
+      const timeoutId = window.setTimeout(() => setChunkPage(maxPage), 0)
+      return () => window.clearTimeout(timeoutId)
     }
   }, [chunks.length, chunkPage, chunkPageSize])
 
@@ -1005,9 +1009,9 @@ function AvatarPanel() {
     }
   }
 
-  useEffect(() => {
+  useDeferredMount(() => {
     void loadConfig()
-  }, [])
+  })
 
   return (
     <div className="admin-panel-grid">
@@ -1208,10 +1212,10 @@ function SettingsPanel() {
     }
   }
 
-  useEffect(() => {
+  useDeferredMount(() => {
     void loadSettings()
     void loadPrompt()
-  }, [])
+  })
 
   async function loadPrompt() {
     setPromptLoading(true)
@@ -1739,9 +1743,9 @@ function QaPanel() {
     message.success('TraceId 已复制')
   }
 
-  useEffect(() => {
+  useDeferredMount(() => {
     void loadTraces()
-  }, [])
+  })
 
   const columns: TableColumnsType<RagTraceSummary> = [
     {
@@ -1938,9 +1942,9 @@ function ReviewPanel() {
     await loadQueue()
   }
 
-  useEffect(() => {
+  useDeferredMount(() => {
     void loadQueue()
-  }, [])
+  })
 
   const columns: TableColumnsType<RagTraceSummary> = [
     { title: '状态', dataIndex: 'reviewStatus', width: 120, render: (value?: string) => <Tag color={value === 'PENDING' ? 'gold' : 'green'}>{value || '-'}</Tag> },
@@ -2057,10 +2061,10 @@ function EvalPanel() {
     setDetail(response.data)
   }
 
-  useEffect(() => {
+  useDeferredMount(() => {
     void loadRuns()
     void loadPromptVersions()
-  }, [])
+  })
 
   const runColumns: TableColumnsType<RagEvalRun> = [
     { title: 'ID', dataIndex: 'id', width: 80 },
@@ -2137,9 +2141,9 @@ function KnowledgeMissingPanel() {
     }
   }
 
-  useEffect(() => {
+  useDeferredMount(() => {
     void loadItems()
-  }, [])
+  })
 
   return (
     <Card title="知识缺失池" extra={<Button onClick={() => void loadItems()} loading={loading}>刷新</Button>}>
@@ -2174,6 +2178,8 @@ function renderPanel(activeKey: MenuKey) {
       return <RouteManagementPage />
     case 'avatar':
       return <AvatarPanel />
+    case 'model-emotion':
+      return <ModelEmotionPage />
     case 'settings':
       return <SettingsPanel />
     case 'travel-analytics':
@@ -2195,7 +2201,6 @@ function renderPanel(activeKey: MenuKey) {
 }
 
 export function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: () => void }) {
-  const [spotDrawerOpen, setSpotDrawerOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
   const activeKey = getMenuKeyFromPath(location.pathname)
@@ -2208,16 +2213,6 @@ export function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: (
 
   return (
     <Layout className="admin-shell">
-      <SpotDrawer
-        open={spotDrawerOpen}
-        onClose={() => setSpotDrawerOpen(false)}
-        title="新增景点"
-        actionText="发布景点"
-        onAction={() => {
-          message.success('发布成功')
-          setSpotDrawerOpen(false)
-        }}
-      />
       <AdminSidebar
         activeKey={activeKey}
         displayName={user.displayName}
@@ -2227,9 +2222,7 @@ export function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: (
       />
       <Layout>
         <Content className={activeKey === 'travel-analytics' ? 'admin-content admin-content--fullscreen-table' : 'admin-content'}>
-          {activeKey === 'facility-list'
-            ? <FacilityListPage onAddFacility={() => setSpotDrawerOpen(true)} />
-            : renderPanel(activeKey)}
+          {renderPanel(activeKey)}
         </Content>
       </Layout>
     </Layout>
