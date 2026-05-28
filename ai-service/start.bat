@@ -6,7 +6,7 @@ cd /d "%~dp0"
 if "%HOST%"=="" set HOST=127.0.0.1
 if "%PORT%"=="" set PORT=18755
 if "%VENV_DIR%"=="" set "VENV_DIR=.venv"
-if "%RUN_MODE%"=="" set "RUN_MODE=docker"
+if "%RUN_MODE%"=="" set "RUN_MODE=local"
 
 set "PYTHON_BIN=%VENV_DIR%\Scripts\python.exe"
 if not exist "%PYTHON_BIN%" (

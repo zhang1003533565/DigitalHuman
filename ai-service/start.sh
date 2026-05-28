@@ -8,7 +8,7 @@ cd "$SCRIPT_DIR"
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-18755}"
 VENV_DIR="${VENV_DIR:-.venv}"
-RUN_MODE="${RUN_MODE:-docker}"
+RUN_MODE="${RUN_MODE:-local}"
 
 if [ -x "$SCRIPT_DIR/${VENV_DIR}/bin/python" ]; then
   PYTHON_BIN="$SCRIPT_DIR/${VENV_DIR}/bin/python"
