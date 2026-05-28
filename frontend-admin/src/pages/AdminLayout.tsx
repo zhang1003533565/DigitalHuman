@@ -44,6 +44,8 @@ import VoiceConfigPage from './settings/VoiceConfigPage'
 import SpotCategoryPage from './scenic/SpotCategoryPage'
 import FacilityListPage from './scenic/FacilityListPage'
 import TravelAnalyticsPage from './scenic/TravelAnalyticsPage'
+import ScenicStructuredPage from './scenic/ScenicStructuredPage'
+import VoiceScriptPage from './scenic/VoiceScriptPage'
 import RouteManagementPage from './scenic/RouteManagementPage'
 import ModelEmotionPage from './ModelEmotionPage'
 import type { LoginResult } from '../types/admin'
@@ -61,6 +63,8 @@ type MenuKey =
   | 'model-emotion'
   | 'settings'
   | 'travel-analytics'
+  | 'scenic-structured'
+  | 'voice-scripts'
   | 'feedback'
   | 'qa'
   | 'review'
@@ -80,6 +84,8 @@ const menuPathByKey: Record<MenuKey, string> = {
   'model-emotion': '/admin/model-emotion',
   settings: '/admin/setting',
   'travel-analytics': '/admin/travel-analytics',
+  'scenic-structured': '/admin/scenic-structured',
+  'voice-scripts': '/admin/voice-scripts',
   feedback: '/admin/feedback',
   qa: '/admin/qa',
   review: '/admin/review',
@@ -2184,6 +2190,10 @@ function renderPanel(activeKey: MenuKey) {
       return <SettingsPanel />
     case 'travel-analytics':
       return <TravelAnalyticsPage />
+    case 'scenic-structured':
+      return <ScenicStructuredPage />
+    case 'voice-scripts':
+      return <VoiceScriptPage />
     case 'feedback':
       return <FeedbackPanel />
     case 'qa':
@@ -2221,7 +2231,7 @@ export function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: (
         onSelect={(key) => navigate(getPathForMenuKey(key as MenuKey))}
       />
       <Layout>
-        <Content className={activeKey === 'travel-analytics' ? 'admin-content admin-content--fullscreen-table' : 'admin-content'}>
+        <Content className={activeKey === 'travel-analytics' || activeKey === 'scenic-structured' || activeKey === 'voice-scripts' ? 'admin-content admin-content--fullscreen-table' : 'admin-content'}>
           {renderPanel(activeKey)}
         </Content>
       </Layout>

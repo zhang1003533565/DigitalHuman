@@ -1,15 +1,10 @@
-﻿import {
+import {
   BarChartOutlined,
   BookOutlined,
   CommentOutlined,
-  DatabaseOutlined,
   EnvironmentOutlined,
-  NodeIndexOutlined,
   RobotOutlined,
   SearchOutlined,
-  SafetyOutlined,
-  ExperimentOutlined,
-  WarningOutlined,
   SettingOutlined,
   UserOutlined,
 } from '@ant-design/icons'
@@ -28,7 +23,17 @@ const { Sider } = Layout
 
 const menuItems: MenuProps['items'] = [
   { key: 'dashboard', icon: <BarChartOutlined />, label: '数据总览' },
-  { key: 'knowledge', icon: <BookOutlined />, label: '知识库管理' },
+  {
+    key: 'knowledge-group',
+    icon: <BookOutlined />,
+    label: '知识库管理',
+    children: [
+      { key: 'knowledge', label: '知识库文档' },
+      { key: 'review', label: '人工审核队列' },
+      { key: 'knowledge-missing', label: '知识缺失池' },
+      { key: 'eval', label: 'RAG 评测报告' },
+    ],
+  },
   {
     key: 'spots',
     icon: <EnvironmentOutlined />,
@@ -36,9 +41,12 @@ const menuItems: MenuProps['items'] = [
     children: [
       { key: 'spot-category', label: '景点分类' },
       { key: 'facility-list', label: '全部设施' },
+      { key: 'routes', label: '路线管理' },
+      { key: 'travel-analytics', label: '旅游数据行为分析' },
+      { key: 'scenic-structured', label: '景点结构化数据' },
+      { key: 'voice-scripts', label: '景点口播管理' },
     ],
   },
-  { key: 'routes', icon: <NodeIndexOutlined />, label: '路线管理' },
   {
     key: 'avatar-group',
     icon: <RobotOutlined />,
@@ -50,10 +58,6 @@ const menuItems: MenuProps['items'] = [
   },
   { key: 'feedback', icon: <CommentOutlined />, label: '游客反馈分析' },
   { key: 'qa', icon: <SearchOutlined />, label: '问答记录查询' },
-  { key: 'review', icon: <SafetyOutlined />, label: '人工审核队列' },
-  { key: 'knowledge-missing', icon: <WarningOutlined />, label: '知识缺失池' },
-  { key: 'eval', icon: <ExperimentOutlined />, label: 'RAG 评测报告' },
-  { key: 'travel-analytics', icon: <DatabaseOutlined />, label: '旅游数据行为分析' },
 ]
 
 export default function AdminSidebar({ activeKey, displayName, role, onLogout, onSelect }: AdminSidebarProps) {
@@ -68,10 +72,10 @@ export default function AdminSidebar({ activeKey, displayName, role, onLogout, o
           theme="dark"
           mode="inline"
           selectedKeys={[activeKey]}
-          defaultOpenKeys={['avatar-group']}
+          defaultOpenKeys={['knowledge-group', 'spots', 'avatar-group']}
           items={menuItems}
           onClick={({ key }) => {
-            if (key === 'spots' || key === 'avatar-group') {
+            if (key === 'knowledge-group' || key === 'spots' || key === 'avatar-group') {
               return
             }
             onSelect(key)
