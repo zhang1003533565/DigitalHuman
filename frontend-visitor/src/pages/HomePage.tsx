@@ -94,23 +94,11 @@ export function HomePage({ user, onLogout }: HomePageProps) {
           </div>
         )}
 
-        {/* ===== 快捷入口 ===== */}
-        <div className="hp-entries">
-          <div className="hp-entry" onClick={() => navigate(DIGITAL_HUMAN_ROUTE)}>
-            <div className="hp-entry__icon">🤖</div>
-            <span>数字人导览</span>
-          </div>
-          <div className="hp-entry" onClick={() => navigate('/routes')}>
-            <div className="hp-entry__icon">🗺️</div>
-            <span>路线推荐</span>
-          </div>
-          <div className="hp-entry" onClick={() => navigate('/map')}>
-            <div className="hp-entry__icon">📍</div>
-            <span>景点地图</span>
-          </div>
-          <div className="hp-entry" onClick={() => navigate('/feedback')}>
-            <div className="hp-entry__icon">💬</div>
-            <span>反馈建议</span>
+        {/* ===== 欢迎栏 ===== */}
+        <div className="hp-welcome">
+          <div className="hp-welcome__left">
+            <h2>Hi, {user.displayName || user.username} 👋</h2>
+            <p>灵山胜境景区智慧导览，AI 数字人为您提供个性化游览服务</p>
           </div>
         </div>
 
@@ -171,17 +159,7 @@ export function HomePage({ user, onLogout }: HomePageProps) {
           </section>
         )}
 
-        {/* ===== 底部欢迎 ===== */}
-        <div className="hp-welcome">
-          <div className="hp-welcome__left">
-            <h2>Hi, {user.displayName || user.username} 👋</h2>
-            <p>灵山胜境景区智慧导览，AI 数字人为您提供个性化游览服务</p>
-          </div>
-          <button className="hp-welcome__btn" onClick={() => navigate(DIGITAL_HUMAN_ROUTE)}>
-            开始导览 →
-          </button>
         </div>
-      </div>
     </main>
   )
 }

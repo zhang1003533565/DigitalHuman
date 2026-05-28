@@ -283,6 +283,7 @@
   border-radius: 16px;
   background: linear-gradient(135deg, rgba(60, 140, 255, 0.1), rgba(100, 220, 200, 0.08));
   border: 1px solid rgba(100, 180, 255, 0.12);
+  margin-bottom: 24px;
 }
 
 .hp-welcome__left h2 {
