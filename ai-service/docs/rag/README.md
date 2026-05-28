@@ -40,9 +40,10 @@ As of May 20, 2026, DeepSeek's official docs show:
 
 ## 3. Start Qdrant
 
-If you want one-command startup for the unified AI layer (`Qdrant + ai-service`), use the repository root `docker-compose.yml`:
+If you want one-command startup for the unified AI layer (`Qdrant + ai-service`), use `ai-service/docker-compose.yml`:
 
 ```bash
+cd ai-service
 docker compose up -d --build
 ```
 
@@ -62,6 +63,7 @@ Shared endpoint and model defaults live in:
 To stop:
 
 ```bash
+cd ai-service
 docker compose down
 ```
 
@@ -71,7 +73,7 @@ Example with Docker:
 
 ```bash
 docker run -p 6333:6333 -p 6334:6334 \
-  -v $(pwd)/../storage/qdrant:/qdrant/storage \
+  -v $(pwd)/storage/qdrant:/qdrant/storage \
   qdrant/qdrant
 ```
 

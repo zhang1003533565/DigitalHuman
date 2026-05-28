@@ -224,7 +224,13 @@ class RagService:
         return self.query_graph.run(request)
 
     def _resolve_document_path(self, file_name: str) -> Path:
-        if not file_name or "/" in file_name or "\\" in file_name:
+        if (
+            not file_name
+            or "/" in file_name
+            or "\\" in file_name
+            or file_name in {".", ".."}
+            or ".." in file_name
+        ):
             raise HTTPException(status_code=400, detail="文件名不合法")
         ensure_directory(self.settings.knowledge_base_dir)
         return self.settings.knowledge_base_dir / file_name

@@ -21,11 +21,11 @@ DigitalHuman/
 ├─ frontend-admin/
 ├─ backend-java/
 ├─ ai-service/
+│  ├─ docker-compose.yml
+│  ├─ knowledge-base/
+│  └─ storage/
 ├─ config/
 │  └─ application-shared.properties
-├─ knowledge-base/
-├─ storage/
-└─ docker-compose.yml
 ```
 
 ## 统一配置
@@ -207,16 +207,18 @@ http://localhost:5173
 如果你想一键启动 `Qdrant + ai-service`：
 
 ```bash
+cd ai-service
 docker compose up -d --build
 ```
 
 停止：
 
 ```bash
+cd ai-service
 docker compose down
 ```
 
-注意：当前 `docker-compose.yml` 只编排了：
+注意：当前 `ai-service/docker-compose.yml` 只编排了：
 
 - `qdrant`
 - `ai-service`
