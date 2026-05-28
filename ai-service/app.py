@@ -4,6 +4,7 @@ RAG FastAPI service for ingesting the local knowledge base and serving retrieval
 """
 
 from fastapi import Body, FastAPI, File, HTTPException, UploadFile
+from agents.router import router as agents_router
 
 from model_capabilities.testing.model_test_service import test_model
 from model_capabilities.tts.router import router as tts_router
@@ -19,6 +20,7 @@ from rag.provider_runtime import provider_health_summary
 app = FastAPI(title="DigitalHuman RAG Service")
 rag_service = RagService()
 app.include_router(tts_router)
+app.include_router(agents_router)
 
 
 @app.get("/health")
