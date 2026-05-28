@@ -3,6 +3,7 @@ import {
   BookOutlined,
   CommentOutlined,
   EnvironmentOutlined,
+  HomeOutlined,
   RobotOutlined,
   SearchOutlined,
   SettingOutlined,
@@ -21,8 +22,11 @@ type AdminSidebarProps = {
 
 const { Sider } = Layout
 
+const PARENT_MENU_KEYS = new Set(['knowledge-group', 'spots', 'avatar-group'])
+
 const menuItems: MenuProps['items'] = [
   { key: 'dashboard', icon: <BarChartOutlined />, label: '数据总览' },
+  { key: 'home-config', icon: <HomeOutlined />, label: '首页配置' },
   {
     key: 'knowledge-group',
     icon: <BookOutlined />,
@@ -75,7 +79,7 @@ export default function AdminSidebar({ activeKey, displayName, role, onLogout, o
           defaultOpenKeys={['knowledge-group', 'spots', 'avatar-group']}
           items={menuItems}
           onClick={({ key }) => {
-            if (key === 'knowledge-group' || key === 'spots' || key === 'avatar-group') {
+            if (PARENT_MENU_KEYS.has(key)) {
               return
             }
             onSelect(key)
