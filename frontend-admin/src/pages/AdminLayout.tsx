@@ -1389,8 +1389,35 @@ function SettingsPanel() {
     }
   }
 
+  async function persistAgentBindings(nextBindings: AgentModelBindingItem[], successText?: string) {
+    setAgentBindingLoading(true)
+    try {
+      const response = await axios.put<AgentModelBindingPayload>('/api/admin/settings/agent-model-bindings', { items: nextBindings })
+      setAgentBindings(response.data.items)
+      if (successText) {
+        message.success(successText)
+      }
+      return true
+    } catch (error) {
+      const description = axios.isAxiosError(error)
+        ? error.response?.data?.message ?? '保存智能体模型编排失败，请检查后端服务。'
+        : '保存智能体模型编排失败，请稍后重试。'
+      message.error(description)
+      setAgentBindings(agentBindings)
+      return false
+    } finally {
+      setAgentBindingLoading(false)
+    }
+  }
+
   const updateBinding = (agent: string, patch: Partial<AgentModelBindingItem>) => {
     setAgentBindings((current) => current.map((item) => (item.agent === agent ? { ...item, ...patch } : item)))
+  }
+
+  async function toggleAgentEnabled(agent: string, enabled: boolean) {
+    const nextBindings = agentBindings.map((item) => (item.agent === agent ? { ...item, enabled } : item))
+    setAgentBindings(nextBindings)
+    await persistAgentBindings(nextBindings, enabled ? '智能体已启用' : '智能体已停用')
   }
 
   async function testAgent(agent: string, task: string) {
@@ -1833,7 +1860,11 @@ function SettingsPanel() {
                   dataIndex: 'enabled',
                   width: 100,
                   render: (value: boolean, row: AgentModelBindingItem) => (
-                    <Switch checked={value} onChange={(next) => updateBinding(row.agent, { enabled: next })} />
+                    <Switch
+                      checked={value}
+                      loading={agentBindingLoading}
+                      onChange={(next) => void toggleAgentEnabled(row.agent, next)}
+                    />
                   ),
                 },
                 {

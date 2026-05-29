@@ -2,9 +2,11 @@ package com.digitalhuman.backend_java.controller;
 
 import com.digitalhuman.backend_java.dto.TravelAnalyticsImportResponse;
 import com.digitalhuman.backend_java.dto.TravelAnalyticsImportResult;
+import com.digitalhuman.backend_java.dto.TravelAnalyticsPageResponse;
 import com.digitalhuman.backend_java.dto.TravelAnalyticsRecordRequest;
 import com.digitalhuman.backend_java.model.TravelAnalyticsRecord;
 import com.digitalhuman.backend_java.service.TravelAnalyticsService;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -21,8 +23,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import jakarta.validation.Valid;
 
-import java.util.List;
-
 @RestController
 @RequestMapping("/api/admin/travel-analytics")
 public class AdminTravelAnalyticsController {
@@ -34,8 +34,15 @@ public class AdminTravelAnalyticsController {
     }
 
     @GetMapping("/records")
-    public List<TravelAnalyticsRecord> listRecords() {
-        return travelAnalyticsService.listAll();
+    public TravelAnalyticsPageResponse listRecords(
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size) {
+        Page<TravelAnalyticsRecord> result = travelAnalyticsService.listPage(page, size);
+        return new TravelAnalyticsPageResponse(
+                result.getContent(),
+                result.getTotalElements(),
+                result.getNumber(),
+                result.getSize());
     }
 
     @GetMapping("/records/{id}")
@@ -72,10 +79,10 @@ public class AdminTravelAnalyticsController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(name = "replaceAll", defaultValue = "false") boolean replaceAll) {
         TravelAnalyticsImportResult result = travelAnalyticsService.importFromExcel(file, replaceAll);
-        int total = travelAnalyticsService.listAll().size();
+        long total = travelAnalyticsService.countAll();
         return new TravelAnalyticsImportResponse(
                 result.getImportedCount(),
-                total,
+                Math.toIntExact(Math.min(total, Integer.MAX_VALUE)),
                 result.getSkippedEmptyCount(),
                 result.getSkippedDuplicateCount(),
                 result.getIssues());

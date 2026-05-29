@@ -5,7 +5,12 @@ import com.digitalhuman.backend_java.dto.TravelAnalyticsImportResult;
 import com.digitalhuman.backend_java.dto.TravelAnalyticsRecordRequest;
 import com.digitalhuman.backend_java.model.TravelAnalyticsRecord;
 import com.digitalhuman.backend_java.repository.TravelAnalyticsRecordRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
@@ -29,6 +34,9 @@ import java.util.Set;
 @Service
 public class TravelAnalyticsService {
 
+    private static final int IMPORT_BATCH_SIZE = 500;
+    private static final int MAX_ISSUE_PREVIEW = 200;
+
     private static final List<String> REQUIRED_HEADERS = List.of(
             "tourist_id",
             "user_nickname",
@@ -51,12 +59,25 @@ public class TravelAnalyticsService {
 
     private final TravelAnalyticsRecordRepository recordRepository;
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     public TravelAnalyticsService(TravelAnalyticsRecordRepository recordRepository) {
         this.recordRepository = recordRepository;
     }
 
     public List<TravelAnalyticsRecord> listAll() {
         return recordRepository.findAllByOrderByIdAsc();
+    }
+
+    public Page<TravelAnalyticsRecord> listPage(int page, int size) {
+        int safePage = Math.max(0, page);
+        int safeSize = Math.max(1, Math.min(size, 100));
+        return recordRepository.findAll(PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.ASC, "id")));
+    }
+
+    public long countAll() {
+        return recordRepository.count();
     }
 
     public TravelAnalyticsRecord getById(Long id) {
@@ -135,11 +156,14 @@ public class TravelAnalyticsService {
 
             if (replaceAll) {
                 recordRepository.deleteAllInBatch();
+                entityManager.flush();
+                entityManager.clear();
             }
 
-            List<TravelAnalyticsRecord> rows = new ArrayList<>();
+            List<TravelAnalyticsRecord> batch = new ArrayList<>(IMPORT_BATCH_SIZE);
             List<TravelAnalyticsImportIssueDto> issues = new ArrayList<>();
             Set<String> touristIdSeen = new HashSet<>();
+            int importedCount = 0;
             int skippedEmptyCount = 0;
             int skippedDuplicateCount = 0;
             DataFormatter formatter = new DataFormatter();
@@ -155,7 +179,7 @@ public class TravelAnalyticsService {
                     continue;
                 }
                 if (parsed.issue() != null) {
-                    issues.add(parsed.issue());
+                    addIssue(issues, parsed.issue());
                     continue;
                 }
                 TravelAnalyticsRecord entity = parsed.entity();
@@ -165,17 +189,20 @@ public class TravelAnalyticsService {
                 String touristId = normalize(entity.getTourist_id());
                 if (touristIdSeen.contains(touristId)) {
                     skippedDuplicateCount++;
-                    issues.add(new TravelAnalyticsImportIssueDto(rowIndex + 1, "tourist_id 重复，已跳过"));
+                    addIssue(issues, rowIndex + 1, "tourist_id 重复，已跳过");
                     continue;
                 }
                 touristIdSeen.add(touristId);
-                rows.add(entity);
+                batch.add(entity);
+                if (batch.size() >= IMPORT_BATCH_SIZE) {
+                    importedCount += saveImportBatch(batch);
+                }
             }
 
-            if (!rows.isEmpty()) {
-                recordRepository.saveAll(rows);
+            if (!batch.isEmpty()) {
+                importedCount += saveImportBatch(batch);
             }
-            return new TravelAnalyticsImportResult(rows.size(), skippedEmptyCount, skippedDuplicateCount, issues);
+            return new TravelAnalyticsImportResult(importedCount, skippedEmptyCount, skippedDuplicateCount, issues);
         } catch (IOException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "读取 Excel 失败：" + exception.getMessage());
         } catch (ResponseStatusException exception) {
@@ -249,6 +276,27 @@ public class TravelAnalyticsService {
         entity.setGroup_size(groupSize);
         entity.setSatisfaction(satisfaction);
         return ParseRowResult.entity(entity);
+    }
+
+    private int saveImportBatch(List<TravelAnalyticsRecord> batch) {
+        int size = batch.size();
+        recordRepository.saveAll(batch);
+        recordRepository.flush();
+        entityManager.clear();
+        batch.clear();
+        return size;
+    }
+
+    private void addIssue(List<TravelAnalyticsImportIssueDto> issues, int rowNumber, String reason) {
+        if (issues.size() < MAX_ISSUE_PREVIEW) {
+            issues.add(new TravelAnalyticsImportIssueDto(rowNumber, reason));
+        }
+    }
+
+    private void addIssue(List<TravelAnalyticsImportIssueDto> issues, TravelAnalyticsImportIssueDto issue) {
+        if (issues.size() < MAX_ISSUE_PREVIEW) {
+            issues.add(issue);
+        }
     }
 
     private String read(Row row, int cellIndex, DataFormatter formatter) {

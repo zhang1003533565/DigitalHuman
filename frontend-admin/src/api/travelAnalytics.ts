@@ -36,18 +36,35 @@ export type TravelAnalyticsImportResponse = {
   issues: TravelAnalyticsImportIssue[]
 }
 
-export async function getTravelAnalyticsRecords() {
-  const response = await axios.get<TravelAnalyticsRecord[]>('/api/admin/travel-analytics/records')
+export type TravelAnalyticsPageResponse = {
+  records: TravelAnalyticsRecord[]
+  total: number
+  page: number
+  size: number
+}
+
+export async function getTravelAnalyticsRecords(page = 0, size = 20) {
+  const response = await axios.get<TravelAnalyticsPageResponse>('/api/admin/travel-analytics/records', {
+    params: { page, size },
+  })
   return response.data
 }
 
-export async function importTravelAnalyticsExcel(file: File, replaceAll = false) {
+export async function importTravelAnalyticsExcel(
+  file: File,
+  replaceAll = false,
+  onProgress?: (percent: number) => void,
+) {
   const formData = new FormData()
   formData.append('file', file)
   formData.append('replaceAll', String(replaceAll))
   const response = await axios.post<TravelAnalyticsImportResponse>('/api/admin/travel-analytics/import', formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
+    },
+    onUploadProgress: (event) => {
+      if (!event.total) return
+      onProgress?.(Math.round((event.loaded * 100) / event.total))
     },
   })
   return response.data

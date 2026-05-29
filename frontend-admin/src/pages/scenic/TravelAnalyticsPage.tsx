@@ -10,8 +10,10 @@ import {
   Switch,
   Table,
   Tooltip,
+  Typography,
   Upload,
   message,
+  Progress,
 } from 'antd'
 import type { TableColumnsType, UploadProps } from 'antd'
 import {
@@ -103,47 +105,53 @@ function renderTruncatedCell(
   const text = (value ?? '').toString()
   const lineHeight = Math.max(18, fontSize + 6)
   const maxLines = Math.max(1, Math.floor(rowHeight / lineHeight))
+  const content = (
+    <div
+      style={{
+        position: 'relative',
+        minHeight: rowHeight,
+        paddingBottom: 6,
+        fontSize,
+        lineHeight: `${lineHeight}px`,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        display: '-webkit-box',
+        WebkitLineClamp: maxLines,
+        WebkitBoxOrient: 'vertical',
+        whiteSpace: 'normal',
+        wordBreak: 'break-word',
+        cursor: 'pointer',
+      }}
+    >
+      {text || '-'}
+      <div
+        role="separator"
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: -3,
+          height: 8,
+          cursor: 'row-resize',
+          zIndex: 3,
+        }}
+        onMouseDown={(event) => {
+          event.stopPropagation()
+          onRowResizeStart(event, rowKey, rowHeight)
+        }}
+      />
+    </div>
+  )
 
+  if (text.length <= 30) {
+    return content
+  }
   return (
     <Tooltip
       placement="topLeft"
       title={<div style={{ maxWidth: 900, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{text || '-'}</div>}
     >
-      <div
-        style={{
-          position: 'relative',
-          minHeight: rowHeight,
-          paddingBottom: 6,
-          fontSize,
-          lineHeight: `${lineHeight}px`,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          display: '-webkit-box',
-          WebkitLineClamp: maxLines,
-          WebkitBoxOrient: 'vertical',
-          whiteSpace: 'normal',
-          wordBreak: 'break-word',
-          cursor: 'pointer',
-        }}
-      >
-        {text || '-'}
-        <div
-          role="separator"
-          style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            bottom: -3,
-            height: 8,
-            cursor: 'row-resize',
-            zIndex: 3,
-          }}
-          onMouseDown={(event) => {
-            event.stopPropagation()
-            onRowResizeStart(event, rowKey, rowHeight)
-          }}
-        />
-      </div>
+      {content}
     </Tooltip>
   )
 }
@@ -151,10 +159,13 @@ function renderTruncatedCell(
 export default function TravelAnalyticsPage() {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [importStage, setImportStage] = useState<'idle' | 'uploading' | 'processing' | 'done'>('idle')
   const [downloadingTemplate, setDownloadingTemplate] = useState(false)
   const [saving, setSaving] = useState(false)
   const [replaceAll, setReplaceAll] = useState(true)
   const [rows, setRows] = useState<DataRow[]>([])
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 })
   const [fontSize] = useState(16)
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
   const [rowHeights, setRowHeights] = useState<Record<string, number>>({})
@@ -166,11 +177,16 @@ export default function TravelAnalyticsPage() {
   const colDragRef = useRef<{ field: string; startX: number; startWidth: number } | null>(null)
   const rowDragRef = useRef<{ rowKey: string; startY: number; startHeight: number } | null>(null)
 
-  const loadRows = useCallback(async () => {
+  const loadRows = useCallback(async (page = 1, pageSize = 20) => {
     setLoading(true)
     try {
-      const records = await getTravelAnalyticsRecords()
-      setRows(buildRows(records))
+      const result = await getTravelAnalyticsRecords(page - 1, pageSize)
+      setRows(buildRows(result.records))
+      setPagination({
+        current: result.page + 1,
+        pageSize: result.size,
+        total: result.total,
+      })
     } catch {
       message.error('加载旅游行为分析数据失败')
     } finally {
@@ -292,7 +308,7 @@ export default function TravelAnalyticsPage() {
               try {
                 await deleteTravelAnalyticsRecord(Number(record.__id))
                 message.success('删除成功')
-                await loadRows()
+                await loadRows(pagination.current, pagination.pageSize)
               } catch {
                 message.error('删除失败')
               }
@@ -314,8 +330,17 @@ export default function TravelAnalyticsPage() {
     showUploadList: false,
     beforeUpload: async (file) => {
       setUploading(true)
+      setUploadProgress(0)
+      setImportStage('uploading')
       try {
-        const result = await importTravelAnalyticsExcel(file as File, replaceAll)
+        const result = await importTravelAnalyticsExcel(file as File, replaceAll, (percent) => {
+          setUploadProgress(Math.min(percent, 100))
+          if (percent >= 100) {
+            setImportStage('processing')
+          }
+        })
+        setImportStage('done')
+        setUploadProgress(100)
         const issuePreview = result.issues.slice(0, 6).map((item) => `第${item.rowNumber}行：${item.reason}`).join('\n')
         message.success(
           `导入完成：成功 ${result.importedCount}，空行跳过 ${result.skippedEmptyCount}，重复跳过 ${result.skippedDuplicateCount}，当前总计 ${result.totalCount}`,
@@ -324,11 +349,15 @@ export default function TravelAnalyticsPage() {
         if (issuePreview) {
           message.warning(`导入问题预览：\n${issuePreview}`, 8)
         }
-        await loadRows()
+        await loadRows(1, pagination.pageSize)
       } catch {
         message.error('导入失败，请检查 Excel 表头和数据格式')
       } finally {
         setUploading(false)
+        window.setTimeout(() => {
+          setImportStage('idle')
+          setUploadProgress(0)
+        }, 1200)
       }
       return false
     },
@@ -369,7 +398,7 @@ export default function TravelAnalyticsPage() {
       setDrawerOpen(false)
       setEditingRow(null)
       form.resetFields()
-      await loadRows()
+      await loadRows(editingRow ? pagination.current : 1, pagination.pageSize)
     } catch (error) {
       if ((error as { errorFields?: unknown[] })?.errorFields) {
         return
@@ -414,6 +443,26 @@ export default function TravelAnalyticsPage() {
           </Space>
         )}
       >
+        {importStage !== 'idle' && (
+          <Card size="small" style={{ marginBottom: 16 }}>
+            <Space direction="vertical" style={{ width: '100%' }} size={8}>
+              <Typography.Text strong>
+                {importStage === 'uploading' && '正在上传 Excel'}
+                {importStage === 'processing' && '上传完成，正在解析并写入数据库'}
+                {importStage === 'done' && '导入完成'}
+              </Typography.Text>
+              <Progress
+                percent={importStage === 'processing' ? 99 : uploadProgress}
+                status={importStage === 'done' ? 'success' : 'active'}
+              />
+              <Typography.Text type="secondary">
+                {importStage === 'processing'
+                  ? '服务端正在分批入库，大文件请稍等，不要刷新页面。'
+                  : '上传进度会实时显示，上传完成后进入服务端处理阶段。'}
+              </Typography.Text>
+            </Space>
+          </Card>
+        )}
         <div className="travel-table-scroll">
           <Table
             className="travel-table"
@@ -423,10 +472,16 @@ export default function TravelAnalyticsPage() {
             tableLayout="fixed"
             scroll={{ x: 3900, y: tableScrollY }}
             pagination={{
-              pageSize: 20,
+              current: pagination.current,
+              pageSize: pagination.pageSize,
+              total: pagination.total,
               showSizeChanger: true,
               pageSizeOptions: ['10', '20', '50'],
               position: ['bottomLeft'],
+              showTotal: (total) => `共 ${total} 条`,
+            }}
+            onChange={(nextPagination) => {
+              void loadRows(nextPagination.current ?? 1, nextPagination.pageSize ?? 20)
             }}
           />
         </div>
