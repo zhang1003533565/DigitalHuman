@@ -490,18 +490,6 @@ export default function MultimodalConfigPage({
   return (
     <div className="multimodal-settings-page">
       <style>{MULTIMODAL_PAGE_STYLES}</style>
-      <div className="multimodal-settings-tabs">
-        {TAB_LABELS.map((label) => (
-          <button
-            key={label}
-            type="button"
-            className={`multimodal-settings-tab ${label === '多模态模型' ? 'multimodal-settings-tab--active' : ''}`}
-            onClick={() => { if (label !== '多模态模型') message.info('仅当前多模态模型页面展示') }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
       <div className="multimodal-settings-layout">
         <Card title="多模态模型列表" className="multimodal-settings-panel multimodal-settings-list-card">
           <div className="multimodal-settings-toolbar">

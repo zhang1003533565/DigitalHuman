@@ -157,6 +157,35 @@
   overflow-y: auto;
   overflow-x: hidden;
   padding-bottom: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.admin-sider__nav:hover {
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.admin-sider__nav::-webkit-scrollbar {
+  width: 4px;
+}
+
+.admin-sider__nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.admin-sider__nav::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: transparent;
+}
+
+.admin-sider__nav:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.admin-sider__nav::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .admin-sider__nav .ant-menu {

@@ -1,18 +1,27 @@
 import { useEffect, useMemo, useState } from 'react'
-import axios from 'axios'
-import { AutoComplete, Button, Card, Form, Input, Select, Table, message } from 'antd'
-import type { TableColumnsType } from 'antd'
-import { useDeferredMount } from '../../hooks/useDeferredMount'
+import {
+  ClockCircleOutlined,
+  FileTextOutlined,
+  InfoCircleOutlined,
+  MoreOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  SearchOutlined,
+} from '@ant-design/icons'
+import { Alert, Button, Card, Dropdown, Form, Input, Modal, Pagination, Select, Table, Tag, Tooltip, message } from 'antd'
+import type { MenuProps, TableColumnsType } from 'antd'
 
 type ModelCategory = 'embedding' | 'speech' | 'vision' | 'chat' | 'multimodal'
+type AddedModelStatus = 'current' | 'candidate'
+type ProviderStatus = 'success' | 'untested' | 'failed'
 
-type AdminModelOption = {
+interface AdminModelOption {
   category: ModelCategory
   provider: string
   modelId: string
 }
 
-type AdminModelCatalog = {
+interface AdminModelCatalog {
   embeddingModels: AdminModelOption[]
   speechModels: AdminModelOption[]
   visionModels: AdminModelOption[]
@@ -20,501 +29,1135 @@ type AdminModelCatalog = {
   multimodalModels: AdminModelOption[]
 }
 
-type AddModelOptionForm = {
-  category: ModelCategory
-  provider: string
-  modelId: string
-}
-
-type ProviderConfig = {
+interface ProviderConfig {
   provider: string
   baseUrl: string
   apiKey: string
   protocol: string
 }
 
-type ProviderConfigForm = {
-  provider: string
-  baseUrl: string
-  apiKey: string
-  protocol: string
-}
-
-type ProviderDoc = {
-  provider: string
-  fileName: string
-  markdown: string
-}
-
-type ModelCatalogRow = {
-  key: string
-  category: ModelCategory
-  provider: string
-  modelId: string
-}
-
-type ModelManualPageProps = {
+interface ModelManualPageProps {
   onCatalogChange?: (catalog: AdminModelCatalog) => void
   onProviderConfigsChange?: (providers: ProviderConfig[]) => void
 }
 
-const PROVIDER_OPTIONS = [
-  { value: 'DeepSeek', label: 'DeepSeek' },
-  { value: 'Qwen', label: 'Qwen' },
-  { value: 'Volcengine', label: 'Volcengine' },
-  { value: 'Xunfei', label: 'Xunfei' },
-]
-
-const PROVIDER_DEFAULTS: Record<string, { baseUrl: string; protocol: string }> = {
-  DeepSeek: {
-    baseUrl: 'https://api.deepseek.com',
-    protocol: 'openai_compatible',
-  },
-  Qwen: {
-    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    protocol: 'openai_compatible',
-  },
-  Volcengine: {
-    baseUrl: '',
-    protocol: 'custom',
-  },
-  Xunfei: {
-    baseUrl: '',
-    protocol: 'custom',
-  },
+interface ProviderItem extends ProviderConfig {
+  status: ProviderStatus
+  lastTestedAt?: string
 }
 
-const MODEL_CATEGORY_OPTIONS = [
+interface SupportedModel {
+  id: string
+  name: string
+  provider: string
+  category: ModelCategory
+  categoryLabel: string
+  description: string
+  capabilities: string[]
+}
+
+interface AddedModel {
+  key: string
+  category: ModelCategory
+  categoryLabel: string
+  provider: string
+  modelId: string
+  status: AddedModelStatus
+}
+
+interface ProviderFormValues {
+  provider: string
+  baseUrl: string
+  apiKey: string
+  protocol: string
+}
+
+interface AddModelFormValues {
+  category: ModelCategory
+  provider: string
+  modelId: string
+  capabilityInput?: string
+}
+
+const PRIMARY_COLOR = '#165DFF'
+const SUCCESS_COLOR = '#00B42A'
+const TEXT_MAIN = '#1D2129'
+const TEXT_SECONDARY = '#4E5969'
+const TEXT_MUTED = '#86909C'
+const BORDER_COLOR = '#E5E6EB'
+const INFO_BG = '#E6F4FF'
+
+const CATEGORY_OPTIONS: Array<{ value: ModelCategory; label: string }> = [
+  { value: 'chat', label: '对话模型' },
+  { value: 'vision', label: '视觉模型' },
+  { value: 'multimodal', label: '多模态模型' },
   { value: 'embedding', label: '嵌入模型' },
   { value: 'speech', label: '语音音色' },
-  { value: 'vision', label: '视觉模型' },
-  { value: 'chat', label: '对话模型' },
-  { value: 'multimodal', label: '多模态模型' },
-] as const
+]
 
-function renderMarkdown(markdown: string) {
-  const lines = markdown.split('\n')
-  const elements: React.JSX.Element[] = []
-  let listItems: string[] = []
-  let paragraphLines: string[] = []
+const CATEGORY_BY_VALUE = CATEGORY_OPTIONS.reduce<Record<ModelCategory, string>>(
+  (map, item) => ({ ...map, [item.value]: item.label }),
+  {} as Record<ModelCategory, string>,
+)
 
-  const flushList = () => {
-    if (!listItems.length) return
-    elements.push(
-      <ul className="admin-list admin-markdown-list" key={`list-${elements.length}`}>
-        {listItems.map((item, index) => (
-          <li key={`${item}-${index}`}>{item}</li>
-        ))}
-      </ul>,
-    )
-    listItems = []
+const CAPABILITY_FILTERS = [
+  { key: 'all', label: '全部' },
+  ...CATEGORY_OPTIONS.map((item) => ({ key: item.value, label: item.label })),
+]
+
+const PROTOCOL_OPTIONS = [
+  { value: 'openai_compatible', label: '兼容 OpenAI 协议' },
+  { value: 'dashscope', label: 'DashScope 协议' },
+  { value: 'custom', label: '自定义协议' },
+]
+
+const INITIAL_PROVIDERS: ProviderItem[] = [
+  {
+    provider: 'DeepSeek',
+    baseUrl: 'https://api.deepseek.com',
+    apiKey: 'sk-********deepseek',
+    protocol: 'openai_compatible',
+    status: 'success',
+    lastTestedAt: '2025-05-21 14:35',
+  },
+  {
+    provider: 'Qwen',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    apiKey: 'sk-********dashscope',
+    protocol: 'openai_compatible',
+    status: 'untested',
+  },
+  {
+    provider: 'Local TTS',
+    baseUrl: 'http://localhost:8000',
+    apiKey: 'local-secret',
+    protocol: 'custom',
+    status: 'success',
+    lastTestedAt: '2025-05-20 10:12',
+  },
+  {
+    provider: 'BGE',
+    baseUrl: 'http://localhost:8000/v1',
+    apiKey: 'local-secret',
+    protocol: 'openai_compatible',
+    status: 'success',
+    lastTestedAt: '2025-05-19 09:48',
+  },
+]
+
+const SUPPORTED_MODELS: SupportedModel[] = [
+  {
+    id: 'deepseek-v4-flash',
+    name: 'DeepSeek-V4-Flash',
+    provider: 'DeepSeek',
+    category: 'chat',
+    categoryLabel: '对话模型',
+    capabilities: ['对话模型', '推理', '问答', '长上下文'],
+    description: '高性能对话模型，支持长文本理解与复杂推理，适合问答与创作场景。',
+  },
+  {
+    id: 'deepseek-r1',
+    name: 'DeepSeek-R1',
+    provider: 'DeepSeek',
+    category: 'chat',
+    categoryLabel: '对话模型',
+    capabilities: ['对话模型', '推理', '代码', '数学'],
+    description: '强化推理能力的对话模型，擅长逻辑分析与代码生成。',
+  },
+  {
+    id: 'Qwen2.5-VL-7B-Instruct',
+    name: 'Qwen2.5-VL-7B-Instruct',
+    provider: 'Qwen',
+    category: 'multimodal',
+    categoryLabel: '多模态模型',
+    capabilities: ['多模态模型', '视觉问答', 'OCR', '推理'],
+    description: '面向图文理解与问答的多模态模型，可处理景区图片、票务截图与导览问答。',
+  },
+  {
+    id: 'qwen-max',
+    name: 'Qwen-Max',
+    provider: 'Qwen',
+    category: 'chat',
+    categoryLabel: '对话模型',
+    capabilities: ['对话模型', '问答', '长上下文'],
+    description: '通用对话与知识问答模型，适合后台智能客服和内容辅助生成。',
+  },
+  {
+    id: 'zh-CN-XiaoxiaoNeural',
+    name: 'zh-CN-XiaoxiaoNeural',
+    provider: 'Local TTS',
+    category: 'speech',
+    categoryLabel: '语音音色',
+    capabilities: ['语音音色', '中文', '自然语音'],
+    description: '清晰自然的中文女声音色，可用于数字人讲解与语音播报。',
+  },
+  {
+    id: 'bge-m3',
+    name: 'bge-m3',
+    provider: 'BGE',
+    category: 'embedding',
+    categoryLabel: '嵌入模型',
+    capabilities: ['嵌入模型', '检索', '多语言'],
+    description: '适合知识库召回的多语言向量模型，支持中文语义检索。',
+  },
+]
+
+const INITIAL_ADDED_MODELS: AddedModel[] = [
+  {
+    key: 'chat:DeepSeek:deepseek-v4-flash',
+    category: 'chat',
+    categoryLabel: '对话模型',
+    provider: 'DeepSeek',
+    modelId: 'deepseek-v4-flash',
+    status: 'current',
+  },
+  {
+    key: 'multimodal:Qwen:Qwen2.5-VL-7B-Instruct',
+    category: 'multimodal',
+    categoryLabel: '多模态模型',
+    provider: 'Qwen',
+    modelId: 'Qwen2.5-VL-7B-Instruct',
+    status: 'candidate',
+  },
+  {
+    key: 'speech:Local TTS:zh-CN-XiaoxiaoNeural',
+    category: 'speech',
+    categoryLabel: '语音音色',
+    provider: 'Local TTS',
+    modelId: 'zh-CN-XiaoxiaoNeural',
+    status: 'candidate',
+  },
+  {
+    key: 'embedding:BGE:bge-m3',
+    category: 'embedding',
+    categoryLabel: '嵌入模型',
+    provider: 'BGE',
+    modelId: 'bge-m3',
+    status: 'candidate',
+  },
+]
+
+const MODEL_MANUAL_STYLES = `
+  .model-manual-page {
+    display: grid;
+    gap: 12px;
+    background: #FFFFFF;
   }
 
-  const flushParagraph = () => {
-    if (!paragraphLines.length) return
-    elements.push(
-      <p className="admin-markdown-paragraph" key={`p-${elements.length}`}>
-        {paragraphLines.join(' ')}
-      </p>,
-    )
-    paragraphLines = []
+  .model-manual-alert {
+    border: 0;
+    border-radius: 8px;
+    background: ${INFO_BG};
+    padding: 11px 16px;
+    color: ${TEXT_SECONDARY};
   }
 
-  lines.forEach((rawLine) => {
-    const line = rawLine.trim()
-    if (!line) {
-      flushList()
-      flushParagraph()
-      return
-    }
-    if (line.startsWith('# ')) {
-      flushList()
-      flushParagraph()
-      elements.push(<h2 className="admin-markdown-h2" key={`h2-${elements.length}`}>{line.slice(2)}</h2>)
-      return
-    }
-    if (line.startsWith('## ')) {
-      flushList()
-      flushParagraph()
-      elements.push(<h3 className="admin-markdown-h3" key={`h3-${elements.length}`}>{line.slice(3)}</h3>)
-      return
-    }
-    if (line.startsWith('### ')) {
-      flushList()
-      flushParagraph()
-      elements.push(<h4 className="admin-markdown-h4" key={`h4-${elements.length}`}>{line.slice(4)}</h4>)
-      return
-    }
-    if (line.startsWith('- ')) {
-      flushParagraph()
-      listItems.push(line.slice(2))
-      return
-    }
-    paragraphLines.push(line)
-  })
+  .model-manual-grid {
+    display: grid;
+    grid-template-columns: minmax(430px, 1fr) minmax(500px, 1.05fr);
+    gap: 12px;
+    align-items: stretch;
+  }
 
-  flushList()
-  flushParagraph()
-  return elements
-}
+  .model-manual-card {
+    border: 1px solid ${BORDER_COLOR};
+    border-radius: 8px;
+    box-shadow: 0 4px 14px rgba(29, 33, 41, 0.06);
+  }
 
-export default function ModelManualPage({ onCatalogChange, onProviderConfigsChange }: ModelManualPageProps) {
-  const [addOptionForm] = Form.useForm<AddModelOptionForm>()
-  const [providerForm] = Form.useForm<ProviderConfigForm>()
-  const [savingProvider, setSavingProvider] = useState(false)
-  const [addingOption, setAddingOption] = useState(false)
-  const [deletingProvider, setDeletingProvider] = useState<string | null>(null)
-  const [deletingOption, setDeletingOption] = useState<string | null>(null)
-  const [providerDocSelection, setProviderDocSelection] = useState('DeepSeek')
-  const [providerDoc, setProviderDoc] = useState<ProviderDoc | null>(null)
-  const [providerDocLoading, setProviderDocLoading] = useState(false)
-  const [providerConfigs, setProviderConfigs] = useState<ProviderConfig[]>([])
-  const [catalog, setCatalog] = useState<AdminModelCatalog>({
+  .model-manual-card > .ant-card-head {
+    min-height: 38px;
+    padding: 0 16px;
+    border-bottom: 0;
+  }
+
+  .model-manual-card > .ant-card-head .ant-card-head-title {
+    padding: 12px 0 6px;
+    color: ${TEXT_MAIN};
+    font-size: 16px;
+    font-weight: 500;
+  }
+
+  .model-manual-card > .ant-card-body {
+    padding: 10px 16px 14px;
+  }
+
+  .model-manual-toolbar {
+    display: grid;
+    grid-template-columns: 190px minmax(0, 1fr);
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .model-manual-filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .model-manual-filter {
+    height: 28px;
+    padding: 0 14px;
+    border: 1px solid ${BORDER_COLOR};
+    border-radius: 999px;
+    background: #FFFFFF;
+    color: ${TEXT_SECONDARY};
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .model-manual-filter:hover,
+  .model-manual-filter--active {
+    border-color: rgba(22, 93, 255, 0.35);
+    background: #E8F3FF;
+    color: ${PRIMARY_COLOR};
+  }
+
+  .model-manual-list {
+    border: 1px solid ${BORDER_COLOR};
+    border-radius: 8px;
+    overflow: hidden;
+    background: #FFFFFF;
+  }
+
+  .model-manual-model {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    padding: 12px;
+    border-bottom: 1px solid ${BORDER_COLOR};
+  }
+
+  .model-manual-model:last-child {
+    border-bottom: 0;
+  }
+
+  .model-manual-model__header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .model-manual-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: ${PRIMARY_COLOR};
+    flex: 0 0 auto;
+  }
+
+  .model-manual-model__name {
+    color: ${TEXT_MAIN};
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.5;
+  }
+
+  .model-manual-tag {
+    margin-inline-end: 4px;
+    border-color: #B7E3FF;
+    background: #E6F7FF;
+    color: ${PRIMARY_COLOR};
+    font-size: 12px;
+    line-height: 20px;
+  }
+
+  .model-manual-tag--green {
+    border-color: #A7E8B4;
+    background: #E8FFEA;
+    color: ${SUCCESS_COLOR};
+  }
+
+  .model-manual-model__description {
+    margin: 4px 0 0 14px;
+    color: ${TEXT_SECONDARY};
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .model-manual-model__actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .model-manual-icon-button {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-color: transparent;
+    color: ${TEXT_SECONDARY};
+  }
+
+  .model-manual-icon-button:hover {
+    border-color: rgba(22, 93, 255, 0.35) !important;
+    color: ${PRIMARY_COLOR} !important;
+    background: #F2F6FF !important;
+  }
+
+  .model-manual-list-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 14px;
+    color: ${TEXT_SECONDARY};
+    font-size: 14px;
+  }
+
+  .model-manual-link {
+    color: ${PRIMARY_COLOR};
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .model-manual-form {
+    display: grid;
+    gap: 10px;
+  }
+
+  .model-manual-form .ant-form-item {
+    margin-bottom: 0;
+  }
+
+  .model-manual-form .ant-form-item-label {
+    flex: 0 0 118px;
+    max-width: 118px;
+    padding-bottom: 0;
+    text-align: left;
+  }
+
+  .model-manual-form .ant-form-item-label > label {
+    color: ${TEXT_MAIN};
+    font-size: 14px;
+  }
+
+  .model-manual-form .ant-form-item-control {
+    min-width: 0;
+  }
+
+  .model-manual-form .ant-form-item-extra,
+  .model-manual-help {
+    min-height: 20px;
+    color: ${TEXT_MUTED};
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .model-manual-provider-line {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+  }
+
+  .model-manual-status {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 8px 0 2px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: #F7F8FA;
+    color: ${TEXT_SECONDARY};
+    font-size: 13px;
+  }
+
+  .model-manual-status__left {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .model-manual-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: ${TEXT_MUTED};
+  }
+
+  .model-manual-status-dot--success {
+    background: ${SUCCESS_COLOR};
+  }
+
+  .model-manual-status-dot--failed {
+    background: #F53F3F;
+  }
+
+  .model-manual-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 6px;
+  }
+
+  .model-manual-primary.ant-btn-primary {
+    background: ${PRIMARY_COLOR};
+    border-color: ${PRIMARY_COLOR};
+    box-shadow: 0 4px 10px rgba(22, 93, 255, 0.22);
+  }
+
+  .model-manual-primary.ant-btn-primary:hover {
+    background: #0E42D2 !important;
+    border-color: #0E42D2 !important;
+  }
+
+  .model-manual-card .ant-btn-default:hover {
+    border-color: ${PRIMARY_COLOR} !important;
+    color: ${PRIMARY_COLOR} !important;
+    background: #F7FAFF !important;
+  }
+
+  .model-manual-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 6px 8px;
+    border: 1px solid #E8EEF8;
+    border-radius: 5px;
+    background: #F7F8FA;
+    color: ${TEXT_SECONDARY};
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .model-manual-add-provider-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 38px;
+    gap: 10px;
+  }
+
+  .model-manual-table-card > .ant-card-body {
+    padding-top: 8px;
+  }
+
+  .model-manual-table .ant-table {
+    color: ${TEXT_MAIN};
+    font-size: 14px;
+  }
+
+  .model-manual-table .ant-table-thead > tr > th {
+    height: 34px;
+    padding: 8px 12px;
+    background: #F7F8FA;
+    color: ${TEXT_MAIN};
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .model-manual-table .ant-table-tbody > tr > td {
+    height: 44px;
+    padding: 8px 12px;
+    border-color: ${BORDER_COLOR};
+  }
+
+  .model-manual-table .ant-table-tbody > tr.model-manual-current-row > td {
+    background: #EAF4FF;
+  }
+
+  .model-manual-provider-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .model-manual-provider-logo {
+    display: inline-grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #E8F3FF;
+    color: ${PRIMARY_COLOR};
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .model-manual-table-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 12px;
+    color: ${TEXT_SECONDARY};
+    font-size: 14px;
+  }
+
+  .model-manual-table-footer .ant-pagination {
+    margin: 0;
+  }
+
+  @media (max-width: 1180px) {
+    .model-manual-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 760px) {
+    .model-manual-toolbar,
+    .model-manual-provider-line,
+    .model-manual-add-provider-row {
+      grid-template-columns: 1fr;
+    }
+
+    .model-manual-form .ant-form-item-label {
+      flex: 0 0 100%;
+      max-width: 100%;
+    }
+  }
+`
+
+function toCatalog(models: AddedModel[]): AdminModelCatalog {
+  const emptyCatalog: AdminModelCatalog = {
     embeddingModels: [],
     speechModels: [],
     visionModels: [],
     chatModels: [],
     multimodalModels: [],
-  })
-
-  async function loadPage() {
-    const [catalogResponse, providerResponse] = await Promise.all([
-      axios.get<AdminModelCatalog>('/api/admin/settings/model-options'),
-      axios.get<ProviderConfig[]>('/api/admin/settings/providers'),
-    ])
-    setCatalog(catalogResponse.data)
-    setProviderConfigs(providerResponse.data)
-    onCatalogChange?.(catalogResponse.data)
-    onProviderConfigsChange?.(providerResponse.data)
-    addOptionForm.setFieldsValue({
-      category: 'multimodal',
-      provider: providerResponse.data[0]?.provider ?? '',
-      modelId: '',
-    })
-    providerForm.setFieldsValue({
-      provider: '',
-      baseUrl: '',
-      apiKey: '',
-      protocol: 'openai_compatible',
-    })
   }
 
-  useDeferredMount(() => {
-    void loadPage().catch(() => {
-      message.error('手动维护页面加载失败，请检查后端服务。')
-    })
+  models.forEach((model) => {
+    const option = {
+      category: model.category,
+      provider: model.provider,
+      modelId: model.modelId,
+    }
+    if (model.category === 'embedding') emptyCatalog.embeddingModels.push(option)
+    if (model.category === 'speech') emptyCatalog.speechModels.push(option)
+    if (model.category === 'vision') emptyCatalog.visionModels.push(option)
+    if (model.category === 'chat') emptyCatalog.chatModels.push(option)
+    if (model.category === 'multimodal') emptyCatalog.multimodalModels.push(option)
   })
+
+  return emptyCatalog
+}
+
+function formatNow() {
+  const date = new Date()
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function getProviderInitial(provider: string) {
+  if (provider === 'DeepSeek') return 'DS'
+  if (provider === 'Qwen') return 'Q'
+  if (provider === 'Local TTS') return 'LT'
+  if (provider === 'BGE') return 'BG'
+  return provider.slice(0, 2).toUpperCase()
+}
+
+function renderCapabilityTag(tag: string) {
+  const greenTags = ['推理', '问答', '代码', '数学', '检索']
+  return (
+    <Tag key={tag} className={`model-manual-tag${greenTags.includes(tag) ? ' model-manual-tag--green' : ''}`}>
+      {tag}
+    </Tag>
+  )
+}
+
+export default function ModelManualPage({ onCatalogChange, onProviderConfigsChange }: ModelManualPageProps) {
+  const [providerForm] = Form.useForm<ProviderFormValues>()
+  const [addModelForm] = Form.useForm<AddModelFormValues>()
+  const [newProviderForm] = Form.useForm<ProviderFormValues>()
+
+  const [providers, setProviders] = useState<ProviderItem[]>(INITIAL_PROVIDERS)
+  const [selectedProvider, setSelectedProvider] = useState('DeepSeek')
+  const [searchKeyword, setSearchKeyword] = useState('')
+  const [capabilityFilter, setCapabilityFilter] = useState<string>('all')
+  const [alertVisible, setAlertVisible] = useState(true)
+  const [testingConnection, setTestingConnection] = useState(false)
+  const [savingProvider, setSavingProvider] = useState(false)
+  const [providerModalOpen, setProviderModalOpen] = useState(false)
+  const [addingModel, setAddingModel] = useState(false)
+  const [testingModelKey, setTestingModelKey] = useState<string | null>(null)
+  const [addedModels, setAddedModels] = useState<AddedModel[]>(INITIAL_ADDED_MODELS)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+
+  const providerOptions = useMemo(
+    () => providers.map((item) => ({ value: item.provider, label: item.provider })),
+    [providers],
+  )
+
+  const selectedProviderConfig = useMemo(
+    () => providers.find((item) => item.provider === selectedProvider) ?? providers[0],
+    [providers, selectedProvider],
+  )
+
+  const providerValues = Form.useWatch([], providerForm)
+  const addModelValues = Form.useWatch([], addModelForm)
+
+  const providerSubmitDisabled = !providerValues?.provider || !providerValues?.baseUrl || !providerValues?.apiKey || !providerValues?.protocol
+  const addModelDisabled = !addModelValues?.category || !addModelValues?.provider || !addModelValues?.modelId
 
   useEffect(() => {
-    async function loadProviderDoc() {
-      setProviderDocLoading(true)
-      try {
-        const response = await axios.get<ProviderDoc>(`/api/admin/settings/provider-docs/${providerDocSelection}`)
-        setProviderDoc(response.data)
-      } catch {
-        setProviderDoc(null)
-      } finally {
-        setProviderDocLoading(false)
-      }
-    }
-
-    void loadProviderDoc()
-  }, [providerDocSelection])
-
-  const catalogRows = useMemo<ModelCatalogRow[]>(() => {
-    const rows: ModelCatalogRow[] = []
-    const pushRows = (items: AdminModelOption[], category: ModelCategory) => {
-      items.forEach((item) => {
-        rows.push({
-          key: `${category}:${item.provider}:${item.modelId}`,
-          category,
-          provider: item.provider,
-          modelId: item.modelId,
-        })
-      })
-    }
-
-    pushRows(catalog.embeddingModels, 'embedding')
-    pushRows(catalog.speechModels, 'speech')
-    pushRows(catalog.visionModels, 'vision')
-    pushRows(catalog.chatModels, 'chat')
-    pushRows(catalog.multimodalModels, 'multimodal')
-    return rows
-  }, [catalog])
-
-  const handleProviderDraftChange = (provider: string) => {
-    const preset = PROVIDER_DEFAULTS[provider]
-    if (!preset) {
-      providerForm.setFieldValue('provider', provider)
-      return
-    }
-
+    if (!selectedProviderConfig) return
     providerForm.setFieldsValue({
-      provider,
-      baseUrl: preset.baseUrl,
-      protocol: preset.protocol,
-      apiKey: providerForm.getFieldValue('apiKey') ?? '',
+      provider: selectedProviderConfig.provider,
+      baseUrl: selectedProviderConfig.baseUrl,
+      apiKey: selectedProviderConfig.apiKey,
+      protocol: selectedProviderConfig.protocol,
     })
+    addModelForm.setFieldValue('provider', selectedProviderConfig.provider)
+  }, [addModelForm, providerForm, selectedProviderConfig])
+
+  useEffect(() => {
+    onCatalogChange?.(toCatalog(addedModels))
+  }, [addedModels, onCatalogChange])
+
+  useEffect(() => {
+    onProviderConfigsChange?.(
+      providers.map(({ provider, baseUrl, apiKey, protocol }) => ({
+        provider,
+        baseUrl,
+        apiKey,
+        protocol,
+      })),
+    )
+  }, [providers, onProviderConfigsChange])
+
+  const filteredSupportedModels = useMemo(() => {
+    const normalizedKeyword = searchKeyword.trim().toLowerCase()
+    return SUPPORTED_MODELS.filter((model) => {
+      const matchesProvider = model.provider === selectedProvider
+      const matchesCategory = capabilityFilter === 'all' || model.category === capabilityFilter
+      const searchableText = `${model.id} ${model.name} ${model.description} ${model.capabilities.join(' ')}`.toLowerCase()
+      const matchesKeyword = !normalizedKeyword || searchableText.includes(normalizedKeyword)
+      return matchesProvider && matchesCategory && matchesKeyword
+    })
+  }, [capabilityFilter, searchKeyword, selectedProvider])
+
+  const pagedAddedModels = useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return addedModels.slice(start, start + pageSize)
+  }, [addedModels, currentPage, pageSize])
+
+  const handleProviderSelect = (provider: string) => {
+    setSelectedProvider(provider)
+    setCapabilityFilter('all')
+    setSearchKeyword('')
   }
 
-  const handleSaveProvider = async (values: ProviderConfigForm) => {
+  const handleSaveProvider = async () => {
+    const values = await providerForm.validateFields()
     setSavingProvider(true)
-    try {
-      const response = await axios.put<ProviderConfig>('/api/admin/settings/providers', values)
-      setProviderConfigs((current) => {
-        const next = current.filter((item) => item.provider !== response.data.provider)
-        const sorted = [...next, response.data].sort((left, right) => left.provider.localeCompare(right.provider))
-        onProviderConfigsChange?.(sorted)
-        return sorted
-      })
-      providerForm.setFieldsValue({
-        provider: '',
-        baseUrl: '',
-        apiKey: '',
-        protocol: 'openai_compatible',
-      })
-      if (!addOptionForm.getFieldValue('provider')) {
-        addOptionForm.setFieldValue('provider', response.data.provider)
-      }
-      message.success(`已保存提供方 ${response.data.provider}`)
-    } catch (error) {
-      const description = axios.isAxiosError(error)
-        ? error.response?.data?.message ?? '保存模型提供方失败，请检查后端服务。'
-        : '保存模型提供方失败，请稍后重试。'
-      message.error(description)
-    } finally {
+    window.setTimeout(() => {
+      setProviders((current) =>
+        current.map((item) =>
+          item.provider === values.provider
+            ? {
+                ...item,
+                ...values,
+              }
+            : item,
+        ),
+      )
       setSavingProvider(false)
-    }
+      message.success('提供方配置已保存')
+    }, 450)
   }
 
-  const handleDeleteProvider = async (provider: string) => {
-    setDeletingProvider(provider)
-    try {
-      await axios.post('/api/admin/settings/providers/delete', { provider })
-      setProviderConfigs((current) => {
-        const next = current.filter((item) => item.provider !== provider)
-        onProviderConfigsChange?.(next)
-        return next
-      })
-      if (addOptionForm.getFieldValue('provider') === provider) {
-        addOptionForm.setFieldValue('provider', '')
-      }
-      message.success(`已删除提供方 ${provider}`)
-    } catch (error) {
-      const description = axios.isAxiosError(error)
-        ? error.response?.data?.message ?? '删除模型提供方失败，请检查后端服务。'
-        : '删除模型提供方失败，请稍后重试。'
-      message.error(description)
-    } finally {
-      setDeletingProvider(null)
-    }
+  const handleTestConnection = async () => {
+    const values = await providerForm.validateFields()
+    setTestingConnection(true)
+    window.setTimeout(() => {
+      setProviders((current) =>
+        current.map((item) =>
+          item.provider === values.provider
+            ? {
+                ...item,
+                ...values,
+                status: 'success',
+                lastTestedAt: formatNow(),
+              }
+            : item,
+        ),
+      )
+      setTestingConnection(false)
+      message.success(`${values.provider} 连接测试成功`)
+    }, 700)
   }
 
-  const handleEditProvider = (providerConfig: ProviderConfig) => {
-    providerForm.setFieldsValue({
-      provider: providerConfig.provider,
-      baseUrl: providerConfig.baseUrl,
-      apiKey: providerConfig.apiKey,
-      protocol: providerConfig.protocol,
+  const handleCreateProvider = async () => {
+    const values = await newProviderForm.validateFields()
+    const nextProvider: ProviderItem = {
+      ...values,
+      status: 'untested',
+    }
+    setProviders((current) => {
+      const withoutDuplicate = current.filter((item) => item.provider !== values.provider)
+      return [...withoutDuplicate, nextProvider]
     })
-    message.info(`已载入 ${providerConfig.provider} 配置，可直接修改后保存`)
+    setSelectedProvider(values.provider)
+    setProviderModalOpen(false)
+    newProviderForm.resetFields()
+    message.success(`已新增提供方 ${values.provider}`)
   }
 
-  const handleAddOption = async (values: AddModelOptionForm) => {
-    setAddingOption(true)
-    try {
-      const response = await axios.post<AdminModelCatalog>('/api/admin/settings/model-options', values)
-      setCatalog(response.data)
-      onCatalogChange?.(response.data)
-      message.success(`模型 ${values.modelId} 已加入候选列表`)
-      addOptionForm.setFieldsValue({
-        ...values,
-        modelId: '',
+  const handleAddModel = async () => {
+    const values = await addModelForm.validateFields()
+    setAddingModel(true)
+    window.setTimeout(() => {
+      const nextModel: AddedModel = {
+        key: `${values.category}:${values.provider}:${values.modelId}`,
+        category: values.category,
+        categoryLabel: CATEGORY_BY_VALUE[values.category],
+        provider: values.provider,
+        modelId: values.modelId,
+        status: 'candidate',
+      }
+
+      setAddedModels((current) => {
+        const exists = current.some((item) => item.key === nextModel.key)
+        if (exists) {
+          message.warning('候选列表中已存在该模型')
+          return current
+        }
+        setCurrentPage(1)
+        message.success(`模型 ${values.modelId} 已添加到候选列表`)
+        return [nextModel, ...current]
       })
-    } catch (error) {
-      const description = axios.isAxiosError(error)
-        ? error.response?.data?.message ?? '新增模型失败，请检查后端服务。'
-        : '新增模型失败，请稍后重试。'
-      message.error(description)
-    } finally {
-      setAddingOption(false)
-    }
+      addModelForm.setFieldsValue({ modelId: '', capabilityInput: '' })
+      setAddingModel(false)
+    }, 350)
   }
 
-  const handleDeleteOption = async (row: ModelCatalogRow) => {
-    setDeletingOption(row.key)
-    try {
-      const response = await axios.post<AdminModelCatalog>('/api/admin/settings/model-options/delete', {
-        category: row.category,
-        provider: row.provider,
-        modelId: row.modelId,
-      })
-      setCatalog(response.data)
-      onCatalogChange?.(response.data)
-      message.success(`已删除模型 ${row.modelId}`)
-    } catch (error) {
-      const description = axios.isAxiosError(error)
-        ? error.response?.data?.message ?? '删除模型失败，请检查后端服务。'
-        : '删除模型失败，请稍后重试。'
-      message.error(description)
-    } finally {
-      setDeletingOption(null)
-    }
+  const handleSetCurrent = (record: AddedModel) => {
+    setAddedModels((current) =>
+      current.map((item) => ({
+        ...item,
+        status: item.category === record.category && item.key === record.key ? 'current' : item.category === record.category ? 'candidate' : item.status,
+      })),
+    )
+    message.success(`${record.modelId} 已设为当前使用`)
   }
 
-  const providerColumns: TableColumnsType<ProviderConfig> = [
-    { title: '提供方', dataIndex: 'provider' },
-    { title: '协议', dataIndex: 'protocol' },
-    { title: 'Base URL', dataIndex: 'baseUrl' },
-    {
-      title: 'API Key',
-      dataIndex: 'apiKey',
-      render: (value: string) => (value ? `***${value.slice(-4)}` : '-'),
-    },
-    {
-      title: '操作',
-      key: 'actions',
-      render: (_, row) => (
-        <div className="admin-action-row">
-          <Button size="small" onClick={() => handleEditProvider(row)}>编辑</Button>
-          <Button size="small" danger onClick={() => void handleDeleteProvider(row.provider)} loading={deletingProvider === row.provider}>删除</Button>
-        </div>
-      ),
-    },
-  ]
+  const handleTestModel = (record: AddedModel) => {
+    setTestingModelKey(record.key)
+    window.setTimeout(() => {
+      setTestingModelKey(null)
+      message.success(`${record.modelId} 测试通过`)
+    }, 650)
+  }
 
-  const catalogColumns: TableColumnsType<ModelCatalogRow> = [
+  const columns: TableColumnsType<AddedModel> = [
     {
       title: '分类',
-      dataIndex: 'category',
-      render: (value: ModelCategory) => MODEL_CATEGORY_OPTIONS.find((item) => item.value === value)?.label ?? value,
+      dataIndex: 'categoryLabel',
+      width: 120,
     },
-    { title: '提供方', dataIndex: 'provider' },
-    { title: '模型 ID', dataIndex: 'modelId' },
+    {
+      title: '提供方',
+      dataIndex: 'provider',
+      width: 140,
+      render: (provider: string) => (
+        <span className="model-manual-provider-cell">
+          <span className="model-manual-provider-logo">{getProviderInitial(provider)}</span>
+          {provider}
+        </span>
+      ),
+    },
+    {
+      title: '模型 ID',
+      dataIndex: 'modelId',
+      ellipsis: true,
+    },
+    {
+      title: '当前状态',
+      dataIndex: 'status',
+      width: 110,
+      render: (status: AddedModelStatus) =>
+        status === 'current' ? <Tag color="success">当前使用</Tag> : <Tag color="processing">候选</Tag>,
+    },
     {
       title: '操作',
       key: 'actions',
-      render: (_, row) => (
-        <Button size="small" danger loading={deletingOption === row.key} onClick={() => void handleDeleteOption(row)}>
-          删除
-        </Button>
-      ),
+      width: 230,
+      render: (_, record) => {
+        const menuItems: MenuProps['items'] = [
+          { key: 'copy', label: '复制模型 ID' },
+          { key: 'remove', label: '从候选列表移除', danger: true },
+        ]
+
+        return (
+          <div className="model-manual-provider-cell">
+            <Button size="small" disabled={record.status === 'current'} onClick={() => handleSetCurrent(record)}>
+              设为当前
+            </Button>
+            <Button size="small" loading={testingModelKey === record.key} onClick={() => handleTestModel(record)}>
+              测试
+            </Button>
+            <Dropdown
+              menu={{
+                items: menuItems,
+                onClick: ({ key }) => {
+                  if (key === 'copy') {
+                    void navigator.clipboard?.writeText(record.modelId)
+                    message.success('模型 ID 已复制')
+                  }
+                  if (key === 'remove') {
+                    setAddedModels((current) => current.filter((item) => item.key !== record.key))
+                  }
+                },
+              }}
+              trigger={['click']}
+            >
+              <Button size="small" icon={<MoreOutlined />} />
+            </Dropdown>
+          </div>
+        )
+      },
     },
   ]
 
   return (
-    <div className="admin-panel-grid">
-      <Card title="手动维护" className="admin-settings-card">
-        <div className="admin-form-grid">
-          <Card size="small" className="admin-build-summary">
-            模型列表改为手动维护。按分类逐个添加模型提供方和模型 ID，更适合逐步扩展 provider 能力文件。
-          </Card>
-          <div className="admin-two-column">
-            <Card size="small" title="模型能力与支持模型" className="admin-build-summary">
-              <div className="admin-provider-docs">
-                <div className="admin-provider-docs__toolbar">
-                  <Select
-                    value={providerDocSelection}
-                    options={[
-                      { value: 'DeepSeek', label: 'DeepSeek' },
-                      { value: 'Qwen', label: 'Qwen' },
-                      { value: 'Volcengine', label: 'Volcengine' },
-                      { value: 'Xunfei', label: 'Xunfei' },
-                      { value: 'Local TTS', label: 'Local TTS / edge-tts' },
-                    ]}
-                    onChange={setProviderDocSelection}
-                    style={{ width: 220 }}
-                  />
-                </div>
-                {providerDocLoading ? (
-                  <div className="admin-provider-docs__summary">正在加载模型说明文档...</div>
-                ) : providerDoc ? (
-                  <div className="admin-provider-docs__markdown">
-                    {renderMarkdown(providerDoc.markdown)}
+    <div className="model-manual-page">
+      <style>{MODEL_MANUAL_STYLES}</style>
+
+      {alertVisible && (
+        <Alert
+          className="model-manual-alert"
+          type="info"
+          showIcon
+          icon={<InfoCircleOutlined />}
+          closable
+          onClose={() => setAlertVisible(false)}
+          message="模型列表改为手动维护。按分类逐个添加模型提供方和模型 ID，更适合逐步扩展 provider 能力文件。"
+        />
+      )}
+
+      <div className="model-manual-grid">
+        <Card title="模型能力与支持模型" className="model-manual-card">
+          <div className="model-manual-toolbar">
+            <Select value={selectedProvider} options={providerOptions} onChange={handleProviderSelect} />
+            <Input
+              allowClear
+              prefix={<SearchOutlined style={{ color: TEXT_MUTED }} />}
+              placeholder="搜索模型 ID 或能力关键词"
+              value={searchKeyword}
+              onChange={(event) => setSearchKeyword(event.target.value)}
+            />
+          </div>
+
+          <div className="model-manual-filter-row">
+            {CAPABILITY_FILTERS.map((item) => (
+              <button
+                key={item.key}
+                className={`model-manual-filter${capabilityFilter === item.key ? ' model-manual-filter--active' : ''}`}
+                type="button"
+                onClick={() => setCapabilityFilter(item.key)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="model-manual-list">
+            {filteredSupportedModels.map((model) => (
+              <div className="model-manual-model" key={model.id}>
+                <div>
+                  <div className="model-manual-model__header">
+                    <span className="model-manual-dot" />
+                    <span className="model-manual-model__name">{model.name}</span>
+                    {model.capabilities.map(renderCapabilityTag)}
                   </div>
-                ) : (
-                  <div className="admin-provider-docs__summary">当前提供方暂无可展示的模型说明文档。</div>
-                )}
+                  <p className="model-manual-model__description">{model.description}</p>
+                </div>
+                <div className="model-manual-model__actions">
+                  <Tooltip title="最近测试记录">
+                    <Button className="model-manual-icon-button" icon={<ClockCircleOutlined />} />
+                  </Tooltip>
+                  <Tooltip title="模型文档">
+                    <Button className="model-manual-icon-button" icon={<FileTextOutlined />} />
+                  </Tooltip>
+                </div>
               </div>
-            </Card>
-            <Card size="small" title="模型提供方配置" className="admin-build-summary">
-              <Form form={providerForm} layout="vertical" onFinish={(values) => void handleSaveProvider(values)}>
-                <Form.Item label="提供方" name="provider" rules={[{ required: true, message: '请输入模型提供方' }]}>
-                  <AutoComplete options={PROVIDER_OPTIONS} onSelect={(value) => handleProviderDraftChange(value)}>
-                    <Input placeholder="例如：DeepSeek / Qwen / Volcengine / Xunfei" />
-                  </AutoComplete>
-                </Form.Item>
-                <Form.Item label="Base URL" name="baseUrl" rules={[{ required: true, message: '请输入 Base URL' }]}>
-                  <Input placeholder="例如：https://api.deepseek.com" />
-                </Form.Item>
-                <Form.Item label="API Key" name="apiKey" rules={[{ required: true, message: '请输入 API Key' }]}>
-                  <Input.Password placeholder="请输入该提供方的 API Key" />
-                </Form.Item>
-                <Form.Item label="协议" name="protocol" rules={[{ required: true, message: '请选择协议' }]}>
-                  <Select options={[
-                    { value: 'openai_compatible', label: '兼容 OpenAI 协议' },
-                    { value: 'custom', label: '自定义协议' },
-                  ]} />
-                </Form.Item>
-                <div className="admin-action-row">
-                  <Button type="primary" htmlType="submit" loading={savingProvider}>保存提供方</Button>
-                </div>
-              </Form>
-            </Card>
+            ))}
+            {!filteredSupportedModels.length && (
+              <div style={{ padding: 24, textAlign: 'center', color: TEXT_MUTED }}>暂无匹配模型</div>
+            )}
           </div>
-          <div className="admin-two-column">
-            <Card size="small" title="新增模型" className="admin-build-summary">
-              <Form form={addOptionForm} layout="vertical" onFinish={(values) => void handleAddOption(values)}>
-                <Form.Item label="模型分类" name="category" rules={[{ required: true, message: '请选择模型分类' }]}>
-                  <Select options={MODEL_CATEGORY_OPTIONS as unknown as { value: string; label: string }[]} />
-                </Form.Item>
-                <Form.Item
-                  label="模型提供方"
-                  name="provider"
-                  rules={[{ required: true, message: '请选择已配置的模型提供方' }]}
-                  extra="请先在右侧保存提供方的 Base URL 和 API Key，再选择该提供方添加模型。"
-                >
-                  <Select options={providerConfigs.map((item) => ({ value: item.provider, label: item.provider }))} placeholder="请选择已配置提供方" />
-                </Form.Item>
-                <Form.Item
-                  label="模型 ID"
-                  name="modelId"
-                  rules={[{ required: true, message: '请输入模型 ID' }]}
-                  extra="例如：deepseek-v4-flash、Qwen/Qwen2.5-VL-7B-Instruct。"
-                >
-                  <Input placeholder="例如：deepseek-v4-flash" />
-                </Form.Item>
-                <div className="admin-action-row">
-                  <Button type="primary" htmlType="submit" loading={addingOption}>添加到候选列表</Button>
-                </div>
-              </Form>
-            </Card>
-            <Card size="small" title="已配置提供方" className="admin-build-summary">
-              <Table
-                columns={providerColumns}
-                dataSource={providerConfigs.map((item) => ({ ...item, key: item.provider }))}
-                pagination={false}
-                locale={{ emptyText: '暂无提供方配置，请先添加提供方和 API Key。' }}
+
+          <div className="model-manual-list-footer">
+            <span>共 {filteredSupportedModels.length} 个模型</span>
+            <Button type="link" className="model-manual-link" icon={<FileTextOutlined />}>
+              查看文档
+            </Button>
+          </div>
+        </Card>
+
+        <Card title="模型提供方配置" className="model-manual-card">
+          <Form form={providerForm} className="model-manual-form" layout="horizontal" colon={false} requiredMark>
+            <Form.Item label="提供方" name="provider" rules={[{ required: true, message: '请选择提供方' }]}>
+              <div className="model-manual-provider-line">
+                <Select options={providerOptions} onChange={handleProviderSelect} />
+                <Button type="link" icon={<PlusOutlined />} onClick={() => setProviderModalOpen(true)}>
+                  新增提供方
+                </Button>
+              </div>
+            </Form.Item>
+            <Form.Item
+              label="Base URL"
+              name="baseUrl"
+              rules={[{ required: true, message: '请输入 Base URL' }]}
+              extra="以 http(s):// 开头，结尾不需要 /"
+            >
+              <Input placeholder="https://api.deepseek.com" />
+            </Form.Item>
+            <Form.Item
+              label="API Key"
+              name="apiKey"
+              rules={[{ required: true, message: '请输入 API Key' }]}
+              extra="密钥将加密存储，仅用于调用接口"
+            >
+              <Input.Password placeholder="请输入提供方 API Key" />
+            </Form.Item>
+            <Form.Item
+              label="协议"
+              name="protocol"
+              rules={[{ required: true, message: '请选择协议' }]}
+              extra="选择与该提供方兼容的 API 协议"
+            >
+              <Select options={PROTOCOL_OPTIONS} />
+            </Form.Item>
+          </Form>
+
+          <div className="model-manual-status">
+            <span className="model-manual-status__left">
+              <span className={`model-manual-status-dot model-manual-status-dot--${selectedProviderConfig?.status ?? 'untested'}`} />
+              连接状态：
+              <span style={{ color: selectedProviderConfig?.status === 'success' ? SUCCESS_COLOR : TEXT_MUTED }}>
+                {selectedProviderConfig?.status === 'success' ? '连接成功' : '未测试'}
+              </span>
+            </span>
+            <span>上次测试： {selectedProviderConfig?.lastTestedAt ?? '--'}</span>
+          </div>
+
+          <div className="model-manual-actions">
+            <Button
+              type="primary"
+              className="model-manual-primary"
+              loading={savingProvider}
+              disabled={providerSubmitDisabled}
+              onClick={() => void handleSaveProvider()}
+            >
+              保存提供方
+            </Button>
+            <Button loading={testingConnection} disabled={providerSubmitDisabled} onClick={() => void handleTestConnection()}>
+              测试连接
+            </Button>
+          </div>
+        </Card>
+
+        <Card title="新增模型" className="model-manual-card">
+          <Form form={addModelForm} className="model-manual-form" layout="horizontal" colon={false} requiredMark>
+            <Form.Item label="模型分类" name="category" rules={[{ required: true, message: '请选择模型分类' }]}>
+              <Select options={CATEGORY_OPTIONS} placeholder="请选择模型分类" />
+            </Form.Item>
+            <Form.Item label="模型提供方" name="provider" rules={[{ required: true, message: '请选择模型提供方' }]}>
+              <div className="model-manual-add-provider-row">
+                <Select options={providerOptions} placeholder="请选择模型提供方" />
+                <Tooltip title="刷新提供方">
+                  <Button icon={<ReloadOutlined />} />
+                </Tooltip>
+              </div>
+            </Form.Item>
+            <Form.Item
+              label="模型 ID"
+              name="modelId"
+              rules={[{ required: true, message: '请输入模型 ID' }]}
+              extra="例如：deepseek-v4-flash"
+            >
+              <Input placeholder="请输入模型 ID，例如：deepseek-v4-flash" />
+            </Form.Item>
+          </Form>
+
+          <div className="model-manual-note">
+            <InfoCircleOutlined style={{ color: PRIMARY_COLOR, marginTop: 2 }} />
+            <span>请先在上方保存提供方的 Base URL 和 API Key，再选择该提供方添加模型。</span>
+          </div>
+
+          <Form form={addModelForm} className="model-manual-form" layout="horizontal" colon={false}>
+            <Form.Item label="能力标签（可选）" name="capabilityInput">
+              <Input
+                maxLength={10}
+                showCount
+                placeholder="输入后回车添加，例如：推理、问答、长上下文"
+                onPressEnter={(event) => event.preventDefault()}
               />
-            </Card>
-          </div>
-          <Card size="small" title="已添加模型" className="admin-build-summary">
-            <Table
-              columns={catalogColumns}
-              dataSource={catalogRows}
-              pagination={false}
-              locale={{
-                emptyText: (
-                  <div className="admin-empty-state">
-                    <strong>当前还没有任何模型</strong>
-                    <div>系统已改为空白启动模式，请先在上方手动新增模型，然后再回到各模型页签设为当前并执行测试。</div>
-                  </div>
-                ),
+            </Form.Item>
+          </Form>
+
+          <Button
+            block
+            type="primary"
+            className="model-manual-primary"
+            loading={addingModel}
+            disabled={addModelDisabled}
+            onClick={() => void handleAddModel()}
+          >
+            添加到候选列表
+          </Button>
+        </Card>
+
+        <Card title="已添加模型" className="model-manual-card model-manual-table-card">
+          <Table
+            rowKey="key"
+            className="model-manual-table"
+            columns={columns}
+            dataSource={pagedAddedModels}
+            pagination={false}
+            size="small"
+            rowClassName={(record) => (record.status === 'current' ? 'model-manual-current-row' : '')}
+          />
+          <div className="model-manual-table-footer">
+            <span>共 {addedModels.length} 条</span>
+            <Pagination
+              current={currentPage}
+              total={addedModels.length}
+              pageSize={pageSize}
+              showSizeChanger
+              pageSizeOptions={[10, 20, 50]}
+              locale={{ items_per_page: '条/页' }}
+              onChange={(page, size) => {
+                setCurrentPage(page)
+                setPageSize(size)
               }}
             />
-          </Card>
-        </div>
-      </Card>
+          </div>
+        </Card>
+      </div>
+
+      <Modal
+        title="新增提供方"
+        open={providerModalOpen}
+        okText="保存"
+        cancelText="取消"
+        onOk={() => void handleCreateProvider()}
+        onCancel={() => setProviderModalOpen(false)}
+        destroyOnHidden
+      >
+        <Form form={newProviderForm} layout="vertical" requiredMark>
+          <Form.Item label="提供方" name="provider" rules={[{ required: true, message: '请输入提供方名称' }]}>
+            <Input placeholder="例如：Moonshot / OpenAI" />
+          </Form.Item>
+          <Form.Item label="Base URL" name="baseUrl" rules={[{ required: true, message: '请输入 Base URL' }]}>
+            <Input placeholder="https://api.example.com" />
+          </Form.Item>
+          <Form.Item label="API Key" name="apiKey" rules={[{ required: true, message: '请输入 API Key' }]}>
+            <Input.Password placeholder="请输入 API Key" />
+          </Form.Item>
+          <Form.Item
+            label="协议"
+            name="protocol"
+            initialValue="openai_compatible"
+            rules={[{ required: true, message: '请选择协议' }]}
+          >
+            <Select options={PROTOCOL_OPTIONS} />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   )
 }
