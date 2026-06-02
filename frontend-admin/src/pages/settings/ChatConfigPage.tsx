@@ -302,45 +302,51 @@ const CHAT_MODELS: ChatModelRecord[] = [
 const CHAT_PAGE_STYLES = `
   .chat-config-page {
     display: grid;
-    gap: 12px;
+    gap: 8px;
+    height: 100%;
     min-height: 0;
-    width: 105%;
-    transform: scale(0.95);
-    transform-origin: top left;
+    overflow: hidden;
   }
 
   .chat-config-layout {
     display: grid;
-    grid-template-columns: minmax(340px, 0.95fr) minmax(600px, 2.05fr);
-    gap: 12px;
+    grid-template-columns: minmax(340px, 0.9fr) minmax(620px, 2.1fr);
+    gap: 10px;
+    height: 100%;
     min-height: 0;
+    overflow: hidden;
   }
 
   .chat-config-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
     border: 1px solid ${BORDER_COLOR};
-    border-radius: 14px;
-    box-shadow: 0 8px 20px rgba(17, 24, 39, 0.05);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(17, 24, 39, 0.035);
     overflow: hidden;
     background: #FFFFFF;
   }
 
   .chat-config-panel > .ant-card-head {
     min-height: 0;
-    padding: 12px 14px 0;
+    padding: 8px 12px 0;
     border-bottom: none;
   }
 
   .chat-config-panel > .ant-card-head .ant-card-head-title {
     padding: 0;
-    font-size: 16px;
-    font-weight: 500;
+    font-size: 14px;
+    font-weight: 600;
     color: ${TEXT_MAIN};
   }
 
   .chat-config-panel > .ant-card-body {
     display: grid;
-    gap: 10px;
-    padding: 10px 12px 12px;
+    flex: 1;
+    gap: 8px;
+    min-height: 0;
+    padding: 8px 12px 10px;
   }
 
   .chat-config-list-card > .ant-card-body {
@@ -351,18 +357,18 @@ const CHAT_PAGE_STYLES = `
   .chat-config-toolbar {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 7px;
   }
 
   .chat-config-toolbar .ant-input-affix-wrapper {
-    height: 32px;
-    border-radius: 8px;
+    height: 30px;
+    border-radius: 6px;
   }
 
   .chat-config-primary-btn {
-    height: 32px;
-    padding: 0 16px;
-    border-radius: 8px;
+    height: 30px;
+    padding: 0 12px;
+    border-radius: 6px;
     border-color: ${PRIMARY_COLOR};
     background: ${PRIMARY_COLOR};
     box-shadow: none;
@@ -377,7 +383,7 @@ const CHAT_PAGE_STYLES = `
 
   .chat-config-list {
     display: grid;
-    gap: 8px;
+    gap: 6px;
     min-height: 0;
     align-content: start;
   }
@@ -385,11 +391,12 @@ const CHAT_PAGE_STYLES = `
   .chat-config-item {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
-    gap: 14px;
+    gap: 10px;
     align-items: center;
-    padding: 10px 10px 10px 8px;
+    min-height: 62px;
+    padding: 6px 8px;
     border: 1px solid ${BORDER_COLOR};
-    border-radius: 12px;
+    border-radius: 8px;
     background: #FFFFFF;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -408,13 +415,13 @@ const CHAT_PAGE_STYLES = `
   }
 
   .chat-config-avatar {
-    width: 38px;
-    height: 38px;
+    width: 34px;
+    height: 34px;
     border-radius: 50%;
     display: grid;
     place-items: center;
     color: #FFFFFF;
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 700;
     box-shadow: inset 0 -12px 22px rgba(255, 255, 255, 0.16);
     flex: none;
@@ -433,7 +440,7 @@ const CHAT_PAGE_STYLES = `
   .chat-config-item__title-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     min-width: 0;
   }
 
@@ -442,7 +449,8 @@ const CHAT_PAGE_STYLES = `
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 14px;
+    font-size: 13px;
+    line-height: 1.2;
     font-weight: 600;
     color: ${TEXT_MAIN};
   }
@@ -454,45 +462,45 @@ const CHAT_PAGE_STYLES = `
     background: rgba(22, 93, 255, 0.10);
     color: ${PRIMARY_COLOR};
     font-size: 12px;
-    line-height: 20px;
+    line-height: 16px;
     font-weight: 500;
   }
 
   .chat-config-item__meta {
-    margin-top: 2px;
+    margin-top: 1px;
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 6px;
     font-size: 12px;
-    line-height: 1.5;
+    line-height: 1.2;
     color: ${TEXT_MUTED};
   }
 
   .chat-config-item__purpose {
-    margin-top: 2px;
+    margin-top: 3px;
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 5px;
   }
 
   .chat-config-purpose-tag {
-    padding: 0 8px;
+    padding: 0 7px;
     border-radius: 2px;
     background: #F2F3F5;
     color: ${TEXT_SECONDARY};
     font-size: 12px;
-    line-height: 20px;
+    line-height: 16px;
   }
 
   .chat-config-item__actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 5px;
   }
 
   .chat-config-icon-btn {
-    width: 30px;
-    height: 30px;
+    width: 26px;
+    height: 26px;
     border: 1px solid ${BORDER_COLOR};
     border-radius: 50%;
     background: #FFFFFF;
@@ -516,22 +524,23 @@ const CHAT_PAGE_STYLES = `
   .chat-config-pagination .ant-pagination-item,
   .chat-config-pagination .ant-pagination-prev,
   .chat-config-pagination .ant-pagination-next {
-    min-width: 32px;
-    height: 32px;
-    line-height: 30px;
-    border-radius: 8px;
+    min-width: 26px;
+    height: 26px;
+    line-height: 24px;
+    border-radius: 6px;
   }
 
   .chat-config-right-stack {
     display: grid;
-    gap: 8px;
+    gap: 6px;
+    min-height: 0;
   }
 
   .chat-config-section-title {
     display: flex;
     align-items: center;
-    gap: 10px;
-    font-size: 14px;
+    gap: 8px;
+    font-size: 13px;
     font-weight: 500;
     color: ${TEXT_MAIN};
   }
@@ -539,7 +548,7 @@ const CHAT_PAGE_STYLES = `
   .chat-config-section-title::before {
     content: '';
     width: 3px;
-    height: 16px;
+    height: 14px;
     border-radius: 999px;
     background: ${PRIMARY_COLOR};
   }
@@ -547,23 +556,24 @@ const CHAT_PAGE_STYLES = `
   .chat-config-form-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px 10px;
+    gap: 6px 10px;
   }
 
   .chat-config-field .ant-input,
   .chat-config-field .ant-input-affix-wrapper,
   .chat-config-field .ant-select-selector,
   .chat-config-field .ant-input-number {
-    min-height: 36px !important;
-    border-radius: 8px !important;
+    min-height: 28px !important;
+    height: 28px !important;
+    border-radius: 6px !important;
   }
 
   .chat-config-label {
     display: flex;
     align-items: center;
-    gap: 6px;
-    margin-bottom: 4px;
-    font-size: 13px;
+    gap: 5px;
+    margin-bottom: 3px;
+    font-size: 12px;
     font-weight: 500;
     color: ${TEXT_MAIN};
   }
@@ -597,10 +607,10 @@ const CHAT_PAGE_STYLES = `
   .chat-config-status {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 6px 8px;
+    gap: 8px;
+    padding: 5px 8px;
     border: 1px solid ${BORDER_COLOR};
-    border-radius: 8px;
+    border-radius: 6px;
     background: #FFFFFF;
     color: ${TEXT_SECONDARY};
     font-size: 12px;
@@ -610,16 +620,16 @@ const CHAT_PAGE_STYLES = `
   .chat-config-status__item {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     flex-wrap: wrap;
   }
 
   .chat-config-status__dot {
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     background: ${SUCCESS_COLOR};
-    box-shadow: 0 0 0 4px rgba(0, 180, 42, 0.12);
+    box-shadow: 0 0 0 3px rgba(0, 180, 42, 0.12);
     flex: none;
   }
 
@@ -636,20 +646,20 @@ const CHAT_PAGE_STYLES = `
   .chat-config-params {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 8px;
+    gap: 6px;
   }
 
   .chat-config-param {
     display: grid;
-    gap: 4px;
-    padding: 8px;
+    gap: 3px;
+    padding: 6px 8px;
     border: 1px solid ${BORDER_COLOR};
-    border-radius: 10px;
+    border-radius: 6px;
     background: #FFFFFF;
   }
 
   .chat-config-param__label {
-    font-size: 12px;
+    font-size: 11px;
     color: ${TEXT_SECONDARY};
     font-weight: 500;
   }
@@ -660,25 +670,25 @@ const CHAT_PAGE_STYLES = `
 
   .chat-config-test {
     display: grid;
-    gap: 10px;
+    gap: 6px;
   }
 
   .chat-config-testrow {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    gap: 10px;
+    gap: 8px;
     align-items: center;
   }
 
   .chat-config-testrow .ant-input-affix-wrapper {
-    min-height: 40px;
-    border-radius: 8px;
+    min-height: 32px;
+    border-radius: 6px;
   }
 
   .chat-config-send-btn {
-    width: 42px;
-    height: 40px;
-    border-radius: 8px;
+    width: 36px;
+    height: 32px;
+    border-radius: 6px;
     border-color: ${PRIMARY_COLOR};
     background: ${PRIMARY_COLOR};
     box-shadow: none;
@@ -687,12 +697,12 @@ const CHAT_PAGE_STYLES = `
   .chat-config-scenes {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 5px;
   }
 
   .chat-config-scene-btn {
-    height: 24px;
-    padding: 0 10px;
+    height: 22px;
+    padding: 0 8px;
     border-radius: 2px;
     border-color: #E5E6EB;
     background: #F2F3F5;
@@ -710,18 +720,18 @@ const CHAT_PAGE_STYLES = `
 
   .chat-config-history {
     display: grid;
-    gap: 6px;
-    padding: 8px;
+    gap: 4px;
+    padding: 6px;
     border: 1px solid ${BORDER_COLOR};
-    border-radius: 10px;
+    border-radius: 6px;
     background: #F7F8FA;
-    min-height: 182px;
+    min-height: 132px;
   }
 
   .chat-config-message {
     display: flex;
     align-items: flex-start;
-    gap: 10px;
+    gap: 8px;
   }
 
   .chat-config-message--user {
@@ -734,10 +744,10 @@ const CHAT_PAGE_STYLES = `
 
   .chat-config-bubble {
     max-width: 82%;
-    padding: 8px 10px;
-    border-radius: 12px;
-    font-size: 14px;
-    line-height: 1.5;
+    padding: 6px 8px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.35;
   }
 
   .chat-config-bubble--user {
@@ -757,14 +767,14 @@ const CHAT_PAGE_STYLES = `
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
     font-size: 12px;
     font-weight: 600;
   }
 
   .chat-config-bubble__avatar {
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
     display: inline-grid;
     place-items: center;
@@ -784,13 +794,13 @@ const CHAT_PAGE_STYLES = `
   .chat-config-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 7px;
   }
 
   .chat-config-save-btn {
-    min-width: 132px;
-    height: 32px;
-    border-radius: 8px;
+    min-width: 112px;
+    height: 30px;
+    border-radius: 6px;
     border-color: ${PRIMARY_COLOR};
     background: ${PRIMARY_COLOR};
     box-shadow: none;
@@ -804,9 +814,9 @@ const CHAT_PAGE_STYLES = `
   }
 
   .chat-config-border-btn {
-    min-width: 148px;
-    height: 32px;
-    border-radius: 8px;
+    min-width: 126px;
+    height: 30px;
+    border-radius: 6px;
     border-color: ${PRIMARY_COLOR};
     color: ${PRIMARY_COLOR};
     background: #FFFFFF;
@@ -822,9 +832,9 @@ const CHAT_PAGE_STYLES = `
   }
 
   .chat-config-default-btn {
-    min-width: 118px;
-    height: 32px;
-    border-radius: 8px;
+    min-width: 100px;
+    height: 30px;
+    border-radius: 6px;
     border-color: ${BORDER_COLOR};
     color: ${TEXT_SECONDARY};
     background: #FFFFFF;
@@ -842,15 +852,31 @@ const CHAT_PAGE_STYLES = `
   .chat-config-note {
     display: flex;
     align-items: flex-start;
-    gap: 8px;
+    gap: 6px;
     color: ${TEXT_MUTED};
     font-size: 12px;
-    line-height: 1.5;
+    line-height: 1.25;
   }
 
   .chat-config-modal .ant-modal-content {
     border-radius: 14px;
     overflow: hidden;
+  }
+
+  .chat-config-panel .ant-form-item {
+    margin-bottom: 0;
+  }
+
+  .chat-config-panel .ant-form-item-label {
+    padding-bottom: 0;
+  }
+
+  .chat-config-panel .ant-form-item-explain {
+    min-height: 0;
+  }
+
+  .chat-config-number-wrap .ant-input-number-input {
+    padding-right: 34px !important;
   }
 
   .chat-config-modal__grid {
@@ -882,8 +908,7 @@ const CHAT_PAGE_STYLES = `
 
   @media (max-width: 900px) {
     .chat-config-page {
-      width: 100%;
-      transform: none;
+      height: auto;
     }
 
     .chat-config-form-grid,

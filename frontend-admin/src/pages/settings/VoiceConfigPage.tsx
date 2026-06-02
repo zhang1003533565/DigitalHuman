@@ -181,76 +181,142 @@ const VOICE_CATALOG: VoiceCardRecord[] = [
 ]
 
 const styles = `
+  .admin-settings-card {
+    overflow: hidden;
+    border: 1px solid #E5E6EB;
+    border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(17, 24, 39, 0.045);
+  }
+
+  .admin-settings-card > .ant-card-head {
+    min-height: 0;
+    padding: 10px 16px 0;
+    border-bottom: none;
+  }
+
+  .admin-settings-card > .ant-card-head .ant-card-head-title {
+    padding: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #1D2129;
+  }
+
+  .admin-settings-card > .ant-card-head .ant-card-extra {
+    padding: 0;
+  }
+
+  .admin-settings-card > .ant-card-body {
+    padding: 2px 12px 10px;
+  }
+
+  .admin-settings-card .ant-tabs-nav {
+    margin: 0 0 8px;
+  }
+
+  .admin-settings-card .ant-tabs-tab {
+    min-height: 36px;
+    padding: 0 12px 7px 0;
+    font-size: 13px;
+    font-weight: 500;
+    color: #4E5969;
+  }
+
+  .admin-settings-card .ant-tabs-tab + .ant-tabs-tab {
+    margin-left: 12px;
+  }
+
+  .admin-settings-card .ant-tabs-content-holder,
+  .admin-settings-card .ant-tabs-content,
+  .admin-settings-card .ant-tabs-tabpane {
+    overflow: hidden;
+  }
+
+  .admin-settings-card .ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn {
+    color: ${PRIMARY_COLOR};
+  }
+
+  .admin-settings-card .ant-tabs-ink-bar {
+    background: ${PRIMARY_COLOR};
+    border-radius: 999px;
+  }
+
   .voice-settings-page {
     display: grid;
-    gap: 16px;
+    gap: 8px;
     height: 100%;
     min-height: 0;
+    overflow: hidden;
   }
 
   .voice-settings-layout {
     display: grid;
-    grid-template-columns: minmax(360px, 1.1fr) minmax(540px, 1.9fr);
-    gap: 16px;
+    grid-template-columns: minmax(360px, 0.92fr) minmax(560px, 1.72fr);
+    gap: 10px;
+    height: 100%;
     min-height: 0;
+    overflow: hidden;
   }
 
   .voice-settings-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
     border: 1px solid #E5E6EB;
-    border-radius: 14px;
-    box-shadow: 0 8px 20px rgba(17, 24, 39, 0.05);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(17, 24, 39, 0.035);
     overflow: hidden;
   }
 
   .voice-settings-panel > .ant-card-head {
     min-height: 0;
-    padding: 18px 18px 0;
+    padding: 9px 12px 0;
     border-bottom: none;
   }
 
   .voice-settings-panel > .ant-card-head .ant-card-head-title {
     padding: 0;
-    font-size: 16px;
-    font-weight: 500;
+    font-size: 14px;
+    font-weight: 600;
     color: #1D2129;
   }
 
   .voice-settings-panel > .ant-card-body {
     display: grid;
-    gap: 16px;
-    padding: 14px 18px 18px;
+    flex: 1;
+    min-height: 0;
+    gap: 8px;
+    padding: 8px 12px 10px;
   }
 
   .voice-settings-list-card > .ant-card-body {
     grid-template-rows: auto minmax(0, 1fr) auto;
     min-height: 0;
-    height: 100%;
   }
 
   .voice-settings-form-card > .ant-card-body {
+    grid-template-rows: auto auto auto auto auto minmax(0, auto);
     min-height: 0;
-    height: 100%;
   }
 
   .voice-settings-toolbar {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 7px;
   }
 
   .voice-settings-toolbar .ant-input-affix-wrapper {
-    height: 36px;
-    border-radius: 8px;
+    height: 30px;
+    border-radius: 6px;
   }
 
   .voice-settings-toolbar .ant-input {
-    font-size: 14px;
+    font-size: 13px;
   }
 
   .voice-settings-primary-btn {
-    height: 36px;
-    padding: 0 16px;
-    border-radius: 8px;
+    height: 30px;
+    padding: 0 12px;
+    border-radius: 6px;
     border-color: ${PRIMARY_COLOR};
     background: ${PRIMARY_COLOR};
     box-shadow: none;
@@ -265,7 +331,7 @@ const styles = `
 
   .voice-settings-list {
     display: grid;
-    gap: 12px;
+    gap: 5px;
     min-height: 0;
     align-content: start;
   }
@@ -274,10 +340,11 @@ const styles = `
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    gap: 14px;
-    padding: 14px 14px 14px 12px;
+    gap: 9px;
+    min-height: 60px;
+    padding: 5px 8px;
     border: 1px solid #E5E6EB;
-    border-radius: 12px;
+    border-radius: 7px;
     background: #FFFFFF;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -295,8 +362,8 @@ const styles = `
   }
 
   .voice-settings-icon {
-    width: 48px;
-    height: 48px;
+    width: 34px;
+    height: 34px;
     border-radius: 50%;
     display: grid;
     place-items: center;
@@ -307,13 +374,13 @@ const styles = `
   .voice-settings-wave {
     display: flex;
     align-items: end;
-    gap: 3px;
-    width: 22px;
-    height: 22px;
+    gap: 2px;
+    width: 18px;
+    height: 18px;
   }
 
   .voice-settings-wave span {
-    width: 3px;
+    width: 2px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.95);
     animation: voiceWave 1.4s ease-in-out infinite;
@@ -332,7 +399,7 @@ const styles = `
   .voice-settings-item__title-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     min-width: 0;
   }
 
@@ -341,7 +408,8 @@ const styles = `
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 14px;
+    font-size: 13px;
+    line-height: 1.25;
     font-weight: 600;
     color: #1D2129;
   }
@@ -353,46 +421,49 @@ const styles = `
     background: rgba(22, 93, 255, 0.10);
     color: ${PRIMARY_COLOR};
     font-size: 12px;
-    line-height: 20px;
+    line-height: 16px;
     font-weight: 500;
   }
 
   .voice-settings-item__id,
   .voice-settings-item__tags {
     font-size: 12px;
-    line-height: 1.5;
+    line-height: 1.2;
     color: #86909C;
   }
 
   .voice-settings-item__id {
-    margin-top: 4px;
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .voice-settings-item__tags {
-    margin-top: 4px;
+    margin-top: 3px;
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 5px;
   }
 
   .voice-settings-tag {
-    padding: 0 8px;
+    padding: 0 7px;
     border-radius: 999px;
     background: #F2F3F5;
     color: #4E5969;
     font-size: 12px;
-    line-height: 20px;
+    line-height: 16px;
   }
 
   .voice-settings-item__actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 5px;
   }
 
   .voice-settings-icon-btn {
-    width: 32px;
-    height: 32px;
+    width: 26px;
+    height: 26px;
     border: 1px solid #E5E6EB;
     border-radius: 50%;
     background: #FFFFFF;
@@ -410,16 +481,17 @@ const styles = `
   .voice-settings-pagination {
     display: flex;
     justify-content: center;
-    padding-top: 4px;
+    padding-top: 0;
+    min-height: 26px;
   }
 
   .voice-settings-pagination .ant-pagination-item,
   .voice-settings-pagination .ant-pagination-prev,
   .voice-settings-pagination .ant-pagination-next {
-    min-width: 32px;
-    height: 32px;
-    line-height: 30px;
-    border-radius: 8px;
+    min-width: 26px;
+    height: 26px;
+    line-height: 24px;
+    border-radius: 6px;
   }
 
   .voice-settings-pagination .ant-pagination-item-active {
@@ -428,14 +500,14 @@ const styles = `
 
   .voice-settings-form-section {
     display: grid;
-    gap: 14px;
+    gap: 7px;
   }
 
   .voice-settings-section-title {
     display: flex;
     align-items: center;
-    gap: 10px;
-    font-size: 16px;
+    gap: 8px;
+    font-size: 13px;
     font-weight: 500;
     color: #1D2129;
   }
@@ -443,7 +515,7 @@ const styles = `
   .voice-settings-section-title::before {
     content: '';
     width: 3px;
-    height: 18px;
+    height: 14px;
     border-radius: 999px;
     background: ${PRIMARY_COLOR};
   }
@@ -451,9 +523,9 @@ const styles = `
   .voice-settings-form-label {
     display: flex;
     align-items: center;
-    gap: 6px;
-    margin-bottom: 6px;
-    font-size: 14px;
+    gap: 5px;
+    margin-bottom: 3px;
+    font-size: 12px;
     font-weight: 500;
     color: #1D2129;
   }
@@ -465,14 +537,14 @@ const styles = `
   .voice-settings-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px 18px;
+    gap: 7px 14px;
   }
 
   .voice-settings-control .ant-input,
   .voice-settings-control .ant-input-affix-wrapper,
   .voice-settings-control .ant-select-selector {
-    height: 40px !important;
-    border-radius: 8px !important;
+    height: 30px !important;
+    border-radius: 6px !important;
   }
 
   .voice-settings-control .ant-input-number {
@@ -481,31 +553,31 @@ const styles = `
   }
 
   .voice-settings-help {
-    margin-top: 6px;
+    margin-top: 3px;
     font-size: 12px;
-    line-height: 1.5;
+    line-height: 1.25;
     color: #86909C;
   }
 
   .voice-settings-preview {
     display: grid;
-    gap: 12px;
+    gap: 6px;
   }
 
   .voice-settings-preview__box {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    gap: 14px;
-    padding: 14px 16px;
-    border-radius: 10px;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 6px;
     border: 1px solid #E5E6EB;
     background: linear-gradient(180deg, rgba(22, 93, 255, 0.06), rgba(22, 93, 255, 0.02));
   }
 
   .voice-settings-preview__play {
-    width: 36px;
-    height: 36px;
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
     border: 0;
     background: rgba(22, 93, 255, 0.12);
@@ -517,12 +589,14 @@ const styles = `
   .voice-settings-preview__waves {
     display: flex;
     align-items: end;
-    gap: 3px;
-    height: 22px;
+    gap: 2px;
+    height: 18px;
+    min-width: 0;
+    overflow: hidden;
   }
 
   .voice-settings-preview__waves span {
-    width: 4px;
+    width: 3px;
     border-radius: 999px;
     background: linear-gradient(180deg, rgba(103, 176, 255, 0.95), rgba(22, 93, 255, 0.75));
     animation: voiceWave 1.2s ease-in-out infinite;
@@ -541,7 +615,7 @@ const styles = `
 
   .voice-settings-preview__duration {
     color: #86909C;
-    font-size: 14px;
+    font-size: 12px;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
@@ -549,15 +623,15 @@ const styles = `
   .voice-settings-actions {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 7px;
     flex-wrap: wrap;
-    padding-top: 4px;
+    padding-top: 2px;
   }
 
   .voice-settings-default-btn {
-    height: 36px;
-    padding: 0 16px;
-    border-radius: 8px;
+    height: 30px;
+    padding: 0 12px;
+    border-radius: 6px;
     border-color: #D0D3D9;
     color: #1D2129;
     background: #FFFFFF;
@@ -574,14 +648,57 @@ const styles = `
   .voice-settings-note {
     display: flex;
     align-items: flex-start;
-    gap: 8px;
+    gap: 6px;
     font-size: 12px;
-    line-height: 1.5;
+    line-height: 1.25;
     color: #86909C;
   }
 
   .voice-settings-extra-result {
-    padding-top: 4px;
+    overflow: visible;
+    padding-top: 0;
+  }
+
+  .voice-settings-extra-result .ant-card,
+  .voice-settings-extra-result .admin-build-summary {
+    margin: 0;
+  }
+
+  .voice-settings-extra-result .ant-card-body {
+    padding: 6px 8px !important;
+  }
+
+  .voice-settings-extra-result .admin-test-result {
+    gap: 3px;
+  }
+
+  .voice-settings-extra-result .admin-test-result__header,
+  .voice-settings-extra-result .admin-test-result__meta {
+    min-height: 0;
+    line-height: 1.25;
+  }
+
+  .voice-settings-extra-result .admin-test-result__summary,
+  .voice-settings-extra-result .admin-build-summary__time {
+    line-height: 1.25;
+  }
+
+  .voice-settings-form-card .ant-form-item {
+    margin-bottom: 0;
+  }
+
+  .voice-settings-form-card .ant-form-item-extra {
+    min-height: 0;
+    margin-top: 3px;
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
+  .voice-settings-test-textarea {
+    height: 66px !important;
+    min-height: 66px !important;
+    max-height: 66px !important;
+    resize: none !important;
   }
 
   .voice-settings-empty {
@@ -998,7 +1115,8 @@ export default function VoiceConfigPage({
                 extra="点击“测试当前音色”时，会用这里的内容做一次本地语音合成测试"
               >
                 <Input.TextArea
-                  rows={5}
+                  rows={3}
+                  className="voice-settings-test-textarea"
                   maxLength={200}
                   showCount
                   placeholder="请输入想试听的文字内容"

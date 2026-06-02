@@ -344,65 +344,73 @@ const VISION_MODELS: VisionModelRecord[] = [
 const VISION_PAGE_STYLES = `
   .vision-settings-page {
     display: grid;
-    gap: 16px;
+    gap: 8px;
+    height: 100%;
     min-height: 0;
+    overflow: hidden;
   }
 
   .vision-settings-layout {
     display: grid;
-    grid-template-columns: minmax(360px, 1.02fr) minmax(640px, 1.98fr);
-    gap: 16px;
+    grid-template-columns: minmax(360px, 0.92fr) minmax(680px, 1.88fr);
+    gap: 10px;
+    height: 100%;
     min-height: 0;
+    overflow: hidden;
   }
 
   .vision-settings-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
     border: 1px solid ${CARD_BORDER};
-    border-radius: 14px;
-    box-shadow: 0 8px 20px rgba(17, 24, 39, 0.05);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(17, 24, 39, 0.035);
     overflow: hidden;
     background: #FFFFFF;
   }
 
   .vision-settings-panel > .ant-card-head {
     min-height: 0;
-    padding: 14px 16px 0;
+    padding: 8px 12px 0;
     border-bottom: none;
   }
 
   .vision-settings-panel > .ant-card-head .ant-card-head-title {
     padding: 0;
-    font-size: 15px;
-    font-weight: 500;
+    font-size: 14px;
+    font-weight: 600;
     color: ${TEXT_MAIN};
   }
 
   .vision-settings-panel > .ant-card-body {
     display: grid;
-    gap: 12px;
-    padding: 12px 14px 14px;
+    flex: 1;
+    gap: 8px;
+    min-height: 0;
+    padding: 8px 12px 10px;
   }
 
   .vision-settings-list-card > .ant-card-body {
     grid-template-rows: auto minmax(0, 1fr) auto;
     min-height: 0;
-    height: 100%;
   }
 
   .vision-settings-toolbar {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 7px;
   }
 
   .vision-settings-toolbar .ant-input-affix-wrapper {
-    height: 34px;
-    border-radius: 8px;
+    height: 30px;
+    border-radius: 6px;
   }
 
   .vision-settings-primary-btn {
-    height: 34px;
-    padding: 0 16px;
-    border-radius: 8px;
+    height: 30px;
+    padding: 0 12px;
+    border-radius: 6px;
     border-color: ${PRIMARY_COLOR};
     background: ${PRIMARY_COLOR};
     box-shadow: none;
@@ -417,7 +425,7 @@ const VISION_PAGE_STYLES = `
 
   .vision-settings-list {
     display: grid;
-    gap: 12px;
+    gap: 5px;
     min-height: 0;
     align-content: start;
   }
@@ -426,10 +434,11 @@ const VISION_PAGE_STYLES = `
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    gap: 14px;
-    padding: 12px 12px 12px 10px;
+    gap: 9px;
+    min-height: 60px;
+    padding: 5px 8px;
     border: 1px solid ${CARD_BORDER};
-    border-radius: 12px;
+    border-radius: 7px;
     background: #FFFFFF;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -447,14 +456,14 @@ const VISION_PAGE_STYLES = `
   }
 
   .vision-settings-icon {
-    width: 42px;
-    height: 42px;
+    width: 34px;
+    height: 34px;
     border-radius: 50%;
     display: grid;
     place-items: center;
     color: #FFFFFF;
     box-shadow: inset 0 -12px 22px rgba(255, 255, 255, 0.16);
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 700;
   }
 
@@ -469,7 +478,7 @@ const VISION_PAGE_STYLES = `
   .vision-settings-item__title-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     min-width: 0;
   }
 
@@ -479,6 +488,7 @@ const VISION_PAGE_STYLES = `
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 13px;
+    line-height: 1.2;
     font-weight: 600;
     color: ${TEXT_MAIN};
   }
@@ -490,44 +500,49 @@ const VISION_PAGE_STYLES = `
     background: rgba(22, 93, 255, 0.10);
     color: ${PRIMARY_COLOR};
     font-size: 12px;
-    line-height: 20px;
+    line-height: 16px;
     font-weight: 500;
   }
 
   .vision-settings-item__provider,
   .vision-settings-item__meta {
     font-size: 11px;
-    line-height: 1.5;
+    line-height: 1.2;
     color: ${TEXT_MUTED};
   }
 
-  .vision-settings-item__provider { margin-top: 4px; }
+  .vision-settings-item__provider {
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
   .vision-settings-item__meta {
-    margin-top: 4px;
+    margin-top: 3px;
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 5px;
   }
 
   .vision-settings-tag {
-    padding: 0 8px;
+    padding: 0 7px;
     border-radius: 2px;
     background: #F2F3F5;
     color: ${TEXT_SECONDARY};
     font-size: 11px;
-    line-height: 18px;
+    line-height: 16px;
   }
 
   .vision-settings-item__actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 5px;
   }
 
   .vision-settings-icon-btn {
-    width: 30px;
-    height: 30px;
+    width: 26px;
+    height: 26px;
     border: 1px solid ${CARD_BORDER};
     border-radius: 50%;
     background: #FFFFFF;
@@ -538,38 +553,44 @@ const VISION_PAGE_STYLES = `
   .vision-settings-pagination {
     display: flex;
     justify-content: center;
-    padding-top: 4px;
+    min-height: 26px;
+    padding-top: 0;
   }
 
   .vision-settings-pagination .ant-pagination-item,
   .vision-settings-pagination .ant-pagination-prev,
   .vision-settings-pagination .ant-pagination-next {
-    min-width: 30px;
-    height: 30px;
-    line-height: 28px;
-    border-radius: 8px;
+    min-width: 26px;
+    height: 26px;
+    line-height: 24px;
+    border-radius: 6px;
   }
 
   .vision-settings-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px 12px;
+    gap: 7px 12px;
+  }
+
+  .vision-settings-form-section > .vision-settings-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .vision-settings-control .ant-input,
   .vision-settings-control .ant-input-affix-wrapper,
   .vision-settings-control .ant-select-selector,
   .vision-settings-control .ant-input-number {
-    min-height: 36px !important;
-    border-radius: 8px !important;
+    min-height: 28px !important;
+    height: 28px !important;
+    border-radius: 6px !important;
   }
 
   .vision-settings-form-label {
     display: flex;
     align-items: center;
-    gap: 6px;
-    margin-bottom: 4px;
-    font-size: 13px;
+    gap: 5px;
+    margin-bottom: 3px;
+    font-size: 12px;
     font-weight: 500;
     color: ${TEXT_MAIN};
   }
@@ -579,8 +600,8 @@ const VISION_PAGE_STYLES = `
   .vision-settings-section-title {
     display: flex;
     align-items: center;
-    gap: 10px;
-    font-size: 14px;
+    gap: 8px;
+    font-size: 13px;
     font-weight: 500;
     color: ${TEXT_MAIN};
   }
@@ -588,7 +609,7 @@ const VISION_PAGE_STYLES = `
   .vision-settings-section-title::before {
     content: '';
     width: 3px;
-    height: 16px;
+    height: 14px;
     border-radius: 999px;
     background: ${PRIMARY_COLOR};
   }
@@ -596,10 +617,10 @@ const VISION_PAGE_STYLES = `
   .vision-settings-status {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 8px 10px;
+    gap: 9px;
+    padding: 5px 8px;
     border: 1px solid ${CARD_BORDER};
-    border-radius: 8px;
+    border-radius: 6px;
     background: #FFFFFF;
     color: ${TEXT_SECONDARY};
     font-size: 12px;
@@ -609,15 +630,15 @@ const VISION_PAGE_STYLES = `
   .vision-settings-status__item {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
   }
 
   .vision-settings-status__dot {
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     background: ${SUCCESS_COLOR};
-    box-shadow: 0 0 0 4px rgba(0, 180, 42, 0.12);
+    box-shadow: 0 0 0 3px rgba(0, 180, 42, 0.12);
   }
 
   .vision-settings-status__success { color: ${SUCCESS_COLOR}; font-weight: 600; }
@@ -626,12 +647,12 @@ const VISION_PAGE_STYLES = `
   .vision-settings-chip-list {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 5px;
   }
 
   .vision-settings-chip {
     padding: 0 8px;
-    line-height: 20px;
+    line-height: 18px;
     border-radius: 2px;
     background: rgba(22, 93, 255, 0.08);
     color: ${PRIMARY_COLOR};
@@ -641,12 +662,13 @@ const VISION_PAGE_STYLES = `
 
   .vision-settings-right-stack {
     display: grid;
-    gap: 12px;
+    gap: 7px;
+    min-height: 0;
   }
 
   .vision-settings-split {
     display: grid;
-    grid-template-columns: minmax(0, 1.12fr) minmax(320px, 0.88fr);
+    grid-template-columns: minmax(0, 1.08fr) minmax(300px, 0.92fr);
     gap: 10px;
     align-items: start;
   }
@@ -654,25 +676,25 @@ const VISION_PAGE_STYLES = `
   .vision-settings-split__left,
   .vision-settings-split__right {
     display: grid;
-    gap: 8px;
+    gap: 6px;
     min-width: 0;
   }
 
   .vision-settings-upload {
-    padding: 12px !important;
+    padding: 8px !important;
     border: 1px dashed #C9CDD4 !important;
-    border-radius: 10px !important;
+    border-radius: 6px !important;
     background: #FBFCFE !important;
   }
 
   .vision-settings-upload__title {
-    margin-top: 6px;
-    font-size: 13px;
+    margin-top: 4px;
+    font-size: 12px;
     color: ${TEXT_SECONDARY};
   }
 
   .vision-settings-upload__desc {
-    margin-top: 4px;
+    margin-top: 2px;
     font-size: 11px;
     color: ${TEXT_MUTED};
   }
@@ -680,7 +702,7 @@ const VISION_PAGE_STYLES = `
   .vision-settings-upload__preview {
     position: relative;
     overflow: hidden;
-    border-radius: 10px;
+    border-radius: 6px;
     border: 1px solid ${CARD_BORDER};
     background: #FBFCFE;
   }
@@ -688,16 +710,16 @@ const VISION_PAGE_STYLES = `
   .vision-settings-upload__preview img {
     display: block;
     width: 100%;
-    height: 170px;
+    height: 92px;
     object-fit: cover;
   }
 
   .vision-settings-upload__remove {
     position: absolute;
-    top: 10px;
-    right: 10px;
-    width: 28px;
-    height: 28px;
+    top: 6px;
+    right: 6px;
+    width: 24px;
+    height: 24px;
     border: 0;
     border-radius: 50%;
     background: rgba(0, 0, 0, 0.52);
@@ -709,14 +731,14 @@ const VISION_PAGE_STYLES = `
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: 8px;
   }
 
   .vision-settings-preview-title {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 500;
     color: ${TEXT_MAIN};
   }
@@ -724,7 +746,7 @@ const VISION_PAGE_STYLES = `
   .vision-settings-preview-title::before {
     content: '';
     width: 3px;
-    height: 16px;
+    height: 14px;
     border-radius: 999px;
     background: ${PRIMARY_COLOR};
   }
@@ -732,7 +754,7 @@ const VISION_PAGE_STYLES = `
   .vision-settings-preview-card,
   .vision-settings-info-card {
     border: 1px solid ${CARD_BORDER};
-    border-radius: 10px;
+    border-radius: 6px;
     background: #FFFFFF;
     overflow: hidden;
   }
@@ -751,14 +773,14 @@ const VISION_PAGE_STYLES = `
   .vision-settings-preview-card__inner {
     position: relative;
     overflow: hidden;
-    min-height: 230px;
+    min-height: 154px;
     background: linear-gradient(180deg, #C9ECFF 0%, #77B8F3 38%, #1D4E89 100%);
   }
 
   .vision-settings-preview-card__inner img {
     display: block;
     width: 100%;
-    height: 230px;
+    height: 154px;
     object-fit: cover;
   }
 
@@ -771,8 +793,8 @@ const VISION_PAGE_STYLES = `
   }
 
   .vision-settings-preview-play {
-    width: 52px;
-    height: 52px;
+    width: 42px;
+    height: 42px;
     border-radius: 50%;
     border: 2px solid rgba(255, 255, 255, 0.82);
     color: #FFFFFF;
@@ -791,9 +813,9 @@ const VISION_PAGE_STYLES = `
     bottom: 0;
     display: grid;
     grid-template-columns: auto auto minmax(0, 1fr) auto auto;
-    gap: 10px;
+    gap: 7px;
     align-items: center;
-    padding: 8px 10px;
+    padding: 6px 8px;
     color: #FFFFFF;
     background: linear-gradient(180deg, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.68));
   }
@@ -829,18 +851,18 @@ const VISION_PAGE_STYLES = `
   .vision-settings-player-actions {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 7px;
     font-size: 13px;
   }
 
   .vision-settings-info-grid {
     display: grid;
-    gap: 8px;
-    padding: 10px;
+    gap: 4px;
+    padding: 7px 8px;
   }
 
   .vision-settings-info-title {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
     color: ${TEXT_MAIN};
   }
@@ -848,10 +870,10 @@ const VISION_PAGE_STYLES = `
   .vision-settings-info-item {
     display: flex;
     justify-content: space-between;
-    gap: 12px;
+    gap: 8px;
     font-size: 12px;
     color: ${TEXT_SECONDARY};
-    line-height: 1.5;
+    line-height: 1.25;
   }
 
   .vision-settings-info-item span:last-child {
@@ -863,13 +885,13 @@ const VISION_PAGE_STYLES = `
   .vision-settings-mode-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 5px;
   }
 
   .vision-settings-mode-btn {
-    height: 30px;
-    padding: 0 10px;
-    border-radius: 8px;
+    height: 24px;
+    padding: 0 8px;
+    border-radius: 6px;
     border: 1px solid ${CARD_BORDER};
     color: ${TEXT_SECONDARY};
     background: #FFFFFF;
@@ -891,13 +913,14 @@ const VISION_PAGE_STYLES = `
   .vision-settings-action-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 8px;
+    padding-top: 1px;
   }
 
   .vision-settings-save-btn {
-    min-width: 132px;
-    height: 36px;
-    border-radius: 8px;
+    min-width: 112px;
+    height: 30px;
+    border-radius: 6px;
     border-color: ${PRIMARY_COLOR};
     background: ${PRIMARY_COLOR};
     box-shadow: none;
@@ -911,9 +934,9 @@ const VISION_PAGE_STYLES = `
   }
 
   .vision-settings-border-btn {
-    min-width: 148px;
-    height: 36px;
-    border-radius: 8px;
+    min-width: 126px;
+    height: 30px;
+    border-radius: 6px;
     border-color: ${PRIMARY_COLOR};
     color: ${PRIMARY_COLOR};
     background: #FFFFFF;
@@ -929,9 +952,9 @@ const VISION_PAGE_STYLES = `
   }
 
   .vision-settings-default-btn {
-    min-width: 118px;
-    height: 36px;
-    border-radius: 8px;
+    min-width: 100px;
+    height: 30px;
+    border-radius: 6px;
     border-color: ${CARD_BORDER};
     color: ${TEXT_SECONDARY};
     background: #FFFFFF;
@@ -949,10 +972,73 @@ const VISION_PAGE_STYLES = `
   .vision-settings-footer-note {
     display: flex;
     align-items: flex-start;
-    gap: 8px;
+    gap: 6px;
     font-size: 11px;
-    line-height: 1.6;
+    line-height: 1.25;
     color: ${TEXT_MUTED};
+  }
+
+  .vision-settings-panel .ant-form-item {
+    margin-bottom: 0;
+  }
+
+  .vision-settings-panel .ant-form-item-label {
+    padding-bottom: 0;
+  }
+
+  .vision-settings-panel textarea.ant-input {
+    resize: none;
+  }
+
+  .vision-settings-prompt-textarea {
+    height: 50px !important;
+    min-height: 50px !important;
+    max-height: 50px !important;
+  }
+
+  .vision-settings-negative-textarea {
+    height: 40px !important;
+    min-height: 40px !important;
+    max-height: 40px !important;
+  }
+
+  .vision-settings-info-card {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-settings-card {
+    overflow: hidden;
+    border: 1px solid #E5E6EB;
+    border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(17, 24, 39, 0.045);
+  }
+
+  .admin-settings-card > .ant-card-head {
+    min-height: 0;
+    padding: 10px 16px 0;
+    border-bottom: none;
+  }
+
+  .admin-settings-card > .ant-card-body {
+    padding: 2px 12px 10px;
+  }
+
+  .admin-settings-card .ant-tabs-nav {
+    margin: 0 0 8px;
+  }
+
+  .admin-settings-card .ant-tabs-tab {
+    min-height: 36px;
+    padding: 0 12px 7px 0;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .admin-settings-card .ant-tabs-content-holder,
+  .admin-settings-card .ant-tabs-content,
+  .admin-settings-card .ant-tabs-tabpane {
+    overflow: hidden;
   }
 
   .vision-settings-modal .ant-modal-content {
@@ -1353,14 +1439,26 @@ export default function VisionConfigPage({
                     rules={[{ required: true, message: '请输入正向提示词' }]}
                     className="vision-settings-control"
                   >
-                    <Input.TextArea rows={3} showCount maxLength={500} placeholder="请输入正向提示词，描述画面主体、场景、构图和风格" />
+                    <Input.TextArea
+                      rows={2}
+                      className="vision-settings-prompt-textarea"
+                      showCount
+                      maxLength={500}
+                      placeholder="请输入正向提示词，描述画面主体、场景、构图和风格"
+                    />
                   </Form.Item>
                   <Form.Item
                     label={<span className="vision-settings-form-label">负向提示词（可选）</span>}
                     name="negativePromptText"
                     className="vision-settings-control"
                   >
-                    <Input.TextArea rows={2} showCount maxLength={300} placeholder="请输入负向提示词，控制画面中不希望出现的内容" />
+                    <Input.TextArea
+                      rows={2}
+                      className="vision-settings-negative-textarea"
+                      showCount
+                      maxLength={300}
+                      placeholder="请输入负向提示词，控制画面中不希望出现的内容"
+                    />
                   </Form.Item>
 
                   <div className="vision-settings-grid">
