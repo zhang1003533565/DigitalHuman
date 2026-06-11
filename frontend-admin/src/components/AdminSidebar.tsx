@@ -1,4 +1,5 @@
 import {
+  ApiOutlined,
   BarChartOutlined,
   BookOutlined,
   CommentOutlined,
@@ -62,6 +63,7 @@ const menuItems: MenuProps['items'] = [
   },
   { key: 'feedback', icon: <CommentOutlined />, label: '游客反馈分析' },
   { key: 'qa', icon: <SearchOutlined />, label: '问答记录查询' },
+  { key: 'ai-models', icon: <ApiOutlined />, label: 'AI 模型管理' },
 ]
 
 export default function AdminSidebar({ activeKey, displayName, role, onLogout, onSelect }: AdminSidebarProps) {

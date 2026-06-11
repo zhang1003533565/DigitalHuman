@@ -49,6 +49,7 @@ import VoiceScriptPage from './scenic/VoiceScriptPage'
 import RouteManagementPage from './scenic/RouteManagementPage'
 import ModelEmotionPage from './ModelEmotionPage'
 import HomeConfigPage from './HomeConfigPage'
+import AiModelManagementPage from './AiModelManagementPage'
 import type { LoginResult } from '../types/admin'
 
 const { Content } = Layout
@@ -72,6 +73,7 @@ type MenuKey =
   | 'review'
   | 'knowledge-missing'
   | 'eval'
+  | 'ai-models'
 
 const ADMIN_HOME_PATH = '/admin/dashboard'
 
@@ -94,6 +96,7 @@ const menuPathByKey: Record<MenuKey, string> = {
   review: '/admin/review',
   'knowledge-missing': '/admin/knowledge-missing',
   eval: '/admin/eval',
+  'ai-models': '/admin/ai-models',
 }
 
 const menuKeyByPath = new Map<string, MenuKey>(
@@ -2592,6 +2595,8 @@ function renderPanel(activeKey: MenuKey) {
       return <KnowledgeMissingPanel />
     case 'eval':
       return <EvalPanel />
+    case 'ai-models':
+      return <AiModelManagementPage />
     case 'dashboard':
     default:
       return <DashboardPanel />
