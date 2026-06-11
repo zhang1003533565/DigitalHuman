@@ -15,6 +15,7 @@ class AgentCatalogItem:
 
 def _display_name(agent_name: str) -> str:
     mapping = {
+        "basic_chat_agent": "基础对话智能体",
         "leader_agent": "总控对话智能体",
         "travel_analytics_agent": "旅游行为数据编排智能体",
         "scenic_structured_agent": "景点结构化数据智能体",
@@ -25,6 +26,7 @@ def _display_name(agent_name: str) -> str:
 
 def _category_hint(agent_name: str) -> str:
     mapping = {
+        "basic_chat_agent": "chat",
         "leader_agent": "chat",
         "travel_analytics_agent": "multimodal",
         "scenic_structured_agent": "chat",

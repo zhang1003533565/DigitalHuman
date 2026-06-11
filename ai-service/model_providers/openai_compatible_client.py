@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from typing import Generator
 
 import requests
 from fastapi import HTTPException
@@ -81,6 +83,65 @@ class OpenAICompatibleProviderClient:
             raise HTTPException(status_code=400, detail="对话接口调用成功，但未返回结果")
         content = ((choices[0].get("message") or {}).get("content") or "").strip()
         return content
+
+    def chat_completion_stream(
+        self,
+        *,
+        model_id: str,
+        messages: list[dict[str, object]],
+        temperature: float = 0.2,
+        max_tokens: int | None = None,
+    ) -> Generator[str, None, None]:
+        payload: dict[str, object] = {
+            "model": model_id,
+            "temperature": temperature,
+            "messages": messages,
+            "stream": True,
+        }
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
+
+        try:
+            response = requests.post(
+                self._url("/chat/completions"),
+                headers=self._headers(),
+                json=payload,
+                timeout=45,
+                stream=True,
+            )
+            response.raise_for_status()
+        except requests.HTTPError as exc:
+            detail = extract_http_error_detail(exc.response)
+            raise HTTPException(status_code=400, detail=f"对话接口流式调用失败：{detail}") from exc
+        except requests.RequestException as exc:
+            raise HTTPException(status_code=502, detail=f"对话接口流式连接失败：{exc}") from exc
+
+        try:
+            for line in response.iter_lines(decode_unicode=True):
+                if not line:
+                    continue
+                if line.startswith(":"):
+                    continue
+                if line.startswith("data:"):
+                    data_str = line[len("data:"):].strip()
+                    if data_str == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data_str)
+                    except json.JSONDecodeError:
+                        continue
+                    choices = chunk.get("choices") or []
+                    if not choices:
+                        continue
+                    delta = choices[0].get("delta") or {}
+                    token = delta.get("content") or ""
+                    if token:
+                        yield token
+        except requests.RequestException:
+            # 流式传输中途网络中断，静默结束
+            pass
+        finally:
+            response.close()
 
     def _url(self, path: str) -> str:
         return self.base_url.rstrip("/") + path

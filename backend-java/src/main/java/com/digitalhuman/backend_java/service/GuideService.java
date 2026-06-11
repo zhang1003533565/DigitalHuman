@@ -19,6 +19,7 @@ import com.digitalhuman.backend_java.model.UserFeedback;
 import com.digitalhuman.backend_java.repository.GuideMessageRepository;
 import com.digitalhuman.backend_java.repository.GuideSessionRepository;
 import com.digitalhuman.backend_java.repository.UserFeedbackRepository;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
@@ -29,9 +30,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.time.LocalDateTime;
@@ -42,6 +49,7 @@ public class GuideService {
 
     private static final Logger log = LoggerFactory.getLogger(GuideService.class);
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
+    private static final int BASIC_CHAT_HISTORY_LIMIT = 10;
 
     @Value("${rag.service-url}")
     private String ragServiceUrl;
@@ -248,23 +256,106 @@ public class GuideService {
                     recommendRoutes(request.getInterest()).stream().map(ScenicRouteDto::getName).toList(),
                     List.of());
         }
-        RagQueryResponse ragResponse = queryRag(request, sessionId, traceId);
-        String answerText = ragResponse != null && ragResponse.getAnswer() != null && !ragResponse.getAnswer().isBlank()
-                ? ragResponse.getAnswer()
-                : buildAnswer(request.getQuestion(), request.getInterest());
-        List<String> relatedSpots = ragResponse != null && ragResponse.getRelatedSpots() != null && !ragResponse.getRelatedSpots().isEmpty()
-                ? ragResponse.getRelatedSpots()
-                : spots.stream().map(ScenicSpotDto::getName).limit(2).toList();
+
+        String answerText = buildAnswer(sessionId, request.getQuestion(), request.getInterest());
+        List<String> relatedSpots = spots.stream().map(ScenicSpotDto::getName).limit(2).toList();
         List<String> recommendedRoutes = recommendRoutes(request.getInterest()).stream()
                 .map(ScenicRouteDto::getName)
                 .toList();
-        List<RagSourceDto> sources = ragResponse != null && ragResponse.getSources() != null ? ragResponse.getSources() : List.of();
+        List<RagSourceDto> sources = List.of();
 
         touchSession(sessionId);
         saveMessage(sessionId, traceId, "user", request.getQuestion());
         saveMessage(sessionId, traceId, "assistant", answerText);
 
         return new GuideChatResponse(sessionId, traceId, answerText, relatedSpots, recommendedRoutes, sources);
+    }
+
+    public SseEmitter chatStream(GuideChatRequest request) {
+        String sessionId = request.getSessionId();
+        if (sessionId == null || sessionId.isBlank()) {
+            sessionId = "session-" + UUID.randomUUID();
+        }
+        String traceId = "rag-" + UUID.randomUUID();
+        String finalSessionId = sessionId;
+
+        SseEmitter emitter = new SseEmitter(120_000L);
+
+        new Thread(() -> {
+            try {
+                // 先发送 sessionId 等元信息
+                emitter.send(SseEmitter.event().name("meta")
+                        .data(objectMapper.writeValueAsString(Map.of(
+                                "sessionId", finalSessionId,
+                                "traceId", traceId))));
+
+                // 调用 ai-service 流式接口
+                String url = ragServiceUrl + "/agents/basic-chat/stream";
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("message", request.getQuestion());
+                payload.put("history", buildBasicChatHistory(finalSessionId));
+                payload.put("systemPrompt", buildBasicChatSystemPrompt(request.getInterest()));
+
+                Request httpRequest = new Request.Builder()
+                        .url(url)
+                        .post(RequestBody.create(objectMapper.writeValueAsString(payload), JSON))
+                        .build();
+
+                StringBuilder fullAnswer = new StringBuilder();
+
+                try (Response response = httpClient.newCall(httpRequest).execute()) {
+                    if (!response.isSuccessful() || response.body() == null) {
+                        throw new IOException("Basic chat stream request failed: " + response.code());
+                    }
+
+                    BufferedReader reader = new BufferedReader(
+                            new InputStreamReader(response.body().byteStream(), java.nio.charset.StandardCharsets.UTF_8));
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        if (!line.startsWith("data:")) {
+                            continue;
+                        }
+                        String dataStr = line.substring(5).trim();
+                        if ("[DONE]".equals(dataStr)) {
+                            break;
+                        }
+                        try {
+                            JsonNode chunk = objectMapper.readTree(dataStr);
+                            // 检查是否有错误
+                            if (chunk.has("error")) {
+                                emitter.send(SseEmitter.event().name("error")
+                                        .data(chunk.get("error").asText()));
+                                break;
+                            }
+                            String token = chunk.path("token").asText("");
+                            if (!token.isEmpty()) {
+                                fullAnswer.append(token);
+                                emitter.send(SseEmitter.event().data(Map.of("token", token)));
+                            }
+                        } catch (Exception ignore) {
+                            // JSON 解析失败，跳过这一行
+                        }
+                    }
+                }
+
+                // 流结束后保存消息
+                String answerText = fullAnswer.toString().trim();
+                touchSession(finalSessionId);
+                saveMessage(finalSessionId, traceId, "user", request.getQuestion());
+                saveMessage(finalSessionId, traceId, "assistant", answerText);
+
+                emitter.complete();
+
+            } catch (Exception exc) {
+                try {
+                    emitter.send(SseEmitter.event().name("error").data(exc.getMessage()));
+                } catch (Exception ignore) {}
+                emitter.completeWithError(exc);
+                log.warn("Chat stream failed", exc);
+            }
+        }).start();
+
+        return emitter;
     }
 
     public List<GuideMessageDto> getSessionMessages(String sessionId) {
@@ -331,8 +422,69 @@ public class GuideService {
         }
     }
 
-    private String buildAnswer(String question, String interest) {
-        return question;
+    private String buildAnswer(String sessionId, String question, String interest) {
+        String answer = queryBasicChatAgent(sessionId, question, interest);
+        if (answer != null && !answer.isBlank()) {
+            return answer;
+        }
+        return "当前基础对话智能体暂时不可用，请确认 ai-service 已启动，并检查 /agents/basic-chat 接口和模型配置。";
+    }
+
+    private String queryBasicChatAgent(String sessionId, String question, String interest) {
+        try {
+            String url = ragServiceUrl + "/agents/basic-chat";
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("message", question);
+            payload.put("history", buildBasicChatHistory(sessionId));
+            payload.put("systemPrompt", buildBasicChatSystemPrompt(interest));
+
+            Request httpRequest = new Request.Builder()
+                    .url(url)
+                    .post(RequestBody.create(objectMapper.writeValueAsString(payload), JSON))
+                    .build();
+
+            try (Response response = httpClient.newCall(httpRequest).execute()) {
+                if (!response.isSuccessful()) {
+                    throw new IOException("Basic chat request failed: " + response.code());
+                }
+                if (response.body() == null) {
+                    throw new IOException("Basic chat response body is empty");
+                }
+
+                JsonNode root = objectMapper.readTree(response.body().string());
+                String answer = root.path("output").path("answer").asText("");
+                return answer == null ? null : answer.trim();
+            }
+        } catch (Exception exception) {
+            log.warn("Basic chat agent request failed", exception);
+            return null;
+        }
+    }
+
+    private List<Map<String, String>> buildBasicChatHistory(String sessionId) {
+        List<GuideMessage> history = messageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+        int startIndex = Math.max(0, history.size() - BASIC_CHAT_HISTORY_LIMIT);
+        List<Map<String, String>> messages = new ArrayList<>();
+        for (int index = startIndex; index < history.size(); index++) {
+            GuideMessage message = history.get(index);
+            String role = "assistant".equalsIgnoreCase(message.getRole()) ? "assistant" : "user";
+            String content = message.getContent();
+            if (content == null || content.isBlank()) {
+                continue;
+            }
+            messages.add(Map.of("role", role, "content", content));
+        }
+        return messages;
+    }
+
+    private String buildBasicChatSystemPrompt(String interest) {
+        String basePrompt = "你是灵山景区智能导览助手。请使用简体中文回答，语气自然、友好，适合游客现场咨询。"
+                + "当前阶段先进行基础对话，不依赖知识库检索。"
+                + "如果用户询问具体史实、开放时间或票务等你无法确认的信息，请明确说明当前无法核实，并给出通用建议。";
+        if (interest == null || interest.isBlank()) {
+            return basePrompt;
+        }
+        return basePrompt + " 用户当前偏好方向：" + interest.trim() + "。";
     }
 
     private void touchSession(String sessionId) {

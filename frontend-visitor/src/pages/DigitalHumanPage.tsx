@@ -705,43 +705,118 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     setStatus('正在生成导览回答...')
     void triggerConfiguredAction({ text: question })
 
-    try {
-      const chatResponse = await axios.post<GuideChatResponse>('/api/user/guide/chat', {
-        sessionId: sessionId || undefined,
-        question,
-      })
+    const assistantMsgId = `guide-${Date.now()}`
 
-      const nextSessionId = chatResponse.data.sessionId
-      setSessionId(nextSessionId)
-      window.sessionStorage.setItem(GUIDE_SESSION_KEY, nextSessionId)
-
-      const assistantMessage: DigitalChatMessage = {
-        id: `guide-${Date.now()}`,
+    // 先添加一个空的助手消息，后续流式填充内容
+    setMessages((current) => [
+      ...current,
+      {
+        id: assistantMsgId,
         sender: 'guide',
         name: '灵山导览数字人',
-        content: buildAssistantContent(chatResponse.data),
+        content: '',
         time: new Date(),
         status: 'read',
+      },
+    ])
+
+    try {
+      console.log('[stream] 开始请求流式接口')
+      const authHeader = axios.defaults.headers.common.Authorization as string | undefined
+      const response = await fetch('/api/user/guide/chat/stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authHeader ? { Authorization: authHeader } : {}),
+        },
+        body: JSON.stringify({
+          sessionId: sessionId || undefined,
+          question,
+        }),
+      })
+
+      console.log('[stream] 响应状态:', response.status, response.headers.get('content-type'))
+
+      if (!response.ok || !response.body) {
+        throw new Error(`Stream request failed: ${response.status}`)
       }
-      setMessages((current) => [...current, assistantMessage])
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let fullAnswer = ''
+      let nextSessionId = sessionId
+      let chunkCount = 0
+
+      // 逐行解析 SSE
+      let buffer = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        chunkCount++
+        const text = decoder.decode(value, { stream: true })
+        console.log(`[stream] chunk #${chunkCount}:`, text.slice(0, 200))
+        buffer += text
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+
+        for (const line of lines) {
+          if (!line.trim() || line.startsWith('event:')) continue
+          if (!line.startsWith('data:')) continue
+
+          const dataStr = line.slice(5).trim()
+          if (dataStr === '[DONE]') {
+            console.log('[stream] 收到 [DONE] 信号')
+            continue
+          }
+
+          try {
+            const parsed = JSON.parse(dataStr)
+
+            // meta 事件：包含 sessionId
+            if (parsed.sessionId) {
+              console.log('[stream] meta:', parsed.sessionId)
+              nextSessionId = parsed.sessionId
+              setSessionId(nextSessionId)
+              window.sessionStorage.setItem(GUIDE_SESSION_KEY, nextSessionId)
+            }
+
+            // token 事件：逐字输出
+            if (parsed.token) {
+              fullAnswer += parsed.token
+              const currentText = fullAnswer
+              setMessages((current) =>
+                current.map((msg) =>
+                  msg.id === assistantMsgId ? { ...msg, content: currentText } : msg
+                )
+              )
+            }
+
+            // error 事件
+            if (parsed.error) {
+              console.error('[stream] error:', parsed.error)
+            }
+          } catch {
+            console.warn('[stream] JSON 解析失败:', dataStr)
+          }
+        }
+      }
+
+      console.log(`[stream] 流结束, 共 ${chunkCount} 个 chunk, 回答长度: ${fullAnswer.length}`)
       setStatus('导览回答已生成，正在驱动数字人口型。')
-      void triggerConfiguredAction({ text: `${question}\n${chatResponse.data.answerText}` })
-      await speakAnswer(chatResponse.data.answerText)
+      void triggerConfiguredAction({ text: `${question}\n${fullAnswer}` })
+      await speakAnswer(fullAnswer)
     } catch (error) {
       console.error(error)
       setIsSpeaking(false)
       setStatus('导览请求失败，请确认问答服务和 TTS 服务已启动。')
-      setMessages((current) => [
-        ...current,
-        {
-          id: `guide-error-${Date.now()}`,
-          sender: 'guide',
-          name: '灵山导览数字人',
-          content: '这次导览请求失败了，请稍后再试。',
-          time: new Date(),
-          status: 'failed',
-        },
-      ])
+      setMessages((current) =>
+        current.map((msg) =>
+          msg.id === assistantMsgId
+            ? { ...msg, content: '这次导览请求失败了，请稍后再试。', status: 'failed' as const }
+            : msg
+        )
+      )
     }
   }
 

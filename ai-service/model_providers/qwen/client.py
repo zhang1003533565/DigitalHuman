@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Generator
 
 from model_providers.openai_compatible_client import OpenAICompatibleProviderClient
 
@@ -17,6 +18,13 @@ class QwenClient:
 
     def generate_answer(self, model_id: str, messages: list[dict[str, object]], temperature: float = 0.2) -> str:
         return self.base.chat_completion(
+            model_id=model_id,
+            messages=messages,
+            temperature=temperature,
+        )
+
+    def generate_answer_stream(self, model_id: str, messages: list[dict[str, object]], temperature: float = 0.2) -> Generator[str, None, None]:
+        return self.base.chat_completion_stream(
             model_id=model_id,
             messages=messages,
             temperature=temperature,

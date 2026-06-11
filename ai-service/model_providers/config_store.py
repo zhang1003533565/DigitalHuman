@@ -30,6 +30,14 @@ class AgentModelBinding:
 
 AGENT_MODEL_DEFAULTS: list[AgentModelBinding] = [
     AgentModelBinding(
+        agent="basic_chat_agent",
+        category="chat",
+        provider="DeepSeek",
+        model="deepseek-v4-flash",
+        timeout_seconds=90,
+        enabled=True,
+    ),
+    AgentModelBinding(
         agent="leader_agent",
         category="chat",
         provider="DeepSeek",
