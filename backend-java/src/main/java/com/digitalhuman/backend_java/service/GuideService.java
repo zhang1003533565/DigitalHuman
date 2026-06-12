@@ -13,9 +13,14 @@ import com.digitalhuman.backend_java.dto.ScenicRouteDto.CoordinateDto;
 import com.digitalhuman.backend_java.dto.ScenicRouteDto.RouteFacilityDto;
 import com.digitalhuman.backend_java.dto.ScenicRouteDto.RouteNodeDto;
 import com.digitalhuman.backend_java.dto.ScenicSpotDto;
+import com.digitalhuman.backend_java.model.AdminModelConfig;
+import com.digitalhuman.backend_java.model.AdminProviderConfig;
 import com.digitalhuman.backend_java.model.GuideMessage;
 import com.digitalhuman.backend_java.model.GuideSession;
+import com.digitalhuman.backend_java.model.ModelCategory;
 import com.digitalhuman.backend_java.model.UserFeedback;
+import com.digitalhuman.backend_java.repository.AdminModelConfigRepository;
+import com.digitalhuman.backend_java.repository.AdminProviderConfigRepository;
 import com.digitalhuman.backend_java.repository.GuideMessageRepository;
 import com.digitalhuman.backend_java.repository.GuideSessionRepository;
 import com.digitalhuman.backend_java.repository.UserFeedbackRepository;
@@ -177,6 +182,8 @@ public class GuideService {
     private final GuideMessageRepository messageRepository;
     private final UserFeedbackRepository feedbackRepository;
     private final ScenicRouteService scenicRouteService;
+    private final AdminModelConfigRepository modelConfigRepository;
+    private final AdminProviderConfigRepository providerConfigRepository;
 
     private static RouteNodeDto node(
             String id,
@@ -214,12 +221,16 @@ public class GuideService {
             GuideSessionRepository sessionRepository,
             GuideMessageRepository messageRepository,
             UserFeedbackRepository feedbackRepository,
-            ScenicRouteService scenicRouteService) {
+            ScenicRouteService scenicRouteService,
+            AdminModelConfigRepository modelConfigRepository,
+            AdminProviderConfigRepository providerConfigRepository) {
         this.ragTraceService = ragTraceService;
         this.sessionRepository = sessionRepository;
         this.messageRepository = messageRepository;
         this.feedbackRepository = feedbackRepository;
         this.scenicRouteService = scenicRouteService;
+        this.modelConfigRepository = modelConfigRepository;
+        this.providerConfigRepository = providerConfigRepository;
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(60, TimeUnit.SECONDS)
@@ -295,6 +306,7 @@ public class GuideService {
                 payload.put("message", request.getQuestion());
                 payload.put("history", buildBasicChatHistory(finalSessionId));
                 payload.put("systemPrompt", buildBasicChatSystemPrompt(request.getInterest()));
+                payload.putAll(resolveAiModelConfig());
 
                 Request httpRequest = new Request.Builder()
                         .url(url)
@@ -437,6 +449,7 @@ public class GuideService {
             payload.put("message", question);
             payload.put("history", buildBasicChatHistory(sessionId));
             payload.put("systemPrompt", buildBasicChatSystemPrompt(interest));
+            payload.putAll(resolveAiModelConfig());
 
             Request httpRequest = new Request.Builder()
                     .url(url)
@@ -485,6 +498,32 @@ public class GuideService {
             return basePrompt;
         }
         return basePrompt + " 用户当前偏好方向：" + interest.trim() + "。";
+    }
+
+    /**
+     * 从 MySQL 查询当前选中的 CHAT 模型及其 provider 配置，
+     * 返回 provider / model / baseUrl / apiKey 四个字段供 ai-service 直接使用。
+     * 查询失败时返回空 Map，ai-service 将自动回退到 SQLite 配置。
+     */
+    private Map<String, String> resolveAiModelConfig() {
+        Map<String, String> config = new LinkedHashMap<>();
+        try {
+            modelConfigRepository
+                    .findFirstByCategoryAndSelectedTrue(ModelCategory.CHAT)
+                    .ifPresent(modelConfig -> {
+                        config.put("provider", modelConfig.getProvider());
+                        config.put("model", modelConfig.getModelId());
+                        providerConfigRepository
+                                .findByProviderIgnoreCase(modelConfig.getProvider())
+                                .ifPresent(providerConfig -> {
+                                    config.put("baseUrl", providerConfig.getBaseUrl());
+                                    config.put("apiKey", providerConfig.getApiKey());
+                                });
+                    });
+        } catch (Exception e) {
+            log.warn("Failed to resolve AI model config from MySQL, ai-service will fallback", e);
+        }
+        return config;
     }
 
     private void touchSession(String sessionId) {

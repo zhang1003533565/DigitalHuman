@@ -28,6 +28,10 @@ class BasicChatRequest(BaseModel):
     message: str = Field(default="")
     history: list[dict[str, str]] = Field(default_factory=list)
     system_prompt: str = Field(default="", alias="systemPrompt")
+    provider: str = Field(default="")
+    model: str = Field(default="")
+    base_url: str = Field(default="", alias="baseUrl")
+    api_key: str = Field(default="", alias="apiKey")
 
 
 class BasicChatResponse(BaseModel):
@@ -72,6 +76,10 @@ def basic_chat(request: BasicChatRequest) -> BasicChatResponse:
             "message": request.message,
             "history": request.history,
             "systemPrompt": request.system_prompt,
+            "provider": request.provider,
+            "model": request.model,
+            "baseUrl": request.base_url,
+            "apiKey": request.api_key,
         },
     )
     result = basic_chat_agent.run(context)
@@ -92,6 +100,10 @@ def basic_chat_stream(request: BasicChatRequest):
             "message": request.message,
             "history": request.history,
             "systemPrompt": request.system_prompt,
+            "provider": request.provider,
+            "model": request.model,
+            "baseUrl": request.base_url,
+            "apiKey": request.api_key,
         },
     )
     token_gen = basic_chat_agent.run_stream(context)

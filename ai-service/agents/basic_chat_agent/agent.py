@@ -5,8 +5,6 @@ from typing import Any, Generator
 from agents.common.base import BaseAgent
 from agents.common.types import AgentContext, AgentResult
 from agents.common.utils import normalize_text
-from agents.model_binding_service import get_agent_bindings
-from model_providers.config_store import find_provider_config
 from model_providers.registry import get_provider_client
 
 
@@ -33,17 +31,19 @@ class BasicChatAgent(BaseAgent):
         if not message:
             return AgentResult(agent=self.name, success=False, output={}, warnings=["message 不能为空"])
 
-        binding = _find_binding(self.name)
-        if not binding:
-            return AgentResult(agent=self.name, success=False, output={}, warnings=["未找到 basic_chat_agent 的模型绑定配置"])
-        if not bool(binding.get("enabled")):
-            return AgentResult(agent=self.name, success=False, output={}, warnings=["basic_chat_agent 当前未启用"])
+        # --- 从 Java 后台（MySQL）传入的模型配置 ---
+        provider = normalize_text(context.metadata.get("provider"))
+        model = normalize_text(context.metadata.get("model"))
+        base_url = normalize_text(context.metadata.get("baseUrl"))
+        api_key = normalize_text(context.metadata.get("apiKey"))
 
-        provider = normalize_text(binding.get("provider"))
-        model = normalize_text(binding.get("model"))
-        provider_config = find_provider_config(provider)
-        if not provider_config:
-            return AgentResult(agent=self.name, success=False, output={}, warnings=[f"provider 未配置: {provider}"])
+        if not all([provider, model, base_url, api_key]):
+            return AgentResult(
+                agent=self.name, success=False, output={},
+                warnings=["模型配置不完整，请在后台管理中完成 CHAT 模型与 Provider 配置"],
+            )
+
+        provider_config = {"provider": provider, "baseUrl": base_url, "apiKey": api_key}
 
         history = _normalize_history(context.metadata.get("history"))
         system_prompt = normalize_text(context.metadata.get("systemPrompt")) or DEFAULT_SYSTEM_PROMPT
@@ -81,21 +81,6 @@ class BasicChatAgent(BaseAgent):
         messages, provider, model, provider_config = prepared
         client = get_provider_client(provider, provider_config)
         return client.generate_answer_stream(model, messages, temperature=0.6)
-
-
-def _find_binding(agent: str) -> dict[str, Any] | None:
-    payload = get_agent_bindings()
-    for item in payload.items:
-        if item.agent == agent:
-            return {
-                "agent": item.agent,
-                "category": item.category,
-                "provider": item.provider,
-                "model": item.model,
-                "timeoutSeconds": item.timeout_seconds,
-                "enabled": item.enabled,
-            }
-    return None
 
 
 def _normalize_history(raw_history: Any) -> list[dict[str, str]]:
