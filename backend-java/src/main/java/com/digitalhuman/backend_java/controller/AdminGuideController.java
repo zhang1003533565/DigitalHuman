@@ -1,6 +1,8 @@
 package com.digitalhuman.backend_java.controller;
 
 import com.digitalhuman.backend_java.dto.FeedbackRecordDto;
+import com.digitalhuman.backend_java.dto.GuideChatRequest;
+import com.digitalhuman.backend_java.dto.GuideChatResponse;
 import com.digitalhuman.backend_java.dto.GuideMessageDto;
 import com.digitalhuman.backend_java.dto.RagTraceDetailDto;
 import com.digitalhuman.backend_java.dto.RagTraceSummaryDto;
@@ -43,6 +45,11 @@ public class AdminGuideController {
     @GetMapping("/session/{id}/messages")
     public List<GuideMessageDto> getSessionMessages(@PathVariable("id") String sessionId) {
         return guideService.getSessionMessages(sessionId);
+    }
+
+    @PostMapping("/chat-test")
+    public GuideChatResponse testGuideChat(@RequestBody GuideChatRequest request) {
+        return guideService.chat(request);
     }
 
     @GetMapping("/feedback")

@@ -81,3 +81,49 @@ export async function testModel(request: ModelTestRequest): Promise<ModelTestRes
   const response = await axios.post<ModelTestResponse>('/api/admin/settings/model-test', request, { timeout: TEST_TIMEOUT })
   return response.data
 }
+
+/* ---------- 智能体测试 ---------- */
+export type AgentTestRequest = {
+  agent: string
+  task: string
+}
+
+export type AgentTestResponse = {
+  success: boolean
+  agent: string
+  message: string
+  detail?: string
+  provider?: string
+  model?: string
+  result?: string
+}
+
+export async function testAgent(request: AgentTestRequest): Promise<AgentTestResponse> {
+  const response = await axios.post<AgentTestResponse>('/api/admin/settings/agent-test', request, { timeout: TEST_TIMEOUT })
+  return response.data
+}
+
+/* ---------- 游客端对话测试 ---------- */
+export type GuideChatTestRequest = {
+  sessionId?: string
+  question: string
+  interest?: string
+}
+
+export type GuideChatTestResponse = {
+  sessionId: string
+  traceId?: string
+  answerText: string
+  relatedSpots: string[]
+  recommendedRoutes: string[]
+  sources?: Array<{
+    source_file?: string
+    title?: string
+    section_path?: string[]
+  }>
+}
+
+export async function testGuideChat(request: GuideChatTestRequest): Promise<GuideChatTestResponse> {
+  const response = await axios.post<GuideChatTestResponse>('/api/admin/guide/chat-test', request, { timeout: TEST_TIMEOUT })
+  return response.data
+}

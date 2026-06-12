@@ -3,9 +3,7 @@ import {
   Button,
   Form,
   Input,
-  Select,
   Spin,
-  Switch,
   Typography,
   message,
 } from 'antd'
@@ -15,19 +13,16 @@ import {
   EyeOutlined,
   ExperimentOutlined,
   RobotOutlined,
-  SaveOutlined,
-  SendOutlined,
   SettingOutlined,
   UserOutlined,
 } from '@ant-design/icons'
 import {
   addModelOption,
-  getModelSettings,
   getProviderConfigs,
   saveProviderConfig,
   selectModelOption,
-  testModel,
-  type ModelTestResponse,
+  testGuideChat,
+  type GuideChatTestResponse,
   type ProviderConfig,
 } from '../api/aiModelConfig'
 
@@ -46,6 +41,8 @@ const AI_PAGE_STYLES = `
   .ai-page__grid { display: grid; grid-template-columns: minmax(360px, 440px) minmax(0, 1fr); gap: 18px; min-height: 0; }
   .ai-card { border: 1px solid #e8eef8; border-radius: 22px; background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,251,255,0.94)); box-shadow: 0 18px 48px rgba(30,64,141,0.08); overflow: hidden; }
   .ai-card__inner { display: grid; gap: 20px; padding: 22px; min-height: 0; }
+  .ai-card--fill { height: 100%; display: flex; flex-direction: column; }
+  .ai-card--fill > .ai-card__inner { display: flex; flex-direction: column; flex: 1; }
   .ai-card__header { display: flex; align-items: flex-start; gap: 12px; }
   .ai-card__icon { width: 40px; height: 40px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(180deg, rgba(57,118,255,0.14), rgba(57,118,255,0.06)); color: #2468ff; font-size: 20px; flex: none; }
   .ai-card__title { margin: 0 !important; color: #1f3054 !important; font-size: 22px !important; font-weight: 700 !important; }
@@ -55,9 +52,7 @@ const AI_PAGE_STYLES = `
   .ai-form .ant-form-item-label > label { color: #20365f; font-weight: 600; }
   .ai-form .ant-input, .ai-form .ant-input-affix-wrapper, .ai-form .ant-select-selector { min-height: 44px !important; border-radius: 12px !important; border-color: #dce5f2 !important; box-shadow: none !important; }
   .ai-form .ant-input:focus, .ai-form .ant-input-affix-wrapper-focused, .ai-form .ant-select-focused .ant-select-selector { border-color: #2f6dff !important; }
-  .ai-form__switch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 4px; }
-  .ai-form__switch-meta { display: inline-flex; align-items: center; gap: 10px; color: #5e7296; font-size: 13px; }
-  .ai-form__switch-meta strong { color: #1f3054; font-size: 14px; }
+  .ai-fixed-field { display: flex; align-items: center; min-height: 44px; padding: 8px 12px; border-radius: 12px; border: 1px solid #dce5f2; background: #f7faff; color: #20365f; font-size: 14px; }
   .ai-save-btn.ant-btn-primary, .ai-send-btn.ant-btn-primary { height: 46px; border: none; border-radius: 14px; background: linear-gradient(135deg, #2f6dff, #1458ff); box-shadow: 0 14px 28px rgba(47,109,255,0.22); font-weight: 600; }
   .ai-save-btn.ant-btn-primary:hover, .ai-send-btn.ant-btn-primary:hover, .ai-save-btn.ant-btn-primary:focus, .ai-send-btn.ant-btn-primary:focus { background: linear-gradient(135deg, #2459d4, #0f49d8) !important; }
   .ai-save-btn { width: 136px; }
@@ -65,43 +60,43 @@ const AI_PAGE_STYLES = `
   .ai-note__title { display: inline-flex; align-items: center; gap: 8px; color: #2564ff; font-weight: 700; }
   .ai-note ul { margin: 0; padding-left: 20px; color: #5e7296; }
   .ai-note li + li { margin-top: 6px; }
-  .ai-test-panel { display: grid; gap: 18px; min-height: 0; }
+  .ai-test-panel { display: flex; flex-direction: column; gap: 18px; min-height: 0; flex: 1; overflow: hidden; }
   .ai-current { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid #edf2fa; }
   .ai-current__meta { display: grid; gap: 8px; }
   .ai-current__label { color: #4f6488; font-size: 13px; font-weight: 600; }
   .ai-current__badge { display: inline-flex; align-items: center; gap: 8px; width: fit-content; padding: 8px 12px; border-radius: 999px; background: #f2f6ff; color: #415a84; font-size: 13px; }
   .ai-current__status { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: #ebfbef; color: #18a957; font-size: 13px; font-weight: 700; }
   .ai-current__status--idle { background: #f3f6fb; color: #6b7f9f; }
-  .ai-chat { display: grid; gap: 12px; min-height: 0; }
-  .ai-chat__scroll { display: grid; gap: 12px; min-height: 0; max-height: 420px; overflow: auto; padding-right: 4px; }
-  .ai-bubble { display: grid; gap: 10px; padding: 18px; border-radius: 18px; background: #f4f8ff; border: 1px solid #e5edf9; }
-  .ai-bubble--assistant { background: linear-gradient(180deg, #ffffff, #f7faff); }
-  .ai-bubble__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .ai-bubble__author { display: inline-flex; align-items: center; gap: 10px; color: #1f3054; font-weight: 700; }
-  .ai-bubble__avatar { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(135deg, #2f6dff, #4b8dff); color: #fff; font-size: 16px; }
-  .ai-bubble--assistant .ai-bubble__avatar { background: linear-gradient(135deg, #8c72ff, #6d8cff); }
-  .ai-bubble__time { color: #90a0bb; font-size: 12px; }
-  .ai-bubble__content { color: #44597f; line-height: 1.75; white-space: pre-wrap; }
+  .ai-chat { display: flex; flex-direction: column; gap: 12px; min-height: 0; flex: 1; overflow: hidden; }
+  .ai-chat__scroll { display: flex; flex-direction: column; gap: 14px; flex: 0 1 360px; max-height: min(360px, 42vh); overflow-y: auto; overflow-x: hidden; padding: 2px 4px 2px 0; }
+  .ai-message { display: flex; align-items: flex-start; gap: 10px; width: fit-content; max-width: min(58%, 520px); }
+  .ai-message--assistant { align-self: flex-start; }
+  .ai-message--user { align-self: flex-end; flex-direction: row-reverse; }
+  .ai-message__avatar { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; flex: 0 0 34px; margin-top: 2px; background: linear-gradient(135deg, #2f6dff, #4b8dff); color: #fff; font-size: 16px; box-shadow: 0 8px 18px rgba(47,109,255,0.18); }
+  .ai-message--assistant .ai-message__avatar { background: linear-gradient(135deg, #8c72ff, #6d8cff); box-shadow: 0 8px 18px rgba(109,140,255,0.18); }
+  .ai-message__body { display: grid; gap: 5px; min-width: 0; }
+  .ai-message--user .ai-message__body { justify-items: end; }
+  .ai-message__author { color: #1f3054; font-size: 13px; font-weight: 700; line-height: 1.2; }
+  .ai-message__time { color: #90a0bb; font-size: 12px; line-height: 1.2; }
+  .ai-bubble { display: grid; gap: 10px; min-width: 0; max-width: 100%; width: fit-content; padding: 14px 16px; border-radius: 16px; background: #eef5ff; border: 1px solid #dfe9f8; }
+  .ai-message--assistant .ai-bubble { background: linear-gradient(180deg, #ffffff, #f7faff); }
+  .ai-message--user .ai-bubble { background: linear-gradient(180deg, #eff6ff, #eaf3ff); border-color: #dbe8fb; }
+  .ai-bubble__content { color: #44597f; line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; }
   .ai-input-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 116px; gap: 14px; align-items: end; }
-  .ai-input-wrap .ant-input { border-radius: 16px !important; border-color: #dce5f2 !important; min-height: 94px !important; resize: none; padding-top: 14px; }
-  .ai-input__count { margin-top: 6px; text-align: right; color: #96a5bf; font-size: 12px; }
-  .ai-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; padding: 16px 18px; border-radius: 18px; border: 1px solid #e0f1e8; background: linear-gradient(180deg, rgba(241,253,246,0.96), rgba(249,255,251,0.96)); }
-  .ai-metrics__item { display: grid; gap: 8px; }
-  .ai-metrics__label { color: #6a7f9d; font-size: 12px; }
-  .ai-metrics__value { color: #1f3054; font-size: 22px; font-weight: 700; }
+  .ai-input-wrap .ant-input { border-radius: 16px !important; border-color: #dce5f2 !important; min-height: 38px !important; resize: none; padding: 8px 12px !important; line-height: 22px; }
+  .ai-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 10px 14px; border-radius: 14px; border: 1px solid #e0f1e8; background: linear-gradient(180deg, rgba(241,253,246,0.96), rgba(249,255,251,0.96)); }
+  .ai-metrics__item { display: grid; gap: 4px; }
+  .ai-metrics__label { color: #6a7f9d; font-size: 11px; }
+  .ai-metrics__value { color: #1f3054; font-size: 18px; font-weight: 700; line-height: 1.2; }
   .ai-metrics__value--success { color: #1ca85b; }
   .ai-metrics__value--danger { color: #e24c4c; }
   .ai-empty-tip { padding: 16px; border-radius: 16px; border: 1px dashed #d6e2f3; background: #f9fbff; color: #7a8eae; text-align: center; }
   @media (max-width: 1180px) { .ai-page__grid { grid-template-columns: 1fr; } }
-  @media (max-width: 760px) { .ai-input-wrap, .ai-metrics { grid-template-columns: 1fr; } .ai-save-btn, .ai-send-btn { width: 100%; } }
+  @media (max-width: 760px) { .ai-input-wrap, .ai-metrics { grid-template-columns: 1fr; } .ai-save-btn, .ai-send-btn { width: 100%; } .ai-chat__scroll { max-height: 42vh; } .ai-message { max-width: 92%; } .ai-bubble { min-width: 0; } }
 `
 
 type AiConfigFormValues = {
-  provider: string
-  modelId: string
-  baseUrl: string
   apiKey: string
-  enabled: boolean
 }
 
 type ChatMessage = { id: string; role: 'user' | 'assistant'; content: string; time: string }
@@ -116,8 +111,8 @@ function nowDateTimeLabel() {
 function estimateTokenUsage(input: string, output: string) {
   return Math.max(1, Math.round((input.length + output.length) / 2))
 }
-function resolveAssistantText(result: ModelTestResponse) {
-  return result.modelAnswer || result.detail || result.message || '模型已返回响应，但没有可展示的文本内容。'
+function resolveAssistantText(result: GuideChatTestResponse) {
+  return result.answerText || '游客端智能体已返回响应，但没有可展示的文本内容。'
 }
 
 /** 给 Promise 加绝对超时，防止请求永久挂起 */
@@ -134,17 +129,16 @@ export default function AiModelManagementPage() {
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [showKey, setShowKey] = useState(false)
-  const [providerOptions, setProviderOptions] = useState([{ value: DEFAULT_PROVIDER, label: DEFAULT_PROVIDER }])
   const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [testInput, setTestInput] = useState('')
+  const [testInput, setTestInput] = useState('你好')
   const [testMetrics, setTestMetrics] = useState<TestMetrics | null>(null)
+  const [guideTestSessionId, setGuideTestSessionId] = useState('')
   const [hasValidConfig, setHasValidConfig] = useState(false)
   const loadingRef = useRef<number>(0)
+  const chatScrollRef = useRef<HTMLDivElement | null>(null)
+  const pendingScrollRef = useRef<{ id: string; align: 'top' | 'bottom' } | null>(null)
 
-  const currentProvider = Form.useWatch('provider', form) || DEFAULT_PROVIDER
-  const currentModelId = Form.useWatch('modelId', form) || DEFAULT_MODEL_ID
-  const enabled = Form.useWatch('enabled', form) ?? true
-  const currentModelLabel = useMemo(() => `${currentProvider} / ${currentModelId}`, [currentModelId, currentProvider])
+  const currentModelLabel = useMemo(() => `${DEFAULT_PROVIDER} / ${DEFAULT_MODEL_ID}`, [])
 
   useEffect(() => {
     const gen = ++loadingRef.current
@@ -153,37 +147,21 @@ export default function AiModelManagementPage() {
     async function load() {
       setLoading(true)
       form.setFieldsValue({
-        provider: DEFAULT_PROVIDER,
-        modelId: DEFAULT_MODEL_ID,
-        baseUrl: DEFAULT_BASE_URL,
         apiKey: DEFAULT_API_KEY_PLACEHOLDER,
-        enabled: true,
       })
 
       try {
-        const [providersResult, modelsResult] = await Promise.allSettled([
-          withTimeout(getProviderConfigs(), 6000),
-          withTimeout(getModelSettings(), 6000),
-        ])
+        const providers = await withTimeout(getProviderConfigs(), 6000)
         if (cancelled || gen !== loadingRef.current) return
-
-        const providers = providersResult.status === 'fulfilled' ? providersResult.value : []
-        const models = modelsResult.status === 'fulfilled' ? modelsResult.value : null
-        const names = new Set([DEFAULT_PROVIDER, ...providers.map((p: ProviderConfig) => p.provider)].filter(Boolean))
-        setProviderOptions(Array.from(names).map((n) => ({ value: n, label: n })))
 
         const matched: ProviderConfig | undefined = providers.find(
           (p: ProviderConfig) => p.provider.toLowerCase() === DEFAULT_PROVIDER.toLowerCase(),
-        ) ?? providers[0]
+        )
 
         form.setFieldsValue({
-          provider: matched?.provider || DEFAULT_PROVIDER,
-          modelId: models?.chatModel || DEFAULT_MODEL_ID,
-          baseUrl: matched?.baseUrl || DEFAULT_BASE_URL,
           apiKey: matched?.apiKey || DEFAULT_API_KEY_PLACEHOLDER,
-          enabled: true,
         })
-        setHasValidConfig(Boolean(matched?.baseUrl && matched?.apiKey && (models?.chatModel || DEFAULT_MODEL_ID)))
+        setHasValidConfig(Boolean(matched?.apiKey))
       } catch {
         message.warning('配置加载超时，已使用默认模板。')
       } finally {
@@ -195,12 +173,31 @@ export default function AiModelManagementPage() {
     return () => { cancelled = true }
   }, [form])
 
+  useEffect(() => {
+    const pending = pendingScrollRef.current
+    const container = chatScrollRef.current
+    if (!pending || !container) return
+
+    const target = container.querySelector<HTMLElement>(`[data-message-id="${pending.id}"]`)
+    if (!target) return
+
+    const top = pending.align === 'bottom'
+      ? target.offsetTop + target.offsetHeight - container.clientHeight
+      : target.offsetTop - container.offsetTop
+
+    container.scrollTo({
+      top: Math.max(0, top),
+      behavior: 'smooth',
+    })
+    pendingScrollRef.current = null
+  }, [messages, testMetrics])
+
   async function persistConfig(options?: { silent?: boolean }) {
     const values = await form.validateFields()
-    const provider = (values.provider || DEFAULT_PROVIDER).trim()
-    const modelId = (values.modelId || DEFAULT_MODEL_ID).trim()
+    const provider = DEFAULT_PROVIDER
+    const modelId = DEFAULT_MODEL_ID
 
-    await saveProviderConfig({ provider, baseUrl: values.baseUrl, apiKey: values.apiKey, protocol: 'openai_compatible' })
+    await saveProviderConfig({ provider, baseUrl: DEFAULT_BASE_URL, apiKey: values.apiKey, protocol: 'openai_compatible' })
 
     const option = { category: 'chat', provider, modelId }
     try { await addModelOption(option) } catch { /* 可能已存在 */ }
@@ -208,7 +205,7 @@ export default function AiModelManagementPage() {
     setHasValidConfig(true)
 
     if (!options?.silent) message.success('配置已保存')
-    return { provider, modelId, enabled: values.enabled }
+    return { provider, modelId }
   }
 
   async function handleSave() {
@@ -223,24 +220,28 @@ export default function AiModelManagementPage() {
 
     try {
       setTesting(true)
-      const config = await persistConfig({ silent: true })
-      if (!config.enabled) { message.warning('当前模型已关闭，请先开启后再测试。'); return }
+      await persistConfig({ silent: true })
 
       const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: 'user', content: question, time: nowTimeLabel() }
+      pendingScrollRef.current = { id: userMsg.id, align: 'top' }
       setMessages((c) => [...c, userMsg])
 
       const startedAt = performance.now()
-      const result = await withTimeout(testModel({ category: 'chat', modelId: config.modelId, text: question }), 25000)
+      const result = await withTimeout(testGuideChat({ sessionId: guideTestSessionId || undefined, question }), 25000)
       const latencyMs = Math.max(1, Math.round(performance.now() - startedAt))
       const answer = resolveAssistantText(result)
+      setGuideTestSessionId(result.sessionId || guideTestSessionId)
 
       const asstMsg: ChatMessage = { id: `a-${Date.now()}`, role: 'assistant', content: answer, time: nowTimeLabel() }
+      pendingScrollRef.current = { id: asstMsg.id, align: 'bottom' }
       setMessages((c) => [...c, asstMsg])
-      setTestMetrics({ success: result.success, latencyMs, tokenUsage: estimateTokenUsage(question, answer), testedAt: nowDateTimeLabel() })
-      message.success(result.message || '模型测试成功')
+      setTestMetrics({ success: true, latencyMs, tokenUsage: estimateTokenUsage(question, answer), testedAt: nowDateTimeLabel() })
+      message.success('游客端智能体测试成功')
     } catch {
-      const fail = '模型测试失败，请检查当前模型配置与接口凭证。'
-      setMessages((c) => [...c, { id: `a-${Date.now()}`, role: 'assistant', content: fail, time: nowTimeLabel() }])
+      const fail = '游客端智能体测试失败，请检查游客端对话服务、模型配置与接口凭证。'
+      const failMsg: ChatMessage = { id: `a-${Date.now()}`, role: 'assistant', content: fail, time: nowTimeLabel() }
+      pendingScrollRef.current = { id: failMsg.id, align: 'bottom' }
+      setMessages((c) => [...c, failMsg])
       setTestMetrics({ success: false, latencyMs: 0, tokenUsage: 0, testedAt: nowDateTimeLabel() })
       message.error(fail)
     } finally { setTesting(false) }
@@ -269,38 +270,30 @@ export default function AiModelManagementPage() {
               </div>
 
               <Form<AiConfigFormValues> form={form} layout="vertical" className="ai-form"
-                initialValues={{ provider: DEFAULT_PROVIDER, modelId: DEFAULT_MODEL_ID, baseUrl: DEFAULT_BASE_URL, apiKey: DEFAULT_API_KEY_PLACEHOLDER, enabled: true }}>
+                initialValues={{ apiKey: DEFAULT_API_KEY_PLACEHOLDER }}>
 
-                <Form.Item label="服务商" name="provider" rules={[{ required: true, message: '请选择服务商' }]}>
-                  <Select options={providerOptions} placeholder="请选择服务商" showSearch optionFilterProp="label" />
+                <Form.Item label="服务商">
+                  <div className="ai-fixed-field">{DEFAULT_PROVIDER}</div>
                 </Form.Item>
 
-                <Form.Item label="模型名称" name="modelId" rules={[{ required: true, message: '请输入模型名称' }]}>
-                  <Input placeholder="例如：deepseek-chat" />
+                <Form.Item label="模型名称">
+                  <div className="ai-fixed-field">{DEFAULT_MODEL_ID}</div>
                 </Form.Item>
 
-                <Form.Item label="API 地址" name="baseUrl" rules={[{ required: true, message: '请输入 API 地址' }]}>
-                  <Input placeholder="例如：https://api.deepseek.com/v1" />
+                <Form.Item label="API 地址">
+                  <div className="ai-fixed-field">{DEFAULT_BASE_URL}</div>
                 </Form.Item>
 
                 <Form.Item label="API Key" name="apiKey" rules={[{ required: true, message: '请输入 API Key' }]}>
                   <Input
                     type={showKey ? 'text' : 'password'}
                     placeholder="例如：sk-xxxxxxxxxxxxxxxxxxxxxxxx"
-                    suffix={showKey ? <EyeOutlined /> : <EyeInvisibleOutlined />}
+                    suffix={showKey ? <EyeOutlined onClick={() => setShowKey(false)} /> : <EyeInvisibleOutlined onClick={() => setShowKey(true)} />}
                     onFocus={(e) => { (e.target as HTMLInputElement).select?.() }}
                   />
                 </Form.Item>
 
-                <div className="ai-form__switch-row">
-                  <div className="ai-form__switch-meta">
-                    <strong>启用状态</strong>
-                    <span>{enabled ? '已启用' : '已停用'}</span>
-                  </div>
-                  <Form.Item name="enabled" valuePropName="checked" noStyle><Switch /></Form.Item>
-                </div>
-
-                <Button type="primary" icon={<SaveOutlined />} className="ai-save-btn" loading={saving} onClick={handleSave}>
+                <Button type="primary" className="ai-save-btn" loading={saving} onClick={handleSave}>
                   保存配置
                 </Button>
               </Form>
@@ -317,7 +310,7 @@ export default function AiModelManagementPage() {
           </section>
 
           {/* -------- 右侧：模型测试 -------- */}
-          <section className="ai-card">
+          <section className="ai-card ai-card--fill">
             <div className="ai-card__inner ai-test-panel">
               <div className="ai-card__header">
                 <div className="ai-card__icon"><ExperimentOutlined /></div>
@@ -338,29 +331,19 @@ export default function AiModelManagementPage() {
               </div>
 
               <div className="ai-chat">
-                <div className="ai-chat__scroll">
+                <div className="ai-chat__scroll" ref={chatScrollRef}>
                   {messages.map((m) => (
-                    <div key={m.id} className={`ai-bubble${m.role === 'assistant' ? ' ai-bubble--assistant' : ''}`}>
-                      <div className="ai-bubble__head">
-                        <span className="ai-bubble__author">
-                          <span className="ai-bubble__avatar">{m.role === 'assistant' ? <RobotOutlined /> : <UserOutlined />}</span>
-                          {m.role === 'assistant' ? 'AI' : '用户'}
-                        </span>
-                        <span className="ai-bubble__time">{m.time}</span>
+                    <div key={m.id} data-message-id={m.id} className={`ai-message ai-message--${m.role === 'assistant' ? 'assistant' : 'user'}`}>
+                      <span className="ai-message__avatar">{m.role === 'assistant' ? <RobotOutlined /> : <UserOutlined />}</span>
+                      <div className="ai-message__body">
+                        <span className="ai-message__author">{m.role === 'assistant' ? 'AI' : '用户'}</span>
+                        <div className="ai-bubble">
+                          <div className="ai-bubble__content">{m.content}</div>
+                        </div>
+                        <span className="ai-message__time">{m.time}</span>
                       </div>
-                      <div className="ai-bubble__content">{m.content}</div>
                     </div>
                   ))}
-                </div>
-
-                <div className="ai-input-wrap">
-                  <div>
-                    <Input.TextArea value={testInput} onChange={(e) => setTestInput(e.target.value)} placeholder="请输入测试问题..." maxLength={1000} />
-                    <div className="ai-input__count">{testInput.length} / 1000</div>
-                  </div>
-                  <Button type="primary" icon={<SendOutlined />} className="ai-send-btn" loading={testing} disabled={!enabled} onClick={handleSendTest}>
-                    发送
-                  </Button>
                 </div>
 
                 {testMetrics ? (
@@ -381,7 +364,7 @@ export default function AiModelManagementPage() {
                     </div>
                     <div className="ai-metrics__item">
                       <span className="ai-metrics__label">测试时间</span>
-                      <span className="ai-metrics__value" style={{ fontSize: 15 }}>{testMetrics.testedAt}</span>
+                      <span className="ai-metrics__value" style={{ fontSize: 13 }}>{testMetrics.testedAt}</span>
                     </div>
                   </div>
                 ) : (
@@ -389,6 +372,20 @@ export default function AiModelManagementPage() {
                     <Paragraph style={{ marginBottom: 0 }}>保存配置后可直接在这里发起测试，对话结果会展示在上方消息区。</Paragraph>
                   </div>
                 )}
+              </div>
+
+              <div className="ai-input-wrap">
+                <div>
+                  <Input.TextArea
+                    value={testInput}
+                    onChange={(e) => setTestInput(e.target.value)}
+                    placeholder="请输入测试问题..."
+                    autoSize={{ minRows: 1, maxRows: 4 }}
+                  />
+                </div>
+                <Button type="primary" className="ai-send-btn" loading={testing} onClick={handleSendTest}>
+                  发送
+                </Button>
               </div>
             </div>
           </section>
