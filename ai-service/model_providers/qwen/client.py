@@ -13,8 +13,8 @@ class QwenClient:
     def test_embedding(self, model_id: str, text: str) -> list[float]:
         return self.base.test_embedding(model_id, text)
 
-    def test_chat_completion(self, model_id: str, category: str) -> str:
-        return self.base.test_chat_completion(model_id, category)
+    def test_chat_completion(self, model_id: str, category: str, prompt: str | None = None) -> str:
+        return self.base.test_chat_completion(model_id, category, prompt)
 
     def generate_answer(self, model_id: str, messages: list[dict[str, object]], temperature: float = 0.2) -> str:
         return self.base.chat_completion(

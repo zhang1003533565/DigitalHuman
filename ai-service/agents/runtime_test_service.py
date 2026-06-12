@@ -3,7 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from agents.model_binding_service import get_agent_bindings
-from model_providers.config_store import find_provider_config
+from model_providers.config_store import (
+    find_provider_config,
+    load_llm_runtime_config,
+)
 from model_providers.registry import get_provider_client
 
 
@@ -32,7 +35,17 @@ def test_agent_runtime(agent: str, task: str) -> dict[str, object]:
 
     binding = _find_binding(normalized_agent)
     if not binding:
-        raise ValueError(f"未找到智能体绑定配置：{normalized_agent}")
+        # 聊天智能体不需要 SQLite agent_model_bindings，回退到 llm_runtime_config
+        # llm_runtime_config 通过 Java selectModelOption 同步自 MySQL
+        llm_runtime = load_llm_runtime_config()
+        binding = {
+            "agent": normalized_agent,
+            "category": "chat",
+            "provider": llm_runtime.provider,
+            "model": llm_runtime.model,
+            "timeoutSeconds": llm_runtime.timeout_seconds,
+            "enabled": True,
+        }
     if not bool(binding.get("enabled")):
         raise ValueError(f"智能体未启用：{normalized_agent}")
 

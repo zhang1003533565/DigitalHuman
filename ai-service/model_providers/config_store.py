@@ -30,26 +30,10 @@ class AgentModelBinding:
 
 AGENT_MODEL_DEFAULTS: list[AgentModelBinding] = [
     AgentModelBinding(
-        agent="basic_chat_agent",
-        category="chat",
-        provider="DeepSeek",
-        model="deepseek-v4-flash",
-        timeout_seconds=90,
-        enabled=True,
-    ),
-    AgentModelBinding(
-        agent="leader_agent",
-        category="chat",
-        provider="DeepSeek",
-        model="deepseek-v4-flash",
-        timeout_seconds=90,
-        enabled=True,
-    ),
-    AgentModelBinding(
         agent="travel_analytics_agent",
         category="multimodal",
         provider="DeepSeek",
-        model="deepseek-v4-flash",
+        model="deepseek-v4-pro",
         timeout_seconds=90,
         enabled=False,
     ),
@@ -57,7 +41,7 @@ AGENT_MODEL_DEFAULTS: list[AgentModelBinding] = [
         agent="scenic_structured_agent",
         category="chat",
         provider="DeepSeek",
-        model="deepseek-v4-flash",
+        model="deepseek-v4-pro",
         timeout_seconds=90,
         enabled=False,
     ),
@@ -65,7 +49,7 @@ AGENT_MODEL_DEFAULTS: list[AgentModelBinding] = [
         agent="guide_script_agent",
         category="chat",
         provider="DeepSeek",
-        model="deepseek-v4-flash",
+        model="deepseek-v4-pro",
         timeout_seconds=90,
         enabled=False,
     ),
@@ -141,12 +125,19 @@ def ensure_default_deepseek_config() -> None:
                 INSERT INTO llm_runtime_config(id, provider, model, timeout_seconds)
                 VALUES(1, ?, ?, ?)
                 """,
-                ("DeepSeek", "deepseek-v4-flash", 90),
+                ("DeepSeek", "deepseek-v4-pro", 90),
             )
         existing_agents = {
             str(row["agent"]).strip()
             for row in conn.execute("SELECT agent FROM agent_model_bindings").fetchall()
         }
+        # 聊天智能体（basic_chat_agent / leader_agent）不需要 SQLite 参与，
+        # 其模型配置由 Java/MySQL 统一管理。清理已存在的旧条目。
+        _CHAT_AGENTS_TO_REMOVE = {"basic_chat_agent", "leader_agent"}
+        for agent_name in _CHAT_AGENTS_TO_REMOVE & existing_agents:
+            conn.execute("DELETE FROM agent_model_bindings WHERE agent=?", (agent_name,))
+        existing_agents -= _CHAT_AGENTS_TO_REMOVE
+
         for item in AGENT_MODEL_DEFAULTS:
             if item.agent in existing_agents:
                 continue
@@ -333,6 +324,7 @@ def ensure_agent_model_defaults(agent_names: list[str]) -> None:
     if not agent_names:
         return
 
+    # 聊天智能体不需要 SQLite 参与，其模型配置由 Java/MySQL 统一管理
     default_by_agent = {item.agent: item for item in AGENT_MODEL_DEFAULTS}
     with _connect() as conn:
         existing = {
@@ -345,14 +337,7 @@ def ensure_agent_model_defaults(agent_names: list[str]) -> None:
                 continue
             default = default_by_agent.get(normalized)
             if default is None:
-                default = AgentModelBinding(
-                    agent=normalized,
-                    category="chat",
-                    provider="DeepSeek",
-                    model="deepseek-v4-flash",
-                    timeout_seconds=90,
-                    enabled=False,
-                )
+                continue  # 不在显式默认列表中的智能体不自动创建 SQLite 条目
             conn.execute(
                 """
                 INSERT INTO agent_model_bindings(agent, category, provider, model, timeout_seconds, enabled)

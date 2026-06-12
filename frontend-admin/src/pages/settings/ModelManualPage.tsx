@@ -86,6 +86,7 @@ const TEXT_SECONDARY = '#4E5969'
 const TEXT_MUTED = '#86909C'
 const BORDER_COLOR = '#E5E6EB'
 const INFO_BG = '#E6F4FF'
+const DEFAULT_CHAT_MODEL_ID = 'deepseek-v4-pro'
 
 const CATEGORY_OPTIONS: Array<{ value: ModelCategory; label: string }> = [
   { value: 'chat', label: '对话模型' },
@@ -147,8 +148,8 @@ const INITIAL_PROVIDERS: ProviderItem[] = [
 
 const SUPPORTED_MODELS: SupportedModel[] = [
   {
-    id: 'deepseek-v4-flash',
-    name: 'DeepSeek-V4-Flash',
+    id: DEFAULT_CHAT_MODEL_ID,
+    name: 'DeepSeek',
     provider: 'DeepSeek',
     category: 'chat',
     categoryLabel: '对话模型',
@@ -204,11 +205,11 @@ const SUPPORTED_MODELS: SupportedModel[] = [
 
 const INITIAL_ADDED_MODELS: AddedModel[] = [
   {
-    key: 'chat:DeepSeek:deepseek-v4-flash',
+    key: `chat:DeepSeek:${DEFAULT_CHAT_MODEL_ID}`,
     category: 'chat',
     categoryLabel: '对话模型',
     provider: 'DeepSeek',
-    modelId: 'deepseek-v4-flash',
+    modelId: DEFAULT_CHAT_MODEL_ID,
     status: 'current',
   },
   {
@@ -730,7 +731,13 @@ export default function ModelManualPage({ onCatalogChange, onProviderConfigsChan
       apiKey: selectedProviderConfig.apiKey,
       protocol: selectedProviderConfig.protocol,
     })
-    addModelForm.setFieldValue('provider', selectedProviderConfig.provider)
+    const currentAddModelValues = addModelForm.getFieldsValue()
+    addModelForm.setFieldsValue({
+      category: currentAddModelValues.category ?? 'chat',
+      provider: selectedProviderConfig.provider,
+      modelId: currentAddModelValues.modelId || DEFAULT_CHAT_MODEL_ID,
+      capabilityInput: currentAddModelValues.capabilityInput,
+    })
   }, [addModelForm, providerForm, selectedProviderConfig])
 
   useEffect(() => {
@@ -849,7 +856,12 @@ export default function ModelManualPage({ onCatalogChange, onProviderConfigsChan
         message.success(`模型 ${values.modelId} 已添加到候选列表`)
         return [nextModel, ...current]
       })
-      addModelForm.setFieldsValue({ modelId: '', capabilityInput: '' })
+      addModelForm.setFieldsValue({
+        category: 'chat',
+        provider: selectedProviderConfig.provider,
+        modelId: DEFAULT_CHAT_MODEL_ID,
+        capabilityInput: '',
+      })
       setAddingModel(false)
     }, 350)
   }
@@ -1098,9 +1110,9 @@ export default function ModelManualPage({ onCatalogChange, onProviderConfigsChan
               label="模型 ID"
               name="modelId"
               rules={[{ required: true, message: '请输入模型 ID' }]}
-              extra="例如：deepseek-v4-flash"
+              extra="例如：deepseek-v4-pro"
             >
-              <Input placeholder="请输入模型 ID，例如：deepseek-v4-flash" />
+              <Input placeholder="请输入模型 ID，例如：deepseek-v4-pro" />
             </Form.Item>
           </Form>
 

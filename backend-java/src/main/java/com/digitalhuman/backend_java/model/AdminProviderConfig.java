@@ -24,6 +24,9 @@ public class AdminProviderConfig {
     @Column(nullable = false, length = 255)
     private String apiKey;
 
+    @Column(nullable = false, length = 50)
+    private String protocol = "openai_compatible";
+
     public Long getId() {
         return id;
     }
@@ -54,5 +57,13 @@ public class AdminProviderConfig {
 
     public void setApiKey(String apiKey) {
         this.apiKey = apiKey;
+    }
+
+    public String getProtocol() {
+        return protocol;
+    }
+
+    public void setProtocol(String protocol) {
+        this.protocol = protocol;
     }
 }

@@ -102,9 +102,9 @@ const CHAT_TEST_SCENES = ['景点介绍', '路线推荐', '游客问答', '多�
 
 const CHAT_MODELS: ChatModelRecord[] = [
   {
-    key: 'deepseek-v4-flash',
-    modelName: 'deepseek-v4-flash',
-    modelCode: 'deepseek-v4-flash',
+    key: 'deepseek-v4-pro',
+    modelName: 'deepseek-v4-pro',
+    modelCode: 'deepseek-v4-pro',
     provider: 'DeepSeek',
     providerTone: 'deepseek',
     contextLength: 128000,
@@ -1413,6 +1413,8 @@ export default function ChatConfigPage({
           layout="vertical"
           requiredMark={false}
           initialValues={{
+            modelName: 'deepseek-v4-pro',
+            modelCode: 'deepseek-v4-pro',
             provider: 'DeepSeek',
             contextLength: 128000,
             maxOutput: 4096,

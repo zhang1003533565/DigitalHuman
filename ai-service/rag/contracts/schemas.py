@@ -159,6 +159,8 @@ class ModelTestRequest(BaseModel):
     text: str | None = None
     image_data_url: str | None = Field(default=None, alias="imageDataUrl")
     mode: str | None = None
+    base_url: str | None = Field(default=None, alias="baseUrl")
+    api_key: str | None = Field(default=None, alias="apiKey")
 
 
 class ModelTestResponse(BaseModel):

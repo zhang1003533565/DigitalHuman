@@ -17,8 +17,10 @@ import com.digitalhuman.backend_java.dto.RagLlmConfigDto;
 import com.digitalhuman.backend_java.dto.RagPromptConfigDto;
 import com.digitalhuman.backend_java.dto.RagRetrievalConfigDto;
 import com.digitalhuman.backend_java.model.AdminModelConfig;
+import com.digitalhuman.backend_java.model.AdminProviderConfig;
 import com.digitalhuman.backend_java.model.ModelCategory;
 import com.digitalhuman.backend_java.repository.AdminModelConfigRepository;
+import com.digitalhuman.backend_java.repository.AdminProviderConfigRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -56,11 +58,15 @@ public class AdminSettingsService {
     private String ragServiceUrl;
 
     private final AdminModelConfigRepository adminModelConfigRepository;
+    private final AdminProviderConfigRepository adminProviderConfigRepository;
     private final ObjectMapper objectMapper;
     private final OkHttpClient httpClient;
 
-    public AdminSettingsService(AdminModelConfigRepository adminModelConfigRepository, ObjectMapper objectMapper) {
+    public AdminSettingsService(AdminModelConfigRepository adminModelConfigRepository,
+                                AdminProviderConfigRepository adminProviderConfigRepository,
+                                ObjectMapper objectMapper) {
         this.adminModelConfigRepository = adminModelConfigRepository;
+        this.adminProviderConfigRepository = adminProviderConfigRepository;
         this.objectMapper = objectMapper;
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)
@@ -152,23 +158,44 @@ public class AdminSettingsService {
         ensureProviderConfigured(provider);
 
         updateSelectedModel(category, modelId);
+
+        // 当选择 chat 模型时，同步到 ai-service 的 LLM 运行时配置，确保运行时使用正确的模型
+        if (category == ModelCategory.CHAT && !provider.isBlank() && !modelId.isBlank()) {
+            try {
+                RagLlmConfigDto dto = new RagLlmConfigDto();
+                dto.setProvider(provider);
+                dto.setModel(modelId);
+                dto.setTimeoutSeconds(90);
+                String payload = objectMapper.writeValueAsString(dto);
+                Request httpRequest = new Request.Builder()
+                        .url(ragServiceUrl + "/admin/rag/llm-config")
+                        .put(RequestBody.create(payload, JSON))
+                        .build();
+                try (Response response = httpClient.newCall(httpRequest).execute()) {
+                    if (!response.isSuccessful()) {
+                        System.err.println("[WARN] 同步 chat 模型到 ai-service 失败，code=" + response.code());
+                    }
+                }
+            } catch (Exception syncEx) {
+                System.err.println("[WARN] 同步 chat 模型到 ai-service 异常：" + syncEx.getMessage());
+            }
+        }
+
         return getModelSettings();
     }
 
     @Transactional(readOnly = true)
     public List<AdminProviderConfigDto> getProviderConfigs() {
-        Request request = new Request.Builder()
-                .url(ragServiceUrl + "/admin/providers")
-                .get()
-                .build();
-        try (Response response = httpClient.newCall(request).execute()) {
-            if (!response.isSuccessful() || response.body() == null) {
-                throw new IOException("ai-service provider list failed: " + response.code());
-            }
-            return objectMapper.readValue(response.body().string(), new TypeReference<>() {});
-        } catch (Exception exception) {
-            throw new IllegalArgumentException("读取模型提供方配置失败", exception);
-        }
+        return adminProviderConfigRepository.findAllByOrderByProviderAsc().stream()
+                .map(item -> {
+                    AdminProviderConfigDto dto = new AdminProviderConfigDto();
+                    dto.setProvider(item.getProvider());
+                    dto.setBaseUrl(item.getBaseUrl());
+                    dto.setApiKey(item.getApiKey());
+                    dto.setProtocol(item.getProtocol());
+                    return dto;
+                })
+                .toList();
     }
 
     @Transactional
@@ -176,25 +203,48 @@ public class AdminSettingsService {
         String provider = normalize(request.getProvider(), "");
         String baseUrl = normalize(request.getBaseUrl(), "");
         String apiKey = normalize(request.getApiKey(), "");
+        String protocol = normalize(request.getProtocol(), "openai_compatible");
         if (provider.isBlank() || baseUrl.isBlank() || apiKey.isBlank()) {
             throw new IllegalArgumentException("提供方、Base URL、API Key 都不能为空");
         }
 
+        // 1) 写入 Java MySQL
+        AdminProviderConfig entity = adminProviderConfigRepository.findByProviderIgnoreCase(provider)
+                .orElseGet(AdminProviderConfig::new);
+        entity.setProvider(provider);
+        entity.setBaseUrl(baseUrl);
+        entity.setApiKey(apiKey);
+        entity.setProtocol(protocol);
+        adminProviderConfigRepository.save(entity);
+
+        // 2) 同步到 ai-service（兼容智能体运行时仍从 SQLite 读取的场景）
         try {
-            String payload = objectMapper.writeValueAsString(request);
+            AdminProviderConfigDto payloadDto = new AdminProviderConfigDto();
+            payloadDto.setProvider(provider);
+            payloadDto.setBaseUrl(baseUrl);
+            payloadDto.setApiKey(apiKey);
+            payloadDto.setProtocol(protocol);
+            String payload = objectMapper.writeValueAsString(payloadDto);
             Request httpRequest = new Request.Builder()
                     .url(ragServiceUrl + "/admin/providers")
                     .put(RequestBody.create(payload, JSON))
                     .build();
             try (Response response = httpClient.newCall(httpRequest).execute()) {
-                if (!response.isSuccessful() || response.body() == null) {
-                    throw new IOException("ai-service provider save failed: " + response.code());
+                // 同步失败不阻断主流程，仅记录日志
+                if (!response.isSuccessful()) {
+                    System.err.println("[WARN] 同步 provider 到 ai-service 失败，code=" + response.code());
                 }
-                return objectMapper.readValue(response.body().string(), AdminProviderConfigDto.class);
             }
-        } catch (Exception exception) {
-            throw new IllegalArgumentException("保存模型提供方配置失败", exception);
+        } catch (Exception syncEx) {
+            System.err.println("[WARN] 同步 provider 到 ai-service 异常：" + syncEx.getMessage());
         }
+
+        AdminProviderConfigDto result = new AdminProviderConfigDto();
+        result.setProvider(provider);
+        result.setBaseUrl(baseUrl);
+        result.setApiKey(apiKey);
+        result.setProtocol(protocol);
+        return result;
     }
 
     @Transactional
@@ -213,6 +263,11 @@ public class AdminSettingsService {
             throw new IllegalArgumentException("请先删除该提供方下的模型，再删除提供方配置。当前仍关联模型：" + details);
         }
 
+        // 1) 删除 Java MySQL 中的记录
+        adminProviderConfigRepository.findByProviderIgnoreCase(provider)
+                .ifPresent(adminProviderConfigRepository::delete);
+
+        // 2) 同步删除 ai-service 中的记录
         try {
             String payload = objectMapper.writeValueAsString(request);
             Request httpRequest = new Request.Builder()
@@ -221,11 +276,11 @@ public class AdminSettingsService {
                     .build();
             try (Response response = httpClient.newCall(httpRequest).execute()) {
                 if (!response.isSuccessful()) {
-                    throw new IOException("ai-service provider delete failed: " + response.code());
+                    System.err.println("[WARN] 同步删除 provider 到 ai-service 失败，code=" + response.code());
                 }
             }
-        } catch (Exception exception) {
-            throw new IllegalArgumentException("删除模型提供方配置失败", exception);
+        } catch (Exception syncEx) {
+            System.err.println("[WARN] 同步删除 provider 到 ai-service 异常：" + syncEx.getMessage());
         }
     }
 
@@ -258,33 +313,65 @@ public class AdminSettingsService {
         ModelCategory category = normalizeCategory(request.getCategory());
         String modelId = normalize(request.getModelId(), "");
         if (modelId.isBlank()) {
-            throw new IllegalArgumentException("待测试模型不能为空");
+            return buildTestErrorResponse("", request.getCategory(), "", "待测试模型不能为空");
         }
 
         AdminModelConfig item = adminModelConfigRepository.findByCategoryAndModelIdIgnoreCase(category, modelId)
-                .orElseThrow(() -> new IllegalArgumentException("未找到对应模型，请先添加到候选列表"));
+                .orElse(null);
+        if (item == null) {
+            return buildTestErrorResponse("", request.getCategory(), modelId,
+                    "未找到对应模型「" + modelId + "」，请先保存配置并添加到候选列表");
+        }
+
+        String provider = item.getProvider();
+        String categoryKey = toCategoryKey(category);
+
+        // 从 Java MySQL 读取 provider 凭证
+        AdminProviderConfig providerConfig = adminProviderConfigRepository.findByProviderIgnoreCase(provider).orElse(null);
+        String baseUrl = providerConfig != null ? providerConfig.getBaseUrl() : "";
+        String apiKey = providerConfig != null ? providerConfig.getApiKey() : "";
+
+        if (baseUrl.isBlank() || apiKey.isBlank()) {
+            return buildTestErrorResponse(provider, categoryKey, item.getModelId(),
+                    "请先在「模型配置」中配置 " + provider + " 的 Base URL 和 API Key");
+        }
 
         try {
-            String payload = objectMapper.writeValueAsString(new AiModelTestRequest(item.getProvider(), toCategoryKey(category), item.getModelId()));
+            String payload = objectMapper.writeValueAsString(new AiModelTestRequest(
+                    provider, categoryKey, item.getModelId(),
+                    request.getText(), request.getImageDataUrl(), request.getMode(),
+                    baseUrl, apiKey
+            ));
             Request httpRequest = new Request.Builder()
                     .url(ragServiceUrl + "/admin/model-test")
                     .post(RequestBody.create(payload, JSON))
                     .build();
             try (Response response = httpClient.newCall(httpRequest).execute()) {
+                String responseBody = response.body() != null ? response.body().string() : "";
                 if (!response.isSuccessful()) {
-                    String errorBody = response.body() != null ? response.body().string() : "";
-                    throw new IllegalArgumentException(extractAiServiceErrorMessage(errorBody, "模型测试失败"));
+                    String detail = extractAiServiceErrorMessage(responseBody, "模型测试失败");
+                    return buildTestErrorResponse(provider, categoryKey, item.getModelId(), detail);
                 }
-                if (response.body() == null) {
-                    throw new IOException("ai-service model test returned empty body");
-                }
-                return objectMapper.readValue(response.body().string(), AdminModelTestResponseDto.class);
+                return objectMapper.readValue(responseBody, AdminModelTestResponseDto.class);
             }
-        } catch (IllegalArgumentException exception) {
-            throw exception;
+        } catch (IOException exception) {
+            return buildTestErrorResponse(provider, categoryKey, item.getModelId(),
+                    "无法连接 ai-service：" + exception.getMessage());
         } catch (Exception exception) {
-            throw new IllegalArgumentException("模型测试失败，请检查 ai-service 配置和 provider 凭证", exception);
+            return buildTestErrorResponse(provider, categoryKey, item.getModelId(),
+                    "模型测试异常：" + exception.getMessage());
         }
+    }
+
+    private AdminModelTestResponseDto buildTestErrorResponse(String provider, String category, String modelId, String detail) {
+        AdminModelTestResponseDto dto = new AdminModelTestResponseDto();
+        dto.setSuccess(false);
+        dto.setProvider(provider);
+        dto.setCategory(category);
+        dto.setModelId(modelId);
+        dto.setMessage("模型测试失败");
+        dto.setDetail(detail);
+        return dto;
     }
 
     public RagPromptConfigDto getRagPrompt() {
@@ -677,7 +764,7 @@ public class AdminSettingsService {
     }
 
     private void ensureProviderConfigured(String provider) {
-        if (getProviderConfigs().stream().noneMatch(item -> provider.equalsIgnoreCase(item.getProvider()))) {
+        if (adminProviderConfigRepository.findByProviderIgnoreCase(provider).isEmpty()) {
             throw new IllegalArgumentException("请先配置该模型提供方的 Base URL 和 API Key，再添加模型");
         }
     }
@@ -763,7 +850,7 @@ public class AdminSettingsService {
         };
     }
 
-    private record AiModelTestRequest(String provider, String category, String modelId) {
+    private record AiModelTestRequest(String provider, String category, String modelId, String text, String imageDataUrl, String mode, String baseUrl, String apiKey) {
     }
 
 }

@@ -37,15 +37,15 @@ class OpenAICompatibleProviderClient:
             raise HTTPException(status_code=400, detail="Embedding 接口调用成功，但未返回向量数据")
         return list(data[0].get("embedding") or [])
 
-    def test_chat_completion(self, model_id: str, category: str) -> str:
+    def test_chat_completion(self, model_id: str, category: str, prompt: str | None = None) -> str:
+        user_prompt = (prompt or "").strip() or f"Reply with OK for {category} model test."
         return self.chat_completion(
             model_id=model_id,
             messages=[
-                {"role": "system", "content": "You are a health check assistant."},
-                {"role": "user", "content": f"Reply with OK for {category} model test."},
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": user_prompt},
             ],
             temperature=0,
-            max_tokens=16,
         )
 
     def chat_completion(
