@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Form, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -16,8 +16,6 @@ from agents.model_binding_service import (
 )
 from agents.runtime_test_service import test_agent_runtime
 from agents.common.types import AgentContext, AgentResult
-from rag.config.settings import get_settings
-from rag.content.file_store import ensure_directory
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 leader = LeaderAgent()
@@ -130,35 +128,6 @@ def basic_chat_stream(request: BasicChatRequest):
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(_sse_generator(), media_type="text/event-stream")
-
-
-@router.post("/transform")
-async def transform(file: UploadFile = File(...), save_to_kb: bool = Form(default=False)) -> dict[str, object]:
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="文件名不能为空")
-
-    suffix = Path(file.filename).suffix.lower()
-    if suffix not in {".xlsx", ".docx"}:
-        raise HTTPException(status_code=400, detail="仅支持 .xlsx/.docx")
-
-    settings = get_settings()
-    kb_dir = ensure_directory(settings.knowledge_base_dir)
-    target = kb_dir / file.filename
-    content = await file.read()
-    target.write_bytes(content)
-
-    context = AgentContext(file_name=file.filename, file_path=str(target))
-    result = leader.run(context)
-
-    if not save_to_kb and target.exists():
-        target.unlink(missing_ok=True)
-
-    return {
-        "success": result.success,
-        "agent": result.agent,
-        "warnings": result.warnings,
-        "output": result.output,
-    }
 
 
 @router.get("/model-bindings", response_model=AgentModelBindingPayload)

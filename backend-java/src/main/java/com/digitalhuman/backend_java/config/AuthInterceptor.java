@@ -61,8 +61,6 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     private boolean isAdminConsoleRole(UserRole role) {
         return role == UserRole.ADMIN
-                || role == UserRole.REVIEWER
-                || role == UserRole.KNOWLEDGE_ADMIN
                 || role == UserRole.OBSERVER;
     }
 
@@ -72,13 +70,6 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
         if (role == UserRole.OBSERVER) {
             return "GET".equalsIgnoreCase(method);
-        }
-        if (role == UserRole.REVIEWER) {
-            return path.startsWith("/api/admin/guide/");
-        }
-        if (role == UserRole.KNOWLEDGE_ADMIN) {
-            return path.startsWith("/api/admin/knowledge/")
-                    || (path.startsWith("/api/admin/settings/") && "GET".equalsIgnoreCase(method));
         }
         return false;
     }

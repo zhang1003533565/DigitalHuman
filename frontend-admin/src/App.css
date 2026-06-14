@@ -1087,59 +1087,6 @@
   margin-top: 12px;
 }
 
-.admin-rag-trace-id {
-  color: #6b7280;
-  font-size: 12px;
-  margin-top: 4px;
-}
-
-.admin-rag-detail {
-  width: 100%;
-}
-
-.admin-rag-issues {
-  margin-top: 8px;
-}
-
-.admin-rag-chunk-list {
-  display: grid;
-  gap: 10px;
-  margin-top: 8px;
-}
-
-.admin-rag-chunk {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  padding: 10px 12px;
-}
-
-.admin-rag-chunk__meta {
-  align-items: center;
-  color: #4b5563;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-
-.admin-rag-attempts {
-  display: grid;
-  gap: 18px;
-}
-
-.admin-rag-attempt {
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  padding: 12px;
-}
-
-.admin-rag-compare {
-  display: grid;
-  gap: 14px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
 .admin-json-preview {
   background: #0f172a;
   border-radius: 6px;
@@ -1159,10 +1106,4 @@ mark {
   background: #fde68a;
   border-radius: 2px;
   padding: 0 2px;
-}
-
-@media (max-width: 900px) {
-  .admin-rag-compare {
-    grid-template-columns: 1fr;
-  }
 }

@@ -64,7 +64,7 @@ interface EmbeddingModelRecord {
   purpose: string
   maxInputLength: number
   endpoint: string
-  knowledgeBaseCount: number
+  externalKbCount: number
   sampleQuery: string
   connectionStatus: 'connected' | 'offline'
   featuredLabel?: string
@@ -660,10 +660,10 @@ const BASE_EMBEDDING_MODELS: EmbeddingModelRecord[] = [
     provider: 'BAAI',
     providerTone: 'blue',
     vectorDimension: 1024,
-    purpose: '知识库检索 / 向量化',
+    purpose: '第三方知识服务 / 向量化',
     maxInputLength: 8192,
     endpoint: 'http://localhost:8000/v1/embeddings',
-    knowledgeBaseCount: 3,
+    externalKbCount: 3,
     sampleQuery: '北京烤鸭推荐',
     connectionStatus: 'connected',
     featuredLabel: '当前使用',
@@ -683,7 +683,7 @@ const BASE_EMBEDDING_MODELS: EmbeddingModelRecord[] = [
     purpose: '高精度召回',
     maxInputLength: 8192,
     endpoint: 'https://api.openai.com/v1/embeddings',
-    knowledgeBaseCount: 5,
+    externalKbCount: 5,
     sampleQuery: '博物馆讲解推荐',
     connectionStatus: 'connected',
     retrievalResults: [
@@ -702,12 +702,12 @@ const BASE_EMBEDDING_MODELS: EmbeddingModelRecord[] = [
     purpose: '轻量部署',
     maxInputLength: 8192,
     endpoint: 'https://api.openai.com/v1/embeddings',
-    knowledgeBaseCount: 4,
+    externalKbCount: 4,
     sampleQuery: '景区问答检索',
     connectionStatus: 'connected',
     retrievalResults: [
       { id: 'oai-small-1', title: '景区常见问题与答案模板', similarity: 91.18 },
-      { id: 'oai-small-2', title: '游客服务中心问答知识库示例', similarity: 88.56 },
+      { id: 'oai-small-2', title: '游客服务中心问答示例', similarity: 88.56 },
       { id: 'oai-small-3', title: '轻量化向量检索在景区场景的应用', similarity: 84.79 },
     ],
   },
@@ -721,7 +721,7 @@ const BASE_EMBEDDING_MODELS: EmbeddingModelRecord[] = [
     purpose: '中文优化',
     maxInputLength: 4096,
     endpoint: 'http://localhost:8000/v1/embeddings',
-    knowledgeBaseCount: 2,
+    externalKbCount: 2,
     sampleQuery: '非遗文化讲解',
     connectionStatus: 'connected',
     retrievalResults: [
@@ -740,7 +740,7 @@ const BASE_EMBEDDING_MODELS: EmbeddingModelRecord[] = [
     purpose: '语义匹配',
     maxInputLength: 4096,
     endpoint: 'http://localhost:8000/v1/embeddings',
-    knowledgeBaseCount: 1,
+    externalKbCount: 1,
     sampleQuery: '景点语义召回',
     connectionStatus: 'connected',
     retrievalResults: [
@@ -766,16 +766,16 @@ function createDerivedModel(option: EmbeddingOption): EmbeddingModelRecord {
     provider,
     providerTone,
     vectorDimension: provider.includes('OpenAI') ? 1536 : 1024,
-    purpose: '知识库检索',
+    purpose: '第三方知识检索',
     maxInputLength: 8192,
     endpoint: provider.includes('OpenAI') ? 'https://api.openai.com/v1/embeddings' : 'http://localhost:8000/v1/embeddings',
-    knowledgeBaseCount: 2,
-    sampleQuery: '知识库语义检索',
+    externalKbCount: 2,
+    sampleQuery: '第三方知识语义检索',
     connectionStatus: 'connected',
     retrievalResults: [
-      { id: `${option.value}-1`, title: '知识库内容匹配结果示例一', similarity: 90.12 },
-      { id: `${option.value}-2`, title: '知识库内容匹配结果示例二', similarity: 87.48 },
-      { id: `${option.value}-3`, title: '知识库内容匹配结果示例三', similarity: 83.36 },
+      { id: `${option.value}-1`, title: '第三方知识内容匹配结果示例一', similarity: 90.12 },
+      { id: `${option.value}-2`, title: '第三方知识内容匹配结果示例二', similarity: 87.48 },
+      { id: `${option.value}-3`, title: '第三方知识内容匹配结果示例三', similarity: 83.36 },
     ],
   }
 }
@@ -948,7 +948,7 @@ export default function EmbeddingConfigPage({
       purpose: values.purpose,
       maxInputLength: values.maxInputLength,
       endpoint: values.endpoint,
-      knowledgeBaseCount: 0,
+      externalKbCount: 0,
       sampleQuery: '请输入测试文本',
       connectionStatus: 'connected',
       retrievalResults: [
@@ -1197,8 +1197,8 @@ export default function EmbeddingConfigPage({
               </div>
               <div className="embedding-settings-status__item">
                 <LinkOutlined style={{ color: PRIMARY_COLOR }} />
-                <span>已关联知识库：</span>
-                <span className="embedding-settings-status__link">{selectedModel.knowledgeBaseCount}个</span>
+                <span>第三方知识源：</span>
+                <span className="embedding-settings-status__link">{selectedModel.externalKbCount}个</span>
               </div>
             </div>
           </div>
@@ -1272,7 +1272,7 @@ export default function EmbeddingConfigPage({
 
           <div className="embedding-settings-note">
             <InfoCircleOutlined />
-            <span>嵌入模型用于将文本转为向量，支撑知识库检索等，可按模型维度和精度需求灵活配置。</span>
+            <span>嵌入模型用于将文本转为向量，支撑第三方知识检索等，可按模型维度和精度需求灵活配置。</span>
           </div>
 
           {result ? (
@@ -1303,7 +1303,7 @@ export default function EmbeddingConfigPage({
             vectorDimension: 1024,
             maxInputLength: 8192,
             endpoint: 'http://localhost:8000/v1/embeddings',
-            purpose: '知识库检索',
+            purpose: '第三方知识检索',
           }}
         >
           <Form.Item
@@ -1359,7 +1359,7 @@ export default function EmbeddingConfigPage({
             name="purpose"
             rules={[{ required: true, message: '请输入用途说明' }]}
           >
-            <Input placeholder="例如：知识库检索 / 向量化" />
+            <Input placeholder="例如：第三方知识服务 / 向量化" />
           </Form.Item>
         </Form>
       </Modal>

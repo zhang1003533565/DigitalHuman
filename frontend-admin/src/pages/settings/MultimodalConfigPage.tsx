@@ -56,7 +56,7 @@ interface MultimodalModelRecord {
   contextLength: number
   maxImageSize: number
   endpoint: string
-  knowledgeBaseCount: number
+  externalKbCount: number
   capabilityTags: string[]
   featuredLabel?: string
 }
@@ -114,7 +114,7 @@ const BASE_MODELS: MultimodalModelRecord[] = [
     contextLength: 128000,
     maxImageSize: 4096,
     endpoint: 'https://api.openai.com/v1/chat/completions',
-    knowledgeBaseCount: 12,
+    externalKbCount: 12,
     capabilityTags: ['图文理解', 'OCR', '问答', '推理'],
     featuredLabel: '当前使用',
   },
@@ -127,7 +127,7 @@ const BASE_MODELS: MultimodalModelRecord[] = [
     contextLength: 128000,
     maxImageSize: 4096,
     endpoint: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
-    knowledgeBaseCount: 8,
+    externalKbCount: 8,
     capabilityTags: ['图文问答', 'OCR', '场景识别'],
   },
   {
@@ -139,7 +139,7 @@ const BASE_MODELS: MultimodalModelRecord[] = [
     contextLength: 128000,
     maxImageSize: 4096,
     endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
-    knowledgeBaseCount: 6,
+    externalKbCount: 6,
     capabilityTags: ['多模态理解', '推理'],
   },
   {
@@ -151,7 +151,7 @@ const BASE_MODELS: MultimodalModelRecord[] = [
     contextLength: 128000,
     maxImageSize: 4096,
     endpoint: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
-    knowledgeBaseCount: 10,
+    externalKbCount: 10,
     capabilityTags: ['图像问答', 'OCR', '分类'],
   },
   {
@@ -163,7 +163,7 @@ const BASE_MODELS: MultimodalModelRecord[] = [
     contextLength: 128000,
     maxImageSize: 4096,
     endpoint: 'https://internlm.example.com/v1/chat/completions',
-    knowledgeBaseCount: 4,
+    externalKbCount: 4,
     capabilityTags: ['图片理解', '视觉问答'],
   },
   {
@@ -175,7 +175,7 @@ const BASE_MODELS: MultimodalModelRecord[] = [
     contextLength: 128000,
     maxImageSize: 3072,
     endpoint: 'https://api.openai.com/v1/chat/completions',
-    knowledgeBaseCount: 7,
+    externalKbCount: 7,
     capabilityTags: ['图文理解', '问答'],
   },
   {
@@ -187,7 +187,7 @@ const BASE_MODELS: MultimodalModelRecord[] = [
     contextLength: 128000,
     maxImageSize: 4096,
     endpoint: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
-    knowledgeBaseCount: 9,
+    externalKbCount: 9,
     capabilityTags: ['图文理解', 'OCR', '推理'],
   },
   {
@@ -199,7 +199,7 @@ const BASE_MODELS: MultimodalModelRecord[] = [
     contextLength: 128000,
     maxImageSize: 4096,
     endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent',
-    knowledgeBaseCount: 5,
+    externalKbCount: 5,
     capabilityTags: ['图文理解', '推理'],
   },
   {
@@ -211,7 +211,7 @@ const BASE_MODELS: MultimodalModelRecord[] = [
     contextLength: 128000,
     maxImageSize: 4096,
     endpoint: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
-    knowledgeBaseCount: 11,
+    externalKbCount: 11,
     capabilityTags: ['图像理解', 'OCR', '问答'],
   },
   {
@@ -223,7 +223,7 @@ const BASE_MODELS: MultimodalModelRecord[] = [
     contextLength: 64000,
     maxImageSize: 3072,
     endpoint: 'https://internlm.example.com/v1/chat/completions',
-    knowledgeBaseCount: 3,
+    externalKbCount: 3,
     capabilityTags: ['图片理解', '分类'],
   },
 ]
@@ -540,7 +540,7 @@ export default function MultimodalConfigPage({
       contextLength: values.contextLength,
       maxImageSize: values.maxImageSize,
       endpoint: values.endpoint,
-      knowledgeBaseCount: 0,
+      externalKbCount: 0,
       capabilityTags: ['图文理解', '问答'],
     }
     setCustomModels((current) => [nextModel, ...current])
@@ -649,8 +649,8 @@ export default function MultimodalConfigPage({
                   <span className="multimodal-settings-status__success">已连接</span>
                 </div>
                 <div className="multimodal-settings-status__item">
-                  <span>已关联知识库：</span>
-                  <span className="multimodal-settings-status__tag">{selectedModel.knowledgeBaseCount}</span>
+                  <span>第三方知识源：</span>
+                  <span className="multimodal-settings-status__tag">{selectedModel.externalKbCount}</span>
                 </div>
                 <div className="multimodal-settings-status__item">
                   <span>能力标签：</span>

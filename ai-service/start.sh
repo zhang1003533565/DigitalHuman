@@ -57,15 +57,12 @@ else
 fi
 
 if [ "$RUN_MODE" = "docker" ]; then
-  echo "Starting all ai-service Docker services ..."
+  echo "Starting ai-service Docker service ..."
   "${DOCKER_COMPOSE[@]}" up -d
   echo "ai-service is running in Docker. Local uvicorn startup is skipped."
   echo "Visit: http://${HOST}:${PORT}/health"
   exit 0
 fi
-
-echo "Starting qdrant with Docker (local ai-service mode) ..."
-"${DOCKER_COMPOSE[@]}" up -d qdrant
 
 echo "Starting ai-service on http://${HOST}:${PORT}"
 echo "Using Python: $PYTHON_BIN"

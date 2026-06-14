@@ -70,17 +70,13 @@ if errorlevel 1 (
 )
 
 if /i "%RUN_MODE%"=="docker" (
-  echo Starting all ai-service Docker services ...
+  echo Starting ai-service Docker service ...
   %DOCKER_COMPOSE_CMD% up -d
   if errorlevel 1 exit /b 1
   echo ai-service is running in Docker. Local uvicorn startup is skipped.
   echo Visit: http://%HOST%:%PORT%/health
   exit /b 0
 )
-
-echo Starting qdrant with Docker ^(local ai-service mode^) ...
-%DOCKER_COMPOSE_CMD% up -d qdrant
-if errorlevel 1 exit /b 1
 
 echo Starting ai-service on http://%HOST%:%PORT%
 echo Using Python: %PYTHON_BIN%

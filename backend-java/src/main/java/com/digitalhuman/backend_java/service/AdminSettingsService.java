@@ -13,15 +13,11 @@ import com.digitalhuman.backend_java.dto.AgentHealthTestRequestDto;
 import com.digitalhuman.backend_java.dto.AgentHealthTestResponseDto;
 import com.digitalhuman.backend_java.dto.AgentModelBindingItemDto;
 import com.digitalhuman.backend_java.dto.AgentModelBindingPayloadDto;
-import com.digitalhuman.backend_java.dto.RagLlmConfigDto;
-import com.digitalhuman.backend_java.dto.RagPromptConfigDto;
-import com.digitalhuman.backend_java.dto.RagRetrievalConfigDto;
 import com.digitalhuman.backend_java.model.AdminModelConfig;
 import com.digitalhuman.backend_java.model.AdminProviderConfig;
 import com.digitalhuman.backend_java.model.ModelCategory;
 import com.digitalhuman.backend_java.repository.AdminModelConfigRepository;
 import com.digitalhuman.backend_java.repository.AdminProviderConfigRepository;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -54,8 +50,8 @@ public class AdminSettingsService {
             "Local TTS", "model_providers/local_tts/docs/models.md"
     );
 
-    @Value("${rag.service-url}")
-    private String ragServiceUrl;
+    @Value("${ai.service-url}")
+    private String aiServiceUrl;
 
     private final AdminModelConfigRepository adminModelConfigRepository;
     private final AdminProviderConfigRepository adminProviderConfigRepository;
@@ -159,28 +155,6 @@ public class AdminSettingsService {
 
         updateSelectedModel(category, modelId);
 
-        // 当选择 chat 模型时，同步到 ai-service 的 LLM 运行时配置，确保运行时使用正确的模型
-        if (category == ModelCategory.CHAT && !provider.isBlank() && !modelId.isBlank()) {
-            try {
-                RagLlmConfigDto dto = new RagLlmConfigDto();
-                dto.setProvider(provider);
-                dto.setModel(modelId);
-                dto.setTimeoutSeconds(90);
-                String payload = objectMapper.writeValueAsString(dto);
-                Request httpRequest = new Request.Builder()
-                        .url(ragServiceUrl + "/admin/rag/llm-config")
-                        .put(RequestBody.create(payload, JSON))
-                        .build();
-                try (Response response = httpClient.newCall(httpRequest).execute()) {
-                    if (!response.isSuccessful()) {
-                        System.err.println("[WARN] 同步 chat 模型到 ai-service 失败，code=" + response.code());
-                    }
-                }
-            } catch (Exception syncEx) {
-                System.err.println("[WARN] 同步 chat 模型到 ai-service 异常：" + syncEx.getMessage());
-            }
-        }
-
         return getModelSettings();
     }
 
@@ -226,7 +200,7 @@ public class AdminSettingsService {
             payloadDto.setProtocol(protocol);
             String payload = objectMapper.writeValueAsString(payloadDto);
             Request httpRequest = new Request.Builder()
-                    .url(ragServiceUrl + "/admin/providers")
+                    .url(aiServiceUrl + "/admin/providers")
                     .put(RequestBody.create(payload, JSON))
                     .build();
             try (Response response = httpClient.newCall(httpRequest).execute()) {
@@ -271,7 +245,7 @@ public class AdminSettingsService {
         try {
             String payload = objectMapper.writeValueAsString(request);
             Request httpRequest = new Request.Builder()
-                    .url(ragServiceUrl + "/admin/providers/delete")
+                    .url(aiServiceUrl + "/admin/providers/delete")
                     .post(RequestBody.create(payload, JSON))
                     .build();
             try (Response response = httpClient.newCall(httpRequest).execute()) {
@@ -343,7 +317,7 @@ public class AdminSettingsService {
                     baseUrl, apiKey
             ));
             Request httpRequest = new Request.Builder()
-                    .url(ragServiceUrl + "/admin/model-test")
+                    .url(aiServiceUrl + "/admin/model-test")
                     .post(RequestBody.create(payload, JSON))
                     .build();
             try (Response response = httpClient.newCall(httpRequest).execute()) {
@@ -374,151 +348,9 @@ public class AdminSettingsService {
         return dto;
     }
 
-    public RagPromptConfigDto getRagPrompt() {
-        Request request = new Request.Builder()
-                .url(ragServiceUrl + "/admin/rag/prompt")
-                .get()
-                .build();
-        try (Response response = httpClient.newCall(request).execute()) {
-            if (!response.isSuccessful() || response.body() == null) {
-                throw new IOException("ai-service prompt get failed: " + response.code());
-            }
-            return objectMapper.readValue(response.body().string(), RagPromptConfigDto.class);
-        } catch (Exception exception) {
-            throw new IllegalArgumentException("读取 RAG Prompt 配置失败", exception);
-        }
-    }
-
-    public RagPromptConfigDto updateRagPrompt(RagPromptConfigDto request) {
-        try {
-            String payload = objectMapper.writeValueAsString(request);
-            Request httpRequest = new Request.Builder()
-                    .url(ragServiceUrl + "/admin/rag/prompt")
-                    .put(RequestBody.create(payload, JSON))
-                    .build();
-            try (Response response = httpClient.newCall(httpRequest).execute()) {
-                if (!response.isSuccessful() || response.body() == null) {
-                    throw new IOException("ai-service prompt update failed: " + response.code());
-                }
-                return objectMapper.readValue(response.body().string(), RagPromptConfigDto.class);
-            }
-        } catch (Exception exception) {
-            throw new IllegalArgumentException("保存 RAG Prompt 配置失败", exception);
-        }
-    }
-
-    public List<RagPromptConfigDto> listRagPrompts() {
-        Request request = new Request.Builder()
-                .url(ragServiceUrl + "/admin/rag/prompts")
-                .get()
-                .build();
-        try (Response response = httpClient.newCall(request).execute()) {
-            if (!response.isSuccessful() || response.body() == null) {
-                throw new IOException("ai-service prompt versions get failed: " + response.code());
-            }
-            return objectMapper.readValue(response.body().string(), new TypeReference<>() {});
-        } catch (Exception exception) {
-            throw new IllegalArgumentException("读取 RAG Prompt 版本失败", exception);
-        }
-    }
-
-    public RagPromptConfigDto publishRagPrompt(String version) {
-        Request request = new Request.Builder()
-                .url(ragServiceUrl + "/admin/rag/prompts/" + version + "/publish")
-                .post(RequestBody.create(new byte[0], null))
-                .build();
-        try (Response response = httpClient.newCall(request).execute()) {
-            if (!response.isSuccessful() || response.body() == null) {
-                throw new IOException("ai-service prompt publish failed: " + response.code());
-            }
-            return objectMapper.readValue(response.body().string(), RagPromptConfigDto.class);
-        } catch (Exception exception) {
-            throw new IllegalArgumentException("发布 RAG Prompt 失败", exception);
-        }
-    }
-
-    public RagRetrievalConfigDto getRagRetrievalConfig() {
-        Request request = new Request.Builder()
-                .url(ragServiceUrl + "/admin/rag/retrieval-config")
-                .get()
-                .build();
-        try (Response response = httpClient.newCall(request).execute()) {
-            if (!response.isSuccessful() || response.body() == null) {
-                throw new IOException("ai-service retrieval config get failed: " + response.code());
-            }
-            return objectMapper.readValue(response.body().string(), RagRetrievalConfigDto.class);
-        } catch (Exception exception) {
-            throw new IllegalArgumentException("读取 RAG 检索配置失败", exception);
-        }
-    }
-
-    public RagRetrievalConfigDto updateRagRetrievalConfig(RagRetrievalConfigDto request) {
-        try {
-            String payload = objectMapper.writeValueAsString(request);
-            Request httpRequest = new Request.Builder()
-                    .url(ragServiceUrl + "/admin/rag/retrieval-config")
-                    .put(RequestBody.create(payload, JSON))
-                    .build();
-            try (Response response = httpClient.newCall(httpRequest).execute()) {
-                if (!response.isSuccessful() || response.body() == null) {
-                    throw new IOException("ai-service retrieval config update failed: " + response.code());
-                }
-                return objectMapper.readValue(response.body().string(), RagRetrievalConfigDto.class);
-            }
-        } catch (Exception exception) {
-            throw new IllegalArgumentException("保存 RAG 检索配置失败", exception);
-        }
-    }
-
-    public RagLlmConfigDto getRagLlmConfig() {
-        Request request = new Request.Builder()
-                .url(ragServiceUrl + "/admin/rag/llm-config")
-                .get()
-                .build();
-        try (Response response = httpClient.newCall(request).execute()) {
-            if (!response.isSuccessful() || response.body() == null) {
-                throw new IOException("ai-service llm config get failed: " + response.code());
-            }
-            return objectMapper.readValue(response.body().string(), RagLlmConfigDto.class);
-        } catch (Exception exception) {
-            throw new IllegalArgumentException("读取 LLM 运行配置失败", exception);
-        }
-    }
-
-    public RagLlmConfigDto updateRagLlmConfig(RagLlmConfigDto request) {
-        String provider = normalize(request.getProvider(), "");
-        String model = normalize(request.getModel(), "");
-        int timeoutSeconds = request.getTimeoutSeconds();
-        if (provider.isBlank() || model.isBlank()) {
-            throw new IllegalArgumentException("provider/model 不能为空");
-        }
-        if (timeoutSeconds < 1 || timeoutSeconds > 600) {
-            throw new IllegalArgumentException("timeoutSeconds 必须在 1-600 之间");
-        }
-
-        try {
-            String payload = objectMapper.writeValueAsString(request);
-            Request httpRequest = new Request.Builder()
-                    .url(ragServiceUrl + "/admin/rag/llm-config")
-                    .put(RequestBody.create(payload, JSON))
-                    .build();
-            try (Response response = httpClient.newCall(httpRequest).execute()) {
-                if (!response.isSuccessful() || response.body() == null) {
-                    String errorBody = response.body() != null ? response.body().string() : "";
-                    throw new IllegalArgumentException(extractAiServiceErrorMessage(errorBody, "保存 LLM 运行配置失败"));
-                }
-                return objectMapper.readValue(response.body().string(), RagLlmConfigDto.class);
-            }
-        } catch (IllegalArgumentException exception) {
-            throw exception;
-        } catch (Exception exception) {
-            throw new IllegalArgumentException("保存 LLM 运行配置失败", exception);
-        }
-    }
-
     public AgentModelBindingPayloadDto getAgentModelBindings() {
         Request request = new Request.Builder()
-                .url(ragServiceUrl + "/agents/model-bindings")
+                .url(aiServiceUrl + "/agents/model-bindings")
                 .get()
                 .build();
         try (Response response = httpClient.newCall(request).execute()) {
@@ -542,7 +374,7 @@ public class AdminSettingsService {
         try {
             String payload = objectMapper.writeValueAsString(request);
             Request httpRequest = new Request.Builder()
-                    .url(ragServiceUrl + "/agents/model-bindings")
+                    .url(aiServiceUrl + "/agents/model-bindings")
                     .put(RequestBody.create(payload, JSON))
                     .build();
             try (Response response = httpClient.newCall(httpRequest).execute()) {
@@ -561,7 +393,7 @@ public class AdminSettingsService {
 
     public AgentCatalogResponseDto getAgentCatalog() {
         Request request = new Request.Builder()
-                .url(ragServiceUrl + "/agents/health")
+                .url(aiServiceUrl + "/agents/health")
                 .get()
                 .build();
         try (Response response = httpClient.newCall(request).execute()) {
@@ -590,7 +422,7 @@ public class AdminSettingsService {
                 .addFormDataPart("task", task)
                 .build();
         Request runtimeRequest = new Request.Builder()
-                .url(ragServiceUrl + "/agents/runtime-test")
+                .url(aiServiceUrl + "/agents/runtime-test")
                 .post(formBody)
                 .build();
 
@@ -624,7 +456,7 @@ public class AdminSettingsService {
 
     public JsonNode getAiServiceHealth() {
         Request request = new Request.Builder()
-                .url(ragServiceUrl + "/health")
+                .url(aiServiceUrl + "/health")
                 .get()
                 .build();
         try (Response response = httpClient.newCall(request).execute()) {

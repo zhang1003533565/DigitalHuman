@@ -10,7 +10,6 @@ from fastapi import HTTPException
 from model_capabilities.tts.edge_tts_adapter import synthesize_voice_to_file
 from model_capabilities.embedding.service import embed_query
 from model_providers.registry import get_provider_client
-from rag.retrieval.embedder import BgeM3Embedder
 
 
 @dataclass
@@ -40,13 +39,6 @@ def test_model(provider: str, category: str, model_id: str, text: str | None = N
 
 
 def test_embedding_model(provider: str, model_id: str) -> ModelTestResult:
-    if provider.lower() in {"baai", "local"}:
-        try:
-            vector = BgeM3Embedder(model_id).embed_query("灵山胜境模型测试")
-            return ModelTestResult(True, "本地嵌入模型可用", f"返回向量维度：{len(vector)}")
-        except Exception as exc:
-            raise HTTPException(status_code=400, detail=f"本地嵌入模型测试失败：{exc}") from exc
-
     embedding = embed_query(provider, model_id, "灵山胜境模型测试")
     return ModelTestResult(True, "Embedding 接口调用成功", f"返回向量维度：{len(embedding)}")
 

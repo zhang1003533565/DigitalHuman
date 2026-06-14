@@ -5,9 +5,7 @@ import com.digitalhuman.backend_java.dto.FeedbackRequest;
 import com.digitalhuman.backend_java.dto.GuideChatRequest;
 import com.digitalhuman.backend_java.dto.GuideChatResponse;
 import com.digitalhuman.backend_java.dto.GuideMessageDto;
-import com.digitalhuman.backend_java.dto.RagQueryRequest;
-import com.digitalhuman.backend_java.dto.RagQueryResponse;
-import com.digitalhuman.backend_java.dto.RagSourceDto;
+import com.digitalhuman.backend_java.dto.GuideSourceDto;
 import com.digitalhuman.backend_java.dto.ScenicRouteDto;
 import com.digitalhuman.backend_java.dto.ScenicRouteDto.CoordinateDto;
 import com.digitalhuman.backend_java.dto.ScenicRouteDto.RouteFacilityDto;
@@ -56,8 +54,8 @@ public class GuideService {
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
     private static final int BASIC_CHAT_HISTORY_LIMIT = 10;
 
-    @Value("${rag.service-url}")
-    private String ragServiceUrl;
+    @Value("${ai.service-url}")
+    private String aiServiceUrl;
 
     private final List<ScenicSpotDto> spots = List.of(
             new ScenicSpotDto("spot-1", "灵山胜境", "灵山大佛", "景区核心地标，适合了解整体文化背景。", "08:00-17:00", List.of("历史文化", "地标", "热门")),
@@ -177,7 +175,6 @@ public class GuideService {
 
     private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
-    private final RagTraceService ragTraceService;
     private final GuideSessionRepository sessionRepository;
     private final GuideMessageRepository messageRepository;
     private final UserFeedbackRepository feedbackRepository;
@@ -217,14 +214,12 @@ public class GuideService {
     }
 
     public GuideService(
-            RagTraceService ragTraceService,
             GuideSessionRepository sessionRepository,
             GuideMessageRepository messageRepository,
             UserFeedbackRepository feedbackRepository,
             ScenicRouteService scenicRouteService,
             AdminModelConfigRepository modelConfigRepository,
             AdminProviderConfigRepository providerConfigRepository) {
-        this.ragTraceService = ragTraceService;
         this.sessionRepository = sessionRepository;
         this.messageRepository = messageRepository;
         this.feedbackRepository = feedbackRepository;
@@ -253,27 +248,13 @@ public class GuideService {
             sessionId = "session-" + UUID.randomUUID();
         }
 
-        String traceId = "rag-" + UUID.randomUUID();
-        String reviewedAnswer = ragTraceService.findReusableReviewedAnswer(request.getQuestion());
-        if (reviewedAnswer != null && !reviewedAnswer.isBlank()) {
-            touchSession(sessionId);
-            saveMessage(sessionId, traceId, "user", request.getQuestion());
-            saveMessage(sessionId, traceId, "assistant", reviewedAnswer);
-            return new GuideChatResponse(
-                    sessionId,
-                    traceId,
-                    reviewedAnswer,
-                    spots.stream().map(ScenicSpotDto::getName).limit(2).toList(),
-                    recommendRoutes(request.getInterest()).stream().map(ScenicRouteDto::getName).toList(),
-                    List.of());
-        }
-
+        String traceId = "chat-" + UUID.randomUUID();
         String answerText = buildAnswer(sessionId, request.getQuestion(), request.getInterest());
         List<String> relatedSpots = spots.stream().map(ScenicSpotDto::getName).limit(2).toList();
         List<String> recommendedRoutes = recommendRoutes(request.getInterest()).stream()
                 .map(ScenicRouteDto::getName)
                 .toList();
-        List<RagSourceDto> sources = List.of();
+        List<GuideSourceDto> sources = List.of();
 
         touchSession(sessionId);
         saveMessage(sessionId, traceId, "user", request.getQuestion());
@@ -287,7 +268,7 @@ public class GuideService {
         if (sessionId == null || sessionId.isBlank()) {
             sessionId = "session-" + UUID.randomUUID();
         }
-        String traceId = "rag-" + UUID.randomUUID();
+        String traceId = "chat-" + UUID.randomUUID();
         String finalSessionId = sessionId;
 
         SseEmitter emitter = new SseEmitter(120_000L);
@@ -301,7 +282,7 @@ public class GuideService {
                                 "traceId", traceId))));
 
                 // 调用 ai-service 流式接口
-                String url = ragServiceUrl + "/agents/basic-chat/stream";
+                String url = aiServiceUrl + "/agents/basic-chat/stream";
                 Map<String, Object> payload = new LinkedHashMap<>();
                 payload.put("message", request.getQuestion());
                 payload.put("history", buildBasicChatHistory(finalSessionId));
@@ -390,7 +371,6 @@ public class GuideService {
         feedback.setComment(request.getComment());
         feedback.setCreatedAt(LocalDateTime.now());
         feedbackRepository.save(feedback);
-        ragTraceService.attachFeedback(request.getTraceId(), request.isHelpful(), request.getRating(), request.getComment());
     }
 
     public List<FeedbackRecordDto> getFeedbackRecords() {
@@ -407,33 +387,6 @@ public class GuideService {
                 .toList();
     }
 
-    private RagQueryResponse queryRag(GuideChatRequest request, String sessionId, String traceId) {
-        try {
-            String url = ragServiceUrl + "/rag/query";
-            String json = objectMapper.writeValueAsString(new RagQueryRequest(request.getQuestion(), request.getInterest(), 5, sessionId, traceId));
-            Request httpRequest = new Request.Builder()
-                    .url(url)
-                    .post(RequestBody.create(json, JSON))
-                    .build();
-
-            try (Response response = httpClient.newCall(httpRequest).execute()) {
-                if (!response.isSuccessful()) {
-                    throw new IOException("RAG request failed: " + response.code());
-                }
-                if (response.body() == null) {
-                    throw new IOException("RAG response body is empty");
-                }
-                RagQueryResponse ragResponse = objectMapper.readValue(response.body().string(), RagQueryResponse.class);
-                ragTraceService.saveSuccess(traceId, sessionId, request, ragResponse);
-                return ragResponse;
-            }
-        } catch (Exception exception) {
-            log.warn("Falling back to local guide answer because RAG service is unavailable", exception);
-            ragTraceService.saveFailure(traceId, sessionId, request, exception);
-            return null;
-        }
-    }
-
     private String buildAnswer(String sessionId, String question, String interest) {
         String answer = queryBasicChatAgent(sessionId, question, interest);
         if (answer != null && !answer.isBlank()) {
@@ -444,7 +397,7 @@ public class GuideService {
 
     private String queryBasicChatAgent(String sessionId, String question, String interest) {
         try {
-            String url = ragServiceUrl + "/agents/basic-chat";
+            String url = aiServiceUrl + "/agents/basic-chat";
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("message", question);
             payload.put("history", buildBasicChatHistory(sessionId));

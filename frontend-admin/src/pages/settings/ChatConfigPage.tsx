@@ -945,7 +945,7 @@ const MORE_MENU_ITEMS: MenuProps['items'] = [
 
 function createAssistantReply(question: string, record: ChatModelRecord) {
   const tags = record.purposeTags.join('、')
-  return `已收到你的问题「${question}」。当前模型 ${record.provider} / ${record.modelName} 适合处理 ${tags} 场景，建议结合景区知识库、路线推荐和游客常见问答继续展开。`
+  return `已收到你的问题「${question}」。当前模型 ${record.provider} / ${record.modelName} 适合处理 ${tags} 场景，建议结合第三方知识服务、路线推荐和游客常见问答继续展开。`
 }
 
 export default function ChatConfigPage({

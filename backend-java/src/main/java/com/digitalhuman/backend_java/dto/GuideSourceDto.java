@@ -3,7 +3,7 @@ package com.digitalhuman.backend_java.dto;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
-public class RagSourceDto {
+public class GuideSourceDto {
 
     @JsonProperty("doc_id")
     private String docId;

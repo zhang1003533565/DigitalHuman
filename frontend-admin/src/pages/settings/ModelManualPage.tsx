@@ -199,7 +199,7 @@ const SUPPORTED_MODELS: SupportedModel[] = [
     category: 'embedding',
     categoryLabel: '嵌入模型',
     capabilities: ['嵌入模型', '检索', '多语言'],
-    description: '适合知识库召回的多语言向量模型，支持中文语义检索。',
+    description: '适合第三方知识召回的多语言向量模型，支持中文语义检索。',
   },
 ]
 

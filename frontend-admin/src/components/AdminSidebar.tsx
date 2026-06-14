@@ -1,7 +1,6 @@
 import {
   ApiOutlined,
   BarChartOutlined,
-  BookOutlined,
   CommentOutlined,
   EnvironmentOutlined,
   HomeOutlined,
@@ -23,22 +22,11 @@ type AdminSidebarProps = {
 
 const { Sider } = Layout
 
-const PARENT_MENU_KEYS = new Set(['knowledge-group', 'spots', 'avatar-group'])
+const PARENT_MENU_KEYS = new Set(['spots', 'avatar-group'])
 
 const menuItems: MenuProps['items'] = [
   { key: 'dashboard', icon: <BarChartOutlined />, label: '数据总览' },
   { key: 'home-config', icon: <HomeOutlined />, label: '首页配置' },
-  {
-    key: 'knowledge-group',
-    icon: <BookOutlined />,
-    label: '知识库管理',
-    children: [
-      { key: 'knowledge', label: '知识库文档' },
-      { key: 'review', label: '人工审核队列' },
-      { key: 'knowledge-missing', label: '知识缺失池' },
-      { key: 'eval', label: 'RAG 评测报告' },
-    ],
-  },
   {
     key: 'spots',
     icon: <EnvironmentOutlined />,
@@ -78,7 +66,7 @@ export default function AdminSidebar({ activeKey, displayName, role, onLogout, o
           theme="dark"
           mode="inline"
           selectedKeys={[activeKey]}
-          defaultOpenKeys={['knowledge-group', 'spots', 'avatar-group']}
+          defaultOpenKeys={['spots', 'avatar-group']}
           items={menuItems}
           onClick={({ key }) => {
             if (PARENT_MENU_KEYS.has(key)) {
