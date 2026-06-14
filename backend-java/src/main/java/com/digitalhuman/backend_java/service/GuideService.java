@@ -52,7 +52,7 @@ public class GuideService {
 
     private static final Logger log = LoggerFactory.getLogger(GuideService.class);
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
-    private static final int BASIC_CHAT_HISTORY_LIMIT = 10;
+    private static final int LEADER_CHAT_HISTORY_LIMIT = 10;
 
     @Value("${ai.service-url}")
     private String aiServiceUrl;
@@ -282,11 +282,11 @@ public class GuideService {
                                 "traceId", traceId))));
 
                 // 调用 ai-service 流式接口
-                String url = aiServiceUrl + "/agents/basic-chat/stream";
+                String url = aiServiceUrl + "/agents/leader/chat/stream";
                 Map<String, Object> payload = new LinkedHashMap<>();
                 payload.put("message", request.getQuestion());
-                payload.put("history", buildBasicChatHistory(finalSessionId));
-                payload.put("systemPrompt", buildBasicChatSystemPrompt(request.getInterest()));
+                payload.put("history", buildLeaderChatHistory(finalSessionId));
+                payload.put("systemPrompt", buildLeaderChatSystemPrompt(request.getInterest()));
                 payload.putAll(resolveAiModelConfig());
 
                 Request httpRequest = new Request.Builder()
@@ -298,7 +298,7 @@ public class GuideService {
 
                 try (Response response = httpClient.newCall(httpRequest).execute()) {
                     if (!response.isSuccessful() || response.body() == null) {
-                        throw new IOException("Basic chat stream request failed: " + response.code());
+                        throw new IOException("Leader chat stream request failed: " + response.code());
                     }
 
                     BufferedReader reader = new BufferedReader(
@@ -388,20 +388,20 @@ public class GuideService {
     }
 
     private String buildAnswer(String sessionId, String question, String interest) {
-        String answer = queryBasicChatAgent(sessionId, question, interest);
+        String answer = queryLeaderChatAgent(sessionId, question, interest);
         if (answer != null && !answer.isBlank()) {
             return answer;
         }
-        return "当前基础对话智能体暂时不可用，请确认 ai-service 已启动，并检查 /agents/basic-chat 接口和模型配置。";
+        return "当前主智能体暂时不可用，请确认 ai-service 已启动，并检查 /agents/leader/chat 接口和模型配置。";
     }
 
-    private String queryBasicChatAgent(String sessionId, String question, String interest) {
+    private String queryLeaderChatAgent(String sessionId, String question, String interest) {
         try {
-            String url = aiServiceUrl + "/agents/basic-chat";
+            String url = aiServiceUrl + "/agents/leader/chat";
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("message", question);
-            payload.put("history", buildBasicChatHistory(sessionId));
-            payload.put("systemPrompt", buildBasicChatSystemPrompt(interest));
+            payload.put("history", buildLeaderChatHistory(sessionId));
+            payload.put("systemPrompt", buildLeaderChatSystemPrompt(interest));
             payload.putAll(resolveAiModelConfig());
 
             Request httpRequest = new Request.Builder()
@@ -422,14 +422,14 @@ public class GuideService {
                 return answer == null ? null : answer.trim();
             }
         } catch (Exception exception) {
-            log.warn("Basic chat agent request failed", exception);
+            log.warn("Leader chat agent request failed", exception);
             return null;
         }
     }
 
-    private List<Map<String, String>> buildBasicChatHistory(String sessionId) {
+    private List<Map<String, String>> buildLeaderChatHistory(String sessionId) {
         List<GuideMessage> history = messageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
-        int startIndex = Math.max(0, history.size() - BASIC_CHAT_HISTORY_LIMIT);
+        int startIndex = Math.max(0, history.size() - LEADER_CHAT_HISTORY_LIMIT);
         List<Map<String, String>> messages = new ArrayList<>();
         for (int index = startIndex; index < history.size(); index++) {
             GuideMessage message = history.get(index);
@@ -443,9 +443,10 @@ public class GuideService {
         return messages;
     }
 
-    private String buildBasicChatSystemPrompt(String interest) {
-        String basePrompt = "你是灵山景区智能导览助手。请使用简体中文回答，语气自然、友好，适合游客现场咨询。"
-                + "当前阶段先进行基础对话，不依赖知识库检索。"
+    private String buildLeaderChatSystemPrompt(String interest) {
+        String basePrompt = "你是 DigitalHuman 的主智能体，也是灵山景区智能导览助手。"
+                + "当前阶段先支持快速对话，暂不调度其他智能体，也不依赖知识库检索。"
+                + "请使用简体中文回答，语气自然、友好，适合游客现场咨询。"
                 + "如果用户询问具体史实、开放时间或票务等你无法确认的信息，请明确说明当前无法核实，并给出通用建议。";
         if (interest == null || interest.isBlank()) {
             return basePrompt;

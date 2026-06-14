@@ -7,24 +7,26 @@ Each agent has three layers:
 - `agent.py`: executable logic
 
 ## Agents
-- `leader_agent`: chat + orchestration
+- `leader_agent`: quick chat now, orchestration entrypoint later
+- `basic_chat_agent`: direct quick chat fallback
 - `travel_analytics_agent`: Excel -> `travel_analytics_record`
 - `scenic_structured_agent`: structured DOCX table -> `scenic_spot_structured_record`
 - `guide_script_agent`: narrative DOCX -> `voice_script_scene`
 
 ## API
-- `POST /agents/transform` (multipart file upload)
 - `POST /agents/leader/chat`
+- `POST /agents/leader/chat/stream`
+- `POST /agents/basic-chat`
+- `POST /agents/basic-chat/stream`
 - `GET /agents/health`
 
-## Routing Rules (leader)
-1. `.xlsx` => `travel_analytics_agent`
-2. `.docx` filename contains `结构化数据集` => `scenic_structured_agent`
-3. other `.docx` => `guide_script_agent` (fallback to scenic parser if needed)
+## Leader Status
+`leader_agent` is the main agent entrypoint. It currently handles quick chat only and returns `dispatchEnabled=false`.
+Specialist-agent dispatch will be attached later.
 
 ## Output Contract
 - `success`: bool
 - `agent`: executor name
 - `warnings`: list[str]
-- `output.table`: target backend table name
-- `output.records`: normalized row objects
+- `output.answer`: assistant reply for chat endpoints
+- `output.dispatchEnabled`: false while dispatch is not enabled

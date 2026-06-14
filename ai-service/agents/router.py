@@ -60,9 +60,68 @@ def health() -> dict[str, object]:
     }
 
 
-@router.post("/leader/chat")
-def leader_chat(message: str = Form(default="")) -> dict[str, object]:
-    return leader.chat(message)
+@router.post("/leader/chat", response_model=BasicChatResponse)
+def leader_chat(request: BasicChatRequest) -> BasicChatResponse:
+    context = AgentContext(
+        file_name="",
+        file_path="",
+        metadata={
+            "message": request.message,
+            "history": request.history,
+            "systemPrompt": request.system_prompt,
+            "provider": request.provider,
+            "model": request.model,
+            "baseUrl": request.base_url,
+            "apiKey": request.api_key,
+        },
+    )
+    result = leader.run(context)
+    return BasicChatResponse(
+        success=result.success,
+        agent=result.agent,
+        warnings=result.warnings,
+        output=result.output,
+    )
+
+
+@router.post("/leader/chat/stream")
+def leader_chat_stream(request: BasicChatRequest):
+    context = AgentContext(
+        file_name="",
+        file_path="",
+        metadata={
+            "message": request.message,
+            "history": request.history,
+            "systemPrompt": request.system_prompt,
+            "provider": request.provider,
+            "model": request.model,
+            "baseUrl": request.base_url,
+            "apiKey": request.api_key,
+        },
+    )
+    token_gen = leader.run_stream(context)
+
+    if isinstance(token_gen, AgentResult):
+        error_payload = json.dumps(
+            {"success": token_gen.success, "agent": token_gen.agent, "warnings": token_gen.warnings},
+            ensure_ascii=False,
+        )
+        def _error_sse():
+            yield f"data: {error_payload}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(_error_sse(), media_type="text/event-stream")
+
+    def _sse_generator():
+        try:
+            for token in token_gen:
+                chunk = json.dumps({"token": token}, ensure_ascii=False)
+                yield f"data: {chunk}\n\n"
+        except Exception as exc:
+            error_payload = json.dumps({"error": str(exc)}, ensure_ascii=False)
+            yield f"data: {error_payload}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(_sse_generator(), media_type="text/event-stream")
 
 
 @router.post("/basic-chat", response_model=BasicChatResponse)
