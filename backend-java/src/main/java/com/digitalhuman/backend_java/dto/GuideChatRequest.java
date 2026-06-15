@@ -11,6 +11,8 @@ public class GuideChatRequest {
 
     private String interest;
 
+    private String knowledgeId;
+
     public String getSessionId() {
         return sessionId;
     }
@@ -33,5 +35,13 @@ public class GuideChatRequest {
 
     public void setInterest(String interest) {
         this.interest = interest;
+    }
+
+    public String getKnowledgeId() {
+        return knowledgeId;
+    }
+
+    public void setKnowledgeId(String knowledgeId) {
+        this.knowledgeId = knowledgeId;
     }
 }

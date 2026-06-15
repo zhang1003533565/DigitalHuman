@@ -274,6 +274,12 @@
   min-height: 0;
 }
 
+.knowledge-openapi-page {
+  align-content: start;
+  overflow: auto;
+  padding-right: 4px;
+}
+
 .admin-list {
   margin: 0;
   padding-left: 18px;
@@ -1100,6 +1106,20 @@
 
 .admin-metric-row {
   margin-bottom: 16px;
+}
+
+.admin-table-row-selected > td {
+  background: rgba(47, 109, 255, 0.08) !important;
+}
+
+.admin-table-row-selected:hover > td {
+  background: rgba(47, 109, 255, 0.12) !important;
+}
+
+.admin-mono-cell {
+  display: inline-block;
+  font-family: Consolas, "Courier New", monospace;
+  white-space: nowrap;
 }
 
 mark {

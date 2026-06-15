@@ -7,10 +7,10 @@ export default defineConfig({
     port: 30001,
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        target: 'http://localhost:8081',
         changeOrigin: true,
         configure: (proxy) => {
-          proxy.on('proxyRes', (proxyRes, req, res) => {
+          proxy.on('proxyRes', (proxyRes, req) => {
             // SSE 流式响应需要禁用缓冲
             if (req.url?.includes('/chat/stream')) {
               proxyRes.headers['cache-control'] = 'no-cache'

@@ -38,6 +38,7 @@ maxkb:
   base-url: ${MAXKB_BASE_URL:http://localhost:3000}
   api-key: ${MAXKB_API_KEY:}
   workspace-id: ${MAXKB_WORKSPACE_ID:default}
+  default-knowledge-id: ${MAXKB_DEFAULT_KNOWLEDGE_ID:}
 
 app:
   auth:
