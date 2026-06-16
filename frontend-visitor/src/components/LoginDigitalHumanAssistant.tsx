@@ -49,6 +49,25 @@ const IDLE_STATUS = ''
 const LOADING_STATUS = '数字人加载中...'
 const READY_STATUS = '数字人已就绪。'
 
+type OutfitOption = {
+  id: string
+  label: string
+  modelUrl: string
+}
+
+const OUTFIT_OPTIONS: OutfitOption[] = [
+  {
+    id: 'default',
+    label: '黑色商务',
+    modelUrl: '/live2d/haru_greeter_pro_jp/haru_greeter_t05.model3.json',
+  },
+  {
+    id: 'white',
+    label: '白色商务',
+    modelUrl: '/live2d/haru_greeter_pro_jp/haru_greeter_t05_white.model3.json',
+  },
+]
+
 function isUserGestureRequired(error: unknown) {
   if (!(error instanceof Error)) {
     return false
@@ -92,6 +111,9 @@ export const LoginDigitalHumanAssistant = forwardRef<
   const [visibleText, setVisibleText] = useState('')
 
   const selectedModel = MODEL_OPTIONS.find((model) => model.id === 'haru_greeter_pro_jp') ?? MODEL_OPTIONS[0]
+  const [currentOutfitIndex, setCurrentOutfitIndex] = useState(0)
+  const currentOutfit = OUTFIT_OPTIONS[currentOutfitIndex]
+  const outfitKeyRef = useRef(0)
 
   const syncBubblePosition = useCallback(() => {
     const bubble = bubbleRef.current
@@ -497,38 +519,72 @@ export const LoginDigitalHumanAssistant = forwardRef<
   )
 
   useEffect(() => {
-    let mounted = true
+    const canvas = canvasRef.current
 
-    async function initModel() {
-      const canvas = canvasRef.current
+    if (!canvas || appRef.current) {
+      return
+    }
 
-      if (!canvas) {
+    let cancelled = false
+
+    async function initApp() {
+      await loadLive2dScripts()
+
+      if (cancelled || !window.PIXI || !canvas) {
         return
       }
 
-      try {
+      const width = window.innerWidth
+      const height = window.innerHeight
+
+      const pixiApp = new window.PIXI.Application({
+        view: canvas,
+        autoStart: true,
+        resizeTo: window,
+        width,
+        height,
+        backgroundAlpha: 0,
+        backgroundColor: 0x000000,
+      })
+
+      appRef.current = pixiApp
+    }
+
+    void initApp()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let mounted = true
+
+    async function loadModel() {
+      if (!appRef.current) {
         await loadLive2dScripts()
+        // Wait a tick for app to be ready
+        await new Promise((r) => setTimeout(r, 100))
+      }
 
-        if (!mounted || !window.PIXI) {
-          return
-        }
+      const pixiApp = appRef.current
 
-        const width = window.innerWidth
-        const height = window.innerHeight
+      if (!pixiApp || !window.PIXI) {
+        return
+      }
 
-        const pixiApp = new window.PIXI.Application({
-          view: canvas,
-          autoStart: true,
-          resizeTo: window,
-          width,
-          height,
-          backgroundAlpha: 0,
-          backgroundColor: 0x000000,
-        })
+      setIsReady(false)
+      setStatus(LOADING_STATUS)
 
-        appRef.current = pixiApp
+      // Remove old model from stage
+      if (modelRef.current) {
+        pixiApp.stage.removeChild(modelRef.current)
+        modelRef.current.destroy?.()
+        modelRef.current = null
+      }
 
-        const model = await window.PIXI.live2d.Live2DModel.from(selectedModel.url)
+      try {
+        const model = await window.PIXI.live2d.Live2DModel.from(currentOutfit.modelUrl)
 
         if (!mounted) {
           return
@@ -536,6 +592,8 @@ export const LoginDigitalHumanAssistant = forwardRef<
 
         pixiApp.stage.addChild(model)
 
+        const width = window.innerWidth
+        const height = window.innerHeight
         const scaleX = width / model.width
         const scaleY = height / model.height
         const scaleMultiplier = (selectedModel.scaleMultiplier ?? 0.84) * 0.74
@@ -593,18 +651,14 @@ export const LoginDigitalHumanAssistant = forwardRef<
       }
     }
 
-    void initModel()
+    void loadModel()
 
     return () => {
       mounted = false
       stopSpeaking()
       clearReturnAnimation()
       stopBubbleTracking()
-      void audioContextRef.current?.close().catch(() => undefined)
       window.removeEventListener('resize', resizeCanvas)
-      modelRef.current = null
-      appRef.current?.destroy(true, { children: true })
-      appRef.current = null
     }
   }, [
     clearReturnAnimation,
@@ -615,12 +669,26 @@ export const LoginDigitalHumanAssistant = forwardRef<
     selectedModel.dragEndMotionGroup,
     selectedModel.dragStartMotionGroup,
     selectedModel.scaleMultiplier,
-    selectedModel.url,
+    currentOutfit.modelUrl,
     startBubbleTracking,
     stopSpeaking,
     stopBubbleTracking,
     syncBubblePosition,
   ])
+
+  useEffect(() => {
+    return () => {
+      void audioContextRef.current?.close().catch(() => undefined)
+      modelRef.current = null
+      appRef.current?.destroy(true, { children: true })
+      appRef.current = null
+    }
+  }, [])
+
+  const handleOutfitSwitch = useCallback(() => {
+    setCurrentOutfitIndex((prev) => (prev + 1) % OUTFIT_OPTIONS.length)
+    outfitKeyRef.current += 1
+  }, [])
 
   useEffect(() => {
     if (!isReady || !autoPlayInitialSpeech || !initialSpeech) {
@@ -646,6 +714,17 @@ export const LoginDigitalHumanAssistant = forwardRef<
             {hasHintStatus ? <p className="login-dh-bubble__hint">{status}</p> : null}
           </div>
         ) : null}
+        <button
+          type="button"
+          className="login-dh-outfit-btn"
+          onClick={handleOutfitSwitch}
+          title="换装"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20.38 3.46L16 2a4 4 0 01-8 0L3.62 3.46a2 2 0 00-1.34 2.23l.58 3.47a1 1 0 00.99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 002-2V10h2.15a1 1 0 00.99-.84l.58-3.47a2 2 0 00-1.34-2.23z" />
+          </svg>
+          <span>{currentOutfit.label}</span>
+        </button>
       </div>
     </section>
   )
