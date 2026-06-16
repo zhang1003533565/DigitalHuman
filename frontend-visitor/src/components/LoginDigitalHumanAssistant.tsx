@@ -424,7 +424,6 @@ export const LoginDigitalHumanAssistant = forwardRef<
       const content = text.trim()
 
       if (!model || !content) {
-        setStatus(content ? '数字人还没有加载完成。' : '没有可播报的文本。')
         return false
       }
 
@@ -559,17 +558,20 @@ export const LoginDigitalHumanAssistant = forwardRef<
 
   useEffect(() => {
     let mounted = true
+    let loading = false
 
     async function loadModel() {
+      if (loading) return
+      loading = true
+
       if (!appRef.current) {
         await loadLive2dScripts()
-        // Wait a tick for app to be ready
         await new Promise((r) => setTimeout(r, 100))
       }
 
       const pixiApp = appRef.current
 
-      if (!pixiApp || !window.PIXI) {
+      if (!pixiApp || !window.PIXI || !mounted) {
         return
       }
 
@@ -648,6 +650,8 @@ export const LoginDigitalHumanAssistant = forwardRef<
       } catch (error) {
         console.error(error)
         setStatus('数字人加载失败，请检查 Live2D 资源。')
+      } finally {
+        loading = false
       }
     }
 
@@ -660,21 +664,9 @@ export const LoginDigitalHumanAssistant = forwardRef<
       stopBubbleTracking()
       window.removeEventListener('resize', resizeCanvas)
     }
-  }, [
-    clearReturnAnimation,
-    ensureAudioElement,
-    resizeCanvas,
-    scheduleReturnToHome,
-    selectedModel.bodyMotionGroup,
-    selectedModel.dragEndMotionGroup,
-    selectedModel.dragStartMotionGroup,
-    selectedModel.scaleMultiplier,
-    currentOutfit.modelUrl,
-    startBubbleTracking,
-    stopSpeaking,
-    stopBubbleTracking,
-    syncBubblePosition,
-  ])
+    // Only reload when outfit URL changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentOutfit.modelUrl])
 
   useEffect(() => {
     return () => {
