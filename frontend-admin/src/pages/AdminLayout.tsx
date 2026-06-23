@@ -45,6 +45,7 @@ import SpotCategoryPage from './scenic/SpotCategoryPage'
 import FacilityListPage from './scenic/FacilityListPage'
 import TravelAnalyticsPage from './scenic/TravelAnalyticsPage'
 import RouteManagementPage from './scenic/RouteManagementPage'
+import TravelTipManagementPage from './travel-tips/TravelTipManagementPage'
 import ModelEmotionPage from './ModelEmotionPage'
 import type { LoginResult } from '../types/admin'
 
@@ -57,6 +58,7 @@ type MenuKey =
   | 'spot-category'
   | 'facility-list'
   | 'routes'
+  | 'travel-tips'
   | 'avatar'
   | 'model-emotion'
   | 'settings'
@@ -76,6 +78,7 @@ const menuPathByKey: Record<MenuKey, string> = {
   'spot-category': '/admin/spots/categories',
   'facility-list': '/admin/spots/facilities',
   routes: '/admin/routes',
+  'travel-tips': '/admin/travel-tips',
   avatar: '/admin/avatar',
   'model-emotion': '/admin/model-emotion',
   settings: '/admin/setting',
@@ -2176,6 +2179,8 @@ function renderPanel(activeKey: MenuKey) {
       return <FacilityListPage />
     case 'routes':
       return <RouteManagementPage />
+    case 'travel-tips':
+      return <TravelTipManagementPage />
     case 'avatar':
       return <AvatarPanel />
     case 'model-emotion':

@@ -12,6 +12,7 @@
   WarningOutlined,
   SettingOutlined,
   UserOutlined,
+  BulbOutlined,
 } from '@ant-design/icons'
 import { Button, Layout, Menu } from 'antd'
 import type { MenuProps } from 'antd'
@@ -39,6 +40,7 @@ const menuItems: MenuProps['items'] = [
     ],
   },
   { key: 'routes', icon: <NodeIndexOutlined />, label: '路线管理' },
+  { key: 'travel-tips', icon: <BulbOutlined />, label: '游览贴士' },
   {
     key: 'avatar-group',
     icon: <RobotOutlined />,
