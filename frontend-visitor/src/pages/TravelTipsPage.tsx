@@ -61,13 +61,6 @@ export function TravelTipsPage({ onLogout }: Props) {
     ? tips
     : tips.filter((tip) => tip.category === activeCategory)
 
-  const groupedTips = filteredTips.reduce<Record<string, TravelTip[]>>((acc, tip) => {
-    const cat = tip.category
-    if (!acc[cat]) acc[cat] = []
-    acc[cat].push(tip)
-    return acc
-  }, {})
-
   return (
     <main className="page-shell travel-tips-page">
       <AppTopNav onLogout={onLogout} />
@@ -96,28 +89,24 @@ export function TravelTipsPage({ onLogout }: Props) {
               <p className="card-kicker">加载失败</p>
               <h2>{error}</h2>
             </article>
-          ) : Object.keys(groupedTips).length === 0 ? (
+          ) : filteredTips.length === 0 ? (
             <article className="feature-card tips-empty">
               <p className="card-kicker">暂无数据</p>
               <h2>该分类下暂无贴士</h2>
             </article>
           ) : (
-            Object.entries(groupedTips).map(([category, categoryTips]) => (
-              <div key={category} className="tips-category-group">
-                <h2 className="tips-group-title">
-                  <span className="tips-group-icon">{CATEGORY_ICONS[category] || '📌'}</span>
-                  {CATEGORY_LABELS[category] || category}
-                </h2>
-                <div className="tips-grid">
-                  {categoryTips.map((tip) => (
-                    <article key={tip.id} className="feature-card tips-card">
-                      <h3 className="tips-card-title">{tip.title}</h3>
-                      <p className="tips-card-content">{tip.content}</p>
-                    </article>
-                  ))}
-                </div>
-              </div>
-            ))
+            <div className="tips-grid">
+              {filteredTips.map((tip) => (
+                <article key={tip.id} className="feature-card tips-card">
+                  <div className="tips-card-header">
+                    <span className="tips-card-icon">{CATEGORY_ICONS[tip.category] || '📌'}</span>
+                    <span className="tips-card-category">{CATEGORY_LABELS[tip.category] || tip.category}</span>
+                  </div>
+                  <h3 className="tips-card-title">{tip.title}</h3>
+                  <p className="tips-card-content">{tip.content}</p>
+                </article>
+              ))}
+            </div>
           )}
         </section>
       </section>
