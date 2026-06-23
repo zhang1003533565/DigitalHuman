@@ -1,108 +1,72 @@
 package com.digitalhuman.backend_java.controller;
 
-import com.digitalhuman.backend_java.dto.KnowledgeDocumentDto;
-import com.digitalhuman.backend_java.dto.KnowledgeBuildRequest;
-import com.digitalhuman.backend_java.dto.KnowledgeBuildResponse;
-import com.digitalhuman.backend_java.dto.KnowledgeChunkDto;
-import com.digitalhuman.backend_java.dto.KnowledgeDeleteResponse;
-import com.digitalhuman.backend_java.dto.KnowledgeUploadResponse;
-import com.digitalhuman.backend_java.dto.KnowledgeBuildTaskDto;
-import com.digitalhuman.backend_java.service.KnowledgeBaseService;
+import com.digitalhuman.backend_java.service.MaxKbService;
 import com.fasterxml.jackson.databind.JsonNode;
-import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin/knowledge")
 public class AdminKnowledgeController {
 
-    private final KnowledgeBaseService knowledgeBaseService;
+    private final MaxKbService maxKbService;
 
-    public AdminKnowledgeController(KnowledgeBaseService knowledgeBaseService) {
-        this.knowledgeBaseService = knowledgeBaseService;
+    public AdminKnowledgeController(MaxKbService maxKbService) {
+        this.maxKbService = maxKbService;
     }
 
-    @GetMapping("/documents")
-    public List<KnowledgeDocumentDto> listDocuments() {
-        return knowledgeBaseService.listDocuments();
+    @GetMapping("/open-api/docs")
+    public JsonNode docs() {
+        return maxKbService.docs();
     }
 
-    @PostMapping("/documents/upload")
-    public KnowledgeUploadResponse uploadDocument(@RequestParam("file") MultipartFile file) {
-        return knowledgeBaseService.uploadDocument(file);
+    @GetMapping("/open-api/config")
+    public JsonNode currentConfig() {
+        return maxKbService.currentConfig();
     }
 
-    @PostMapping("/build")
-    public KnowledgeBuildResponse buildKnowledgeBase(@RequestBody(required = false) KnowledgeBuildRequest request) {
-        return knowledgeBaseService.buildKnowledgeBase(request);
+    @PostMapping("/open-api/config")
+    public JsonNode saveConfig(@RequestBody Map<String, Object> payload) {
+        return maxKbService.saveConfig(payload);
     }
 
-    @PostMapping("/build-tasks")
-    public KnowledgeBuildTaskDto submitBuildTask(@RequestBody(required = false) KnowledgeBuildRequest request) {
-        return knowledgeBaseService.submitBuildTask(request);
+    @PostMapping("/open-api/sync-keys")
+    public JsonNode syncOpenApiKeys(@RequestBody Map<String, Object> payload) {
+        return maxKbService.syncOpenApiKeys(payload);
     }
 
-    @GetMapping("/build-tasks")
-    public List<KnowledgeBuildTaskDto> listBuildTasks() {
-        return knowledgeBaseService.listBuildTasks();
+    @GetMapping("/knowledges")
+    public JsonNode listKnowledges(@RequestParam Map<String, String> query) {
+        return maxKbService.listKnowledges(query);
     }
 
-    @PostMapping("/build-tasks/{id}/retry")
-    public KnowledgeBuildTaskDto retryBuildTask(@PathVariable Long id) {
-        return knowledgeBaseService.retryBuildTask(id);
+    @GetMapping("/knowledges/{knowledgeId}")
+    public JsonNode getKnowledge(@PathVariable String knowledgeId) {
+        return maxKbService.getKnowledge(knowledgeId);
     }
 
-    @PostMapping("/build-tasks/{id}/cancel")
-    public KnowledgeBuildTaskDto cancelBuildTask(@PathVariable Long id) {
-        return knowledgeBaseService.cancelBuildTask(id);
+    @GetMapping("/knowledges/{knowledgeId}/documents")
+    public JsonNode listDocuments(@PathVariable String knowledgeId, @RequestParam Map<String, String> query) {
+        return maxKbService.listDocuments(knowledgeId, query);
     }
 
-    @PostMapping("/documents/{fileName}/rebuild")
-    public KnowledgeBuildResponse rebuildDocument(@PathVariable String fileName) {
-        return knowledgeBaseService.rebuildDocument(fileName);
+    @GetMapping("/knowledges/{knowledgeId}/documents/{documentId}/paragraphs")
+    public JsonNode listParagraphs(
+            @PathVariable String knowledgeId,
+            @PathVariable String documentId,
+            @RequestParam Map<String, String> query) {
+        return maxKbService.listParagraphs(knowledgeId, documentId, query);
     }
 
-    @DeleteMapping("/documents/{fileName}")
-    public KnowledgeDeleteResponse deleteDocument(@PathVariable String fileName) {
-        return knowledgeBaseService.deleteDocument(fileName);
-    }
-
-    @GetMapping("/documents/{fileName}/chunks")
-    public KnowledgeChunkDto listDocumentChunks(@PathVariable String fileName) {
-        return knowledgeBaseService.listDocumentChunks(fileName);
-    }
-
-    @GetMapping("/documents/{fileName}/preview")
-    public JsonNode previewDocument(@PathVariable String fileName) {
-        return knowledgeBaseService.previewDocument(fileName);
-    }
-
-    @GetMapping("/documents/{fileName}/diff")
-    public JsonNode diffDocument(@PathVariable String fileName) {
-        return knowledgeBaseService.diffDocument(fileName);
-    }
-
-    @GetMapping("/documents/{fileName}/versions")
-    public JsonNode listDocumentVersions(@PathVariable String fileName) {
-        return knowledgeBaseService.listDocumentVersions(fileName);
-    }
-
-    @PostMapping("/documents/{fileName}/versions/{version}/restore")
-    public JsonNode restoreDocumentVersion(@PathVariable String fileName, @PathVariable String version) {
-        return knowledgeBaseService.restoreDocumentVersion(fileName, version);
-    }
-
-    @PutMapping("/chunks/{chunkId}/disabled")
-    public JsonNode setChunkDisabled(@PathVariable String chunkId, @RequestBody JsonNode request) {
-        return knowledgeBaseService.setChunkDisabled(chunkId, request.path("disabled").asBoolean());
+    @PostMapping("/hit-test")
+    public JsonNode hitTest(@RequestBody Map<String, Object> payload) {
+        return maxKbService.hitTest(payload);
     }
 }

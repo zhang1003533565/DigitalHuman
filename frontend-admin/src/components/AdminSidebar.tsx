@@ -1,18 +1,15 @@
 ﻿import {
+  ApiOutlined,
   BarChartOutlined,
   BookOutlined,
+  BulbOutlined,
   CommentOutlined,
-  DatabaseOutlined,
   EnvironmentOutlined,
-  NodeIndexOutlined,
+  HomeOutlined,
   RobotOutlined,
   SearchOutlined,
-  SafetyOutlined,
-  ExperimentOutlined,
-  WarningOutlined,
   SettingOutlined,
   UserOutlined,
-  BulbOutlined,
 } from '@ant-design/icons'
 import { Button, Layout, Menu } from 'antd'
 import type { MenuProps } from 'antd'
@@ -27,9 +24,11 @@ type AdminSidebarProps = {
 
 const { Sider } = Layout
 
+const PARENT_MENU_KEYS = new Set(['spots', 'avatar-group'])
+
 const menuItems: MenuProps['items'] = [
   { key: 'dashboard', icon: <BarChartOutlined />, label: '数据总览' },
-  { key: 'knowledge', icon: <BookOutlined />, label: '知识库管理' },
+  { key: 'home-config', icon: <HomeOutlined />, label: '首页配置' },
   {
     key: 'spots',
     icon: <EnvironmentOutlined />,
@@ -37,9 +36,12 @@ const menuItems: MenuProps['items'] = [
     children: [
       { key: 'spot-category', label: '景点分类' },
       { key: 'facility-list', label: '全部设施' },
+      { key: 'routes', label: '路线管理' },
+      { key: 'travel-analytics', label: '旅游数据行为分析' },
+      { key: 'scenic-structured', label: '景点结构化数据' },
+      { key: 'voice-scripts', label: '景点口播管理' },
     ],
   },
-  { key: 'routes', icon: <NodeIndexOutlined />, label: '路线管理' },
   { key: 'travel-tips', icon: <BulbOutlined />, label: '游览贴士' },
   {
     key: 'avatar-group',
@@ -52,10 +54,8 @@ const menuItems: MenuProps['items'] = [
   },
   { key: 'feedback', icon: <CommentOutlined />, label: '游客反馈分析' },
   { key: 'qa', icon: <SearchOutlined />, label: '问答记录查询' },
-  { key: 'review', icon: <SafetyOutlined />, label: '人工审核队列' },
-  { key: 'knowledge-missing', icon: <WarningOutlined />, label: '知识缺失池' },
-  { key: 'eval', icon: <ExperimentOutlined />, label: 'RAG 评测报告' },
-  { key: 'travel-analytics', icon: <DatabaseOutlined />, label: '旅游数据行为分析' },
+  { key: 'ai-models', icon: <ApiOutlined />, label: 'AI 模型管理' },
+  { key: 'knowledge', icon: <BookOutlined />, label: '知识库对接站' },
 ]
 
 export default function AdminSidebar({ activeKey, displayName, role, onLogout, onSelect }: AdminSidebarProps) {
@@ -70,10 +70,10 @@ export default function AdminSidebar({ activeKey, displayName, role, onLogout, o
           theme="dark"
           mode="inline"
           selectedKeys={[activeKey]}
-          defaultOpenKeys={['avatar-group']}
+          defaultOpenKeys={['spots', 'avatar-group']}
           items={menuItems}
           onClick={({ key }) => {
-            if (key === 'spots' || key === 'avatar-group') {
+            if (PARENT_MENU_KEYS.has(key)) {
               return
             }
             onSelect(key)

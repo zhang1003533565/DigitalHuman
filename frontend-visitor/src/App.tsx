@@ -18,6 +18,8 @@ import { FeedbackPage } from './pages/FeedbackPage'
 import { HistoryPage } from './pages/HistoryPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { TravelTipsPage } from './pages/TravelTipsPage'
+import { SpotRecommendPage } from './pages/SpotRecommendPage'
+import { RouteRecommendListPage } from './pages/RouteRecommendListPage'
 
 function ProtectedRoute({ user }: { user: SessionUser | null }) {
   const location = useLocation()
@@ -67,6 +69,8 @@ function App() {
         />
         <Route path="/routes" element={<RouteRecommendPage onLogout={handleLogout} />} />
         <Route path="/map" element={<MapPage onLogout={handleLogout} />} />
+        <Route path="/spot-recommend" element={<SpotRecommendPage onLogout={handleLogout} />} />
+        <Route path="/route-recommend" element={<RouteRecommendListPage onLogout={handleLogout} />} />
         <Route path="/feedback" element={<FeedbackPage onLogout={handleLogout} />} />
         <Route path="/history" element={<HistoryPage onLogout={handleLogout} />} />
         <Route path="/profile" element={<ProfilePage onLogout={handleLogout} />} />

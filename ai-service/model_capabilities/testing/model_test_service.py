@@ -9,9 +9,7 @@ from fastapi import HTTPException
 
 from model_capabilities.tts.edge_tts_adapter import synthesize_voice_to_file
 from model_capabilities.embedding.service import embed_query
-from model_providers.config_store import find_provider_config
 from model_providers.registry import get_provider_client
-from rag.retrieval.embedder import BgeM3Embedder
 
 
 @dataclass
@@ -25,7 +23,7 @@ class ModelTestResult:
     scene_summary: str | None = None
 
 
-def test_model(provider: str, category: str, model_id: str, text: str | None = None, image_data_url: str | None = None, mode: str | None = None) -> ModelTestResult:
+def test_model(provider: str, category: str, model_id: str, text: str | None = None, image_data_url: str | None = None, mode: str | None = None, base_url: str | None = None, api_key: str | None = None) -> ModelTestResult:
     normalized_category = category.strip().lower()
     normalized_provider = provider.strip()
     normalized_model_id = model_id.strip()
@@ -33,7 +31,7 @@ def test_model(provider: str, category: str, model_id: str, text: str | None = N
     if normalized_category == "embedding":
         return test_embedding_model(normalized_provider, normalized_model_id)
     if normalized_category in {"vision", "chat", "multimodal"}:
-        return test_chat_model(normalized_provider, normalized_category, normalized_model_id, text, image_data_url, mode)
+        return test_chat_model(normalized_provider, normalized_category, normalized_model_id, text, image_data_url, mode, base_url, api_key)
     if normalized_category == "speech":
         return test_speech_model(normalized_provider, normalized_model_id, text)
 
@@ -41,19 +39,15 @@ def test_model(provider: str, category: str, model_id: str, text: str | None = N
 
 
 def test_embedding_model(provider: str, model_id: str) -> ModelTestResult:
-    if provider.lower() in {"baai", "local"}:
-        try:
-            vector = BgeM3Embedder(model_id).embed_query("灵山胜境模型测试")
-            return ModelTestResult(True, "本地嵌入模型可用", f"返回向量维度：{len(vector)}")
-        except Exception as exc:
-            raise HTTPException(status_code=400, detail=f"本地嵌入模型测试失败：{exc}") from exc
-
     embedding = embed_query(provider, model_id, "灵山胜境模型测试")
     return ModelTestResult(True, "Embedding 接口调用成功", f"返回向量维度：{len(embedding)}")
 
 
-def test_chat_model(provider: str, category: str, model_id: str, text: str | None = None, image_data_url: str | None = None, mode: str | None = None) -> ModelTestResult:
-    config = require_provider_config(provider)
+def test_chat_model(provider: str, category: str, model_id: str, text: str | None = None, image_data_url: str | None = None, mode: str | None = None, base_url: str | None = None, api_key: str | None = None) -> ModelTestResult:
+    if not base_url or not api_key:
+        raise HTTPException(status_code=400, detail=f"缺少 {provider} 的凭证信息（baseUrl/apiKey），请通过 Java 后端传入")
+    config = {"provider": provider, "protocol": "openai_compatible", "baseUrl": base_url, "apiKey": api_key}
+
     if get_protocol(config) != "openai_compatible":
         raise HTTPException(status_code=400, detail=f"{provider} 当前未配置可测试的对话协议")
     client = get_provider_client(provider, config)
@@ -74,7 +68,7 @@ def test_chat_model(provider: str, category: str, model_id: str, text: str | Non
             temperature=0,
         )
     else:
-        content = client.test_chat_completion(model_id, category)
+        content = client.test_chat_completion(model_id, category, text or f"Reply with OK for {category} model test.")
     detail = content[:120] if content else "模型有响应，但内容为空"
     normalized_mode = (mode or '').strip().lower()
     result = ModelTestResult(True, "对话接口调用成功", detail)
@@ -112,13 +106,6 @@ def test_speech_model(provider: str, model_id: str, text: str | None = None) -> 
     return ModelTestResult(True, "语音合成测试成功", f"输出音频大小：{size} 字节")
 
 
-def require_provider_config(provider: str) -> dict[str, str]:
-    config = find_provider_config(provider)
-    if config is None:
-        raise HTTPException(status_code=400, detail=f"未找到 provider 配置：{provider}")
-    if not str(config.get("apiKey", "")).strip():
-        raise HTTPException(status_code=400, detail=f"{provider} 缺少 apiKey 配置")
-    return config
 
 
 def get_protocol(config: dict[str, str]) -> str:

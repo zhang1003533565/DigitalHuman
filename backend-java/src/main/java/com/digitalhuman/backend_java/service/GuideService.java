@@ -5,20 +5,24 @@ import com.digitalhuman.backend_java.dto.FeedbackRequest;
 import com.digitalhuman.backend_java.dto.GuideChatRequest;
 import com.digitalhuman.backend_java.dto.GuideChatResponse;
 import com.digitalhuman.backend_java.dto.GuideMessageDto;
-import com.digitalhuman.backend_java.dto.RagQueryRequest;
-import com.digitalhuman.backend_java.dto.RagQueryResponse;
-import com.digitalhuman.backend_java.dto.RagSourceDto;
+import com.digitalhuman.backend_java.dto.GuideSourceDto;
 import com.digitalhuman.backend_java.dto.ScenicRouteDto;
 import com.digitalhuman.backend_java.dto.ScenicRouteDto.CoordinateDto;
 import com.digitalhuman.backend_java.dto.ScenicRouteDto.RouteFacilityDto;
 import com.digitalhuman.backend_java.dto.ScenicRouteDto.RouteNodeDto;
 import com.digitalhuman.backend_java.dto.ScenicSpotDto;
+import com.digitalhuman.backend_java.model.AdminModelConfig;
+import com.digitalhuman.backend_java.model.AdminProviderConfig;
 import com.digitalhuman.backend_java.model.GuideMessage;
 import com.digitalhuman.backend_java.model.GuideSession;
+import com.digitalhuman.backend_java.model.ModelCategory;
 import com.digitalhuman.backend_java.model.UserFeedback;
+import com.digitalhuman.backend_java.repository.AdminModelConfigRepository;
+import com.digitalhuman.backend_java.repository.AdminProviderConfigRepository;
 import com.digitalhuman.backend_java.repository.GuideMessageRepository;
 import com.digitalhuman.backend_java.repository.GuideSessionRepository;
 import com.digitalhuman.backend_java.repository.UserFeedbackRepository;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
@@ -29,9 +33,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.time.LocalDateTime;
@@ -42,9 +52,10 @@ public class GuideService {
 
     private static final Logger log = LoggerFactory.getLogger(GuideService.class);
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
+    private static final int LEADER_CHAT_HISTORY_LIMIT = 10;
 
-    @Value("${rag.service-url}")
-    private String ragServiceUrl;
+    @Value("${ai.service-url}")
+    private String aiServiceUrl;
 
     private final List<ScenicSpotDto> spots = List.of(
             new ScenicSpotDto("spot-1", "灵山胜境", "灵山大佛", "景区核心地标，适合了解整体文化背景。", "08:00-17:00", List.of("历史文化", "地标", "热门")),
@@ -164,11 +175,13 @@ public class GuideService {
 
     private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
-    private final RagTraceService ragTraceService;
     private final GuideSessionRepository sessionRepository;
     private final GuideMessageRepository messageRepository;
     private final UserFeedbackRepository feedbackRepository;
     private final ScenicRouteService scenicRouteService;
+    private final AdminModelConfigRepository modelConfigRepository;
+    private final AdminProviderConfigRepository providerConfigRepository;
+    private final MaxKbService maxKbService;
 
     private static RouteNodeDto node(
             String id,
@@ -202,16 +215,20 @@ public class GuideService {
     }
 
     public GuideService(
-            RagTraceService ragTraceService,
             GuideSessionRepository sessionRepository,
             GuideMessageRepository messageRepository,
             UserFeedbackRepository feedbackRepository,
-            ScenicRouteService scenicRouteService) {
-        this.ragTraceService = ragTraceService;
+            ScenicRouteService scenicRouteService,
+            AdminModelConfigRepository modelConfigRepository,
+            AdminProviderConfigRepository providerConfigRepository,
+            MaxKbService maxKbService) {
         this.sessionRepository = sessionRepository;
         this.messageRepository = messageRepository;
         this.feedbackRepository = feedbackRepository;
         this.scenicRouteService = scenicRouteService;
+        this.modelConfigRepository = modelConfigRepository;
+        this.providerConfigRepository = providerConfigRepository;
+        this.maxKbService = maxKbService;
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(60, TimeUnit.SECONDS)
@@ -234,37 +251,109 @@ public class GuideService {
             sessionId = "session-" + UUID.randomUUID();
         }
 
-        String traceId = "rag-" + UUID.randomUUID();
-        String reviewedAnswer = ragTraceService.findReusableReviewedAnswer(request.getQuestion());
-        if (reviewedAnswer != null && !reviewedAnswer.isBlank()) {
-            touchSession(sessionId);
-            saveMessage(sessionId, traceId, "user", request.getQuestion());
-            saveMessage(sessionId, traceId, "assistant", reviewedAnswer);
-            return new GuideChatResponse(
-                    sessionId,
-                    traceId,
-                    reviewedAnswer,
-                    spots.stream().map(ScenicSpotDto::getName).limit(2).toList(),
-                    recommendRoutes(request.getInterest()).stream().map(ScenicRouteDto::getName).toList(),
-                    List.of());
-        }
-        RagQueryResponse ragResponse = queryRag(request, sessionId, traceId);
-        String answerText = ragResponse != null && ragResponse.getAnswer() != null && !ragResponse.getAnswer().isBlank()
-                ? ragResponse.getAnswer()
-                : buildAnswer(request.getQuestion(), request.getInterest());
-        List<String> relatedSpots = ragResponse != null && ragResponse.getRelatedSpots() != null && !ragResponse.getRelatedSpots().isEmpty()
-                ? ragResponse.getRelatedSpots()
-                : spots.stream().map(ScenicSpotDto::getName).limit(2).toList();
+        String traceId = "chat-" + UUID.randomUUID();
+        List<GuideSourceDto> sources = retrieveGuideSources(request.getQuestion(), request.getKnowledgeId());
+        String answerText = buildAnswer(sessionId, request.getQuestion(), request.getInterest(), sources);
+        List<String> relatedSpots = spots.stream().map(ScenicSpotDto::getName).limit(2).toList();
         List<String> recommendedRoutes = recommendRoutes(request.getInterest()).stream()
                 .map(ScenicRouteDto::getName)
                 .toList();
-        List<RagSourceDto> sources = ragResponse != null && ragResponse.getSources() != null ? ragResponse.getSources() : List.of();
 
         touchSession(sessionId);
         saveMessage(sessionId, traceId, "user", request.getQuestion());
         saveMessage(sessionId, traceId, "assistant", answerText);
 
         return new GuideChatResponse(sessionId, traceId, answerText, relatedSpots, recommendedRoutes, sources);
+    }
+
+    public SseEmitter chatStream(GuideChatRequest request) {
+        String sessionId = request.getSessionId();
+        if (sessionId == null || sessionId.isBlank()) {
+            sessionId = "session-" + UUID.randomUUID();
+        }
+        String traceId = "chat-" + UUID.randomUUID();
+        String finalSessionId = sessionId;
+
+        SseEmitter emitter = new SseEmitter(120_000L);
+
+        new Thread(() -> {
+            try {
+                List<GuideSourceDto> sources = retrieveGuideSources(request.getQuestion(), request.getKnowledgeId());
+                // 先发送 sessionId 等元信息
+                emitter.send(SseEmitter.event().name("meta")
+                        .data(objectMapper.writeValueAsString(Map.of(
+                                "sessionId", finalSessionId,
+                                "traceId", traceId,
+                                "sources", sources))));
+
+                // 调用 ai-service 流式接口
+                String url = aiServiceUrl + "/agents/leader/chat/stream";
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("message", request.getQuestion());
+                payload.put("history", buildLeaderChatHistory(finalSessionId));
+                payload.put("systemPrompt", buildLeaderChatSystemPrompt(request.getInterest(), sources));
+                payload.putAll(resolveAiModelConfig());
+
+                Request httpRequest = new Request.Builder()
+                        .url(url)
+                        .post(RequestBody.create(objectMapper.writeValueAsString(payload), JSON))
+                        .build();
+
+                StringBuilder fullAnswer = new StringBuilder();
+
+                try (Response response = httpClient.newCall(httpRequest).execute()) {
+                    if (!response.isSuccessful() || response.body() == null) {
+                        throw new IOException("Leader chat stream request failed: " + response.code());
+                    }
+
+                    BufferedReader reader = new BufferedReader(
+                            new InputStreamReader(response.body().byteStream(), java.nio.charset.StandardCharsets.UTF_8));
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        if (!line.startsWith("data:")) {
+                            continue;
+                        }
+                        String dataStr = line.substring(5).trim();
+                        if ("[DONE]".equals(dataStr)) {
+                            break;
+                        }
+                        try {
+                            JsonNode chunk = objectMapper.readTree(dataStr);
+                            // 检查是否有错误
+                            if (chunk.has("error")) {
+                                emitter.send(SseEmitter.event().name("error")
+                                        .data(chunk.get("error").asText()));
+                                break;
+                            }
+                            String token = chunk.path("token").asText("");
+                            if (!token.isEmpty()) {
+                                fullAnswer.append(token);
+                                emitter.send(SseEmitter.event().data(Map.of("token", token)));
+                            }
+                        } catch (Exception ignore) {
+                            // JSON 解析失败，跳过这一行
+                        }
+                    }
+                }
+
+                // 流结束后保存消息
+                String answerText = fullAnswer.toString().trim();
+                touchSession(finalSessionId);
+                saveMessage(finalSessionId, traceId, "user", request.getQuestion());
+                saveMessage(finalSessionId, traceId, "assistant", answerText);
+
+                emitter.complete();
+
+            } catch (Exception exc) {
+                try {
+                    emitter.send(SseEmitter.event().name("error").data(exc.getMessage()));
+                } catch (Exception ignore) {}
+                emitter.completeWithError(exc);
+                log.warn("Chat stream failed", exc);
+            }
+        }).start();
+
+        return emitter;
     }
 
     public List<GuideMessageDto> getSessionMessages(String sessionId) {
@@ -287,7 +376,6 @@ public class GuideService {
         feedback.setComment(request.getComment());
         feedback.setCreatedAt(LocalDateTime.now());
         feedbackRepository.save(feedback);
-        ragTraceService.attachFeedback(request.getTraceId(), request.isHelpful(), request.getRating(), request.getComment());
     }
 
     public List<FeedbackRecordDto> getFeedbackRecords() {
@@ -304,35 +392,175 @@ public class GuideService {
                 .toList();
     }
 
-    private RagQueryResponse queryRag(GuideChatRequest request, String sessionId, String traceId) {
+    private String buildAnswer(String sessionId, String question, String interest, List<GuideSourceDto> sources) {
+        String answer = queryLeaderChatAgent(sessionId, question, interest, sources);
+        if (answer != null && !answer.isBlank()) {
+            return answer;
+        }
+        return "当前主智能体暂时不可用，请确认 ai-service 已启动，并检查 /agents/leader/chat 接口和模型配置。";
+    }
+
+    private String queryLeaderChatAgent(String sessionId, String question, String interest, List<GuideSourceDto> sources) {
         try {
-            String url = ragServiceUrl + "/rag/query";
-            String json = objectMapper.writeValueAsString(new RagQueryRequest(request.getQuestion(), request.getInterest(), 5, sessionId, traceId));
+            String url = aiServiceUrl + "/agents/leader/chat";
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("message", question);
+            payload.put("history", buildLeaderChatHistory(sessionId));
+            payload.put("systemPrompt", buildLeaderChatSystemPrompt(interest, sources));
+            payload.putAll(resolveAiModelConfig());
+
             Request httpRequest = new Request.Builder()
                     .url(url)
-                    .post(RequestBody.create(json, JSON))
+                    .post(RequestBody.create(objectMapper.writeValueAsString(payload), JSON))
                     .build();
 
             try (Response response = httpClient.newCall(httpRequest).execute()) {
                 if (!response.isSuccessful()) {
-                    throw new IOException("RAG request failed: " + response.code());
+                    throw new IOException("Basic chat request failed: " + response.code());
                 }
                 if (response.body() == null) {
-                    throw new IOException("RAG response body is empty");
+                    throw new IOException("Basic chat response body is empty");
                 }
-                RagQueryResponse ragResponse = objectMapper.readValue(response.body().string(), RagQueryResponse.class);
-                ragTraceService.saveSuccess(traceId, sessionId, request, ragResponse);
-                return ragResponse;
+
+                JsonNode root = objectMapper.readTree(response.body().string());
+                String answer = root.path("output").path("answer").asText("");
+                return answer == null ? null : answer.trim();
             }
         } catch (Exception exception) {
-            log.warn("Falling back to local guide answer because RAG service is unavailable", exception);
-            ragTraceService.saveFailure(traceId, sessionId, request, exception);
+            log.warn("Leader chat agent request failed", exception);
             return null;
         }
     }
 
-    private String buildAnswer(String question, String interest) {
-        return question;
+    private List<Map<String, String>> buildLeaderChatHistory(String sessionId) {
+        List<GuideMessage> history = messageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+        int startIndex = Math.max(0, history.size() - LEADER_CHAT_HISTORY_LIMIT);
+        List<Map<String, String>> messages = new ArrayList<>();
+        for (int index = startIndex; index < history.size(); index++) {
+            GuideMessage message = history.get(index);
+            String role = "assistant".equalsIgnoreCase(message.getRole()) ? "assistant" : "user";
+            String content = message.getContent();
+            if (content == null || content.isBlank()) {
+                continue;
+            }
+            messages.add(Map.of("role", role, "content", content));
+        }
+        return messages;
+    }
+
+    private String buildLeaderChatSystemPrompt(String interest, List<GuideSourceDto> sources) {
+        String basePrompt = "你是 DigitalHuman 的主智能体，也是灵山景区智能导览助手。"
+                + "请优先依据下方知识库召回内容回答，回答要使用简体中文，语气自然、友好，适合游客现场咨询。"
+                + "如果知识库内容不足以确认具体史实、开放时间或票务信息，请明确说明当前无法核实，并给出通用建议。";
+        if (interest == null || interest.isBlank()) {
+            return basePrompt + buildKnowledgeContext(sources);
+        }
+        return basePrompt + " 用户当前偏好方向：" + interest.trim() + "。" + buildKnowledgeContext(sources);
+    }
+
+    private List<GuideSourceDto> retrieveGuideSources(String question, String knowledgeId) {
+        if (question == null || question.isBlank()) {
+            return List.of();
+        }
+        try {
+            JsonNode root = maxKbService.hitTest(question, knowledgeId);
+            JsonNode items = root.path("data");
+            if (!items.isArray() && root.isArray()) {
+                items = root;
+            }
+            if (!items.isArray()) {
+                return List.of();
+            }
+            List<GuideSourceDto> sources = new ArrayList<>();
+            for (JsonNode item : items) {
+                GuideSourceDto source = new GuideSourceDto();
+                source.setParagraphId(text(item, "id"));
+                source.setDocId(text(item, "document_id"));
+                source.setKnowledgeName(text(item, "knowledge_name"));
+                source.setDocumentName(text(item, "document_name"));
+                source.setSourceFile(text(item, "document_name"));
+                source.setTitle(text(item, "title"));
+                source.setContent(text(item, "content"));
+                source.setSimilarity(number(item, "similarity"));
+                source.setComprehensiveScore(number(item, "comprehensive_score"));
+                source.setUpdatedAt(text(item, "update_time"));
+                sources.add(source);
+            }
+            return sources;
+        } catch (Exception exception) {
+            log.warn("MaxKB hit-test failed, continue without knowledge sources", exception);
+            return List.of();
+        }
+    }
+
+    private String buildKnowledgeContext(List<GuideSourceDto> sources) {
+        if (sources == null || sources.isEmpty()) {
+            return "\n\n知识库召回内容：无。";
+        }
+        StringBuilder builder = new StringBuilder("\n\n知识库召回内容：");
+        int index = 1;
+        for (GuideSourceDto source : sources) {
+            String content = source.getContent();
+            if (content == null || content.isBlank()) {
+                continue;
+            }
+            builder.append("\n[").append(index++).append("] ");
+            if (source.getDocumentName() != null && !source.getDocumentName().isBlank()) {
+                builder.append("文档：").append(source.getDocumentName()).append("。");
+            }
+            if (source.getTitle() != null && !source.getTitle().isBlank()) {
+                builder.append("标题：").append(source.getTitle()).append("。");
+            }
+            builder.append("内容：").append(content.length() > 700 ? content.substring(0, 700) : content);
+        }
+        return builder.toString();
+    }
+
+    private String text(JsonNode node, String field) {
+        JsonNode value = node.path(field);
+        return value.isMissingNode() || value.isNull() ? null : value.asText();
+    }
+
+    private Double number(JsonNode node, String field) {
+        JsonNode value = node.path(field);
+        return value.isNumber() ? value.asDouble() : null;
+    }
+
+    private String buildLeaderChatSystemPrompt(String interest) {
+        String basePrompt = "你是 DigitalHuman 的主智能体，也是灵山景区智能导览助手。"
+                + "当前阶段先支持快速对话，暂不调度其他智能体，也不依赖知识库检索。"
+                + "请使用简体中文回答，语气自然、友好，适合游客现场咨询。"
+                + "如果用户询问具体史实、开放时间或票务等你无法确认的信息，请明确说明当前无法核实，并给出通用建议。";
+        if (interest == null || interest.isBlank()) {
+            return basePrompt;
+        }
+        return basePrompt + " 用户当前偏好方向：" + interest.trim() + "。";
+    }
+
+    /**
+     * 从 MySQL 查询当前选中的 CHAT 模型及其 provider 配置，
+     * 返回 provider / model / baseUrl / apiKey 四个字段供 ai-service 直接使用。
+     * 查询失败时返回空 Map，ai-service 将自动回退到 SQLite 配置。
+     */
+    private Map<String, String> resolveAiModelConfig() {
+        Map<String, String> config = new LinkedHashMap<>();
+        try {
+            modelConfigRepository
+                    .findFirstByCategoryAndSelectedTrue(ModelCategory.CHAT)
+                    .ifPresent(modelConfig -> {
+                        config.put("provider", modelConfig.getProvider());
+                        config.put("model", modelConfig.getModelId());
+                        providerConfigRepository
+                                .findByProviderIgnoreCase(modelConfig.getProvider())
+                                .ifPresent(providerConfig -> {
+                                    config.put("baseUrl", providerConfig.getBaseUrl());
+                                    config.put("apiKey", providerConfig.getApiKey());
+                                });
+                    });
+        } catch (Exception e) {
+            log.warn("Failed to resolve AI model config from MySQL, ai-service will fallback", e);
+        }
+        return config;
     }
 
     private void touchSession(String sessionId) {

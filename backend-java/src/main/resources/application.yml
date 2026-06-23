@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: 8081
   error:
     include-message: always
 
@@ -31,8 +31,14 @@ tts:
   base-url: ${TTS_BASE_URL:${tts.base-url:${app.backend-base-url:http://localhost:8080}}}
   edge-service-url: ${EDGE_TTS_SERVICE_URL:${app.ai-service-url:http://127.0.0.1:18755}}
 
-rag:
-  service-url: ${RAG_SERVICE_URL:${app.ai-service-url:http://127.0.0.1:18755}}
+ai:
+  service-url: ${AI_SERVICE_URL:${app.ai-service-url:http://127.0.0.1:18755}}
+
+maxkb:
+  base-url: ${MAXKB_BASE_URL:http://localhost:3000}
+  api-key: ${MAXKB_API_KEY:}
+  workspace-id: ${MAXKB_WORKSPACE_ID:default}
+  default-knowledge-id: ${MAXKB_DEFAULT_KNOWLEDGE_ID:}
 
 app:
   auth:
@@ -45,14 +51,6 @@ app:
         password: user123
         display-name: Visitor User
         role: USER
-      - username: reviewer
-        password: reviewer123
-        display-name: RAG Reviewer
-        role: REVIEWER
-      - username: kbadmin
-        password: kbadmin123
-        display-name: Knowledge Admin
-        role: KNOWLEDGE_ADMIN
       - username: observer
         password: observer123
         display-name: Readonly Observer

@@ -7,21 +7,28 @@ import com.digitalhuman.backend_java.dto.AdminProviderConfigDto;
 import com.digitalhuman.backend_java.dto.AdminModelSettingsDto;
 import com.digitalhuman.backend_java.dto.AdminModelTestRequestDto;
 import com.digitalhuman.backend_java.dto.AdminModelTestResponseDto;
-import com.digitalhuman.backend_java.dto.RagPromptConfigDto;
-import com.digitalhuman.backend_java.dto.RagRetrievalConfigDto;
+import com.digitalhuman.backend_java.dto.AgentCatalogItemDto;
+import com.digitalhuman.backend_java.dto.AgentCatalogResponseDto;
+import com.digitalhuman.backend_java.dto.AgentHealthTestRequestDto;
+import com.digitalhuman.backend_java.dto.AgentHealthTestResponseDto;
+import com.digitalhuman.backend_java.dto.AgentModelBindingItemDto;
+import com.digitalhuman.backend_java.dto.AgentModelBindingPayloadDto;
 import com.digitalhuman.backend_java.model.AdminModelConfig;
+import com.digitalhuman.backend_java.model.AdminProviderConfig;
 import com.digitalhuman.backend_java.model.ModelCategory;
 import com.digitalhuman.backend_java.repository.AdminModelConfigRepository;
-import com.fasterxml.jackson.core.type.TypeReference;
+import com.digitalhuman.backend_java.repository.AdminProviderConfigRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import okhttp3.MediaType;
+import okhttp3.MultipartBody;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
@@ -43,15 +50,19 @@ public class AdminSettingsService {
             "Local TTS", "model_providers/local_tts/docs/models.md"
     );
 
-    @Value("${rag.service-url}")
-    private String ragServiceUrl;
+    @Value("${ai.service-url}")
+    private String aiServiceUrl;
 
     private final AdminModelConfigRepository adminModelConfigRepository;
+    private final AdminProviderConfigRepository adminProviderConfigRepository;
     private final ObjectMapper objectMapper;
     private final OkHttpClient httpClient;
 
-    public AdminSettingsService(AdminModelConfigRepository adminModelConfigRepository, ObjectMapper objectMapper) {
+    public AdminSettingsService(AdminModelConfigRepository adminModelConfigRepository,
+                                AdminProviderConfigRepository adminProviderConfigRepository,
+                                ObjectMapper objectMapper) {
         this.adminModelConfigRepository = adminModelConfigRepository;
+        this.adminProviderConfigRepository = adminProviderConfigRepository;
         this.objectMapper = objectMapper;
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)
@@ -143,23 +154,22 @@ public class AdminSettingsService {
         ensureProviderConfigured(provider);
 
         updateSelectedModel(category, modelId);
+
         return getModelSettings();
     }
 
     @Transactional(readOnly = true)
     public List<AdminProviderConfigDto> getProviderConfigs() {
-        Request request = new Request.Builder()
-                .url(ragServiceUrl + "/admin/providers")
-                .get()
-                .build();
-        try (Response response = httpClient.newCall(request).execute()) {
-            if (!response.isSuccessful() || response.body() == null) {
-                throw new IOException("ai-service provider list failed: " + response.code());
-            }
-            return objectMapper.readValue(response.body().string(), new TypeReference<>() {});
-        } catch (Exception exception) {
-            throw new IllegalArgumentException("读取模型提供方配置失败", exception);
-        }
+        return adminProviderConfigRepository.findAllByOrderByProviderAsc().stream()
+                .map(item -> {
+                    AdminProviderConfigDto dto = new AdminProviderConfigDto();
+                    dto.setProvider(item.getProvider());
+                    dto.setBaseUrl(item.getBaseUrl());
+                    dto.setApiKey(item.getApiKey());
+                    dto.setProtocol(item.getProtocol());
+                    return dto;
+                })
+                .toList();
     }
 
     @Transactional
@@ -167,25 +177,48 @@ public class AdminSettingsService {
         String provider = normalize(request.getProvider(), "");
         String baseUrl = normalize(request.getBaseUrl(), "");
         String apiKey = normalize(request.getApiKey(), "");
+        String protocol = normalize(request.getProtocol(), "openai_compatible");
         if (provider.isBlank() || baseUrl.isBlank() || apiKey.isBlank()) {
             throw new IllegalArgumentException("提供方、Base URL、API Key 都不能为空");
         }
 
+        // 1) 写入 Java MySQL
+        AdminProviderConfig entity = adminProviderConfigRepository.findByProviderIgnoreCase(provider)
+                .orElseGet(AdminProviderConfig::new);
+        entity.setProvider(provider);
+        entity.setBaseUrl(baseUrl);
+        entity.setApiKey(apiKey);
+        entity.setProtocol(protocol);
+        adminProviderConfigRepository.save(entity);
+
+        // 2) 同步到 ai-service（兼容智能体运行时仍从 SQLite 读取的场景）
         try {
-            String payload = objectMapper.writeValueAsString(request);
+            AdminProviderConfigDto payloadDto = new AdminProviderConfigDto();
+            payloadDto.setProvider(provider);
+            payloadDto.setBaseUrl(baseUrl);
+            payloadDto.setApiKey(apiKey);
+            payloadDto.setProtocol(protocol);
+            String payload = objectMapper.writeValueAsString(payloadDto);
             Request httpRequest = new Request.Builder()
-                    .url(ragServiceUrl + "/admin/providers")
+                    .url(aiServiceUrl + "/admin/providers")
                     .put(RequestBody.create(payload, JSON))
                     .build();
             try (Response response = httpClient.newCall(httpRequest).execute()) {
-                if (!response.isSuccessful() || response.body() == null) {
-                    throw new IOException("ai-service provider save failed: " + response.code());
+                // 同步失败不阻断主流程，仅记录日志
+                if (!response.isSuccessful()) {
+                    System.err.println("[WARN] 同步 provider 到 ai-service 失败，code=" + response.code());
                 }
-                return objectMapper.readValue(response.body().string(), AdminProviderConfigDto.class);
             }
-        } catch (Exception exception) {
-            throw new IllegalArgumentException("保存模型提供方配置失败", exception);
+        } catch (Exception syncEx) {
+            System.err.println("[WARN] 同步 provider 到 ai-service 异常：" + syncEx.getMessage());
         }
+
+        AdminProviderConfigDto result = new AdminProviderConfigDto();
+        result.setProvider(provider);
+        result.setBaseUrl(baseUrl);
+        result.setApiKey(apiKey);
+        result.setProtocol(protocol);
+        return result;
     }
 
     @Transactional
@@ -204,19 +237,24 @@ public class AdminSettingsService {
             throw new IllegalArgumentException("请先删除该提供方下的模型，再删除提供方配置。当前仍关联模型：" + details);
         }
 
+        // 1) 删除 Java MySQL 中的记录
+        adminProviderConfigRepository.findByProviderIgnoreCase(provider)
+                .ifPresent(adminProviderConfigRepository::delete);
+
+        // 2) 同步删除 ai-service 中的记录
         try {
             String payload = objectMapper.writeValueAsString(request);
             Request httpRequest = new Request.Builder()
-                    .url(ragServiceUrl + "/admin/providers/delete")
+                    .url(aiServiceUrl + "/admin/providers/delete")
                     .post(RequestBody.create(payload, JSON))
                     .build();
             try (Response response = httpClient.newCall(httpRequest).execute()) {
                 if (!response.isSuccessful()) {
-                    throw new IOException("ai-service provider delete failed: " + response.code());
+                    System.err.println("[WARN] 同步删除 provider 到 ai-service 失败，code=" + response.code());
                 }
             }
-        } catch (Exception exception) {
-            throw new IllegalArgumentException("删除模型提供方配置失败", exception);
+        } catch (Exception syncEx) {
+            System.err.println("[WARN] 同步删除 provider 到 ai-service 异常：" + syncEx.getMessage());
         }
     }
 
@@ -249,143 +287,216 @@ public class AdminSettingsService {
         ModelCategory category = normalizeCategory(request.getCategory());
         String modelId = normalize(request.getModelId(), "");
         if (modelId.isBlank()) {
-            throw new IllegalArgumentException("待测试模型不能为空");
+            return buildTestErrorResponse("", request.getCategory(), "", "待测试模型不能为空");
         }
 
         AdminModelConfig item = adminModelConfigRepository.findByCategoryAndModelIdIgnoreCase(category, modelId)
-                .orElseThrow(() -> new IllegalArgumentException("未找到对应模型，请先添加到候选列表"));
+                .orElse(null);
+        if (item == null) {
+            return buildTestErrorResponse("", request.getCategory(), modelId,
+                    "未找到对应模型「" + modelId + "」，请先保存配置并添加到候选列表");
+        }
+
+        String provider = item.getProvider();
+        String categoryKey = toCategoryKey(category);
+
+        // 从 Java MySQL 读取 provider 凭证
+        AdminProviderConfig providerConfig = adminProviderConfigRepository.findByProviderIgnoreCase(provider).orElse(null);
+        String baseUrl = providerConfig != null ? providerConfig.getBaseUrl() : "";
+        String apiKey = providerConfig != null ? providerConfig.getApiKey() : "";
+
+        if (baseUrl.isBlank() || apiKey.isBlank()) {
+            return buildTestErrorResponse(provider, categoryKey, item.getModelId(),
+                    "请先在「模型配置」中配置 " + provider + " 的 Base URL 和 API Key");
+        }
 
         try {
-            String payload = objectMapper.writeValueAsString(new AiModelTestRequest(item.getProvider(), toCategoryKey(category), item.getModelId()));
+            String payload = objectMapper.writeValueAsString(new AiModelTestRequest(
+                    provider, categoryKey, item.getModelId(),
+                    request.getText(), request.getImageDataUrl(), request.getMode(),
+                    baseUrl, apiKey
+            ));
             Request httpRequest = new Request.Builder()
-                    .url(ragServiceUrl + "/admin/model-test")
+                    .url(aiServiceUrl + "/admin/model-test")
                     .post(RequestBody.create(payload, JSON))
                     .build();
             try (Response response = httpClient.newCall(httpRequest).execute()) {
+                String responseBody = response.body() != null ? response.body().string() : "";
                 if (!response.isSuccessful()) {
+                    String detail = extractAiServiceErrorMessage(responseBody, "模型测试失败");
+                    return buildTestErrorResponse(provider, categoryKey, item.getModelId(), detail);
+                }
+                return objectMapper.readValue(responseBody, AdminModelTestResponseDto.class);
+            }
+        } catch (IOException exception) {
+            return buildTestErrorResponse(provider, categoryKey, item.getModelId(),
+                    "无法连接 ai-service：" + exception.getMessage());
+        } catch (Exception exception) {
+            return buildTestErrorResponse(provider, categoryKey, item.getModelId(),
+                    "模型测试异常：" + exception.getMessage());
+        }
+    }
+
+    private AdminModelTestResponseDto buildTestErrorResponse(String provider, String category, String modelId, String detail) {
+        AdminModelTestResponseDto dto = new AdminModelTestResponseDto();
+        dto.setSuccess(false);
+        dto.setProvider(provider);
+        dto.setCategory(category);
+        dto.setModelId(modelId);
+        dto.setMessage("模型测试失败");
+        dto.setDetail(detail);
+        return dto;
+    }
+
+    public AgentModelBindingPayloadDto getAgentModelBindings() {
+        Request request = new Request.Builder()
+                .url(aiServiceUrl + "/agents/model-bindings")
+                .get()
+                .build();
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful() || response.body() == null) {
+                throw new IOException("ai-service agent model bindings get failed: " + response.code());
+            }
+            return objectMapper.readValue(response.body().string(), AgentModelBindingPayloadDto.class);
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("读取智能体模型编排配置失败", exception);
+        }
+    }
+
+    public AgentModelBindingPayloadDto updateAgentModelBindings(AgentModelBindingPayloadDto request) {
+        if (request.getItems() == null || request.getItems().isEmpty()) {
+            throw new IllegalArgumentException("智能体模型编排不能为空");
+        }
+        for (AgentModelBindingItemDto item : request.getItems()) {
+            validateAgentBindingModel(item);
+        }
+
+        try {
+            String payload = objectMapper.writeValueAsString(request);
+            Request httpRequest = new Request.Builder()
+                    .url(aiServiceUrl + "/agents/model-bindings")
+                    .put(RequestBody.create(payload, JSON))
+                    .build();
+            try (Response response = httpClient.newCall(httpRequest).execute()) {
+                if (!response.isSuccessful() || response.body() == null) {
                     String errorBody = response.body() != null ? response.body().string() : "";
-                    throw new IllegalArgumentException(extractAiServiceErrorMessage(errorBody, "模型测试失败"));
+                    throw new IllegalArgumentException(extractAiServiceErrorMessage(errorBody, "保存智能体模型编排失败"));
                 }
-                if (response.body() == null) {
-                    throw new IOException("ai-service model test returned empty body");
-                }
-                return objectMapper.readValue(response.body().string(), AdminModelTestResponseDto.class);
+                return objectMapper.readValue(response.body().string(), AgentModelBindingPayloadDto.class);
             }
         } catch (IllegalArgumentException exception) {
             throw exception;
         } catch (Exception exception) {
-            throw new IllegalArgumentException("模型测试失败，请检查 ai-service 配置和 provider 凭证", exception);
+            throw new IllegalArgumentException("保存智能体模型编排失败", exception);
         }
     }
 
-    public RagPromptConfigDto getRagPrompt() {
+    public AgentCatalogResponseDto getAgentCatalog() {
         Request request = new Request.Builder()
-                .url(ragServiceUrl + "/admin/rag/prompt")
+                .url(aiServiceUrl + "/agents/health")
                 .get()
                 .build();
         try (Response response = httpClient.newCall(request).execute()) {
             if (!response.isSuccessful() || response.body() == null) {
-                throw new IOException("ai-service prompt get failed: " + response.code());
+                throw new IOException("ai-service agents health get failed: " + response.code());
             }
-            return objectMapper.readValue(response.body().string(), RagPromptConfigDto.class);
+            return objectMapper.readValue(response.body().string(), AgentCatalogResponseDto.class);
         } catch (Exception exception) {
-            throw new IllegalArgumentException("读取 RAG Prompt 配置失败", exception);
+            return scanLocalAgentCatalog();
         }
     }
 
-    public RagPromptConfigDto updateRagPrompt(RagPromptConfigDto request) {
-        try {
-            String payload = objectMapper.writeValueAsString(request);
-            Request httpRequest = new Request.Builder()
-                    .url(ragServiceUrl + "/admin/rag/prompt")
-                    .put(RequestBody.create(payload, JSON))
-                    .build();
-            try (Response response = httpClient.newCall(httpRequest).execute()) {
-                if (!response.isSuccessful() || response.body() == null) {
-                    throw new IOException("ai-service prompt update failed: " + response.code());
-                }
-                return objectMapper.readValue(response.body().string(), RagPromptConfigDto.class);
-            }
-        } catch (Exception exception) {
-            throw new IllegalArgumentException("保存 RAG Prompt 配置失败", exception);
+    public AgentHealthTestResponseDto testAgent(AgentHealthTestRequestDto request) {
+        String agent = normalize(request.getAgent(), "");
+        String task = normalize(request.getTask(), "");
+        if (agent.isBlank()) {
+            throw new IllegalArgumentException("agent 不能为空");
         }
-    }
+        if (task.isBlank()) {
+            throw new IllegalArgumentException("task 不能为空");
+        }
 
-    public List<RagPromptConfigDto> listRagPrompts() {
-        Request request = new Request.Builder()
-                .url(ragServiceUrl + "/admin/rag/prompts")
-                .get()
+        RequestBody formBody = new MultipartBody.Builder()
+                .setType(MultipartBody.FORM)
+                .addFormDataPart("agent", agent)
+                .addFormDataPart("task", task)
                 .build();
-        try (Response response = httpClient.newCall(request).execute()) {
-            if (!response.isSuccessful() || response.body() == null) {
-                throw new IOException("ai-service prompt versions get failed: " + response.code());
-            }
-            return objectMapper.readValue(response.body().string(), new TypeReference<>() {});
-        } catch (Exception exception) {
-            throw new IllegalArgumentException("读取 RAG Prompt 版本失败", exception);
-        }
-    }
-
-    public RagPromptConfigDto publishRagPrompt(String version) {
-        Request request = new Request.Builder()
-                .url(ragServiceUrl + "/admin/rag/prompts/" + version + "/publish")
-                .post(RequestBody.create(new byte[0], null))
+        Request runtimeRequest = new Request.Builder()
+                .url(aiServiceUrl + "/agents/runtime-test")
+                .post(formBody)
                 .build();
-        try (Response response = httpClient.newCall(request).execute()) {
-            if (!response.isSuccessful() || response.body() == null) {
-                throw new IOException("ai-service prompt publish failed: " + response.code());
-            }
-            return objectMapper.readValue(response.body().string(), RagPromptConfigDto.class);
-        } catch (Exception exception) {
-            throw new IllegalArgumentException("发布 RAG Prompt 失败", exception);
-        }
-    }
 
-    public RagRetrievalConfigDto getRagRetrievalConfig() {
-        Request request = new Request.Builder()
-                .url(ragServiceUrl + "/admin/rag/retrieval-config")
-                .get()
-                .build();
-        try (Response response = httpClient.newCall(request).execute()) {
-            if (!response.isSuccessful() || response.body() == null) {
-                throw new IOException("ai-service retrieval config get failed: " + response.code());
+        try (Response response = httpClient.newCall(runtimeRequest).execute()) {
+            String responseBody = response.body() == null ? "" : response.body().string();
+            if (!response.isSuccessful()) {
+                throw new IllegalArgumentException(extractAiServiceErrorMessage(responseBody, "智能体任务测试失败: HTTP " + response.code()));
             }
-            return objectMapper.readValue(response.body().string(), RagRetrievalConfigDto.class);
-        } catch (Exception exception) {
-            throw new IllegalArgumentException("读取 RAG 检索配置失败", exception);
-        }
-    }
-
-    public RagRetrievalConfigDto updateRagRetrievalConfig(RagRetrievalConfigDto request) {
-        try {
-            String payload = objectMapper.writeValueAsString(request);
-            Request httpRequest = new Request.Builder()
-                    .url(ragServiceUrl + "/admin/rag/retrieval-config")
-                    .put(RequestBody.create(payload, JSON))
-                    .build();
-            try (Response response = httpClient.newCall(httpRequest).execute()) {
-                if (!response.isSuccessful() || response.body() == null) {
-                    throw new IOException("ai-service retrieval config update failed: " + response.code());
-                }
-                return objectMapper.readValue(response.body().string(), RagRetrievalConfigDto.class);
+            if (responseBody.isBlank()) {
+                throw new IOException("智能体任务测试返回空响应");
             }
+            JsonNode payload = objectMapper.readTree(responseBody);
+            AgentHealthTestResponseDto result = new AgentHealthTestResponseDto();
+            result.setAgent(payload.path("agent").asText(agent));
+            result.setSuccess(payload.path("success").asBoolean(true));
+            result.setMessage("智能体任务执行成功");
+            result.setDetail("已通过绑定模型执行任务");
+            result.setProvider(payload.path("provider").asText(""));
+            result.setModel(payload.path("model").asText(""));
+            result.setResult(payload.path("result").asText(""));
+            return result;
         } catch (Exception exception) {
-            throw new IllegalArgumentException("保存 RAG 检索配置失败", exception);
+            AgentHealthTestResponseDto result = new AgentHealthTestResponseDto();
+            result.setAgent(agent);
+            result.setSuccess(false);
+            result.setMessage("智能体任务测试失败");
+            result.setDetail(String.valueOf(exception.getMessage()));
+            return result;
         }
     }
 
     public JsonNode getAiServiceHealth() {
         Request request = new Request.Builder()
-                .url(ragServiceUrl + "/health")
+                .url(aiServiceUrl + "/health")
                 .get()
                 .build();
         try (Response response = httpClient.newCall(request).execute()) {
             if (response.body() == null) {
-                throw new IOException("ai-service health returned empty body");
+                return objectMapper.readTree("{\"status\":\"degraded\",\"message\":\"ai-service health returned empty body\"}");
             }
-            return objectMapper.readTree(response.body().string());
+            String body = response.body().string();
+            if (body == null || body.isBlank()) {
+                return objectMapper.readTree("{\"status\":\"degraded\",\"message\":\"ai-service health returned blank body\"}");
+            }
+            try {
+                JsonNode parsed = objectMapper.readTree(body);
+                if (parsed != null && !parsed.isNull()) {
+                    return parsed;
+                }
+            } catch (Exception ignored) {
+                // Fallback to wrapped text payload below.
+            }
+            String escaped = body
+                    .replace("\\", "\\\\")
+                    .replace("\"", "\\\"")
+                    .replace("\n", "\\n")
+                    .replace("\r", "\\r");
+            int code = response.code();
+            return objectMapper.readTree(
+                    "{\"status\":\"degraded\",\"httpStatus\":" + code + ",\"message\":\"ai-service health returned non-json body\",\"raw\":\"" + escaped + "\"}"
+            );
         } catch (Exception exception) {
-            throw new IllegalArgumentException("读取 ai-service 健康状态失败", exception);
+            try {
+                String escaped = String.valueOf(exception.getMessage())
+                        .replace("\\", "\\\\")
+                        .replace("\"", "\\\"")
+                        .replace("\n", "\\n")
+                        .replace("\r", "\\r");
+                return objectMapper.readTree(
+                        "{\"status\":\"down\",\"message\":\"读取 ai-service 健康状态失败\",\"error\":\"" + escaped + "\"}"
+                );
+            } catch (Exception secondary) {
+                throw new IllegalArgumentException("读取 ai-service 健康状态失败", exception);
+            }
         }
     }
 
@@ -485,12 +596,93 @@ public class AdminSettingsService {
     }
 
     private void ensureProviderConfigured(String provider) {
-        if (getProviderConfigs().stream().noneMatch(item -> provider.equalsIgnoreCase(item.getProvider()))) {
+        if (adminProviderConfigRepository.findByProviderIgnoreCase(provider).isEmpty()) {
             throw new IllegalArgumentException("请先配置该模型提供方的 Base URL 和 API Key，再添加模型");
         }
     }
 
-    private record AiModelTestRequest(String provider, String category, String modelId) {
+    private void validateAgentBindingModel(AgentModelBindingItemDto item) {
+        if (item == null) {
+            throw new IllegalArgumentException("智能体模型配置项不能为空");
+        }
+        String agent = normalize(item.getAgent(), "");
+        String categoryRaw = normalize(item.getCategory(), "");
+        String provider = normalize(item.getProvider(), "");
+        String model = normalize(item.getModel(), "");
+        if (agent.isBlank() || categoryRaw.isBlank() || provider.isBlank() || model.isBlank()) {
+            throw new IllegalArgumentException("智能体模型编排中存在空字段（agent/category/provider/model）");
+        }
+        ModelCategory category = normalizeCategory(categoryRaw);
+        boolean matched = adminModelConfigRepository
+                .findByCategoryAndProviderIgnoreCaseAndModelIdIgnoreCase(category, provider, model)
+                .isPresent();
+        if (!matched) {
+            throw new IllegalArgumentException("智能体 " + agent + " 绑定模型未在手动维护中配置："
+                    + categoryRaw + " / " + provider + " / " + model);
+        }
+        int timeout = item.getTimeoutSeconds();
+        if (timeout < 1 || timeout > 600) {
+            throw new IllegalArgumentException("智能体 " + agent + " 的 timeoutSeconds 必须在 1-600 之间");
+        }
+    }
+
+    private AgentCatalogResponseDto scanLocalAgentCatalog() {
+        Path agentsRoot = AI_SERVICE_ROOT.resolve("agents");
+        List<AgentCatalogItemDto> items = new ArrayList<>();
+        if (Files.isDirectory(agentsRoot)) {
+            try (var stream = Files.list(agentsRoot)) {
+                stream
+                        .filter(Files::isDirectory)
+                        .filter(path -> {
+                            String name = path.getFileName().toString();
+                            return name.endsWith("_agent");
+                        })
+                        .sorted((left, right) -> left.getFileName().toString().compareToIgnoreCase(right.getFileName().toString()))
+                        .forEach(path -> {
+                            String name = path.getFileName().toString();
+                            Path skill = path.resolve("SKILL.md");
+                            Path soul = path.resolve("SOUL.md");
+                            Path agentPy = path.resolve("agent.py");
+                            if (!Files.exists(skill) || !Files.exists(soul) || !Files.exists(agentPy)) {
+                                return;
+                            }
+                            AgentCatalogItemDto dto = new AgentCatalogItemDto();
+                            dto.setName(name);
+                            dto.setDisplayName(toAgentDisplayName(name));
+                            dto.setSkill("agents/" + name + "/SKILL.md");
+                            dto.setSoul("agents/" + name + "/SOUL.md");
+                            dto.setCategoryHint(guessAgentCategory(name));
+                            items.add(dto);
+                        });
+            } catch (Exception ignored) {
+                // Return what we can.
+            }
+        }
+
+        AgentCatalogResponseDto response = new AgentCatalogResponseDto();
+        response.setStatus("ok");
+        response.setAgents(items);
+        return response;
+    }
+
+    private String guessAgentCategory(String agentName) {
+        return switch (agentName) {
+            case "travel_analytics_agent" -> "multimodal";
+            default -> "chat";
+        };
+    }
+
+    private String toAgentDisplayName(String agentName) {
+        return switch (agentName) {
+            case "leader_agent" -> "总控对话智能体";
+            case "travel_analytics_agent" -> "旅游行为数据编排智能体";
+            case "scenic_structured_agent" -> "景点结构化数据智能体";
+            case "guide_script_agent" -> "口播脚本生成智能体";
+            default -> agentName;
+        };
+    }
+
+    private record AiModelTestRequest(String provider, String category, String modelId, String text, String imageDataUrl, String mode, String baseUrl, String apiKey) {
     }
 
 }

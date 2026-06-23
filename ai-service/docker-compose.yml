@@ -1,0 +1,14 @@
+services:
+  ai-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: digitalhuman-ai-service
+    ports:
+      - "18755:18755"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:18755/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s

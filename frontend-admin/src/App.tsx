@@ -65,7 +65,7 @@ function LoginView({
         <p className="eyebrow">DigitalHuman Admin</p>
         <h1>管理后台登录</h1>
         <p className="lead">
-          这一版先完成比赛演示后台骨架，包括总览、知识库、景点、路线、数字人配置、反馈分析和问答查询。
+          这一版先完成比赛演示后台骨架，包括总览、景点、路线、数字人配置、反馈分析和问答查询。
         </p>
         <div className="account-list">
           <div>
@@ -123,7 +123,7 @@ function App() {
         password,
       })
 
-      if (!['ADMIN', 'REVIEWER', 'KNOWLEDGE_ADMIN', 'OBSERVER'].includes(response.data.role)) {
+      if (!['ADMIN', 'OBSERVER'].includes(response.data.role)) {
         setError('当前入口仅允许管理员登录，请使用管理员账号。')
         setUser(null)
         return

@@ -3,6 +3,7 @@ package com.digitalhuman.backend_java.config;
 import com.digitalhuman.backend_java.model.AppUser;
 import com.digitalhuman.backend_java.repository.AppUserRepository;
 import com.digitalhuman.backend_java.service.AdminSettingsService;
+import com.digitalhuman.backend_java.service.HomeConfigService;
 import com.digitalhuman.backend_java.service.ScenicRouteService;
 import com.digitalhuman.backend_java.service.TravelTipService;
 import org.springframework.boot.CommandLineRunner;
@@ -18,6 +19,7 @@ public class DataInitializer implements CommandLineRunner {
     private final AdminSettingsService adminSettingsService;
     private final ScenicRouteService scenicRouteService;
     private final TravelTipService travelTipService;
+    private final HomeConfigService homeConfigService;
 
     public DataInitializer(
             AuthProperties authProperties,
@@ -25,13 +27,15 @@ public class DataInitializer implements CommandLineRunner {
             PasswordEncoder passwordEncoder,
             AdminSettingsService adminSettingsService,
             ScenicRouteService scenicRouteService,
-            TravelTipService travelTipService) {
+            TravelTipService travelTipService,
+            HomeConfigService homeConfigService) {
         this.authProperties = authProperties;
         this.appUserRepository = appUserRepository;
         this.passwordEncoder = passwordEncoder;
         this.adminSettingsService = adminSettingsService;
         this.scenicRouteService = scenicRouteService;
         this.travelTipService = travelTipService;
+        this.homeConfigService = homeConfigService;
     }
 
     @Override
@@ -39,6 +43,7 @@ public class DataInitializer implements CommandLineRunner {
         adminSettingsService.seedDefaultsIfMissing();
         scenicRouteService.seedDefaultsIfMissing();
         travelTipService.seedDefaultsIfMissing();
+        homeConfigService.seedDefaultsIfMissing();
 
         for (AuthProperties.SeedUser seedUser : authProperties.getSeedUsers()) {
             appUserRepository.findByUsername(seedUser.getUsername()).orElseGet(() -> {
