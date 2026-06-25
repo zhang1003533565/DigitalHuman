@@ -15,6 +15,7 @@ const DEFAULT_NAV_ITEMS: TopNavItem[] = [
   { to: DIGITAL_HUMAN_ROUTE, label: '数字人导览' },
   { to: '/routes', label: '路线推荐' },
   { to: '/map', label: '景点地图' },
+  { to: '/tips', label: '游览贴士' },
   { to: '/feedback', label: '反馈记录' },
   { to: '/history', label: '会话历史' },
 ]

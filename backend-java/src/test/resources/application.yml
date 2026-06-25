@@ -15,3 +15,9 @@ ai:
 tts:
   base-url: http://127.0.0.1:8080
   edge-service-url: http://127.0.0.1:18755
+
+maxkb:
+  base-url: http://localhost:3000
+  api-key: test-key
+  workspace-id: default
+  default-knowledge-id:

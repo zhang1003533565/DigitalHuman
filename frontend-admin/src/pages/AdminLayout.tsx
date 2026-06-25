@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Component, useEffect, useMemo, useState, type ErrorInfo, type ReactNode } from 'react'
 import axios from 'axios'
 import {
   Layout,
@@ -36,12 +36,54 @@ import TravelAnalyticsPage from './scenic/TravelAnalyticsPage'
 import ScenicStructuredPage from './scenic/ScenicStructuredPage'
 import VoiceScriptPage from './scenic/VoiceScriptPage'
 import RouteManagementPage from './scenic/RouteManagementPage'
+import TravelTipManagementPage from './travel-tips/TravelTipManagementPage'
 import ModelEmotionPage from './ModelEmotionPage'
 import HomeConfigPage from './HomeConfigPage'
 import AiModelManagementPage from './AiModelManagementPage'
+import KnowledgeOpenApiPage from './KnowledgeOpenApiPage'
 import type { LoginResult } from '../types/admin'
 
 const { Content } = Layout
+
+class AdminPanelErrorBoundary extends Component<
+  { children: ReactNode; resetKey: string },
+  { errorMessage: string }
+> {
+  state = { errorMessage: '' }
+
+  static getDerivedStateFromError(error: unknown) {
+    return {
+      errorMessage: error instanceof Error ? error.message : '页面渲染异常',
+    }
+  }
+
+  componentDidUpdate(previousProps: { resetKey: string }) {
+    if (previousProps.resetKey !== this.props.resetKey && this.state.errorMessage) {
+      this.setState({ errorMessage: '' })
+    }
+  }
+
+  componentDidCatch(error: unknown, info: ErrorInfo) {
+    console.error('Admin panel render failed', error, info)
+  }
+
+  render() {
+    if (this.state.errorMessage) {
+      return (
+        <Card title="页面加载异常">
+          <Typography.Paragraph type="secondary">
+            当前页面渲染失败，请刷新后重试。错误信息：{this.state.errorMessage}
+          </Typography.Paragraph>
+          <Button type="primary" onClick={() => window.location.reload()}>
+            刷新页面
+          </Button>
+        </Card>
+      )
+    }
+
+    return this.props.children
+  }
+}
 
 type MenuKey =
   | 'dashboard'
@@ -50,6 +92,7 @@ type MenuKey =
   | 'spot-category'
   | 'facility-list'
   | 'routes'
+  | 'travel-tips'
   | 'avatar'
   | 'model-emotion'
   | 'settings'
@@ -59,6 +102,7 @@ type MenuKey =
   | 'feedback'
   | 'qa'
   | 'ai-models'
+  | 'knowledge'
 
 const ADMIN_HOME_PATH = '/admin/dashboard'
 
@@ -69,6 +113,7 @@ const menuPathByKey: Record<MenuKey, string> = {
   'spot-category': '/admin/spots/categories',
   'facility-list': '/admin/spots/facilities',
   routes: '/admin/routes',
+  'travel-tips': '/admin/travel-tips',
   avatar: '/admin/avatar',
   'model-emotion': '/admin/model-emotion',
   settings: '/admin/setting',
@@ -78,6 +123,7 @@ const menuPathByKey: Record<MenuKey, string> = {
   feedback: '/admin/feedback',
   qa: '/admin/qa',
   'ai-models': '/admin/ai-models',
+  knowledge: '/admin/knowledge',
 }
 
 const menuKeyByPath = new Map<string, MenuKey>(
@@ -1019,6 +1065,8 @@ function renderPanel(activeKey: MenuKey) {
       return <FacilityListPage />
     case 'routes':
       return <RouteManagementPage />
+    case 'travel-tips':
+      return <TravelTipManagementPage />
     case 'avatar':
       return <AvatarPanel />
     case 'model-emotion':
@@ -1037,6 +1085,8 @@ function renderPanel(activeKey: MenuKey) {
       return <QaPanel />
     case 'ai-models':
       return <AiModelManagementPage />
+    case 'knowledge':
+      return <KnowledgeOpenApiPage />
     case 'dashboard':
     default:
       return <DashboardPanel />
@@ -1055,7 +1105,7 @@ export function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: (
   }, [location.pathname, navigate])
 
   return (
-    <Layout className="admin-shell">
+    <Layout className="admin-shell notranslate" translate="no">
       <AdminSidebar
         activeKey={activeKey}
         displayName={user.displayName}
@@ -1065,7 +1115,9 @@ export function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: (
       />
       <Layout>
         <Content className="admin-content">
-          {renderPanel(activeKey)}
+          <AdminPanelErrorBoundary resetKey={activeKey}>
+            {renderPanel(activeKey)}
+          </AdminPanelErrorBoundary>
         </Content>
       </Layout>
     </Layout>

@@ -181,6 +181,7 @@ public class GuideService {
     private final ScenicRouteService scenicRouteService;
     private final AdminModelConfigRepository modelConfigRepository;
     private final AdminProviderConfigRepository providerConfigRepository;
+    private final MaxKbService maxKbService;
 
     private static RouteNodeDto node(
             String id,
@@ -219,13 +220,15 @@ public class GuideService {
             UserFeedbackRepository feedbackRepository,
             ScenicRouteService scenicRouteService,
             AdminModelConfigRepository modelConfigRepository,
-            AdminProviderConfigRepository providerConfigRepository) {
+            AdminProviderConfigRepository providerConfigRepository,
+            MaxKbService maxKbService) {
         this.sessionRepository = sessionRepository;
         this.messageRepository = messageRepository;
         this.feedbackRepository = feedbackRepository;
         this.scenicRouteService = scenicRouteService;
         this.modelConfigRepository = modelConfigRepository;
         this.providerConfigRepository = providerConfigRepository;
+        this.maxKbService = maxKbService;
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(60, TimeUnit.SECONDS)
@@ -249,12 +252,12 @@ public class GuideService {
         }
 
         String traceId = "chat-" + UUID.randomUUID();
-        String answerText = buildAnswer(sessionId, request.getQuestion(), request.getInterest());
+        List<GuideSourceDto> sources = retrieveGuideSources(request.getQuestion(), request.getKnowledgeId());
+        String answerText = buildAnswer(sessionId, request.getQuestion(), request.getInterest(), sources);
         List<String> relatedSpots = spots.stream().map(ScenicSpotDto::getName).limit(2).toList();
         List<String> recommendedRoutes = recommendRoutes(request.getInterest()).stream()
                 .map(ScenicRouteDto::getName)
                 .toList();
-        List<GuideSourceDto> sources = List.of();
 
         touchSession(sessionId);
         saveMessage(sessionId, traceId, "user", request.getQuestion());
@@ -275,18 +278,20 @@ public class GuideService {
 
         new Thread(() -> {
             try {
+                List<GuideSourceDto> sources = retrieveGuideSources(request.getQuestion(), request.getKnowledgeId());
                 // 先发送 sessionId 等元信息
                 emitter.send(SseEmitter.event().name("meta")
                         .data(objectMapper.writeValueAsString(Map.of(
                                 "sessionId", finalSessionId,
-                                "traceId", traceId))));
+                                "traceId", traceId,
+                                "sources", sources))));
 
                 // 调用 ai-service 流式接口
                 String url = aiServiceUrl + "/agents/leader/chat/stream";
                 Map<String, Object> payload = new LinkedHashMap<>();
                 payload.put("message", request.getQuestion());
                 payload.put("history", buildLeaderChatHistory(finalSessionId));
-                payload.put("systemPrompt", buildLeaderChatSystemPrompt(request.getInterest()));
+                payload.put("systemPrompt", buildLeaderChatSystemPrompt(request.getInterest(), sources));
                 payload.putAll(resolveAiModelConfig());
 
                 Request httpRequest = new Request.Builder()
@@ -387,21 +392,21 @@ public class GuideService {
                 .toList();
     }
 
-    private String buildAnswer(String sessionId, String question, String interest) {
-        String answer = queryLeaderChatAgent(sessionId, question, interest);
+    private String buildAnswer(String sessionId, String question, String interest, List<GuideSourceDto> sources) {
+        String answer = queryLeaderChatAgent(sessionId, question, interest, sources);
         if (answer != null && !answer.isBlank()) {
             return answer;
         }
         return "当前主智能体暂时不可用，请确认 ai-service 已启动，并检查 /agents/leader/chat 接口和模型配置。";
     }
 
-    private String queryLeaderChatAgent(String sessionId, String question, String interest) {
+    private String queryLeaderChatAgent(String sessionId, String question, String interest, List<GuideSourceDto> sources) {
         try {
             String url = aiServiceUrl + "/agents/leader/chat";
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("message", question);
             payload.put("history", buildLeaderChatHistory(sessionId));
-            payload.put("systemPrompt", buildLeaderChatSystemPrompt(interest));
+            payload.put("systemPrompt", buildLeaderChatSystemPrompt(interest, sources));
             payload.putAll(resolveAiModelConfig());
 
             Request httpRequest = new Request.Builder()
@@ -441,6 +446,84 @@ public class GuideService {
             messages.add(Map.of("role", role, "content", content));
         }
         return messages;
+    }
+
+    private String buildLeaderChatSystemPrompt(String interest, List<GuideSourceDto> sources) {
+        String basePrompt = "你是 DigitalHuman 的主智能体，也是灵山景区智能导览助手。"
+                + "请优先依据下方知识库召回内容回答，回答要使用简体中文，语气自然、友好，适合游客现场咨询。"
+                + "如果知识库内容不足以确认具体史实、开放时间或票务信息，请明确说明当前无法核实，并给出通用建议。";
+        if (interest == null || interest.isBlank()) {
+            return basePrompt + buildKnowledgeContext(sources);
+        }
+        return basePrompt + " 用户当前偏好方向：" + interest.trim() + "。" + buildKnowledgeContext(sources);
+    }
+
+    private List<GuideSourceDto> retrieveGuideSources(String question, String knowledgeId) {
+        if (question == null || question.isBlank()) {
+            return List.of();
+        }
+        try {
+            JsonNode root = maxKbService.hitTest(question, knowledgeId);
+            JsonNode items = root.path("data");
+            if (!items.isArray() && root.isArray()) {
+                items = root;
+            }
+            if (!items.isArray()) {
+                return List.of();
+            }
+            List<GuideSourceDto> sources = new ArrayList<>();
+            for (JsonNode item : items) {
+                GuideSourceDto source = new GuideSourceDto();
+                source.setParagraphId(text(item, "id"));
+                source.setDocId(text(item, "document_id"));
+                source.setKnowledgeName(text(item, "knowledge_name"));
+                source.setDocumentName(text(item, "document_name"));
+                source.setSourceFile(text(item, "document_name"));
+                source.setTitle(text(item, "title"));
+                source.setContent(text(item, "content"));
+                source.setSimilarity(number(item, "similarity"));
+                source.setComprehensiveScore(number(item, "comprehensive_score"));
+                source.setUpdatedAt(text(item, "update_time"));
+                sources.add(source);
+            }
+            return sources;
+        } catch (Exception exception) {
+            log.warn("MaxKB hit-test failed, continue without knowledge sources", exception);
+            return List.of();
+        }
+    }
+
+    private String buildKnowledgeContext(List<GuideSourceDto> sources) {
+        if (sources == null || sources.isEmpty()) {
+            return "\n\n知识库召回内容：无。";
+        }
+        StringBuilder builder = new StringBuilder("\n\n知识库召回内容：");
+        int index = 1;
+        for (GuideSourceDto source : sources) {
+            String content = source.getContent();
+            if (content == null || content.isBlank()) {
+                continue;
+            }
+            builder.append("\n[").append(index++).append("] ");
+            if (source.getDocumentName() != null && !source.getDocumentName().isBlank()) {
+                builder.append("文档：").append(source.getDocumentName()).append("。");
+            }
+            if (source.getTitle() != null && !source.getTitle().isBlank()) {
+                builder.append("标题：").append(source.getTitle()).append("。");
+            }
+            builder.append("内容：").append(content.length() > 700 ? content.substring(0, 700) : content);
+        }
+        return builder.toString();
+    }
+
+    private String text(JsonNode node, String field) {
+        JsonNode value = node.path(field);
+        return value.isMissingNode() || value.isNull() ? null : value.asText();
+    }
+
+    private Double number(JsonNode node, String field) {
+        JsonNode value = node.path(field);
+        return value.isNumber() ? value.asDouble() : null;
     }
 
     private String buildLeaderChatSystemPrompt(String interest) {

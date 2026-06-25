@@ -1,6 +1,8 @@
-import {
+﻿import {
   ApiOutlined,
   BarChartOutlined,
+  BookOutlined,
+  BulbOutlined,
   CommentOutlined,
   EnvironmentOutlined,
   HomeOutlined,
@@ -40,6 +42,7 @@ const menuItems: MenuProps['items'] = [
       { key: 'voice-scripts', label: '景点口播管理' },
     ],
   },
+  { key: 'travel-tips', icon: <BulbOutlined />, label: '游览贴士' },
   {
     key: 'avatar-group',
     icon: <RobotOutlined />,
@@ -52,6 +55,7 @@ const menuItems: MenuProps['items'] = [
   { key: 'feedback', icon: <CommentOutlined />, label: '游客反馈分析' },
   { key: 'qa', icon: <SearchOutlined />, label: '问答记录查询' },
   { key: 'ai-models', icon: <ApiOutlined />, label: 'AI 模型管理' },
+  { key: 'knowledge', icon: <BookOutlined />, label: '知识库对接站' },
 ]
 
 export default function AdminSidebar({ activeKey, displayName, role, onLogout, onSelect }: AdminSidebarProps) {

@@ -7,9 +7,19 @@ public class GuideSourceDto {
 
     @JsonProperty("doc_id")
     private String docId;
+    @JsonProperty("paragraph_id")
+    private String paragraphId;
+    @JsonProperty("knowledge_name")
+    private String knowledgeName;
+    @JsonProperty("document_name")
+    private String documentName;
     @JsonProperty("source_file")
     private String sourceFile;
     private String title;
+    private String content;
+    private Double similarity;
+    @JsonProperty("comprehensive_score")
+    private Double comprehensiveScore;
     @JsonProperty("section_path")
     private List<String> sectionPath;
     @JsonProperty("chunk_index")
@@ -30,6 +40,30 @@ public class GuideSourceDto {
         this.docId = docId;
     }
 
+    public String getParagraphId() {
+        return paragraphId;
+    }
+
+    public void setParagraphId(String paragraphId) {
+        this.paragraphId = paragraphId;
+    }
+
+    public String getKnowledgeName() {
+        return knowledgeName;
+    }
+
+    public void setKnowledgeName(String knowledgeName) {
+        this.knowledgeName = knowledgeName;
+    }
+
+    public String getDocumentName() {
+        return documentName;
+    }
+
+    public void setDocumentName(String documentName) {
+        this.documentName = documentName;
+    }
+
     public String getSourceFile() {
         return sourceFile;
     }
@@ -44,6 +78,30 @@ public class GuideSourceDto {
 
     public void setTitle(String title) {
         this.title = title;
+    }
+
+    public String getContent() {
+        return content;
+    }
+
+    public void setContent(String content) {
+        this.content = content;
+    }
+
+    public Double getSimilarity() {
+        return similarity;
+    }
+
+    public void setSimilarity(Double similarity) {
+        this.similarity = similarity;
+    }
+
+    public Double getComprehensiveScore() {
+        return comprehensiveScore;
+    }
+
+    public void setComprehensiveScore(Double comprehensiveScore) {
+        this.comprehensiveScore = comprehensiveScore;
     }
 
     public List<String> getSectionPath() {
