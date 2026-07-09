@@ -40,6 +40,10 @@ maxkb:
   workspace-id: ${MAXKB_WORKSPACE_ID:default}
   default-knowledge-id: ${MAXKB_DEFAULT_KNOWLEDGE_ID:}
 
+knowledge:
+  maxkb:
+    timeout-seconds: ${KNOWLEDGE_MAXKB_TIMEOUT_SECONDS:30}
+
 app:
   auth:
     seed-users:
