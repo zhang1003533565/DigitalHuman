@@ -87,6 +87,10 @@ type DragBehaviorOptions = {
   onDragEnd?: () => void
 }
 
+const MOUTH_OPEN_PARAMETER_ID = 'ParamMouthOpenY'
+const MOUTH_FORM_PARAMETER_ID = 'ParamMouthForm'
+const activeSpeechStops = new WeakMap<Live2DModel, () => void>()
+
 export type ModelOption = {
   id: string
   name: string
@@ -358,12 +362,99 @@ export function speak(
     onError?: (error: Error) => void
   },
 ) {
-  model.speak(audioUrl, {
-    volume: 1,
-    crossOrigin: 'anonymous',
-    onFinish: options?.onFinish,
-    onError: options?.onError,
+  stopSpeech(model)
+
+  const audio = new Audio(audioUrl)
+  audio.crossOrigin = 'anonymous'
+  audio.preload = 'auto'
+  audio.volume = 1
+  const stopLipSync = startProceduralLipSync(model)
+  let settled = false
+
+  const cleanup = (reason: 'finish' | 'error' | 'stop', error?: Error) => {
+    if (settled) return
+    settled = true
+
+    audio.pause()
+    audio.removeAttribute('src')
+    audio.load()
+    stopLipSync()
+    activeSpeechStops.delete(model)
+    model.stopSpeaking?.()
+
+    if (reason === 'finish') {
+      options?.onFinish?.()
+    } else if (reason === 'error') {
+      options?.onError?.(error ?? new Error('Audio playback failed'))
+    }
+  }
+
+  activeSpeechStops.set(model, () => cleanup('stop'))
+
+  audio.addEventListener('ended', () => cleanup('finish'), { once: true })
+  audio.addEventListener('error', () => cleanup('error', new Error('Audio playback failed')), { once: true })
+
+  void audio.play().catch((error) => {
+    cleanup('error', error instanceof Error ? error : new Error(String(error)))
   })
+}
+
+export function stopSpeech(model: Live2DModel) {
+  const stopActiveSpeech = activeSpeechStops.get(model)
+  if (stopActiveSpeech) {
+    stopActiveSpeech()
+    return
+  }
+
+  model.stopSpeaking?.()
+  resetMouth(model)
+}
+
+function startProceduralLipSync(model: Live2DModel) {
+  const coreModel = model.internalModel?.coreModel
+  if (!coreModel?.setParameterValueById || typeof window === 'undefined') {
+    return () => undefined
+  }
+
+  let frameId: number | null = null
+  let stopped = false
+  let currentOpen = 0
+  let currentForm = 0
+  const startedAt = performance.now()
+
+  const tick = () => {
+    if (stopped) return
+
+    const elapsed = (performance.now() - startedAt) / 1000
+    const fastPulse = Math.abs(Math.sin(elapsed * 13.5))
+    const slowPulse = Math.abs(Math.sin(elapsed * 5.8))
+    const targetOpen = Math.min(0.92, Math.max(0.04, fastPulse * 0.58 + slowPulse * 0.22))
+    const targetForm = Math.min(0.22, Math.max(-0.08, targetOpen * 0.22 - 0.04))
+
+    currentOpen += (targetOpen - currentOpen) * 0.42
+    currentForm += (targetForm - currentForm) * 0.32
+
+    coreModel.setParameterValueById?.(MOUTH_OPEN_PARAMETER_ID, currentOpen, 1)
+    coreModel.setParameterValueById?.(MOUTH_FORM_PARAMETER_ID, currentForm, 1)
+    frameId = window.requestAnimationFrame(tick)
+  }
+
+  frameId = window.requestAnimationFrame(tick)
+
+  return () => {
+    stopped = true
+    if (frameId !== null) {
+      window.cancelAnimationFrame(frameId)
+      frameId = null
+    }
+    resetMouth(model)
+  }
+}
+
+function resetMouth(model: Live2DModel) {
+  const coreModel = model.internalModel?.coreModel
+  coreModel?.setParameterValueById?.(MOUTH_OPEN_PARAMETER_ID, 0, 1)
+  coreModel?.setParameterValueById?.(MOUTH_FORM_PARAMETER_ID, 0, 1)
 }
 
 export function formatPercent(value: number) {

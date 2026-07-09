@@ -1,4 +1,5 @@
-const SENTENCE_END_RE = /[。！？!?；;，,、]/
+const STRONG_SENTENCE_END_RE = /[。！？!?；;]/
+const SOFT_SENTENCE_END_RE = /[，,、]/
 const GREETING_KEYWORDS_RE = /(你好|您好|欢迎|很高兴|见面|哈喽|嗨)/
 const STAGE_DIRECTION_RE = /[（(【\[][^）)】\]]*(?:眼角含笑|含笑|微笑|笑着|神态|表情|动作|语气|旁白|低头|抬头|点头|眨眼)[^）)】\]]*[）)】\]]/g
 const INLINE_STAGE_DIRECTION_RE = /[^。！？!?；;\n]{0,16}(?:眼角含笑|含笑|微笑|笑着|神态|表情|动作|语气|旁白|低头|抬头|点头|眨眼)(?:地说|说道|说|：|:)?/g
@@ -26,8 +27,8 @@ export function extractSpeakableSegments(text: string, options: SegmentOptions =
   let rest = text
 
   while (rest.trim().length > 0) {
-    const boundary = findBoundary(rest, minChars)
-    if (boundary >= minChars) {
+    const boundary = findBoundary(rest, minChars, maxChars)
+    if (boundary > 0) {
       const segment = rest.slice(0, boundary).trim()
       if (segment) {
         segments.push(segment)
@@ -120,11 +121,19 @@ export function sanitizeAnswerText(text: string) {
     .trim()
 }
 
-function findBoundary(text: string, minChars: number) {
-  for (let index = minChars - 1; index < text.length; index += 1) {
-    if (SENTENCE_END_RE.test(text[index])) {
+function findBoundary(text: string, minChars: number, maxChars: number) {
+  const searchEnd = Math.min(text.length, maxChars)
+  for (let index = minChars - 1; index < searchEnd; index += 1) {
+    if (STRONG_SENTENCE_END_RE.test(text[index])) {
       return index + 1
     }
   }
+
+  for (let index = minChars - 1; index < searchEnd; index += 1) {
+    if (SOFT_SENTENCE_END_RE.test(text[index])) {
+      return index + 1
+    }
+  }
+
   return -1
 }

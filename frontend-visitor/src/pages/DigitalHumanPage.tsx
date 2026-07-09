@@ -16,20 +16,14 @@ import {
   makeDraggable,
   resolveModelUrl,
   speak,
+  stopSpeech,
 } from '../digitalHuman/shared'
 import {
   extractSpeakableSegments,
-  joinQuickReplyAndAnswer,
+  sanitizeAnswerText,
   sanitizeSpeechText,
-  stripDuplicateGreeting,
 } from '../digitalHuman/streamingSpeech'
 import { AppTopNav } from '../components/AppTopNav'
-
-type GuideChatResponse = {
-  sessionId: string
-  traceId?: string
-  answerText: string
-}
 
 type DigitalHumanPageProps = {
   onLogout: () => void
@@ -54,6 +48,14 @@ type DigitalChatMessage = {
   content: ReactNode
   time: Date
   status?: 'sent' | 'read' | 'failed'
+}
+
+type SpeechQueueItem = {
+  id: number
+  text: string
+  audioUrl?: string
+  promise?: Promise<string | null>
+  failed?: boolean
 }
 
 type DigitalChatDropdownKey = 'factory' | 'voice' | 'model'
@@ -102,6 +104,7 @@ const SELECTED_MODEL_KEY = 'digitalhuman.visitor.selectedModelId'
 const HIGHEST_TRIGGER_PRIORITY = 1
 const LOWEST_TRIGGER_PRIORITY = 10
 const IDLE_TRIGGER_DELAY_MS = 12000
+const SPEECH_PREFETCH_LIMIT = 2
 
 const DEFAULT_CONFIG: DigitalHumanConfig = {
   modelId: 'hiyori_pro_zh',
@@ -171,10 +174,14 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
   const dragStartXRef = useRef(0)
   const clickTimerRef = useRef<number | null>(null)
   const lastInteractionAtRef = useRef(0)
-  const speechQueueRef = useRef<string[]>([])
+  const speechQueueRef = useRef<SpeechQueueItem[]>([])
+  const speechItemIdRef = useRef(0)
+  const speechHandoffTimerRef = useRef<number | null>(null)
   const isAudioPlayingRef = useRef(false)
+  const isAudioStartingRef = useRef(false)
   const isAnswerStreamingRef = useRef(false)
   const speechRunIdRef = useRef(0)
+  const backendModelIdRef = useRef<string | null>(null)
   const [config, setConfig] = useState<DigitalHumanConfig>(DEFAULT_CONFIG)
   const [selectedModelId, setSelectedModelId] = useState(() => getStoredSelectedModelId() ?? DEFAULT_CONFIG.modelId)
   const [runtimeModels, setRuntimeModels] = useState<RuntimeDigitalHumanModel[]>([])
@@ -209,7 +216,26 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     FACTORY_OPTIONS.find((factory) => factory.id === selectedFactoryId) ??
     FACTORY_OPTIONS[0]
 
-  const canSend = isReady && !isSpeaking && draft.trim().length > 0
+  const canSend = isReady && draft.trim().length > 0
+
+  const applyDigitalHumanConfig = useCallback((nextConfig: DigitalHumanConfig) => {
+    setConfig(nextConfig)
+
+    const previousBackendModelId = backendModelIdRef.current
+    const backendModelChanged =
+      previousBackendModelId !== null &&
+      previousBackendModelId !== nextConfig.modelId
+
+    backendModelIdRef.current = nextConfig.modelId
+
+    if (backendModelChanged) {
+      window.sessionStorage.removeItem(SELECTED_MODEL_KEY)
+      setSelectedModelId(nextConfig.modelId)
+      return
+    }
+
+    setSelectedModelId(getStoredSelectedModelId() ?? nextConfig.modelId)
+  }, [])
 
   const markInteraction = useCallback(() => {
     lastInteractionAtRef.current = Date.now()
@@ -224,8 +250,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
       try {
         const response = await axios.get<DigitalHumanConfig>('/api/user/digital-human/config')
         const nextConfig = { ...DEFAULT_CONFIG, ...response.data }
-        setConfig(nextConfig)
-        setSelectedModelId(nextConfig.modelId)
+        applyDigitalHumanConfig(nextConfig)
         setMessages((current) => {
           if (current.length !== 1 || current[0]?.id !== 'welcome') {
             return current
@@ -242,7 +267,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     }
 
     void loadConfig()
-  }, [])
+  }, [applyDigitalHumanConfig])
 
   useEffect(() => {
     async function loadRuntimeModels() {
@@ -264,35 +289,6 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
 
     return () => {
       clearInterval(refreshInterval)
-    }
-  }, [])
-
-  useEffect(() => {
-    async function refreshDigitalHumanConfig() {
-      try {
-        const response = await axios.get<DigitalHumanConfig>('/api/user/digital-human/config')
-        const nextConfig = { ...DEFAULT_CONFIG, ...response.data }
-        setConfig(nextConfig)
-        setSelectedModelId(nextConfig.modelId)
-      } catch (error) {
-        console.warn('Refresh digital human config failed', error)
-      }
-    }
-
-    const refreshInterval = setInterval(() => {
-      void refreshDigitalHumanConfig()
-    }, 8000)
-
-    function handleVisibilityChange() {
-      if (document.visibilityState === 'visible') {
-        void refreshDigitalHumanConfig()
-      }
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    return () => {
-      clearInterval(refreshInterval)
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [])
 
@@ -498,6 +494,9 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     return () => {
       isMountedRef.current = false
       loadIdRef.current += 1
+      if (modelRef.current) {
+        stopSpeech(modelRef.current)
+      }
       modelRef.current = null
       appRef.current?.destroy(true, { children: true })
       appRef.current = null
@@ -545,6 +544,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
 
         const currentModel = modelRef.current
         if (currentModel) {
+          stopSpeech(currentModel)
           app.stage.removeChild(currentModel)
           modelRef.current = null
         }
@@ -624,24 +624,100 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
 
   function resetSpeechQueue() {
     speechRunIdRef.current += 1
+    if (speechHandoffTimerRef.current !== null) {
+      window.clearTimeout(speechHandoffTimerRef.current)
+      speechHandoffTimerRef.current = null
+    }
+    speechQueueRef.current.forEach((item) => {
+      if (item.audioUrl) {
+        URL.revokeObjectURL(item.audioUrl)
+      }
+    })
     speechQueueRef.current = []
     isAudioPlayingRef.current = false
-    modelRef.current?.stopSpeaking?.()
+    isAudioStartingRef.current = false
+    if (modelRef.current) {
+      stopSpeech(modelRef.current)
+    }
   }
 
-  function enqueueSpeechSegments(segments: string[]) {
+  function scheduleNextSpeechSegment(runId: number) {
+    if (runId !== speechRunIdRef.current) return
+
+    if (speechHandoffTimerRef.current !== null) {
+      window.clearTimeout(speechHandoffTimerRef.current)
+    }
+
+    isAudioStartingRef.current = true
+    speechHandoffTimerRef.current = window.setTimeout(() => {
+      speechHandoffTimerRef.current = null
+      isAudioStartingRef.current = false
+      if (runId === speechRunIdRef.current) {
+        void playNextSpeechSegment(runId)
+      }
+    }, 48)
+  }
+
+  function enqueueSpeechSegments(
+    segments: string[],
+    runId = speechRunIdRef.current,
+  ) {
+    if (runId !== speechRunIdRef.current) return
+
     const cleanSegments = segments.map((segment) => sanitizeSpeechText(segment)).filter(Boolean)
     if (!cleanSegments.length) return
 
-    speechQueueRef.current.push(...cleanSegments)
-    void playNextSpeechSegment(speechRunIdRef.current)
+    speechQueueRef.current.push(...cleanSegments.map((text) => ({
+      id: speechItemIdRef.current += 1,
+      text,
+    })))
+    prefetchSpeechSegments(runId)
+    void playNextSpeechSegment(runId)
+  }
+
+  function prefetchSpeechSegments(runId: number) {
+    if (runId !== speechRunIdRef.current) return
+
+    const pendingCount = speechQueueRef.current.filter((item) => item.promise && !item.audioUrl && !item.failed).length
+    let availableSlots = Math.max(0, SPEECH_PREFETCH_LIMIT - pendingCount)
+    if (!availableSlots) return
+
+    for (const item of speechQueueRef.current) {
+      if (!availableSlots) break
+      if (item.audioUrl || item.promise || item.failed) continue
+
+      item.promise = synthesizeSpeechSegment(item.text, runId)
+        .then((audioUrl) => {
+          if (runId !== speechRunIdRef.current) {
+            if (audioUrl) {
+              URL.revokeObjectURL(audioUrl)
+            }
+            return null
+          }
+
+          item.audioUrl = audioUrl ?? undefined
+          item.failed = !audioUrl
+          return audioUrl
+        })
+        .catch((error) => {
+          console.error(error)
+          item.failed = true
+          return null
+        })
+      availableSlots -= 1
+    }
   }
 
   async function playNextSpeechSegment(runId: number) {
-    if (isAudioPlayingRef.current || runId !== speechRunIdRef.current) return
+    if (isAudioPlayingRef.current || isAudioStartingRef.current || runId !== speechRunIdRef.current) return
 
-    const nextText = speechQueueRef.current.shift()
-    if (!nextText) {
+    isAudioStartingRef.current = true
+
+    prefetchSpeechSegments(runId)
+
+    const nextItem = speechQueueRef.current[0]
+    if (!nextItem) {
+      isAudioStartingRef.current = false
       if (!isAnswerStreamingRef.current) {
         setIsSpeaking(false)
         setStatus('导览回答已生成。')
@@ -649,59 +725,85 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
       return
     }
 
-    await speakTextSegment(nextText, runId)
+    const audioUrl = nextItem.audioUrl ?? await nextItem.promise
+    if (runId !== speechRunIdRef.current) {
+      isAudioStartingRef.current = false
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl)
+      }
+      return
+    }
+
+    if (!audioUrl || nextItem.failed) {
+      isAudioStartingRef.current = false
+      speechQueueRef.current.shift()
+      prefetchSpeechSegments(runId)
+      void playNextSpeechSegment(runId)
+      return
+    }
+
+    playSynthesizedSpeechSegment(nextItem, audioUrl, runId)
   }
 
-  async function speakTextSegment(text: string, runId: number) {
-    const model = modelRef.current
+  async function synthesizeSpeechSegment(text: string, runId: number) {
     const cleanText = sanitizeSpeechText(text)
-    if (!model || !cleanText || runId !== speechRunIdRef.current) return
+    if (!cleanText || runId !== speechRunIdRef.current) return null
 
-    isAudioPlayingRef.current = true
     setStatus('正在分段合成并播放导览语音。')
 
-    try {
-      const response = await axios.post(
-        TTS_ENDPOINT,
-        {
-          text: cleanText,
-          voice: selectedVoice.id,
-          rate: formatPercent(config.rate),
-          volume: formatPercent(config.volume),
-          pitch: formatPitch(config.pitch),
-        },
-        {
-          responseType: 'blob',
-        },
-      )
+    const response = await axios.post(
+      TTS_ENDPOINT,
+      {
+        text: cleanText,
+        voice: selectedVoice.id,
+        rate: formatPercent(config.rate),
+        volume: formatPercent(config.volume),
+        pitch: formatPitch(config.pitch),
+      },
+      {
+        responseType: 'blob',
+      },
+    )
 
-      if (runId !== speechRunIdRef.current) return
+    if (runId !== speechRunIdRef.current) return null
+    return URL.createObjectURL(response.data)
+  }
 
-      const audioUrl = URL.createObjectURL(response.data)
-      model.stopMotions?.()
-      speak(model, audioUrl, {
-        onFinish: () => {
-          markInteraction()
-          URL.revokeObjectURL(audioUrl)
-          isAudioPlayingRef.current = false
-          void playNextSpeechSegment(runId)
-        },
-        onError: () => {
-          markInteraction()
-          URL.revokeObjectURL(audioUrl)
-          isAudioPlayingRef.current = false
-          void playNextSpeechSegment(runId)
-        },
-      })
-    } catch (error) {
-      console.error(error)
-      isAudioPlayingRef.current = false
-      if (runId === speechRunIdRef.current && speechQueueRef.current.length) {
-        void playNextSpeechSegment(runId)
-      } else if (runId === speechRunIdRef.current && !isAnswerStreamingRef.current) {
-        setIsSpeaking(false)
-      }
+  function playSynthesizedSpeechSegment(item: SpeechQueueItem, audioUrl: string, runId: number) {
+    const model = modelRef.current
+    if (!model || runId !== speechRunIdRef.current) {
+      isAudioStartingRef.current = false
+      return
     }
+
+    isAudioStartingRef.current = false
+    isAudioPlayingRef.current = true
+    setStatus('正在播放导览语音。')
+    prefetchSpeechSegments(runId)
+
+    model.stopMotions?.()
+    speak(model, audioUrl, {
+      onFinish: () => {
+        markInteraction()
+        URL.revokeObjectURL(audioUrl)
+        if (speechQueueRef.current[0]?.id === item.id) {
+          speechQueueRef.current.shift()
+        }
+        isAudioPlayingRef.current = false
+        prefetchSpeechSegments(runId)
+        scheduleNextSpeechSegment(runId)
+      },
+      onError: () => {
+        markInteraction()
+        URL.revokeObjectURL(audioUrl)
+        if (speechQueueRef.current[0]?.id === item.id) {
+          speechQueueRef.current.shift()
+        }
+        isAudioPlayingRef.current = false
+        prefetchSpeechSegments(runId)
+        scheduleNextSpeechSegment(runId)
+      },
+    })
   }
 
   async function handleSend(event?: FormEvent<HTMLFormElement>) {
@@ -725,11 +827,13 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     setIsSpeaking(true)
     setStatus('正在生成导览回答...')
     resetSpeechQueue()
+    const requestRunId = speechRunIdRef.current
+    const isCurrentRequest = () => requestRunId === speechRunIdRef.current
+    const enqueueCurrentSpeechSegments = (segments: string[]) => enqueueSpeechSegments(segments, requestRunId)
     isAnswerStreamingRef.current = true
     void triggerConfiguredAction({ text: question })
 
     const assistantMsgId = `guide-${Date.now()}`
-    let quickReplyText = ''
 
     setMessages((current) => [
       ...current,
@@ -737,25 +841,25 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
         id: assistantMsgId,
         sender: 'guide',
         name: '灵山导览数字人',
-        content: joinQuickReplyAndAnswer('', '', { pending: true }),
+        content: '...',
         time: new Date(),
         status: 'read',
       },
     ])
 
     try {
-      console.log('[stream] 开始请求流式接口')
       const authHeader = axios.defaults.headers.common.Authorization as string | undefined
       let fullAnswer = ''
       let nextSessionId = sessionId
-      let chunkCount = 0
       let streamError = ''
       let speechBuffer = ''
       let speakableAnswer = ''
-      let quickReplySettled = false
+      let mainSpeechSegmentCount = 0
 
       const queueAnswerSpeech = (flush = false) => {
-        const nextSpeakableAnswer = sanitizeSpeechText(stripDuplicateGreeting(quickReplyText, fullAnswer))
+        if (!isCurrentRequest()) return
+
+        const nextSpeakableAnswer = sanitizeSpeechText(fullAnswer)
         if (nextSpeakableAnswer.length < speakableAnswer.length) {
           speakableAnswer = nextSpeakableAnswer
           speechBuffer = ''
@@ -768,41 +872,16 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
           speechBuffer += delta
         }
 
+        const isFirstMainSegment = mainSpeechSegmentCount === 0
         const extracted = extractSpeakableSegments(speechBuffer, {
-          minChars: 20,
-          maxChars: 46,
+          minChars: isFirstMainSegment ? 40 : 80,
+          maxChars: isFirstMainSegment ? 56 : 96,
           flush,
         })
         speechBuffer = extracted.rest
-        enqueueSpeechSegments(extracted.segments)
+        mainSpeechSegmentCount += extracted.segments.length
+        enqueueCurrentSpeechSegments(extracted.segments)
       }
-
-      const quickReplyPromise = axios
-        .post<GuideChatResponse>('/api/user/guide/chat/quick', {
-          sessionId: sessionId || undefined,
-          question,
-        }, { timeout: 5000 })
-        .then((response) => response.data.answerText.trim())
-        .catch((error) => {
-          console.warn('[quick] 短答生成失败:', error)
-          return ''
-        })
-
-      quickReplyPromise.then((quickReply) => {
-        quickReplySettled = true
-        if (quickReply) {
-          quickReplyText = quickReply
-          setMessages((current) =>
-            current.map((msg) =>
-              msg.id === assistantMsgId
-                ? { ...msg, content: joinQuickReplyAndAnswer(quickReplyText, fullAnswer, { pending: !fullAnswer.trim() }) }
-                : msg
-            )
-          )
-          enqueueSpeechSegments([quickReply])
-        }
-        queueAnswerSpeech()
-      })
 
       const response = await fetch('/api/user/guide/chat/stream', {
         method: 'POST',
@@ -816,8 +895,6 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
         }),
       })
 
-      console.log('[stream] 响应状态:', response.status, response.headers.get('content-type'))
-
       if (!response.ok || !response.body) {
         throw new Error(`Stream request failed: ${response.status}`)
       }
@@ -828,12 +905,19 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
       // 逐行解析 SSE
       let buffer = ''
       while (true) {
+        if (!isCurrentRequest()) {
+          await reader.cancel().catch(() => undefined)
+          break
+        }
+
         const { done, value } = await reader.read()
         if (done) break
+        if (!isCurrentRequest()) {
+          await reader.cancel().catch(() => undefined)
+          break
+        }
 
-        chunkCount++
         const text = decoder.decode(value, { stream: true })
-        console.log(`[stream] chunk #${chunkCount}:`, text.slice(0, 200))
         buffer += text
         const lines = buffer.split('\n')
         buffer = lines.pop() ?? ''
@@ -844,7 +928,6 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
 
           const dataStr = line.slice(5).trim()
           if (dataStr === '[DONE]') {
-            console.log('[stream] 收到 [DONE] 信号')
             continue
           }
 
@@ -853,7 +936,6 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
 
             // meta 事件：包含 sessionId
             if (parsed.sessionId) {
-              console.log('[stream] meta:', parsed.sessionId)
               nextSessionId = parsed.sessionId
               setSessionId(nextSessionId)
               window.sessionStorage.setItem(GUIDE_SESSION_KEY, nextSessionId)
@@ -862,8 +944,8 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
             // token 事件：逐字输出
             if (parsed.token) {
               fullAnswer += parsed.token
-              if (quickReplySettled) {
-                const currentText = joinQuickReplyAndAnswer(quickReplyText, fullAnswer)
+              if (isCurrentRequest()) {
+                const currentText = sanitizeAnswerText(fullAnswer) || '...'
                 setMessages((current) =>
                   current.map((msg) =>
                     msg.id === assistantMsgId ? { ...msg, content: currentText } : msg
@@ -879,12 +961,12 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
               streamError = String(parsed.error)
               setStatus(streamError)
               if (!parsed.token) {
-                enqueueSpeechSegments([streamError])
+                enqueueCurrentSpeechSegments([streamError])
               }
               setMessages((current) =>
                 current.map((msg) =>
                   msg.id === assistantMsgId
-                    ? { ...msg, content: joinQuickReplyAndAnswer(quickReplyText, streamError), status: 'failed' as const }
+                    ? { ...msg, content: sanitizeAnswerText(streamError), status: 'failed' as const }
                     : msg
                 )
               )
@@ -895,41 +977,43 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
         }
       }
 
-      console.log(`[stream] 流结束, 共 ${chunkCount} 个 chunk, 回答长度: ${fullAnswer.length}`)
-      if (!quickReplySettled) {
-        await quickReplyPromise
+      if (!isCurrentRequest()) {
+        return
       }
       queueAnswerSpeech(true)
 
       if (!fullAnswer.trim()) {
         const fallbackMessage = streamError || '当前主智能体暂时不可用，请确认 ai-service 已启动，并在后台完成 CHAT 模型配置。'
         setStatus(fallbackMessage)
-        enqueueSpeechSegments([fallbackMessage])
+        enqueueCurrentSpeechSegments([fallbackMessage])
         setMessages((current) =>
           current.map((msg) =>
             msg.id === assistantMsgId
-              ? { ...msg, content: joinQuickReplyAndAnswer(quickReplyText, fallbackMessage), status: 'failed' as const }
+              ? { ...msg, content: sanitizeAnswerText(fallbackMessage), status: 'failed' as const }
               : msg
           )
         )
         isAnswerStreamingRef.current = false
-        void playNextSpeechSegment(speechRunIdRef.current)
+        void playNextSpeechSegment(requestRunId)
         return
       }
 
       setStatus('导览回答已生成，语音正在分段播放。')
       void triggerConfiguredAction({ text: `${question}\n${fullAnswer}` })
       isAnswerStreamingRef.current = false
-      void playNextSpeechSegment(speechRunIdRef.current)
+      void playNextSpeechSegment(requestRunId)
     } catch (error) {
       console.error(error)
+      if (!isCurrentRequest()) {
+        return
+      }
       isAnswerStreamingRef.current = false
       setStatus('导览请求失败，请确认问答服务和 TTS 服务已启动。')
-      enqueueSpeechSegments(['这次导览请求失败了，请稍后再试。'])
+      enqueueCurrentSpeechSegments(['这次导览请求失败了，请稍后再试。'])
       setMessages((current) =>
         current.map((msg) =>
           msg.id === assistantMsgId
-            ? { ...msg, content: joinQuickReplyAndAnswer(quickReplyText, '这次导览请求失败了，请稍后再试。'), status: 'failed' as const }
+            ? { ...msg, content: '这次导览请求失败了，请稍后再试。', status: 'failed' as const }
             : msg
         )
       )
@@ -963,6 +1047,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     window.sessionStorage.setItem(SELECTED_MODEL_KEY, model.id)
     setSelectedModelId(model.id)
     setOpenDropdown(null)
+    setStatus(`正在切换数字人：${model.name}`)
   }
 
   return (
@@ -1104,7 +1189,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
                 value={draft}
                 placeholder="请输入您的问题..."
                 rows={2}
-                disabled={!isReady || isSpeaking}
+                disabled={!isReady}
                 onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && !event.shiftKey) {
@@ -1123,7 +1208,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
                 <span>语音</span>
               </button>
               <button type="submit" className="digital-chat-send" disabled={!canSend}>
-                {isSpeaking ? '发送中' : '发送'}
+                发送
               </button>
             </form>
           </footer>

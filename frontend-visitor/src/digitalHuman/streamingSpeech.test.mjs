@@ -64,6 +64,20 @@ const firstPass = extractSpeakableSegments('灵山胜境很适合上午游览，
 assert.deepEqual(firstPass.segments, ['灵山胜境很适合上午游览，可以先去灵山大佛。'])
 assert.equal(firstPass.rest, '接着去梵宫看演出。')
 
+const progressiveFirstPass = extractSpeakableSegments(
+  '灵山清晨的风很轻，沿着湖边慢慢走，会看到山色和水面一点点亮起来，也会听见远处钟声。接着去梵宫看建筑细节，再去灵山大佛前停一停。',
+  { minChars: 40, maxChars: 56 },
+)
+assert.deepEqual(progressiveFirstPass.segments, ['灵山清晨的风很轻，沿着湖边慢慢走，会看到山色和水面一点点亮起来，也会听见远处钟声。'])
+assert.equal(progressiveFirstPass.rest, '接着去梵宫看建筑细节，再去灵山大佛前停一停。')
+
+const progressiveLaterPass = extractSpeakableSegments(
+  '第一站可以从游客中心出发，沿主路慢慢走到九龙灌浴，再顺着湖边去看梵宫。第二站建议留给灵山大佛，途中可以看看香樟树和远处山影，也可以顺手拍几张湖面的倒影和山色变化，',
+  { minChars: 80, maxChars: 96 },
+)
+assert.deepEqual(progressiveLaterPass.segments, ['第一站可以从游客中心出发，沿主路慢慢走到九龙灌浴，再顺着湖边去看梵宫。第二站建议留给灵山大佛，途中可以看看香樟树和远处山影，也可以顺手拍几张湖面的倒影和山色变化，'])
+assert.equal(progressiveLaterPass.rest, '')
+
 const secondPass = extractSpeakableSegments(firstPass.rest, {
   minChars: 20,
   flush: true,
