@@ -2,7 +2,6 @@ import { useNavigate } from 'react-router-dom'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import './HomePage.css'
 import { type SessionUser } from '../auth/session'
-import { DIGITAL_HUMAN_ROUTE } from '../digitalHuman/shared'
 import { AppTopNav } from '../components/AppTopNav'
 
 interface HomeItem {

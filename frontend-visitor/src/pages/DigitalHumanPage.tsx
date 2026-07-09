@@ -16,6 +16,7 @@ import {
   makeDraggable,
   speak,
 } from '../digitalHuman/shared'
+import { buildQuickGuideReply, extractSpeakableSegments } from '../digitalHuman/streamingSpeech'
 import { AppTopNav } from '../components/AppTopNav'
 
 type DigitalHumanPageProps = {
@@ -31,19 +32,6 @@ type DigitalHumanConfig = {
   welcomeText: string
   guideStyle: string
   broadcastStrategy: string
-}
-
-type GuideChatResponse = {
-  sessionId: string
-  traceId?: string
-  answerText: string
-  relatedSpots: string[]
-  recommendedRoutes: string[]
-  sources?: Array<{
-    source_file?: string
-    title?: string
-    section_path?: string[]
-  }>
 }
 
 type DigitalChatMessage = {
@@ -158,38 +146,6 @@ function selectWeightedRule(rules: RuntimeTriggerRule[]) {
   return rules[rules.length - 1] ?? null
 }
 
-function buildAssistantContent(response: GuideChatResponse) {
-  return (
-    <div className="digital-human-answer">
-      <p>{response.answerText}</p>
-      {response.answerText.includes('知识库暂未覆盖') ? (
-        <p className="digital-human-answer__hint">
-          这个问题目前还没有进入景区知识库，后台可以在知识缺失池中补充资料。
-        </p>
-      ) : null}
-      {response.relatedSpots.length || response.recommendedRoutes.length ? (
-        <div className="digital-human-answer__tags">
-          {response.relatedSpots.map((spot) => (
-            <span key={spot}>{spot}</span>
-          ))}
-          {response.recommendedRoutes.map((route) => (
-            <span key={route}>{route}</span>
-          ))}
-        </div>
-      ) : null}
-      {response.sources?.length ? (
-        <div className="digital-human-answer__sources">
-          {response.sources.slice(0, 3).map((source, index) => (
-            <span key={`${source.source_file ?? source.title ?? 'source'}-${index}`}>
-              来源：{source.source_file || source.title || '知识库'}
-            </span>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  )
-}
-
 export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
@@ -201,6 +157,10 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
   const dragStartXRef = useRef(0)
   const clickTimerRef = useRef<number | null>(null)
   const lastInteractionAtRef = useRef(0)
+  const speechQueueRef = useRef<string[]>([])
+  const isAudioPlayingRef = useRef(false)
+  const isAnswerStreamingRef = useRef(false)
+  const speechRunIdRef = useRef(0)
   const [config, setConfig] = useState<DigitalHumanConfig>(DEFAULT_CONFIG)
   const [selectedModelId, setSelectedModelId] = useState(() => getStoredSelectedModelId() ?? DEFAULT_CONFIG.modelId)
   const [runtimeModels, setRuntimeModels] = useState<RuntimeDigitalHumanModel[]>([])
@@ -649,38 +609,85 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     triggerConfiguredAction,
   ])
 
-  async function speakAnswer(answerText: string) {
+  function resetSpeechQueue() {
+    speechRunIdRef.current += 1
+    speechQueueRef.current = []
+    isAudioPlayingRef.current = false
+    modelRef.current?.stopSpeaking?.()
+  }
+
+  function enqueueSpeechSegments(segments: string[]) {
+    const cleanSegments = segments.map((segment) => segment.trim()).filter(Boolean)
+    if (!cleanSegments.length) return
+
+    speechQueueRef.current.push(...cleanSegments)
+    void playNextSpeechSegment(speechRunIdRef.current)
+  }
+
+  async function playNextSpeechSegment(runId: number) {
+    if (isAudioPlayingRef.current || runId !== speechRunIdRef.current) return
+
+    const nextText = speechQueueRef.current.shift()
+    if (!nextText) {
+      if (!isAnswerStreamingRef.current) {
+        setIsSpeaking(false)
+        setStatus('导览回答已生成。')
+      }
+      return
+    }
+
+    await speakTextSegment(nextText, runId)
+  }
+
+  async function speakTextSegment(text: string, runId: number) {
     const model = modelRef.current
-    if (!model || !answerText.trim()) return
+    if (!model || !text.trim() || runId !== speechRunIdRef.current) return
 
-    const response = await axios.post(
-      TTS_ENDPOINT,
-      {
-        text: answerText,
-        voice: selectedVoice.id,
-        rate: formatPercent(config.rate),
-        volume: formatPercent(config.volume),
-        pitch: formatPitch(config.pitch),
-      },
-      {
-        responseType: 'blob',
-      },
-    )
+    isAudioPlayingRef.current = true
+    setStatus('正在分段合成并播放导览语音。')
 
-    const audioUrl = URL.createObjectURL(response.data)
-    model.stopMotions?.()
-    speak(model, audioUrl, {
-      onFinish: () => {
-        markInteraction()
+    try {
+      const response = await axios.post(
+        TTS_ENDPOINT,
+        {
+          text,
+          voice: selectedVoice.id,
+          rate: formatPercent(config.rate),
+          volume: formatPercent(config.volume),
+          pitch: formatPitch(config.pitch),
+        },
+        {
+          responseType: 'blob',
+        },
+      )
+
+      if (runId !== speechRunIdRef.current) return
+
+      const audioUrl = URL.createObjectURL(response.data)
+      model.stopMotions?.()
+      speak(model, audioUrl, {
+        onFinish: () => {
+          markInteraction()
+          URL.revokeObjectURL(audioUrl)
+          isAudioPlayingRef.current = false
+          void playNextSpeechSegment(runId)
+        },
+        onError: () => {
+          markInteraction()
+          URL.revokeObjectURL(audioUrl)
+          isAudioPlayingRef.current = false
+          void playNextSpeechSegment(runId)
+        },
+      })
+    } catch (error) {
+      console.error(error)
+      isAudioPlayingRef.current = false
+      if (runId === speechRunIdRef.current && speechQueueRef.current.length) {
+        void playNextSpeechSegment(runId)
+      } else if (runId === speechRunIdRef.current && !isAnswerStreamingRef.current) {
         setIsSpeaking(false)
-        URL.revokeObjectURL(audioUrl)
-      },
-      onError: () => {
-        markInteraction()
-        setIsSpeaking(false)
-        URL.revokeObjectURL(audioUrl)
-      },
-    })
+      }
+    }
   }
 
   async function handleSend(event?: FormEvent<HTMLFormElement>) {
@@ -703,13 +710,24 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     setDraft('')
     setIsSpeaking(true)
     setStatus('正在生成导览回答...')
+    resetSpeechQueue()
+    isAnswerStreamingRef.current = true
     void triggerConfiguredAction({ text: question })
 
+    const quickReply = buildQuickGuideReply()
+    const quickReplyMsgId = `guide-quick-${Date.now()}`
     const assistantMsgId = `guide-${Date.now()}`
 
-    // 先添加一个空的助手消息，后续流式填充内容
     setMessages((current) => [
       ...current,
+      {
+        id: quickReplyMsgId,
+        sender: 'guide',
+        name: '灵山导览数字人',
+        content: quickReply,
+        time: new Date(),
+        status: 'read',
+      },
       {
         id: assistantMsgId,
         sender: 'guide',
@@ -719,6 +737,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
         status: 'read',
       },
     ])
+    enqueueSpeechSegments([quickReply])
 
     try {
       console.log('[stream] 开始请求流式接口')
@@ -746,6 +765,8 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
       let fullAnswer = ''
       let nextSessionId = sessionId
       let chunkCount = 0
+      let streamError = ''
+      let speechBuffer = ''
 
       // 逐行解析 SSE
       let buffer = ''
@@ -784,17 +805,34 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
             // token 事件：逐字输出
             if (parsed.token) {
               fullAnswer += parsed.token
+              speechBuffer += parsed.token
               const currentText = fullAnswer
               setMessages((current) =>
                 current.map((msg) =>
                   msg.id === assistantMsgId ? { ...msg, content: currentText } : msg
                 )
               )
+              const extracted = extractSpeakableSegments(speechBuffer, {
+                minChars: 20,
+                maxChars: 46,
+              })
+              speechBuffer = extracted.rest
+              enqueueSpeechSegments(extracted.segments)
             }
 
             // error 事件
             if (parsed.error) {
               console.error('[stream] error:', parsed.error)
+              streamError = String(parsed.error)
+              setStatus(streamError)
+              if (!parsed.token) {
+                enqueueSpeechSegments([streamError])
+              }
+              setMessages((current) =>
+                current.map((msg) =>
+                  msg.id === assistantMsgId ? { ...msg, content: streamError, status: 'failed' as const } : msg
+                )
+              )
             }
           } catch {
             console.warn('[stream] JSON 解析失败:', dataStr)
@@ -803,13 +841,37 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
       }
 
       console.log(`[stream] 流结束, 共 ${chunkCount} 个 chunk, 回答长度: ${fullAnswer.length}`)
-      setStatus('导览回答已生成，正在驱动数字人口型。')
+      const flushed = extractSpeakableSegments(speechBuffer, {
+        minChars: 20,
+        maxChars: 46,
+        flush: true,
+      })
+      speechBuffer = flushed.rest
+      enqueueSpeechSegments(flushed.segments)
+
+      if (!fullAnswer.trim()) {
+        const fallbackMessage = streamError || '当前主智能体暂时不可用，请确认 ai-service 已启动，并在后台完成 CHAT 模型配置。'
+        setStatus(fallbackMessage)
+        enqueueSpeechSegments([fallbackMessage])
+        setMessages((current) =>
+          current.map((msg) =>
+            msg.id === assistantMsgId ? { ...msg, content: fallbackMessage, status: 'failed' as const } : msg
+          )
+        )
+        isAnswerStreamingRef.current = false
+        void playNextSpeechSegment(speechRunIdRef.current)
+        return
+      }
+
+      setStatus('导览回答已生成，语音正在分段播放。')
       void triggerConfiguredAction({ text: `${question}\n${fullAnswer}` })
-      await speakAnswer(fullAnswer)
+      isAnswerStreamingRef.current = false
+      void playNextSpeechSegment(speechRunIdRef.current)
     } catch (error) {
       console.error(error)
-      setIsSpeaking(false)
+      isAnswerStreamingRef.current = false
       setStatus('导览请求失败，请确认问答服务和 TTS 服务已启动。')
+      enqueueSpeechSegments(['这次导览请求失败了，请稍后再试。'])
       setMessages((current) =>
         current.map((msg) =>
           msg.id === assistantMsgId
@@ -817,6 +879,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
             : msg
         )
       )
+      void playNextSpeechSegment(speechRunIdRef.current)
     }
   }
 

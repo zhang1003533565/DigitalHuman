@@ -321,8 +321,21 @@ public class GuideService {
                             JsonNode chunk = objectMapper.readTree(dataStr);
                             // 检查是否有错误
                             if (chunk.has("error")) {
+                                String errorText = chunk.get("error").asText("当前主智能体暂时不可用，请检查模型配置。");
                                 emitter.send(SseEmitter.event().name("error")
-                                        .data(chunk.get("error").asText()));
+                                        .data(objectMapper.writeValueAsString(Map.of("error", errorText))));
+                                if (fullAnswer.isEmpty()) {
+                                    fullAnswer.append(errorText);
+                                    emitter.send(SseEmitter.event().data(Map.of("token", errorText)));
+                                }
+                                break;
+                            }
+                            if (chunk.has("success") && !chunk.path("success").asBoolean(true)) {
+                                String errorText = firstWarningOrDefault(chunk, "当前主智能体暂时不可用，请在后台管理中完成 CHAT 模型与 Provider 配置。");
+                                fullAnswer.append(errorText);
+                                emitter.send(SseEmitter.event().data(Map.of(
+                                        "error", errorText,
+                                        "token", errorText)));
                                 break;
                             }
                             String token = chunk.path("token").asText("");
@@ -354,6 +367,18 @@ public class GuideService {
         }).start();
 
         return emitter;
+    }
+
+    private String firstWarningOrDefault(JsonNode chunk, String defaultMessage) {
+        JsonNode warnings = chunk.path("warnings");
+        if (warnings.isArray() && !warnings.isEmpty()) {
+            String warning = warnings.get(0).asText("");
+            if (!warning.isBlank()) {
+                return warning;
+            }
+        }
+        String error = chunk.path("error").asText("");
+        return error.isBlank() ? defaultMessage : error;
     }
 
     public List<GuideMessageDto> getSessionMessages(String sessionId) {
