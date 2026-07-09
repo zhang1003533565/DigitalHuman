@@ -266,6 +266,19 @@ public class GuideService {
         return new GuideChatResponse(sessionId, traceId, answerText, relatedSpots, recommendedRoutes, sources);
     }
 
+    public GuideChatResponse quickChat(GuideChatRequest request) {
+        String sessionId = request.getSessionId();
+        if (sessionId == null || sessionId.isBlank()) {
+            sessionId = "session-" + UUID.randomUUID();
+        }
+        String traceId = "quick-" + UUID.randomUUID();
+        String answerText = queryLeaderQuickReply(sessionId, request.getQuestion(), request.getInterest());
+        if (answerText == null || answerText.isBlank()) {
+            answerText = "您好呀，我在听。";
+        }
+        return new GuideChatResponse(sessionId, traceId, normalizeQuickReply(answerText), List.of(), List.of(), List.of());
+    }
+
     public SseEmitter chatStream(GuideChatRequest request) {
         String sessionId = request.getSessionId();
         if (sessionId == null || sessionId.isBlank()) {
@@ -457,6 +470,64 @@ public class GuideService {
         }
     }
 
+    private String queryLeaderQuickReply(String sessionId, String question, String interest) {
+        try {
+            String url = aiServiceUrl + "/agents/leader/chat";
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("message", question);
+            payload.put("history", buildLeaderChatHistory(sessionId));
+            payload.put("systemPrompt", buildQuickReplySystemPrompt(interest));
+            payload.putAll(resolveAiModelConfig());
+
+            Request httpRequest = new Request.Builder()
+                    .url(url)
+                    .post(RequestBody.create(objectMapper.writeValueAsString(payload), JSON))
+                    .build();
+
+            try (Response response = httpClient.newCall(httpRequest).execute()) {
+                if (!response.isSuccessful()) {
+                    throw new IOException("Quick chat request failed: " + response.code());
+                }
+                if (response.body() == null) {
+                    throw new IOException("Quick chat response body is empty");
+                }
+
+                JsonNode root = objectMapper.readTree(response.body().string());
+                if (!root.path("success").asBoolean(true)) {
+                    return firstWarningOrDefault(root, "您好呀，我在听。");
+                }
+                String answer = root.path("output").path("answer").asText("");
+                return answer == null ? null : answer.trim();
+            }
+        } catch (Exception exception) {
+            log.warn("Leader quick reply request failed", exception);
+            return null;
+        }
+    }
+
+    private String buildQuickReplySystemPrompt(String interest) {
+        String prompt = "你是灵山景区智能导览数字人。"
+                + "请先用一句自然口语回应游客，30个汉字以内。"
+                + "不要说“我先整理”“马上详细说明”“正在查询”等系统流程话。"
+                + "不要输出列表、标题、Markdown 或表情。"
+                + "只输出这一句短回复。";
+        if (interest == null || interest.isBlank()) {
+            return prompt;
+        }
+        return prompt + " 用户当前偏好方向：" + interest.trim() + "。";
+    }
+
+    private String normalizeQuickReply(String answerText) {
+        String normalized = answerText == null ? "" : answerText
+                .replaceAll("[\\r\\n]+", " ")
+                .replaceAll("[*_`#>-]", "")
+                .trim();
+        if (normalized.length() <= 30) {
+            return normalized;
+        }
+        return normalized.substring(0, 30);
+    }
+
     private List<Map<String, String>> buildLeaderChatHistory(String sessionId) {
         List<GuideMessage> history = messageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
         int startIndex = Math.max(0, history.size() - LEADER_CHAT_HISTORY_LIMIT);
@@ -476,6 +547,7 @@ public class GuideService {
     private String buildLeaderChatSystemPrompt(String interest, List<GuideSourceDto> sources) {
         String basePrompt = "你是 DigitalHuman 的主智能体，也是灵山景区智能导览助手。"
                 + "请优先依据下方知识库召回内容回答，回答要使用简体中文，语气自然、友好，适合游客现场咨询。"
+                + "本回答会接在一条很短的即时回复之后，请不要再以你好、您好、欢迎、很高兴见面等寒暄开头，直接给出实质导览内容。"
                 + "如果知识库内容不足以确认具体史实、开放时间或票务信息，请明确说明当前无法核实，并给出通用建议。";
         if (interest == null || interest.isBlank()) {
             return basePrompt + buildKnowledgeContext(sources);

@@ -1,12 +1,39 @@
 import assert from 'node:assert/strict'
 import {
-  buildQuickGuideReply,
   extractSpeakableSegments,
+  joinQuickReplyAndAnswer,
+  stripDuplicateGreeting,
 } from './streamingSpeech.ts'
 
-const quickReply = buildQuickGuideReply()
-assert.ok(quickReply.length <= 30, 'quick reply should stay within 30 Chinese characters')
-assert.match(quickReply, /查|看|整理|说明|介绍/, 'quick reply should acknowledge that details are coming')
+const joined = joinQuickReplyAndAnswer('你好呀，灵山很好逛。', '我推荐上午先去灵山大佛。')
+assert.equal(joined, '你好呀，灵山很好逛。\n\n我推荐上午先去灵山大佛。')
+
+const emptyQuickReply = joinQuickReplyAndAnswer('', '我推荐上午先去灵山大佛。')
+assert.equal(emptyQuickReply, '我推荐上午先去灵山大佛。')
+
+const duplicateGreeting = stripDuplicateGreeting(
+  '你好呀！欢迎来到灵山景区，有什么需要帮忙的吗？',
+  '你好呀！很高兴又和你见面啦～😊 今天是想了解灵山景区的游览攻略，还是想听这里的故事？',
+)
+assert.equal(duplicateGreeting, '今天是想了解灵山景区的游览攻略，还是想听这里的故事？')
+
+const joinedWithoutDuplicateGreeting = joinQuickReplyAndAnswer(
+  '你好呀！欢迎来到灵山景区，有什么需要帮忙的吗？',
+  '你好呀！很高兴又和你见面啦～😊 今天是想了解灵山景区的游览攻略，还是想听这里的故事？',
+)
+assert.equal(
+  joinedWithoutDuplicateGreeting,
+  '你好呀！欢迎来到灵山景区，有什么需要帮忙的吗？\n\n今天是想了解灵山景区的游览攻略，还是想听这里的故事？',
+)
+
+const substantiveGreeting = stripDuplicateGreeting('', '你好呀！我推荐上午先去灵山大佛。')
+assert.equal(substantiveGreeting, '你好呀！我推荐上午先去灵山大佛。')
+
+const duplicateWelcome = stripDuplicateGreeting(
+  '欢迎来到灵山景区，有什么需要帮忙的吗？',
+  '欢迎来到灵山景区，今天我推荐先看灵山大佛。',
+)
+assert.equal(duplicateWelcome, '今天我推荐先看灵山大佛。')
 
 const firstPass = extractSpeakableSegments('灵山胜境很适合上午游览，可以先去灵山大佛。接着去梵宫看演出。', {
   minChars: 20,

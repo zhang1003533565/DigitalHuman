@@ -33,6 +33,11 @@ public class UserGuideController {
         return guideService.chat(request);
     }
 
+    @PostMapping("/chat/quick")
+    public GuideChatResponse quickChat(@Valid @RequestBody GuideChatRequest request) {
+        return guideService.quickChat(request);
+    }
+
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chatStream(@Valid @RequestBody GuideChatRequest request) {
         return guideService.chatStream(request);

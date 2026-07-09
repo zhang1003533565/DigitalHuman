@@ -16,8 +16,18 @@ import {
   makeDraggable,
   speak,
 } from '../digitalHuman/shared'
-import { buildQuickGuideReply, extractSpeakableSegments } from '../digitalHuman/streamingSpeech'
+import {
+  extractSpeakableSegments,
+  joinQuickReplyAndAnswer,
+  stripDuplicateGreeting,
+} from '../digitalHuman/streamingSpeech'
 import { AppTopNav } from '../components/AppTopNav'
+
+type GuideChatResponse = {
+  sessionId: string
+  traceId?: string
+  answerText: string
+}
 
 type DigitalHumanPageProps = {
   onLogout: () => void
@@ -714,20 +724,11 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     isAnswerStreamingRef.current = true
     void triggerConfiguredAction({ text: question })
 
-    const quickReply = buildQuickGuideReply()
-    const quickReplyMsgId = `guide-quick-${Date.now()}`
     const assistantMsgId = `guide-${Date.now()}`
+    let quickReplyText = ''
 
     setMessages((current) => [
       ...current,
-      {
-        id: quickReplyMsgId,
-        sender: 'guide',
-        name: '灵山导览数字人',
-        content: quickReply,
-        time: new Date(),
-        status: 'read',
-      },
       {
         id: assistantMsgId,
         sender: 'guide',
@@ -737,11 +738,66 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
         status: 'read',
       },
     ])
-    enqueueSpeechSegments([quickReply])
 
     try {
       console.log('[stream] 开始请求流式接口')
       const authHeader = axios.defaults.headers.common.Authorization as string | undefined
+      let fullAnswer = ''
+      let nextSessionId = sessionId
+      let chunkCount = 0
+      let streamError = ''
+      let speechBuffer = ''
+      let speakableAnswer = ''
+      let quickReplySettled = false
+
+      const queueAnswerSpeech = (flush = false) => {
+        const nextSpeakableAnswer = stripDuplicateGreeting(quickReplyText, fullAnswer)
+        if (nextSpeakableAnswer.length < speakableAnswer.length) {
+          speakableAnswer = nextSpeakableAnswer
+          speechBuffer = ''
+          return
+        }
+
+        const delta = nextSpeakableAnswer.slice(speakableAnswer.length)
+        speakableAnswer = nextSpeakableAnswer
+        if (delta) {
+          speechBuffer += delta
+        }
+
+        const extracted = extractSpeakableSegments(speechBuffer, {
+          minChars: 20,
+          maxChars: 46,
+          flush,
+        })
+        speechBuffer = extracted.rest
+        enqueueSpeechSegments(extracted.segments)
+      }
+
+      const quickReplyPromise = axios
+        .post<GuideChatResponse>('/api/user/guide/chat/quick', {
+          sessionId: sessionId || undefined,
+          question,
+        }, { timeout: 5000 })
+        .then((response) => response.data.answerText.trim())
+        .catch((error) => {
+          console.warn('[quick] 短答生成失败:', error)
+          return ''
+        })
+
+      quickReplyPromise.then((quickReply) => {
+        quickReplySettled = true
+        if (quickReply) {
+          quickReplyText = quickReply
+          setMessages((current) =>
+            current.map((msg) =>
+              msg.id === assistantMsgId ? { ...msg, content: joinQuickReplyAndAnswer(quickReplyText, fullAnswer) } : msg
+            )
+          )
+          enqueueSpeechSegments([quickReply])
+        }
+        queueAnswerSpeech()
+      })
+
       const response = await fetch('/api/user/guide/chat/stream', {
         method: 'POST',
         headers: {
@@ -762,11 +818,6 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
 
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
-      let fullAnswer = ''
-      let nextSessionId = sessionId
-      let chunkCount = 0
-      let streamError = ''
-      let speechBuffer = ''
 
       // 逐行解析 SSE
       let buffer = ''
@@ -805,19 +856,15 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
             // token 事件：逐字输出
             if (parsed.token) {
               fullAnswer += parsed.token
-              speechBuffer += parsed.token
-              const currentText = fullAnswer
+              const currentText = joinQuickReplyAndAnswer(quickReplyText, fullAnswer)
               setMessages((current) =>
                 current.map((msg) =>
                   msg.id === assistantMsgId ? { ...msg, content: currentText } : msg
                 )
               )
-              const extracted = extractSpeakableSegments(speechBuffer, {
-                minChars: 20,
-                maxChars: 46,
-              })
-              speechBuffer = extracted.rest
-              enqueueSpeechSegments(extracted.segments)
+              if (quickReplySettled) {
+                queueAnswerSpeech()
+              }
             }
 
             // error 事件
@@ -830,7 +877,9 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
               }
               setMessages((current) =>
                 current.map((msg) =>
-                  msg.id === assistantMsgId ? { ...msg, content: streamError, status: 'failed' as const } : msg
+                  msg.id === assistantMsgId
+                    ? { ...msg, content: joinQuickReplyAndAnswer(quickReplyText, streamError), status: 'failed' as const }
+                    : msg
                 )
               )
             }
@@ -841,13 +890,10 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
       }
 
       console.log(`[stream] 流结束, 共 ${chunkCount} 个 chunk, 回答长度: ${fullAnswer.length}`)
-      const flushed = extractSpeakableSegments(speechBuffer, {
-        minChars: 20,
-        maxChars: 46,
-        flush: true,
-      })
-      speechBuffer = flushed.rest
-      enqueueSpeechSegments(flushed.segments)
+      if (!quickReplySettled) {
+        await quickReplyPromise
+      }
+      queueAnswerSpeech(true)
 
       if (!fullAnswer.trim()) {
         const fallbackMessage = streamError || '当前主智能体暂时不可用，请确认 ai-service 已启动，并在后台完成 CHAT 模型配置。'
@@ -855,7 +901,9 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
         enqueueSpeechSegments([fallbackMessage])
         setMessages((current) =>
           current.map((msg) =>
-            msg.id === assistantMsgId ? { ...msg, content: fallbackMessage, status: 'failed' as const } : msg
+            msg.id === assistantMsgId
+              ? { ...msg, content: joinQuickReplyAndAnswer(quickReplyText, fallbackMessage), status: 'failed' as const }
+              : msg
           )
         )
         isAnswerStreamingRef.current = false
@@ -875,7 +923,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
       setMessages((current) =>
         current.map((msg) =>
           msg.id === assistantMsgId
-            ? { ...msg, content: '这次导览请求失败了，请稍后再试。', status: 'failed' as const }
+            ? { ...msg, content: joinQuickReplyAndAnswer(quickReplyText, '这次导览请求失败了，请稍后再试。'), status: 'failed' as const }
             : msg
         )
       )
