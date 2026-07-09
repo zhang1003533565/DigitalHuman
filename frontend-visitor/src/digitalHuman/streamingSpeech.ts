@@ -1,5 +1,7 @@
 const SENTENCE_END_RE = /[。！？!?；;，,、]/
 const GREETING_KEYWORDS_RE = /(你好|您好|欢迎|很高兴|见面|哈喽|嗨)/
+const STAGE_DIRECTION_RE = /[（(【\[][^）)】\]]*(?:眼角含笑|含笑|微笑|笑着|神态|表情|动作|语气|旁白|低头|抬头|点头|眨眼)[^）)】\]]*[）)】\]]/g
+const INLINE_STAGE_DIRECTION_RE = /[^。！？!?；;\n]{0,16}(?:眼角含笑|含笑|微笑|笑着|神态|表情|动作|语气|旁白|低头|抬头|点头|眨眼)(?:地说|说道|说|：|:)?/g
 const DUPLICATE_GREETING_PREFIXES = [
   /^\s*(?:你好呀?|您好呀?|哈喽|嗨|hi|hello)[!！。,.，、~～\s]*/i,
   /^\s*(?:很高兴(?:又)?(?:和你)?见面(?:啦|呀)?|很高兴见到你(?:啦|呀)?)[!！。,.，、~～\s😊🙂]*\s*/i,
@@ -91,6 +93,15 @@ export function stripDuplicateGreeting(quickReply: string, answer: string) {
   }
 
   return cleanAnswer
+}
+
+export function sanitizeSpeechText(text: string) {
+  return text
+    .replace(STAGE_DIRECTION_RE, '')
+    .replace(INLINE_STAGE_DIRECTION_RE, '')
+    .replace(/\s+/g, ' ')
+    .replace(/^[：:，,。！？!?\s]+/, '')
+    .trim()
 }
 
 function findBoundary(text: string, minChars: number) {

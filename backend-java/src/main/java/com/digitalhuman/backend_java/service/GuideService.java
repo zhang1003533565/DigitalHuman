@@ -57,6 +57,8 @@ public class GuideService {
     private static final int LEADER_CHAT_HISTORY_LIMIT = 10;
     private static final int QUICK_REPLY_MIN_LENGTH = 6;
     private static final int QUICK_REPLY_MAX_LENGTH = 24;
+    private static final Pattern STAGE_DIRECTION_BLOCK_PATTERN = Pattern.compile("[（(【\\[][^）)】\\]]*(?:眼角含笑|含笑|微笑|笑着|神态|表情|动作|语气|旁白|低头|抬头|点头|眨眼)[^）)】\\]]*[）)】\\]]");
+    private static final Pattern INLINE_STAGE_DIRECTION_PATTERN = Pattern.compile("[^。！？!?；;\\n]{0,16}(?:眼角含笑|含笑|微笑|笑着|神态|表情|动作|语气|旁白|低头|抬头|点头|眨眼)(?:地说|说道|说|：|:)?");
 
     @Value("${ai.service-url}")
     private String aiServiceUrl;
@@ -578,6 +580,12 @@ public class GuideService {
             if (content == null || content.isBlank()) {
                 continue;
             }
+            if ("assistant".equals(role)) {
+                content = sanitizeStageDirections(content);
+                if (content.isBlank()) {
+                    continue;
+                }
+            }
             messages.add(Map.of("role", role, "content", content));
         }
         return messages;
@@ -587,6 +595,7 @@ public class GuideService {
         String basePrompt = "你是 DigitalHuman 的主智能体，也是灵山景区智能导览助手。"
                 + "请优先依据下方知识库召回内容回答，回答要使用简体中文，语气自然、友好，适合游客现场咨询。"
                 + "本回答会接在一条很短的即时回复之后，请不要再以你好、您好、欢迎、很高兴见面等寒暄开头，直接给出实质导览内容。"
+                + "不要输出舞台提示、动作描写或神态旁白，例如“眼角含笑”“微笑着说”“点头”等；只输出要给游客听和看的正文。"
                 + "如果知识库内容不足以确认具体史实、开放时间或票务信息，请明确说明当前无法核实，并给出通用建议。";
         if (interest == null || interest.isBlank()) {
             return basePrompt + buildKnowledgeContext(sources);
@@ -666,6 +675,7 @@ public class GuideService {
         String basePrompt = "你是 DigitalHuman 的主智能体，也是灵山景区智能导览助手。"
                 + "当前阶段先支持快速对话，暂不调度其他智能体，也不依赖知识库检索。"
                 + "请使用简体中文回答，语气自然、友好，适合游客现场咨询。"
+                + "不要输出舞台提示、动作描写或神态旁白，例如“眼角含笑”“微笑着说”“点头”等；只输出要给游客听和看的正文。"
                 + "如果用户询问具体史实、开放时间或票务等你无法确认的信息，请明确说明当前无法核实，并给出通用建议。";
         if (interest == null || interest.isBlank()) {
             return basePrompt;
@@ -715,9 +725,21 @@ public class GuideService {
         message.setSessionId(sessionId);
         message.setTraceId(traceId);
         message.setRole(role);
-        message.setContent(content);
+        message.setContent("assistant".equalsIgnoreCase(role) ? sanitizeStageDirections(content) : content);
         message.setCreatedAt(LocalDateTime.now());
         messageRepository.save(message);
+    }
+
+    private String sanitizeStageDirections(String content) {
+        if (content == null || content.isBlank()) {
+            return "";
+        }
+        return INLINE_STAGE_DIRECTION_PATTERN
+                .matcher(STAGE_DIRECTION_BLOCK_PATTERN.matcher(content).replaceAll(""))
+                .replaceAll("")
+                .replaceAll("\\s+", " ")
+                .replaceAll("^[：:，,。！？!?\\s]+", "")
+                .trim();
     }
 
     private long toEpochMillis(LocalDateTime value) {

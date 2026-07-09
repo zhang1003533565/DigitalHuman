@@ -20,6 +20,7 @@ import {
 import {
   extractSpeakableSegments,
   joinQuickReplyAndAnswer,
+  sanitizeSpeechText,
   stripDuplicateGreeting,
 } from '../digitalHuman/streamingSpeech'
 import { AppTopNav } from '../components/AppTopNav'
@@ -629,7 +630,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
   }
 
   function enqueueSpeechSegments(segments: string[]) {
-    const cleanSegments = segments.map((segment) => segment.trim()).filter(Boolean)
+    const cleanSegments = segments.map((segment) => sanitizeSpeechText(segment)).filter(Boolean)
     if (!cleanSegments.length) return
 
     speechQueueRef.current.push(...cleanSegments)
