@@ -654,7 +654,8 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
 
   async function speakTextSegment(text: string, runId: number) {
     const model = modelRef.current
-    if (!model || !text.trim() || runId !== speechRunIdRef.current) return
+    const cleanText = sanitizeSpeechText(text)
+    if (!model || !cleanText || runId !== speechRunIdRef.current) return
 
     isAudioPlayingRef.current = true
     setStatus('正在分段合成并播放导览语音。')
@@ -663,7 +664,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
       const response = await axios.post(
         TTS_ENDPOINT,
         {
-          text,
+          text: cleanText,
           voice: selectedVoice.id,
           rate: formatPercent(config.rate),
           volume: formatPercent(config.volume),
@@ -754,7 +755,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
       let quickReplySettled = false
 
       const queueAnswerSpeech = (flush = false) => {
-        const nextSpeakableAnswer = stripDuplicateGreeting(quickReplyText, fullAnswer)
+        const nextSpeakableAnswer = sanitizeSpeechText(stripDuplicateGreeting(quickReplyText, fullAnswer))
         if (nextSpeakableAnswer.length < speakableAnswer.length) {
           speakableAnswer = nextSpeakableAnswer
           speechBuffer = ''
@@ -861,13 +862,13 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
             // token 事件：逐字输出
             if (parsed.token) {
               fullAnswer += parsed.token
-              const currentText = joinQuickReplyAndAnswer(quickReplyText, fullAnswer)
-              setMessages((current) =>
-                current.map((msg) =>
-                  msg.id === assistantMsgId ? { ...msg, content: currentText } : msg
-                )
-              )
               if (quickReplySettled) {
+                const currentText = joinQuickReplyAndAnswer(quickReplyText, fullAnswer)
+                setMessages((current) =>
+                  current.map((msg) =>
+                    msg.id === assistantMsgId ? { ...msg, content: currentText } : msg
+                  )
+                )
                 queueAnswerSpeech()
               }
             }

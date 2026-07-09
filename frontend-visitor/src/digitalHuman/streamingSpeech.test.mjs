@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import {
   extractSpeakableSegments,
   joinQuickReplyAndAnswer,
+  sanitizeAnswerText,
   sanitizeSpeechText,
   stripDuplicateGreeting,
 } from './streamingSpeech.ts'
@@ -17,6 +18,15 @@ assert.equal(sanitizedStageDirection, '好的，我来介绍灵山。')
 
 const sanitizedMixedStageDirection = sanitizeSpeechText('她眼角含笑地说：灵山很适合上午游览。')
 assert.equal(sanitizedMixedStageDirection, '灵山很适合上午游览。')
+
+const sanitizedEmojiSpeech = sanitizeSpeechText('看来咱们已经很有默契了 😊 想聊点什么？')
+assert.equal(sanitizedEmojiSpeech, '看来咱们已经很有默契了 想聊点什么？')
+
+const sanitizedMarkdownAnswer = sanitizeAnswerText('当然可以！\n\n---\n\n**《灵山守松人》**\n\n- 松树会说话。')
+assert.equal(sanitizedMarkdownAnswer, '当然可以！\n\n《灵山守松人》\n松树会说话。')
+
+const sanitizedMarkdownSpeech = sanitizeSpeechText('**《灵山守松人》**\n\n---\n\n松树会说话。')
+assert.equal(sanitizedMarkdownSpeech, '《灵山守松人》 松树会说话。')
 
 const pendingAfterQuickReply = joinQuickReplyAndAnswer('好的，我来帮你写。', '', { pending: true })
 assert.equal(pendingAfterQuickReply, '好的，我来帮你写。\n\n...')

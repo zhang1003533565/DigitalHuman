@@ -2,6 +2,11 @@ const SENTENCE_END_RE = /[。！？!?；;，,、]/
 const GREETING_KEYWORDS_RE = /(你好|您好|欢迎|很高兴|见面|哈喽|嗨)/
 const STAGE_DIRECTION_RE = /[（(【\[][^）)】\]]*(?:眼角含笑|含笑|微笑|笑着|神态|表情|动作|语气|旁白|低头|抬头|点头|眨眼)[^）)】\]]*[）)】\]]/g
 const INLINE_STAGE_DIRECTION_RE = /[^。！？!?；;\n]{0,16}(?:眼角含笑|含笑|微笑|笑着|神态|表情|动作|语气|旁白|低头|抬头|点头|眨眼)(?:地说|说道|说|：|:)?/g
+const MARKDOWN_RULE_LINE_RE = /^\s*(?:-{3,}|_{3,}|\*{3,})\s*$/gm
+const MARKDOWN_HEADING_RE = /^\s{0,3}#{1,6}\s+/gm
+const MARKDOWN_LIST_MARKER_RE = /^\s*[-*+]\s+/gm
+const MARKDOWN_EMPHASIS_RE = /[*_`]+/g
+const EMOJI_RE = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu
 const DUPLICATE_GREETING_PREFIXES = [
   /^\s*(?:你好呀?|您好呀?|哈喽|嗨|hi|hello)[!！。,.，、~～\s]*/i,
   /^\s*(?:很高兴(?:又)?(?:和你)?见面(?:啦|呀)?|很高兴见到你(?:啦|呀)?)[!！。,.，、~～\s😊🙂]*\s*/i,
@@ -59,7 +64,7 @@ type JoinAnswerOptions = {
 
 export function joinQuickReplyAndAnswer(quickReply: string, answer: string, options: JoinAnswerOptions = {}) {
   const cleanQuickReply = quickReply.trim()
-  const cleanAnswer = stripDuplicateGreeting(cleanQuickReply, answer)
+  const cleanAnswer = sanitizeAnswerText(stripDuplicateGreeting(cleanQuickReply, answer))
   if (!cleanQuickReply) {
     return cleanAnswer || (options.pending ? '...' : '')
   }
@@ -96,11 +101,22 @@ export function stripDuplicateGreeting(quickReply: string, answer: string) {
 }
 
 export function sanitizeSpeechText(text: string) {
-  return text
+  return sanitizeAnswerText(text)
+    .replace(EMOJI_RE, '')
     .replace(STAGE_DIRECTION_RE, '')
     .replace(INLINE_STAGE_DIRECTION_RE, '')
     .replace(/\s+/g, ' ')
     .replace(/^[：:，,。！？!?\s]+/, '')
+    .trim()
+}
+
+export function sanitizeAnswerText(text: string) {
+  return text
+    .replace(MARKDOWN_RULE_LINE_RE, '')
+    .replace(MARKDOWN_HEADING_RE, '')
+    .replace(MARKDOWN_LIST_MARKER_RE, '')
+    .replace(MARKDOWN_EMPHASIS_RE, '')
+    .replace(/\n{3,}/g, '\n\n')
     .trim()
 }
 
