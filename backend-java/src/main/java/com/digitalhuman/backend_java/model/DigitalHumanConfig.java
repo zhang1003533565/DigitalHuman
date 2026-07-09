@@ -11,6 +11,7 @@ public class DigitalHumanConfig {
     private Long id = 1L;
 
     private String modelId = "hiyori_pro_zh";
+    private String costumeId = "default";
     private String voiceId = "zh-CN-XiaoxiaoNeural";
     private Integer rate = 0;
     private Integer volume = 0;
@@ -23,6 +24,8 @@ public class DigitalHumanConfig {
     public void setId(Long id) { this.id = id; }
     public String getModelId() { return modelId; }
     public void setModelId(String modelId) { this.modelId = modelId; }
+    public String getCostumeId() { return costumeId; }
+    public void setCostumeId(String costumeId) { this.costumeId = costumeId; }
     public String getVoiceId() { return voiceId; }
     public void setVoiceId(String voiceId) { this.voiceId = voiceId; }
     public Integer getRate() { return rate; }

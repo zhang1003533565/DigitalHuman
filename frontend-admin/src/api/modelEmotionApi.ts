@@ -69,6 +69,18 @@ export type DigitalHumanModel = {
   updatedAt?: string;
 };
 
+export type DigitalHumanConfig = {
+  modelId: string;
+  costumeId?: string;
+  voiceId: string;
+  rate: number;
+  volume: number;
+  pitch: number;
+  welcomeText: string;
+  guideStyle: string;
+  broadcastStrategy: string;
+};
+
 export type ActionRuleType = 'MOUSE' | 'KEYWORD' | 'IDLE';
 
 export type ActionTriggerRule = {
@@ -119,6 +131,16 @@ export const modelEmotionApi = {
 
   saveTriggerConfig: (id: number, data: Pick<ActionTriggerConfig, 'mouseRules' | 'textRules' | 'idleRules'>) => fetchJson<ActionTriggerConfig>(
     `${API_BASE}/models/${id}/trigger-config`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    },
+  ),
+
+  getDigitalHumanConfig: () => fetchJson<DigitalHumanConfig>('/api/admin/settings/digital-human-config'),
+
+  updateDigitalHumanConfig: (data: DigitalHumanConfig) => fetchJson<DigitalHumanConfig>(
+    '/api/admin/settings/digital-human-config',
     {
       method: 'PUT',
       body: JSON.stringify(data),

@@ -2,6 +2,7 @@ package com.digitalhuman.backend_java.dto;
 
 public class DigitalHumanConfigDto {
     private String modelId;
+    private String costumeId;
     private String voiceId;
     private Integer rate;
     private Integer volume;
@@ -13,8 +14,9 @@ public class DigitalHumanConfigDto {
     public DigitalHumanConfigDto() {
     }
 
-    public DigitalHumanConfigDto(String modelId, String voiceId, Integer rate, Integer volume, Integer pitch, String welcomeText, String guideStyle, String broadcastStrategy) {
+    public DigitalHumanConfigDto(String modelId, String costumeId, String voiceId, Integer rate, Integer volume, Integer pitch, String welcomeText, String guideStyle, String broadcastStrategy) {
         this.modelId = modelId;
+        this.costumeId = costumeId;
         this.voiceId = voiceId;
         this.rate = rate;
         this.volume = volume;
@@ -26,6 +28,8 @@ public class DigitalHumanConfigDto {
 
     public String getModelId() { return modelId; }
     public void setModelId(String modelId) { this.modelId = modelId; }
+    public String getCostumeId() { return costumeId; }
+    public void setCostumeId(String costumeId) { this.costumeId = costumeId; }
     public String getVoiceId() { return voiceId; }
     public void setVoiceId(String voiceId) { this.voiceId = voiceId; }
     public Integer getRate() { return rate; }

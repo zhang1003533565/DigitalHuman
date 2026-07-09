@@ -51,13 +51,20 @@ export function extractSpeakableSegments(text: string, options: SegmentOptions =
   return { segments, rest }
 }
 
-export function joinQuickReplyAndAnswer(quickReply: string, answer: string) {
+type JoinAnswerOptions = {
+  pending?: boolean
+}
+
+export function joinQuickReplyAndAnswer(quickReply: string, answer: string, options: JoinAnswerOptions = {}) {
   const cleanQuickReply = quickReply.trim()
   const cleanAnswer = stripDuplicateGreeting(cleanQuickReply, answer)
   if (!cleanQuickReply) {
-    return cleanAnswer
+    return cleanAnswer || (options.pending ? '...' : '')
   }
   if (!cleanAnswer) {
+    if (options.pending) {
+      return `${cleanQuickReply}\n\n...`
+    }
     return cleanQuickReply
   }
   return `${cleanQuickReply}\n\n${cleanAnswer}`

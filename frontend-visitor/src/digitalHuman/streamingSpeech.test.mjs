@@ -11,6 +11,12 @@ assert.equal(joined, '你好呀，灵山很好逛。\n\n我推荐上午先去灵
 const emptyQuickReply = joinQuickReplyAndAnswer('', '我推荐上午先去灵山大佛。')
 assert.equal(emptyQuickReply, '我推荐上午先去灵山大佛。')
 
+const pendingAfterQuickReply = joinQuickReplyAndAnswer('好的，我来帮你写。', '', { pending: true })
+assert.equal(pendingAfterQuickReply, '好的，我来帮你写。\n\n...')
+
+const pendingWithoutQuickReply = joinQuickReplyAndAnswer('', '', { pending: true })
+assert.equal(pendingWithoutQuickReply, '...')
+
 const duplicateGreeting = stripDuplicateGreeting(
   '你好呀！欢迎来到灵山景区，有什么需要帮忙的吗？',
   '你好呀！很高兴又和你见面啦～😊 今天是想了解灵山景区的游览攻略，还是想听这里的故事？',

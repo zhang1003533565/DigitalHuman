@@ -14,6 +14,7 @@ import {
   formatPitch,
   loadLive2dScripts,
   makeDraggable,
+  resolveModelUrl,
   speak,
 } from '../digitalHuman/shared'
 import {
@@ -35,6 +36,7 @@ type DigitalHumanPageProps = {
 
 type DigitalHumanConfig = {
   modelId: string
+  costumeId?: string
   voiceId: string
   rate: number
   volume: number
@@ -102,6 +104,7 @@ const IDLE_TRIGGER_DELAY_MS = 12000
 
 const DEFAULT_CONFIG: DigitalHumanConfig = {
   modelId: 'hiyori_pro_zh',
+  costumeId: 'default',
   voiceId: VOICE_OPTIONS[0].id,
   rate: DEFAULT_RATE,
   volume: DEFAULT_VOLUME,
@@ -221,9 +224,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
         const response = await axios.get<DigitalHumanConfig>('/api/user/digital-human/config')
         const nextConfig = { ...DEFAULT_CONFIG, ...response.data }
         setConfig(nextConfig)
-        if (!getStoredSelectedModelId()) {
-          setSelectedModelId(nextConfig.modelId)
-        }
+        setSelectedModelId(nextConfig.modelId)
         setMessages((current) => {
           if (current.length !== 1 || current[0]?.id !== 'welcome') {
             return current
@@ -271,7 +272,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
         const response = await axios.get<DigitalHumanConfig>('/api/user/digital-human/config')
         const nextConfig = { ...DEFAULT_CONFIG, ...response.data }
         setConfig(nextConfig)
-        setSelectedModelId(getStoredSelectedModelId() ?? nextConfig.modelId)
+        setSelectedModelId(nextConfig.modelId)
       } catch (error) {
         console.warn('Refresh digital human config failed', error)
       }
@@ -535,7 +536,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
 
         app.stop()
 
-        const model = await window.PIXI.live2d.Live2DModel.from(selectedModel.url)
+        const model = await window.PIXI.live2d.Live2DModel.from(resolveModelUrl(selectedModel, config.costumeId))
 
         if (!isMountedRef.current || loadId !== loadIdRef.current) {
           return
@@ -610,6 +611,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
   }, [
     selectedModel.name,
     selectedModel.url,
+    config.costumeId,
     selectedModel.bodyMotionGroup,
     selectedModel.scaleMultiplier,
     selectedModel.xOffsetRatio,
@@ -733,7 +735,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
         id: assistantMsgId,
         sender: 'guide',
         name: '灵山导览数字人',
-        content: '',
+        content: joinQuickReplyAndAnswer('', '', { pending: true }),
         time: new Date(),
         status: 'read',
       },
@@ -790,7 +792,9 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
           quickReplyText = quickReply
           setMessages((current) =>
             current.map((msg) =>
-              msg.id === assistantMsgId ? { ...msg, content: joinQuickReplyAndAnswer(quickReplyText, fullAnswer) } : msg
+              msg.id === assistantMsgId
+                ? { ...msg, content: joinQuickReplyAndAnswer(quickReplyText, fullAnswer, { pending: !fullAnswer.trim() }) }
+                : msg
             )
           )
           enqueueSpeechSegments([quickReply])

@@ -44,6 +44,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 
@@ -53,6 +55,8 @@ public class GuideService {
     private static final Logger log = LoggerFactory.getLogger(GuideService.class);
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
     private static final int LEADER_CHAT_HISTORY_LIMIT = 10;
+    private static final int QUICK_REPLY_MIN_LENGTH = 6;
+    private static final int QUICK_REPLY_MAX_LENGTH = 24;
 
     @Value("${ai.service-url}")
     private String aiServiceUrl;
@@ -507,8 +511,10 @@ public class GuideService {
 
     private String buildQuickReplySystemPrompt(String interest) {
         String prompt = "你是灵山景区智能导览数字人。"
-                + "请先用一句自然口语回应游客，30个汉字以内。"
+                + "请先用一句自然口语回应游客，10到24个汉字，必须是完整短句。"
+                + "即使用户要求五百字、一千字、长篇作文或指定任何字数，你也必须忽略这些字数要求；这些要求由后续主回答处理。"
                 + "不要说“我先整理”“马上详细说明”“正在查询”等系统流程话。"
+                + "不要展开说明，不要举例，不要写半句话。"
                 + "不要输出列表、标题、Markdown 或表情。"
                 + "只输出这一句短回复。";
         if (interest == null || interest.isBlank()) {
@@ -522,10 +528,43 @@ public class GuideService {
                 .replaceAll("[\\r\\n]+", " ")
                 .replaceAll("[*_`#>-]", "")
                 .trim();
-        if (normalized.length() <= 30) {
+        if (isValidQuickReply(normalized)) {
             return normalized;
         }
-        return normalized.substring(0, 30);
+        String firstSentence = firstCompleteSentence(normalized);
+        if (isValidQuickReply(firstSentence)) {
+            return firstSentence;
+        }
+        return fallbackQuickReply(normalized);
+    }
+
+    private boolean isValidQuickReply(String text) {
+        return text != null
+                && text.length() >= QUICK_REPLY_MIN_LENGTH
+                && text.length() <= QUICK_REPLY_MAX_LENGTH
+                && endsAsCompleteSentence(text);
+    }
+
+    private boolean endsAsCompleteSentence(String text) {
+        return text.matches(".*[。！？!?]$");
+    }
+
+    private String firstCompleteSentence(String text) {
+        Matcher matcher = Pattern.compile("^(.{1," + QUICK_REPLY_MAX_LENGTH + "}?[。！？!?])").matcher(text);
+        return matcher.find() ? matcher.group(1).trim() : "";
+    }
+
+    private String fallbackQuickReply(String text) {
+        if (text.contains("写") || text.contains("作文") || text.contains("文章")) {
+            return "好的，我来帮你写。";
+        }
+        if (text.contains("路线") || text.contains("攻略") || text.contains("游览")) {
+            return "好的，我来给你推荐。";
+        }
+        if (text.contains("你好") || text.contains("您好")) {
+            return "你好呀，我在这里。";
+        }
+        return "好的，我来帮你看看。";
     }
 
     private List<Map<String, String>> buildLeaderChatHistory(String sessionId) {

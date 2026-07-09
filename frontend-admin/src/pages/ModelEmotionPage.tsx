@@ -26,6 +26,7 @@ import {
 import {
   type ActionTriggerRule,
   type ActionTriggerConfig,
+  type DigitalHumanConfig,
   type DigitalHumanModel,
   type ModelAction,
   modelEmotionApi,
@@ -64,6 +65,54 @@ type EditingState = {
 };
 
 type TriggerMode = 'mouse' | 'text' | 'idle';
+
+type CostumeOption = {
+  value: string;
+  label: string;
+  modelPath?: string;
+};
+
+const DEFAULT_DIGITAL_HUMAN_CONFIG: DigitalHumanConfig = {
+  modelId: 'hiyori_pro_zh',
+  costumeId: 'default',
+  voiceId: 'zh-CN-XiaoxiaoNeural',
+  rate: 0,
+  volume: 0,
+  pitch: 0,
+  welcomeText: '您好，欢迎来到灵山胜境，我可以为您介绍景点、路线和活动安排。',
+  guideStyle: 'friendly',
+  broadcastStrategy: 'standard',
+};
+
+const COSTUME_OPTIONS_BY_MODEL: Record<string, CostumeOption[]> = {
+  haru_greeter_pro_jp: [
+    {
+      value: 'default',
+      label: '默认服装',
+      modelPath: 'haru_greeter_pro_jp/haru_greeter_t05.model3.json',
+    },
+    {
+      value: 'white',
+      label: '白色导览服',
+      modelPath: 'haru_greeter_pro_jp/haru_greeter_t05_white.model3.json',
+    },
+  ],
+};
+
+function getCostumeOptions(model?: Pick<DigitalHumanModel, 'modelKey'> | null): CostumeOption[] {
+  if (!model) {
+    return [{ value: 'default', label: '默认服装' }];
+  }
+  return COSTUME_OPTIONS_BY_MODEL[model.modelKey] ?? [{ value: 'default', label: '默认服装' }];
+}
+
+function resolveModelPath(model?: Pick<DigitalHumanModel, 'modelKey' | 'modelPath'> | null, costumeId?: string) {
+  if (!model) {
+    return '';
+  }
+  const costume = getCostumeOptions(model).find((option) => option.value === costumeId);
+  return costume?.modelPath ?? model.modelPath;
+}
 
 type Live2DModel = {
   width: number;
@@ -285,9 +334,11 @@ function getRuleRowKey(mode: TriggerMode, rule: ActionTriggerRule) {
 function ModelActionPreview({
   model,
   config,
+  costumeId,
 }: {
   model?: DigitalHumanModel | null;
   config: ActionTriggerConfig | null;
+  costumeId?: string;
 }) {
   const frameRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -299,7 +350,8 @@ function ModelActionPreview({
   const layoutModelRef = useRef<(() => void) | null>(null);
   const [status, setStatus] = useState('等待模型');
 
-  const modelUrl = model?.modelPath ? `/live2d/${model.modelPath}` : '';
+  const modelPath = resolveModelPath(model, costumeId);
+  const modelUrl = modelPath ? `/live2d/${modelPath}` : '';
 
   const clearClickTimer = useCallback(() => {
     if (clickTimerRef.current !== null) {
@@ -548,6 +600,8 @@ export default function ModelEmotionPage() {
   const [selectedMouseRuleKeys, setSelectedMouseRuleKeys] = useState<Key[]>([]);
   const [selectedTextRuleKeys, setSelectedTextRuleKeys] = useState<Key[]>([]);
   const [selectedIdleRuleKeys, setSelectedIdleRuleKeys] = useState<Key[]>([]);
+  const [digitalHumanConfig, setDigitalHumanConfig] = useState<DigitalHumanConfig | null>(null);
+  const [costumeSaving, setCostumeSaving] = useState(false);
   const [form] = Form.useForm<RuleFormValue>();
 
   const actionOptions = useMemo(
@@ -559,6 +613,20 @@ export default function ModelEmotionPage() {
   );
 
   const selectedModel = models.find((model) => model.id === selectedModelId) ?? config?.model;
+  const costumeOptions = getCostumeOptions(selectedModel);
+  const selectedCostumeId = digitalHumanConfig?.modelId === selectedModel?.modelKey
+    ? digitalHumanConfig?.costumeId ?? 'default'
+    : 'default';
+
+  async function loadDigitalHumanConfig() {
+    try {
+      const data = await modelEmotionApi.getDigitalHumanConfig();
+      setDigitalHumanConfig({ ...DEFAULT_DIGITAL_HUMAN_CONFIG, ...data });
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '加载数字人展示配置失败');
+      setDigitalHumanConfig(DEFAULT_DIGITAL_HUMAN_CONFIG);
+    }
+  }
 
   async function loadModels(autoScan = false) {
     setLoading(true);
@@ -597,12 +665,38 @@ export default function ModelEmotionPage() {
   }
 
   useDeferredMount(() => {
-    void loadModels(true);
+    void Promise.all([
+      loadDigitalHumanConfig(),
+      loadModels(true),
+    ]);
   });
 
   async function handleModelChange(modelId: number) {
     setSelectedModelId(modelId);
     await loadTriggerConfig(modelId);
+  }
+
+  async function handleCostumeChange(costumeId: string) {
+    if (!selectedModel) {
+      return;
+    }
+
+    const nextConfig: DigitalHumanConfig = {
+      ...(digitalHumanConfig ?? DEFAULT_DIGITAL_HUMAN_CONFIG),
+      modelId: selectedModel.modelKey,
+      costumeId,
+    };
+
+    setCostumeSaving(true);
+    try {
+      const saved = await modelEmotionApi.updateDigitalHumanConfig(nextConfig);
+      setDigitalHumanConfig({ ...DEFAULT_DIGITAL_HUMAN_CONFIG, ...saved });
+      message.success('换装已保存，游客端将自动生效');
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '换装保存失败');
+    } finally {
+      setCostumeSaving(false);
+    }
   }
 
   function getRulesByMode(mode: TriggerMode) {
@@ -855,7 +949,15 @@ export default function ModelEmotionPage() {
               options={models.map((model) => ({ value: model.id, label: getModelDisplayName(model) }))}
               onChange={(value) => void handleModelChange(value)}
             />
-            <ModelActionPreview model={selectedModel} config={config} />
+            <Select
+              value={selectedCostumeId}
+              loading={costumeSaving}
+              placeholder="选择服装"
+              style={{ width: '100%' }}
+              options={costumeOptions}
+              onChange={(value) => void handleCostumeChange(value)}
+            />
+            <ModelActionPreview model={selectedModel} config={config} costumeId={selectedCostumeId} />
             <Button icon={<ReloadOutlined />} block onClick={() => void loadModels(true)} loading={loading}>
               替换/扫描模型
             </Button>
@@ -867,7 +969,9 @@ export default function ModelEmotionPage() {
             <dt>模型 ID</dt>
             <dd>{selectedModel?.modelKey ?? '-'}</dd>
             <dt>模型文件</dt>
-            <dd>{selectedModel?.modelPath ?? '-'}</dd>
+            <dd>{resolveModelPath(selectedModel, selectedCostumeId) || '-'}</dd>
+            <dt>当前服装</dt>
+            <dd>{costumeOptions.find((option) => option.value === selectedCostumeId)?.label ?? '默认服装'}</dd>
             <dt>动作数量</dt>
             <dd>{config?.actions.length ?? 0}</dd>
             <dt>更新时间</dt>

@@ -25,6 +25,7 @@ public class DigitalHumanConfigService {
     public DigitalHumanConfigDto updateConfig(DigitalHumanConfigDto request) {
         DigitalHumanConfig config = loadConfig();
         config.setModelId(normalize(request.getModelId(), config.getModelId()));
+        config.setCostumeId(normalize(request.getCostumeId(), config.getCostumeId()));
         config.setVoiceId(normalize(request.getVoiceId(), config.getVoiceId()));
         config.setRate(clamp(request.getRate(), -50, 100, config.getRate()));
         config.setVolume(clamp(request.getVolume(), -50, 50, config.getVolume()));
@@ -46,6 +47,7 @@ public class DigitalHumanConfigService {
     private DigitalHumanConfigDto toDto(DigitalHumanConfig config) {
         return new DigitalHumanConfigDto(
                 config.getModelId(),
+                config.getCostumeId(),
                 config.getVoiceId(),
                 config.getRate(),
                 config.getVolume(),

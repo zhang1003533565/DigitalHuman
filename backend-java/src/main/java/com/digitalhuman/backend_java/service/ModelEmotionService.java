@@ -178,14 +178,20 @@ public class ModelEmotionService {
     }
 
     private String findModelJson(Path modelDir) {
+        List<Path> modelFiles = new ArrayList<>();
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(modelDir, "*.model3.json")) {
             for (Path file : stream) {
-                return modelDir.getFileName() + "/" + file.getFileName();
+                modelFiles.add(file);
             }
         } catch (IOException ignored) {
             return null;
         }
-        return null;
+        return modelFiles.stream()
+                .filter(file -> !file.getFileName().toString().contains("_white"))
+                .findFirst()
+                .or(() -> modelFiles.stream().findFirst())
+                .map(file -> modelDir.getFileName() + "/" + file.getFileName())
+                .orElse(null);
     }
 
     private List<ModelAction> parseActionMd(DigitalHumanModel model, Path actionMdPath) throws IOException {

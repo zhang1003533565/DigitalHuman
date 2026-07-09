@@ -91,6 +91,7 @@ export type ModelOption = {
   id: string
   name: string
   url: string
+  costumes?: CostumeOption[]
   scaleMultiplier?: number
   xOffsetRatio?: number
   yOffsetRatio?: number
@@ -105,6 +106,12 @@ export type MotionOption = {
   label: string
   group: string
   index?: number
+}
+
+export type CostumeOption = {
+  id: string
+  name: string
+  url: string
 }
 
 declare global {
@@ -215,6 +222,18 @@ export const MODEL_OPTIONS = [
     id: 'haru_greeter_pro_jp',
     name: 'Haru Greeter',
     url: '/live2d/haru_greeter_pro_jp/haru_greeter_t05.model3.json',
+    costumes: [
+      {
+        id: 'default',
+        name: '默认服装',
+        url: '/live2d/haru_greeter_pro_jp/haru_greeter_t05.model3.json',
+      },
+      {
+        id: 'white',
+        name: '白色导览服',
+        url: '/live2d/haru_greeter_pro_jp/haru_greeter_t05_white.model3.json',
+      },
+    ],
     motionOptions: HARU_MOTION_OPTIONS,
     microMotionOptions: HARU_MICRO_MOTION_OPTIONS,
   },
@@ -230,6 +249,15 @@ export const MODEL_OPTIONS = [
     motionOptions: MARK_MOTION_OPTIONS,
   },
 ] satisfies ModelOption[]
+
+export function getModelCostumeOptions(model?: ModelOption | null) {
+  return model?.costumes?.length ? model.costumes : [{ id: 'default', name: '默认服装' }]
+}
+
+export function resolveModelUrl(model: ModelOption, costumeId?: string | null) {
+  const costume = model.costumes?.find((item) => item.id === costumeId)
+  return costume?.url ?? model.url
+}
 
 export const VOICE_OPTIONS = [
   { id: 'zh-CN-XiaoxiaoNeural', name: '晓晓 (女声)' },
