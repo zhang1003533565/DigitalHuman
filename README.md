@@ -65,7 +65,7 @@ pnpm -v
 npm -v
 java -version
 mvn -v
-python3 --version
+python3.11 --version
 docker --version
 ```
 
@@ -93,7 +93,7 @@ cd ..
 
 ```bash
 cd ai-service
-python3 -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt

@@ -29,7 +29,7 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(org.springframework.web.servlet.config.annotation.InterceptorRegistry registry) {
         registry.addInterceptor(authInterceptor)
-                .addPathPatterns("/api/admin/**", "/api/user/**")
+                .addPathPatterns("/api/admin/**", "/api/user/**", "/api/knowledge/maxkb/**")
                 .excludePathPatterns("/api/auth/**", "/api/tts/**", "/error");
     }
 

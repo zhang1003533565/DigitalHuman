@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import axios from 'axios'
 import {
   Button,
@@ -55,8 +55,8 @@ function TravelTipManagementPageInner() {
     try {
       const response = await axios.get<TravelTipRow[]>('/api/admin/travel-tips')
       const rows: TravelTipRow[] = response.data.map((tip) => ({
-        key: tip.id,
         ...tip,
+        key: tip.id ?? tip.key,
       }))
       setTips(rows)
     } catch {
