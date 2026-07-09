@@ -370,11 +370,46 @@ export function speak(
   audio.volume = 1
   const stopLipSync = startProceduralLipSync(model)
   let settled = false
+  let playbackTimer: number | null = null
+  let stallTimer: number | null = null
+
+  const clearPlaybackTimer = () => {
+    if (playbackTimer !== null) {
+      window.clearTimeout(playbackTimer)
+      playbackTimer = null
+    }
+  }
+
+  const clearStallTimer = () => {
+    if (stallTimer !== null) {
+      window.clearTimeout(stallTimer)
+      stallTimer = null
+    }
+  }
+
+  const schedulePlaybackGuard = (durationMs?: number) => {
+    clearPlaybackTimer()
+    const fallbackMs = durationMs && Number.isFinite(durationMs)
+      ? Math.min(Math.max(durationMs + 3000, 8000), 90000)
+      : 45000
+    playbackTimer = window.setTimeout(() => {
+      cleanup('finish')
+    }, fallbackMs)
+  }
+
+  const scheduleStallGuard = () => {
+    clearStallTimer()
+    stallTimer = window.setTimeout(() => {
+      cleanup('error', new Error('Audio playback stalled'))
+    }, 6000)
+  }
 
   const cleanup = (reason: 'finish' | 'error' | 'stop', error?: Error) => {
     if (settled) return
     settled = true
 
+    clearPlaybackTimer()
+    clearStallTimer()
     audio.pause()
     audio.removeAttribute('src')
     audio.load()
@@ -391,6 +426,15 @@ export function speak(
 
   activeSpeechStops.set(model, () => cleanup('stop'))
 
+  schedulePlaybackGuard(8000)
+  audio.addEventListener('loadedmetadata', () => {
+    schedulePlaybackGuard(audio.duration * 1000)
+  }, { once: true })
+  audio.addEventListener('playing', clearStallTimer)
+  audio.addEventListener('canplay', clearStallTimer)
+  audio.addEventListener('timeupdate', clearStallTimer)
+  audio.addEventListener('waiting', scheduleStallGuard)
+  audio.addEventListener('stalled', scheduleStallGuard)
   audio.addEventListener('ended', () => cleanup('finish'), { once: true })
   audio.addEventListener('error', () => cleanup('error', new Error('Audio playback failed')), { once: true })
 

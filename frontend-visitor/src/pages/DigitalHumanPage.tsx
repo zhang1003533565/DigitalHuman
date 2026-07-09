@@ -207,6 +207,8 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     MODEL_OPTIONS.find((model) => model.id === selectedModelId) ??
     MODEL_OPTIONS[0]
   const selectedRuntimeModel = runtimeModels.find((model) => model.modelKey === selectedModel.id)
+  const selectedModelIdRef = useRef(selectedModel.id)
+  const selectedRuntimeModelRef = useRef<RuntimeDigitalHumanModel | undefined>(selectedRuntimeModel)
 
   const selectedVoice =
     VOICE_OPTIONS.find((voice) => voice.id === config.voiceId) ??
@@ -217,6 +219,11 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     FACTORY_OPTIONS[0]
 
   const canSend = isReady && draft.trim().length > 0
+
+  useEffect(() => {
+    selectedModelIdRef.current = selectedModel.id
+    selectedRuntimeModelRef.current = selectedRuntimeModel
+  }, [selectedModel.id, selectedRuntimeModel])
 
   const applyDigitalHumanConfig = useCallback((nextConfig: DigitalHumanConfig) => {
     setConfig(nextConfig)
@@ -281,15 +288,6 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     }
 
     void loadRuntimeModels()
-
-    // 定时刷新配置，每 30 秒检查一次更新
-    const refreshInterval = setInterval(() => {
-      void loadRuntimeModels()
-    }, 30000)
-
-    return () => {
-      clearInterval(refreshInterval)
-    }
   }, [])
 
   useEffect(() => {
@@ -333,7 +331,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
   }, [])
 
   const findLocalRuleMatch = useCallback((payload: ActionTriggerPayload) => {
-    const rules = [...(selectedRuntimeModel?.triggerRules ?? [])]
+    const rules = [...(selectedRuntimeModelRef.current?.triggerRules ?? [])]
       .filter((rule) => rule.enabled)
       .sort((left, right) => (left.priority - right.priority) || ((left.id ?? 0) - (right.id ?? 0)))
 
@@ -358,10 +356,10 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     }
 
     return selectWeightedRule(matchedRules)
-  }, [selectedRuntimeModel])
+  }, [])
 
   const triggerConfiguredAction = useCallback(async (payload: ActionTriggerPayload) => {
-    const modelKey = selectedRuntimeModel?.modelKey ?? selectedModel.id
+    const modelKey = selectedRuntimeModelRef.current?.modelKey ?? selectedModelIdRef.current
     if (!modelKey) {
       return false
     }
@@ -380,7 +378,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
 
     const localRule = findLocalRuleMatch(payload)
     return playConfiguredMotion(localRule ? { matched: true, ...localRule } : undefined)
-  }, [findLocalRuleMatch, playConfiguredMotion, selectedModel.id, selectedRuntimeModel])
+  }, [findLocalRuleMatch, playConfiguredMotion])
 
   useEffect(() => {
     if (!isReady || isSpeaking) {
@@ -579,7 +577,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
           const hitAreas = Array.isArray(args[0]) ? (args[0] as string[]) : []
 
           if (hitAreas.includes('Body') && selectedModel.bodyMotionGroup) {
-            const hasConfiguredClick = (selectedRuntimeModel?.triggerRules ?? [])
+            const hasConfiguredClick = (selectedRuntimeModelRef.current?.triggerRules ?? [])
               .some((rule) => rule.enabled && rule.ruleType === 'MOUSE' && rule.eventCode === 'CLICK_LEFT')
             if (!hasConfiguredClick) {
               model.motion(selectedModel.bodyMotionGroup)
@@ -617,7 +615,6 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     selectedModel.scaleMultiplier,
     selectedModel.xOffsetRatio,
     selectedModel.yOffsetRatio,
-    selectedRuntimeModel?.triggerRules,
     markInteraction,
     triggerConfiguredAction,
   ])
@@ -678,6 +675,11 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
   function prefetchSpeechSegments(runId: number) {
     if (runId !== speechRunIdRef.current) return
 
+    const nextItem = speechQueueRef.current[0]
+    if (nextItem) {
+      startSpeechSynthesisForItem(nextItem, runId)
+    }
+
     const pendingCount = speechQueueRef.current.filter((item) => item.promise && !item.audioUrl && !item.failed).length
     let availableSlots = Math.max(0, SPEECH_PREFETCH_LIMIT - pendingCount)
     if (!availableSlots) return
@@ -686,26 +688,32 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
       if (!availableSlots) break
       if (item.audioUrl || item.promise || item.failed) continue
 
-      item.promise = synthesizeSpeechSegment(item.text, runId)
-        .then((audioUrl) => {
-          if (runId !== speechRunIdRef.current) {
-            if (audioUrl) {
-              URL.revokeObjectURL(audioUrl)
-            }
-            return null
-          }
-
-          item.audioUrl = audioUrl ?? undefined
-          item.failed = !audioUrl
-          return audioUrl
-        })
-        .catch((error) => {
-          console.error(error)
-          item.failed = true
-          return null
-        })
+      startSpeechSynthesisForItem(item, runId)
       availableSlots -= 1
     }
+  }
+
+  function startSpeechSynthesisForItem(item: SpeechQueueItem, runId: number) {
+    if (item.audioUrl || item.promise || item.failed || runId !== speechRunIdRef.current) return
+
+    item.promise = synthesizeSpeechSegment(item.text, runId)
+      .then((audioUrl) => {
+        if (runId !== speechRunIdRef.current) {
+          if (audioUrl) {
+            URL.revokeObjectURL(audioUrl)
+          }
+          return null
+        }
+
+        item.audioUrl = audioUrl ?? undefined
+        item.failed = !audioUrl
+        return audioUrl
+      })
+      .catch((error) => {
+        console.error(error)
+        item.failed = true
+        return null
+      })
   }
 
   async function playNextSpeechSegment(runId: number) {
@@ -725,6 +733,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
       return
     }
 
+    startSpeechSynthesisForItem(nextItem, runId)
     const audioUrl = nextItem.audioUrl ?? await nextItem.promise
     if (runId !== speechRunIdRef.current) {
       isAudioStartingRef.current = false
