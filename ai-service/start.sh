@@ -9,24 +9,66 @@ HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-18755}"
 VENV_DIR="${VENV_DIR:-.venv}"
 RUN_MODE="${RUN_MODE:-local}"
+REQUIRED_PYTHON_VERSION="3.11"
+
+python_version_ok() {
+  "$1" - <<'PY'
+import sys
+raise SystemExit(0 if sys.version_info >= (3, 11) else 1)
+PY
+}
+
+python_version_text() {
+  "$1" - <<'PY'
+import sys
+print(f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
+PY
+}
+
+find_bootstrap_python() {
+  for candidate in python3.13 python3.12 python3.11 python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      local candidate_path
+      candidate_path="$(command -v "$candidate")"
+      if python_version_ok "$candidate_path"; then
+        printf '%s\n' "$candidate_path"
+        return 0
+      fi
+    fi
+  done
+
+  return 1
+}
 
 if [ -x "$SCRIPT_DIR/${VENV_DIR}/bin/python" ]; then
   PYTHON_BIN="$SCRIPT_DIR/${VENV_DIR}/bin/python"
 elif [ -x "$SCRIPT_DIR/venv/bin/python" ] && [ "$VENV_DIR" = ".venv" ]; then
   # Backward compatibility for older local environments.
   PYTHON_BIN="$SCRIPT_DIR/venv/bin/python"
-elif command -v python3 >/dev/null 2>&1; then
-  BOOTSTRAP_PYTHON="$(command -v python3)"
-elif command -v python >/dev/null 2>&1; then
-  BOOTSTRAP_PYTHON="$(command -v python)"
-else
-  echo "Error: python3/python not found."
-  echo "Please install Python 3.11+ first."
-  exit 1
+fi
+
+if [ -n "${PYTHON_BIN:-}" ] && ! python_version_ok "$PYTHON_BIN"; then
+  echo "Existing virtual environment uses Python $(python_version_text "$PYTHON_BIN"), but ai-service requires Python ${REQUIRED_PYTHON_VERSION}+."
+  if [ "$VENV_DIR" = ".venv" ] || [ "$VENV_DIR" = "venv" ]; then
+    echo "Recreating ${VENV_DIR} with a compatible Python ..."
+    rm -rf "$SCRIPT_DIR/$VENV_DIR"
+    PYTHON_BIN=""
+  else
+    echo "Error: refusing to remove custom VENV_DIR=${VENV_DIR}."
+    echo "Please recreate it with Python ${REQUIRED_PYTHON_VERSION}+."
+    exit 1
+  fi
 fi
 
 if [ -z "${PYTHON_BIN:-}" ]; then
+  if ! BOOTSTRAP_PYTHON="$(find_bootstrap_python)"; then
+    echo "Error: Python ${REQUIRED_PYTHON_VERSION}+ not found."
+    echo "Please install Python ${REQUIRED_PYTHON_VERSION}+ first, then rerun this script."
+    exit 1
+  fi
+
   echo "Creating virtual environment at ${VENV_DIR} ..."
+  echo "Using bootstrap Python: ${BOOTSTRAP_PYTHON} ($(python_version_text "$BOOTSTRAP_PYTHON"))"
   "$BOOTSTRAP_PYTHON" -m venv "$VENV_DIR"
   PYTHON_BIN="$SCRIPT_DIR/${VENV_DIR}/bin/python"
 fi
