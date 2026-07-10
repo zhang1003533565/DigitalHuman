@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -63,6 +64,23 @@ public class AdminKnowledgeController {
             @PathVariable String documentId,
             @RequestParam Map<String, String> query) {
         return maxKbService.listParagraphs(knowledgeId, documentId, query);
+    }
+
+    @GetMapping("/knowledges/{knowledgeId}/documents/{documentId}/paragraphs/{paragraphId}/problems")
+    public JsonNode listParagraphProblems(
+            @PathVariable String knowledgeId,
+            @PathVariable String documentId,
+            @PathVariable String paragraphId) {
+        return maxKbService.listParagraphProblems(knowledgeId, documentId, paragraphId);
+    }
+
+    @PutMapping("/knowledges/{knowledgeId}/documents/{documentId}/paragraphs/{paragraphId}")
+    public JsonNode updateParagraph(
+            @PathVariable String knowledgeId,
+            @PathVariable String documentId,
+            @PathVariable String paragraphId,
+            @RequestBody Map<String, Object> payload) {
+        return maxKbService.updateParagraph(knowledgeId, documentId, paragraphId, payload);
     }
 
     @PostMapping("/hit-test")

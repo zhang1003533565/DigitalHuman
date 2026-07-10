@@ -43,6 +43,18 @@ export type HitTestPayload = {
   search_mode?: 'embedding' | 'keywords' | 'blend'
 }
 
+export type ParagraphProblemPayload = {
+  id?: string
+  content: string
+}
+
+export type ParagraphUpdatePayload = {
+  title?: string
+  content: string
+  is_active?: boolean
+  problem_list?: ParagraphProblemPayload[]
+}
+
 function unwrap<T>(payload: MaxKbResponse<T> | T): T {
   if (payload && typeof payload === 'object' && 'data' in payload) {
     return (payload as MaxKbResponse<T>).data as T
@@ -132,6 +144,30 @@ export async function getDocumentParagraphs(
   const response = await axios.get<MaxKbResponse>(
     `/api/admin/knowledge/knowledges/${encodeURIComponent(knowledgeId)}/documents/${encodeURIComponent(documentId)}/paragraphs`,
     { params },
+  )
+  return response.data
+}
+
+export async function getDocumentParagraphProblems(
+  knowledgeId: string,
+  documentId: string,
+  paragraphId: string,
+) {
+  const response = await axios.get<MaxKbResponse>(
+    `/api/admin/knowledge/knowledges/${encodeURIComponent(knowledgeId)}/documents/${encodeURIComponent(documentId)}/paragraphs/${encodeURIComponent(paragraphId)}/problems`,
+  )
+  return response.data
+}
+
+export async function updateDocumentParagraph(
+  knowledgeId: string,
+  documentId: string,
+  paragraphId: string,
+  payload: ParagraphUpdatePayload,
+) {
+  const response = await axios.put<MaxKbResponse>(
+    `/api/admin/knowledge/knowledges/${encodeURIComponent(knowledgeId)}/documents/${encodeURIComponent(documentId)}/paragraphs/${encodeURIComponent(paragraphId)}`,
+    payload,
   )
   return response.data
 }

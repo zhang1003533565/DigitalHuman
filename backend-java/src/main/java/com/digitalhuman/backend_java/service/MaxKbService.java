@@ -14,6 +14,7 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -153,6 +154,52 @@ public class MaxKbService {
         return get(workspacePath("/knowledges/" + knowledgeId + "/documents/" + documentId + "/paragraphs"), query);
     }
 
+    public JsonNode listParagraphProblems(String knowledgeId, String documentId, String paragraphId) {
+        String openApiPath = workspacePath(
+                "/knowledges/" + knowledgeId
+                        + "/documents/" + documentId
+                        + "/paragraphs/" + paragraphId
+                        + "/problem");
+        try {
+            return get(openApiPath, Map.of());
+        } catch (ResponseStatusException exception) {
+            if (!shouldTryManagementFallback(exception)) {
+                throw exception;
+            }
+            RuntimeConfig config = effectiveConfig();
+            return getManagement(
+                    config,
+                    "/admin/api/workspace/" + config.workspaceId()
+                            + "/knowledge/" + knowledgeId
+                            + "/document/" + documentId
+                            + "/paragraph/" + paragraphId
+                            + "/problem");
+        }
+    }
+
+    public JsonNode updateParagraph(String knowledgeId, String documentId, String paragraphId, Map<String, Object> payload) {
+        Map<String, Object> normalizedPayload = normalizeParagraphPayload(payload);
+        String openApiPath = workspacePath(
+                "/knowledges/" + knowledgeId
+                        + "/documents/" + documentId
+                        + "/paragraphs/" + paragraphId);
+        try {
+            return putJson(openApiPath, normalizedPayload);
+        } catch (ResponseStatusException exception) {
+            if (!shouldTryManagementFallback(exception)) {
+                throw exception;
+            }
+            RuntimeConfig config = effectiveConfig();
+            return putManagementJson(
+                    config,
+                    "/admin/api/workspace/" + config.workspaceId()
+                            + "/knowledge/" + knowledgeId
+                            + "/document/" + documentId
+                            + "/paragraph/" + paragraphId,
+                    normalizedPayload);
+        }
+    }
+
     public JsonNode hitTest(Map<String, Object> payload) {
         return postJson(workspacePath("/hit-test"), payload);
     }
@@ -193,6 +240,46 @@ public class MaxKbService {
         } catch (IOException exception) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "构造 MaxKB 请求失败", exception);
         }
+    }
+
+    private JsonNode putJson(String path, Map<String, Object> payload) {
+        ensureConfigured();
+        try {
+            Request request = baseRequest(path)
+                    .put(RequestBody.create(objectMapper.writeValueAsString(payload), JSON))
+                    .build();
+            return executeJson(request);
+        } catch (IOException exception) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "构造 MaxKB 请求失败", exception);
+        }
+    }
+
+    private JsonNode getManagement(RuntimeConfig config, String path) {
+        Request request = managementRequest(config, path).get().build();
+        return executeJson(request);
+    }
+
+    private JsonNode putManagementJson(RuntimeConfig config, String path, Map<String, Object> payload) {
+        ensureConfigured(config);
+        try {
+            Request request = managementRequest(config, path)
+                    .put(RequestBody.create(objectMapper.writeValueAsString(payload), JSON))
+                    .build();
+            return executeJson(request);
+        } catch (IOException exception) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "构造 MaxKB 请求失败", exception);
+        }
+    }
+
+    private Request.Builder managementRequest(RuntimeConfig config, String path) {
+        ensureConfigured(config);
+        HttpUrl url = HttpUrl.parse(trimTrailingSlash(config.adminBaseUrl()) + path);
+        if (url == null) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "MaxKB 管理端 URL 配置不合法");
+        }
+        return new Request.Builder()
+                .url(url)
+                .header("Authorization", "Bearer " + config.apiKey());
     }
 
     private Request.Builder baseRequest(String path) {
@@ -248,6 +335,30 @@ public class MaxKbService {
         } catch (Exception ignored) {
             return HttpStatus.BAD_GATEWAY;
         }
+    }
+
+    private boolean shouldTryManagementFallback(ResponseStatusException exception) {
+        HttpStatusCode statusCode = exception.getStatusCode();
+        return statusCode.isSameCodeAs(HttpStatus.NOT_FOUND)
+                || statusCode.isSameCodeAs(HttpStatus.METHOD_NOT_ALLOWED)
+                || statusCode.isSameCodeAs(HttpStatus.BAD_REQUEST);
+    }
+
+    private Map<String, Object> normalizeParagraphPayload(Map<String, Object> payload) {
+        Map<String, Object> normalized = new LinkedHashMap<>();
+        String title = text(payload, "title");
+        String content = text(payload, "content");
+        if (!title.isBlank()) {
+            normalized.put("title", title);
+        }
+        normalized.put("content", content);
+        Object isActive = payload == null ? null : payload.get("is_active");
+        normalized.put("is_active", isActive instanceof Boolean ? isActive : true);
+        Object problemList = payload == null ? null : payload.get("problem_list");
+        if (problemList instanceof Iterable<?> || problemList instanceof Object[]) {
+            normalized.put("problem_list", problemList);
+        }
+        return normalized;
     }
 
     private void ensureConfigured() {
