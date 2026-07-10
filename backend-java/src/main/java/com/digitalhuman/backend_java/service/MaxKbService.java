@@ -237,36 +237,39 @@ public class MaxKbService {
         ensureConfigured(config);
         String assetPath = normalizeAssetPath(config, path);
         List<String> candidatePaths = buildAssetPathCandidates(assetPath);
+        List<String> candidateBaseUrls = buildAssetBaseUrlCandidates(config);
         String lastErrorMessage = null;
 
-        for (String candidatePath : candidatePaths) {
-            HttpUrl url = HttpUrl.parse(trimTrailingSlash(config.adminBaseUrl()) + candidatePath);
-            if (url == null) {
-                lastErrorMessage = "图片地址不合法";
-                continue;
-            }
-            Request request = new Request.Builder()
-                    .url(url)
-                    .header("Authorization", "Bearer " + config.apiKey())
-                    .get()
-                    .build();
-            try (Response response = httpClient.newCall(request).execute()) {
-                byte[] body = response.body() == null ? new byte[0] : response.body().bytes();
-                if (!response.isSuccessful()) {
-                    lastErrorMessage = body.length == 0 ? "HTTP " + response.code() : new String(body);
+        for (String baseUrl : candidateBaseUrls) {
+            for (String candidatePath : candidatePaths) {
+                HttpUrl url = HttpUrl.parse(trimTrailingSlash(baseUrl) + candidatePath);
+                if (url == null) {
+                    lastErrorMessage = "图片地址不合法";
                     continue;
                 }
-                HttpHeaders headers = new HttpHeaders();
-                String contentType = response.header("Content-Type");
-                if (contentType != null && !contentType.isBlank()) {
-                    headers.setContentType(org.springframework.http.MediaType.parseMediaType(contentType));
-                } else {
-                    headers.setContentType(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM);
+                Request request = new Request.Builder()
+                        .url(url)
+                        .header("Authorization", "Bearer " + config.apiKey())
+                        .get()
+                        .build();
+                try (Response response = httpClient.newCall(request).execute()) {
+                    byte[] body = response.body() == null ? new byte[0] : response.body().bytes();
+                    if (!response.isSuccessful()) {
+                        lastErrorMessage = body.length == 0 ? url + " HTTP " + response.code() : new String(body);
+                        continue;
+                    }
+                    HttpHeaders headers = new HttpHeaders();
+                    String contentType = response.header("Content-Type");
+                    if (contentType != null && !contentType.isBlank()) {
+                        headers.setContentType(org.springframework.http.MediaType.parseMediaType(contentType));
+                    } else {
+                        headers.setContentType(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM);
+                    }
+                    headers.set(HttpHeaders.CACHE_CONTROL, "private, max-age=300");
+                    return ResponseEntity.status(HttpStatusCode.valueOf(response.code())).headers(headers).body(body);
+                } catch (IOException exception) {
+                    lastErrorMessage = url + " " + exception.getMessage();
                 }
-                headers.set(HttpHeaders.CACHE_CONTROL, "private, max-age=300");
-                return ResponseEntity.status(HttpStatusCode.valueOf(response.code())).headers(headers).body(body);
-            } catch (IOException exception) {
-                lastErrorMessage = exception.getMessage();
             }
         }
 
@@ -420,6 +423,18 @@ public class MaxKbService {
         return new ArrayList<>(paths);
     }
 
+    private List<String> buildAssetBaseUrlCandidates(RuntimeConfig config) {
+        Set<String> baseUrls = new LinkedHashSet<>();
+        if (!config.adminBaseUrl().isBlank()) {
+            baseUrls.add(trimTrailingSlash(config.adminBaseUrl()));
+        }
+        String derivedFromAccessUrl = deriveAdminBaseUrl(config.accessUrl());
+        if (!derivedFromAccessUrl.isBlank()) {
+            baseUrls.add(trimTrailingSlash(derivedFromAccessUrl));
+        }
+        return new ArrayList<>(baseUrls);
+    }
+
     private String extractOssFileId(String assetPath) {
         String pathOnly = assetPath.split("\\?", 2)[0];
         String marker = "/oss/file/";
@@ -450,12 +465,7 @@ public class MaxKbService {
         if (value.startsWith("http://") || value.startsWith("https://")) {
             try {
                 URI source = URI.create(value);
-                URI base = URI.create(trimTrailingSlash(config.adminBaseUrl()));
-                if (source.getHost() == null
-                        || base.getHost() == null
-                        || !source.getScheme().equalsIgnoreCase(base.getScheme())
-                        || !source.getHost().equalsIgnoreCase(base.getHost())
-                        || source.getPort() != base.getPort()) {
+                if (!isConfiguredAssetOrigin(config, source)) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "只允许代理当前 MaxKB 服务下的图片资源");
                 }
                 value = source.getRawPath() + (source.getRawQuery() == null ? "" : "?" + source.getRawQuery());
@@ -476,6 +486,26 @@ public class MaxKbService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "只允许代理 MaxKB /oss/file 或 /.oss/file 图片资源");
         }
         return value;
+    }
+
+    private boolean isConfiguredAssetOrigin(RuntimeConfig config, URI source) {
+        if (source.getHost() == null) {
+            return false;
+        }
+        for (String baseUrl : buildAssetBaseUrlCandidates(config)) {
+            try {
+                URI base = URI.create(baseUrl);
+                if (base.getHost() != null
+                        && source.getScheme().equalsIgnoreCase(base.getScheme())
+                        && source.getHost().equalsIgnoreCase(base.getHost())
+                        && source.getPort() == base.getPort()) {
+                    return true;
+                }
+            } catch (IllegalArgumentException ignored) {
+                // Try the next configured base URL.
+            }
+        }
+        return false;
     }
 
     private boolean isAllowedAssetPath(String value) {

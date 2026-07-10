@@ -81,6 +81,8 @@ const EMPTY_CONFIG_FORM: MaxKbOpenApiConfig = {
   configured: false,
 }
 
+const EMPTY_IMAGE_SRC = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
+
 const { Text, Paragraph } = Typography
 
 function isSpringDefaultErrorBody(data: unknown): boolean {
@@ -334,6 +336,15 @@ function proxiedAssetPath(value: string) {
   return ''
 }
 
+function isKnowledgeAssetProxyUrl(value: string) {
+  try {
+    const url = new URL(value, window.location.href)
+    return url.pathname.endsWith('/api/admin/knowledge/assets')
+  } catch {
+    return false
+  }
+}
+
 function normalizeResourceUrl(rawUrl: string, assetBaseUrl: string) {
   const trimmed = rawUrl.trim()
   if (!trimmed || /^javascript:/i.test(trimmed)) {
@@ -376,7 +387,14 @@ function sanitizeHtml(value: string, assetBaseUrl: string) {
     .replace(/\son\w+=\S+/gi, '')
     .replace(/\s(src|href)=("([^"]*)"|'([^']*)'|([^\s>]+))/gi, (_match, attr: string, _quoted: string, doubleUrl?: string, singleUrl?: string, bareUrl?: string) => {
       const url = normalizeResourceUrl(doubleUrl ?? singleUrl ?? bareUrl ?? '', assetBaseUrl)
-      return url ? ` ${attr.toLowerCase()}="${escapeHtml(url)}"` : ''
+      const lowerAttr = attr.toLowerCase()
+      if (!url) {
+        return ''
+      }
+      if (lowerAttr === 'src' && isKnowledgeAssetProxyUrl(url)) {
+        return ` src="${EMPTY_IMAGE_SRC}" data-proxy-src="${escapeHtml(url)}"`
+      }
+      return ` ${lowerAttr}="${escapeHtml(url)}"`
     })
 }
 
@@ -391,8 +409,11 @@ function renderInlineMarkdown(value: string, assetBaseUrl: string) {
     const src = normalizeResourceUrl(match[2], assetBaseUrl)
     if (src) {
       const directSrc = directMaxKbAssetUrl(match[2], assetBaseUrl)
+      const shouldProxyWithAuth = isKnowledgeAssetProxyUrl(src)
       chunks.push(
-        `<img src="${escapeHtml(src)}" alt="${escapeHtml(match[1])}" loading="lazy" data-mkb-src="${escapeHtml(match[2])}"${
+        `<img src="${escapeHtml(shouldProxyWithAuth ? EMPTY_IMAGE_SRC : src)}" alt="${escapeHtml(match[1])}" loading="lazy" data-mkb-src="${escapeHtml(match[2])}"${
+          shouldProxyWithAuth ? ` data-proxy-src="${escapeHtml(src)}"` : ''
+        }${
           directSrc ? ` data-fallback-src="${escapeHtml(directSrc)}"` : ''
         } />`,
       )
@@ -661,6 +682,9 @@ function RichDocumentContent({ assetBaseUrl, record }: { assetBaseUrl: string; r
 
     const cleanups: Array<() => void> = []
     root.querySelectorAll<HTMLImageElement>('img').forEach((img) => {
+      let cancelled = false
+      let objectUrl = ''
+
       const removeTip = () => {
         if (img.nextElementSibling?.classList.contains('mkb-image-error-tip')) {
           img.nextElementSibling.remove()
@@ -694,6 +718,23 @@ function RichDocumentContent({ assetBaseUrl, record }: { assetBaseUrl: string; r
         return true
       }
 
+      const loadViaAuthenticatedProxy = async (proxySrc: string) => {
+        try {
+          const response = await axios.get<Blob>(proxySrc, { responseType: 'blob' })
+          if (cancelled) {
+            return
+          }
+          objectUrl = URL.createObjectURL(response.data)
+          img.src = objectUrl
+          img.classList.remove('is-error')
+          removeTip()
+        } catch {
+          if (!cancelled && !tryDirectFallback()) {
+            showErrorTip()
+          }
+        }
+      }
+
       const onError = () => {
         if (tryDirectFallback()) {
           return
@@ -708,12 +749,19 @@ function RichDocumentContent({ assetBaseUrl, record }: { assetBaseUrl: string; r
 
       img.addEventListener('error', onError)
       img.addEventListener('load', onLoad)
-      if (img.complete && img.naturalWidth === 0) {
+      const proxySrc = img.getAttribute('data-proxy-src')
+      if (proxySrc) {
+        void loadViaAuthenticatedProxy(proxySrc)
+      } else if (img.complete && img.naturalWidth === 0) {
         onError()
       }
       cleanups.push(() => {
+        cancelled = true
         img.removeEventListener('error', onError)
         img.removeEventListener('load', onLoad)
+        if (objectUrl) {
+          URL.revokeObjectURL(objectUrl)
+        }
       })
     })
 
@@ -734,10 +782,11 @@ function RichDocumentContent({ assetBaseUrl, record }: { assetBaseUrl: string; r
           {images.map((url) => (
             <img
               key={url}
-              src={url}
+              src={isKnowledgeAssetProxyUrl(url) ? EMPTY_IMAGE_SRC : url}
               alt=""
               loading="lazy"
               data-mkb-src={proxiedAssetPath(url)}
+              data-proxy-src={isKnowledgeAssetProxyUrl(url) ? url : undefined}
               data-fallback-src={directMaxKbAssetUrl(proxiedAssetPath(url) || url, assetBaseUrl)}
             />
           ))}
