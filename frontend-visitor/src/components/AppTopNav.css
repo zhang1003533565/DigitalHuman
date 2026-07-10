@@ -20,6 +20,76 @@
   border-width: 0 0 1px;
 }
 
+.page-shell > .app-topbar--home {
+  min-height: 64px;
+  margin: 0;
+  padding: 8px 4.2vw;
+  border-color: rgba(194, 213, 233, 0.12);
+  background: rgba(3, 14, 28, 0.96);
+  box-shadow: none;
+}
+
+.app-topbar--home .app-topbar__brand {
+  min-width: 280px;
+}
+
+.app-topbar--home .app-topbar__brand a {
+  color: #f6f7f9;
+  font-family: "Songti SC", "STSong", serif;
+  font-size: 25px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-shadow: none;
+}
+
+.app-topbar--home .app-topbar__nav {
+  gap: clamp(12px, 2.7vw, 42px);
+}
+
+.app-topbar--home .app-topbar__link {
+  position: relative;
+  min-width: auto;
+  min-height: 48px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 0;
+  color: rgba(239, 243, 249, 0.68);
+  background: transparent;
+  box-shadow: none;
+  font-size: 15px;
+}
+
+.app-topbar--home .app-topbar__link:hover {
+  color: #fff;
+  background: transparent;
+}
+
+.app-topbar--home .app-topbar__link--active {
+  color: #f1c76f;
+  background: transparent;
+}
+
+.app-topbar--home .app-topbar__link--active::after {
+  content: "";
+  position: absolute;
+  right: 2px;
+  bottom: -8px;
+  left: 2px;
+  height: 2px;
+  border-radius: 2px;
+  background: #e2ad4b;
+}
+
+.app-topbar--home .user-menu__avatar {
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(196, 216, 239, 0.36);
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(36, 52, 75, 0.86);
+  font-family: Georgia, serif;
+  font-weight: 500;
+}
+
 .app-topbar__brand {
   flex-shrink: 0;
   min-width: 280px;

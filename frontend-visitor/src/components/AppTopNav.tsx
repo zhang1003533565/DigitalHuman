@@ -24,6 +24,7 @@ type AppTopNavProps = {
   onLogout: () => void
   title?: string
   items?: TopNavItem[]
+  variant?: 'default' | 'home'
 }
 
 function getInitials(name: string): string {
@@ -35,8 +36,10 @@ export function AppTopNav({
   onLogout,
   title = '景区导览服务AI数字人',
   items = DEFAULT_NAV_ITEMS,
+  variant = 'default',
 }: AppTopNavProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({})
   const navigate = useNavigate()
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const avatarRef = useRef<HTMLButtonElement>(null)
@@ -44,6 +47,14 @@ export function AppTopNav({
 
   const openDropdown = useCallback(() => {
     if (hoverTimer.current) clearTimeout(hoverTimer.current)
+    if (avatarRef.current) {
+      const rect = avatarRef.current.getBoundingClientRect()
+      setDropdownStyle({
+        position: 'fixed',
+        top: rect.bottom + 10,
+        right: window.innerWidth - rect.right,
+      })
+    }
     setDropdownOpen(true)
   }, [])
 
@@ -56,18 +67,8 @@ export function AppTopNav({
     onLogout()
   }
 
-  function getDropdownStyle(): React.CSSProperties {
-    if (!avatarRef.current) return {}
-    const rect = avatarRef.current.getBoundingClientRect()
-    return {
-      position: 'fixed',
-      top: rect.bottom + 10,
-      right: window.innerWidth - rect.right,
-    }
-  }
-
   return (
-    <header className="app-topbar">
+    <header className={`app-topbar${variant === 'home' ? ' app-topbar--home' : ''}`}>
       <div className="app-topbar__brand">
         <Link to="/home">{title}</Link>
       </div>
@@ -101,7 +102,7 @@ export function AppTopNav({
           createPortal(
             <div
               className="user-menu__dropdown"
-              style={getDropdownStyle()}
+              style={dropdownStyle}
               onMouseEnter={openDropdown}
               onMouseLeave={closeDropdown}
             >
