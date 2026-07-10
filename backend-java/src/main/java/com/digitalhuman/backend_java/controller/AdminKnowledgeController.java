@@ -2,6 +2,7 @@ package com.digitalhuman.backend_java.controller;
 
 import com.digitalhuman.backend_java.service.MaxKbService;
 import com.fasterxml.jackson.databind.JsonNode;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -64,6 +65,11 @@ public class AdminKnowledgeController {
             @PathVariable String documentId,
             @RequestParam Map<String, String> query) {
         return maxKbService.listParagraphs(knowledgeId, documentId, query);
+    }
+
+    @GetMapping("/assets")
+    public ResponseEntity<byte[]> proxyAsset(@RequestParam String path) {
+        return maxKbService.proxyAsset(path);
     }
 
     @GetMapping("/knowledges/{knowledgeId}/documents/{documentId}/paragraphs/{paragraphId}/problems")

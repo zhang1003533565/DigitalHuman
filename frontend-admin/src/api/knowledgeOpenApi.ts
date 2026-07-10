@@ -172,6 +172,10 @@ export async function updateDocumentParagraph(
   return response.data
 }
 
+export function getKnowledgeAssetUrl(path: string) {
+  return `/api/admin/knowledge/assets?path=${encodeURIComponent(path || '')}`
+}
+
 export async function runKnowledgeHitTest(payload: HitTestPayload) {
   const response = await axios.post<MaxKbResponse>('/api/admin/knowledge/hit-test', payload)
   return response.data

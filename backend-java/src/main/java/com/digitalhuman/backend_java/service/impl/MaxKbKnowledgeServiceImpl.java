@@ -458,10 +458,18 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
         while (value.startsWith("/./")) {
             value = value.substring(2);
         }
-        if (!value.startsWith("/oss/file/") && !value.startsWith("/.oss/file/")) {
+        if (!isAllowedAssetPath(value)) {
             throw status(HttpStatus.BAD_REQUEST, "只允许代理 MaxKB /oss/file 或 /.oss/file 图片资源");
         }
         return value;
+    }
+
+    private boolean isAllowedAssetPath(String value) {
+        return value.startsWith("/oss/file/")
+                || value.startsWith("/.oss/file/")
+                || value.startsWith("/admin/oss/file/")
+                || value.contains("/oss/file/")
+                || value.contains("/.oss/file/");
     }
 
     private Map<String, String> withDefaultDocumentTaskType(Map<String, String> queryParams) {

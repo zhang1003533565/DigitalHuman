@@ -38,6 +38,7 @@ import {
   RedoOutlined,
   ReloadOutlined,
   SearchOutlined,
+  SettingOutlined,
   StrikethroughOutlined,
   TagsOutlined,
   TableOutlined,
@@ -50,10 +51,15 @@ import {
   extractTotal,
   getDocumentParagraphs,
   getDocumentParagraphProblems,
+  getKnowledgeAssetUrl,
   getKnowledgeDocuments,
   getKnowledgeOpenApiConfig,
   getKnowledges,
+  saveKnowledgeOpenApiConfig,
+  syncKnowledgeOpenApiKeys,
   updateDocumentParagraph,
+  type MaxKbOpenApiConfig,
+  type MaxKbOpenApiKey,
   type MaxKbRecord,
   type ParagraphProblemPayload,
 } from '../api/knowledgeOpenApi'
@@ -63,6 +69,17 @@ type KnowledgeRow = MaxKbRecord & { key: string; idText: string; nameText: strin
 type DocumentRow = MaxKbRecord & { key: string; idText: string; nameText: string; contentText: string }
 type ParagraphRow = MaxKbRecord & { key: string; idText: string; nameText: string; contentText: string }
 type NoticeState = { type: 'success' | 'info' | 'warning' | 'error'; text: string } | null
+
+const EMPTY_CONFIG_FORM: MaxKbOpenApiConfig = {
+  adminBaseUrl: '',
+  workspaceId: 'default',
+  accessUrl: '',
+  apiKey: '',
+  keyId: '',
+  keyName: '',
+  defaultKnowledgeId: '',
+  configured: false,
+}
 
 const { Text, Paragraph } = Typography
 
@@ -233,10 +250,108 @@ function escapeHtml(value: string) {
     .replace(/'/g, '&#39;')
 }
 
+function isMaxKbAssetUrl(value: string) {
+  const normalized = value.trim().replace(/^\.\/+/, '/')
+  return normalized.startsWith('oss/file/')
+    || normalized.startsWith('.oss/file/')
+    || normalized.startsWith('/oss/file/')
+    || normalized.startsWith('/.oss/file/')
+    || normalized.startsWith('/admin/oss/file/')
+    || normalized.includes('/oss/file/')
+    || normalized.includes('/.oss/file/')
+}
+
+function normalizeMaxKbAssetPath(rawUrl: string) {
+  let value = rawUrl.trim()
+  if (!value || /^(data:image\/|blob:)/i.test(value)) {
+    return ''
+  }
+  if (/^https?:\/\//i.test(value)) {
+    try {
+      const source = new URL(value)
+      value = `${source.pathname}${source.search}`
+    } catch {
+      return ''
+    }
+  }
+  while (value.startsWith('./')) {
+    value = value.slice(1)
+  }
+  if (!value.startsWith('/')) {
+    value = `/${value}`
+  }
+  while (value.startsWith('/./')) {
+    value = value.slice(2)
+  }
+
+  const hiddenMarker = '/.oss/file/'
+  const hiddenIndex = value.indexOf(hiddenMarker)
+  if (hiddenIndex >= 0) {
+    return value.slice(hiddenIndex)
+  }
+
+  const marker = '/oss/file/'
+  const index = value.indexOf(marker)
+  return index >= 0 ? value.slice(index) : value
+}
+
+function directMaxKbAssetUrl(rawUrl: string, assetBaseUrl: string) {
+  const trimmed = rawUrl.trim()
+  if (!trimmed || !assetBaseUrl || !isMaxKbAssetUrl(trimmed)) {
+    return ''
+  }
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const source = new URL(trimmed)
+      const base = new URL(assetBaseUrl)
+      if (source.origin === base.origin) {
+        return source.toString()
+      }
+    } catch {
+      return ''
+    }
+  }
+  const path = normalizeMaxKbAssetPath(trimmed)
+  if (!path || !isMaxKbAssetUrl(path)) {
+    return ''
+  }
+  try {
+    return new URL(path, `${assetBaseUrl.replace(/\/$/, '')}/`).toString()
+  } catch {
+    return ''
+  }
+}
+
+function proxiedAssetPath(value: string) {
+  try {
+    const url = new URL(value, window.location.href)
+    if (url.pathname.endsWith('/api/admin/knowledge/assets')) {
+      return url.searchParams.get('path') || ''
+    }
+  } catch {
+    return ''
+  }
+  return ''
+}
+
 function normalizeResourceUrl(rawUrl: string, assetBaseUrl: string) {
   const trimmed = rawUrl.trim()
   if (!trimmed || /^javascript:/i.test(trimmed)) {
     return ''
+  }
+  if (isMaxKbAssetUrl(trimmed)) {
+    if (/^https?:\/\//i.test(trimmed) && assetBaseUrl) {
+      try {
+        const source = new URL(trimmed)
+        const base = new URL(assetBaseUrl)
+        if (source.origin !== base.origin) {
+          return trimmed
+        }
+      } catch {
+        return ''
+      }
+    }
+    return getKnowledgeAssetUrl(trimmed)
   }
   if (/^(data:image\/|blob:|https?:\/\/|\/\/)/i.test(trimmed)) {
     return trimmed
@@ -245,7 +360,8 @@ function normalizeResourceUrl(rawUrl: string, assetBaseUrl: string) {
     return trimmed
   }
   try {
-    return new URL(trimmed, `${assetBaseUrl.replace(/\/$/, '')}/`).toString()
+    const resolved = new URL(trimmed, `${assetBaseUrl.replace(/\/$/, '')}/`).toString()
+    return isMaxKbAssetUrl(resolved) ? getKnowledgeAssetUrl(resolved) : resolved
   } catch {
     return trimmed
   }
@@ -274,7 +390,12 @@ function renderInlineMarkdown(value: string, assetBaseUrl: string) {
     chunks.push(escapeHtml(value.slice(lastIndex, match.index)))
     const src = normalizeResourceUrl(match[2], assetBaseUrl)
     if (src) {
-      chunks.push(`<img src="${escapeHtml(src)}" alt="${escapeHtml(match[1])}" loading="lazy" />`)
+      const directSrc = directMaxKbAssetUrl(match[2], assetBaseUrl)
+      chunks.push(
+        `<img src="${escapeHtml(src)}" alt="${escapeHtml(match[1])}" loading="lazy" data-mkb-src="${escapeHtml(match[2])}"${
+          directSrc ? ` data-fallback-src="${escapeHtml(directSrc)}"` : ''
+        } />`,
+      )
     }
     lastIndex = match.index + match[0].length
   }
@@ -452,7 +573,7 @@ function collectImageUrls(value: unknown, assetBaseUrl: string, urls = new Set<s
     if (url) urls.add(url)
   }
 
-  if (looksLikeImageUrl(trimmed)) {
+  if (looksLikeImageUrl(trimmed) || isMaxKbAssetUrl(trimmed)) {
     const url = normalizeResourceUrl(trimmed, assetBaseUrl)
     if (url) urls.add(url)
   }
@@ -525,23 +646,100 @@ function recordProblemList(record: MaxKbRecord) {
 }
 
 function RichDocumentContent({ assetBaseUrl, record }: { assetBaseUrl: string; record: ParagraphRow }) {
+  const contentRef = useRef<HTMLDivElement | null>(null)
   const html = useMemo(() => richContentHtml(record.contentText, assetBaseUrl), [assetBaseUrl, record.contentText])
   const images = useMemo(() => {
     const renderedUrls = collectImageUrls(record.contentText, assetBaseUrl)
     return extractRecordImages(record, assetBaseUrl).filter((url) => !renderedUrls.has(url))
   }, [assetBaseUrl, record])
 
+  useEffect(() => {
+    const root = contentRef.current
+    if (!root) {
+      return undefined
+    }
+
+    const cleanups: Array<() => void> = []
+    root.querySelectorAll<HTMLImageElement>('img').forEach((img) => {
+      const removeTip = () => {
+        if (img.nextElementSibling?.classList.contains('mkb-image-error-tip')) {
+          img.nextElementSibling.remove()
+        }
+      }
+
+      const showErrorTip = () => {
+        img.classList.add('is-error')
+        const source = img.getAttribute('data-mkb-src') || proxiedAssetPath(img.src) || img.src
+        img.setAttribute('data-error-src', source)
+        if (img.nextElementSibling?.classList.contains('mkb-image-error-tip')) {
+          img.nextElementSibling.textContent = '图片加载失败'
+          return
+        }
+        const tip = document.createElement('span')
+        tip.className = 'mkb-image-error-tip'
+        tip.textContent = '图片加载失败'
+        tip.title = source
+        img.insertAdjacentElement('afterend', tip)
+      }
+
+      const tryDirectFallback = () => {
+        const fallback =
+          img.getAttribute('data-fallback-src')
+          || directMaxKbAssetUrl(img.getAttribute('data-mkb-src') || proxiedAssetPath(img.src), assetBaseUrl)
+        if (!fallback || img.dataset.directTried === 'true' || fallback === img.src) {
+          return false
+        }
+        img.dataset.directTried = 'true'
+        img.src = fallback
+        return true
+      }
+
+      const onError = () => {
+        if (tryDirectFallback()) {
+          return
+        }
+        showErrorTip()
+      }
+
+      const onLoad = () => {
+        img.classList.remove('is-error')
+        removeTip()
+      }
+
+      img.addEventListener('error', onError)
+      img.addEventListener('load', onLoad)
+      if (img.complete && img.naturalWidth === 0) {
+        onError()
+      }
+      cleanups.push(() => {
+        img.removeEventListener('error', onError)
+        img.removeEventListener('load', onLoad)
+      })
+    })
+
+    return () => {
+      cleanups.forEach((cleanup) => cleanup())
+    }
+  }, [assetBaseUrl, html, images])
+
   if (!html && images.length === 0) {
     return <p className="mkb-rich-empty">{shortText(record, 260)}</p>
   }
 
   return (
-    <div className="mkb-document-rich">
+    <div className="mkb-document-rich" ref={contentRef}>
       {html ? <div dangerouslySetInnerHTML={{ __html: html }} /> : null}
       {images.length > 0 ? (
         <div className="mkb-rich-image-list">
           {images.map((url) => (
-            <img key={url} src={url} alt="" loading="lazy" />
+            <img
+              key={url}
+              src={url}
+              alt=""
+              loading="lazy"
+              data-mkb-src={proxiedAssetPath(url)}
+              data-fallback-src={directMaxKbAssetUrl(proxiedAssetPath(url) || url, assetBaseUrl)}
+            />
           ))}
         </div>
       ) : null}
@@ -645,6 +843,13 @@ export default function KnowledgeOpenApiPage() {
   const [paragraphSearchType, setParagraphSearchType] = useState<'title' | 'content'>('title')
   const [detailRecord, setDetailRecord] = useState<MaxKbRecord | null>(null)
   const [assetBaseUrl, setAssetBaseUrl] = useState('')
+  const [configOpen, setConfigOpen] = useState(false)
+  const [configLoading, setConfigLoading] = useState(false)
+  const [savingConfig, setSavingConfig] = useState(false)
+  const [syncingKeys, setSyncingKeys] = useState(false)
+  const [configForm, setConfigForm] = useState<MaxKbOpenApiConfig>(EMPTY_CONFIG_FORM)
+  const [adminToken, setAdminToken] = useState('')
+  const [syncedKeys, setSyncedKeys] = useState<MaxKbOpenApiKey[]>([])
   const [editingParagraph, setEditingParagraph] = useState<ParagraphRow | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [editContent, setEditContent] = useState('')
@@ -707,15 +912,91 @@ export default function KnowledgeOpenApiPage() {
     }
   }, [])
 
-  const loadAssetBaseUrl = useCallback(async () => {
+  const loadKnowledgeConfig = useCallback(async (silent = false) => {
+    if (!silent) {
+      setConfigLoading(true)
+    }
     try {
       const config = await getKnowledgeOpenApiConfig()
+      setConfigForm({ ...EMPTY_CONFIG_FORM, ...config })
       const base = config.accessUrl || config.adminBaseUrl
       setAssetBaseUrl(base ? new URL(base).origin : '')
-    } catch {
+    } catch (error) {
       setAssetBaseUrl('')
+      if (!silent) {
+        notify('error', `连接配置加载失败：${extractErrorMessage(error)}`)
+      }
+    } finally {
+      if (!silent) {
+        setConfigLoading(false)
+      }
     }
   }, [])
+
+  function updateConfigField<K extends keyof MaxKbOpenApiConfig>(key: K, value: MaxKbOpenApiConfig[K]) {
+    setConfigForm((current) => ({ ...current, [key]: value }))
+  }
+
+  function openConfigDrawer() {
+    setConfigOpen(true)
+    void loadKnowledgeConfig()
+  }
+
+  async function saveConfig() {
+    setSavingConfig(true)
+    try {
+      const savedConfig = await saveKnowledgeOpenApiConfig(configForm)
+      setConfigForm({ ...EMPTY_CONFIG_FORM, ...savedConfig })
+      const base = savedConfig.accessUrl || savedConfig.adminBaseUrl
+      setAssetBaseUrl(base ? new URL(base).origin : '')
+      message.success('知识库连接配置已保存')
+      void loadKnowledges()
+    } catch (error) {
+      message.error(`连接配置保存失败：${extractErrorMessage(error)}`)
+    } finally {
+      setSavingConfig(false)
+    }
+  }
+
+  async function syncKeys() {
+    if (!adminToken.trim()) {
+      message.warning('请输入 MaxKB 管理端 Token')
+      return
+    }
+    setSyncingKeys(true)
+    try {
+      const payload = await syncKnowledgeOpenApiKeys({
+        adminBaseUrl: configForm.adminBaseUrl || 'http://localhost:3000',
+        workspaceId: configForm.workspaceId || 'default',
+        adminToken,
+      })
+      setConfigForm((current) => ({
+        ...current,
+        adminBaseUrl: payload.adminBaseUrl || current.adminBaseUrl,
+        workspaceId: payload.workspaceId || current.workspaceId,
+        accessUrl: payload.accessUrl || current.accessUrl,
+      }))
+      setSyncedKeys(payload.keys || [])
+      message.success(payload.keys?.length ? '已同步 OpenAPI Key' : '同步完成，但没有读取到可用 Key')
+    } catch (error) {
+      message.error(`同步 Key 失败：${extractErrorMessage(error)}`)
+    } finally {
+      setSyncingKeys(false)
+    }
+  }
+
+  function selectSyncedKey(keyId: string) {
+    const selectedKey = syncedKeys.find((item) => String(item.id ?? item.name ?? item.secret_key ?? '') === keyId)
+    if (!selectedKey) {
+      return
+    }
+    setConfigForm((current) => ({
+      ...current,
+      keyId: selectedKey.id ?? current.keyId,
+      keyName: selectedKey.name ?? current.keyName,
+      apiKey: selectedKey.secret_key ?? current.apiKey,
+    }))
+  }
 
   const loadDocuments = useCallback(async (knowledgeId: string) => {
     const requestSeq = ++documentsRequestSeq.current
@@ -897,9 +1178,9 @@ export default function KnowledgeOpenApiPage() {
   }
 
   useEffect(() => {
-    void loadAssetBaseUrl()
+    void loadKnowledgeConfig(true)
     void loadKnowledges()
-  }, [loadAssetBaseUrl, loadKnowledges])
+  }, [loadKnowledgeConfig, loadKnowledges])
 
   useEffect(() => {
     if (selectedKnowledgeId) {
@@ -1060,6 +1341,10 @@ export default function KnowledgeOpenApiPage() {
           <FolderFilled />
           <span>根目录</span>
         </button>
+        <button className="mkb-config-entry" type="button" onClick={openConfigDrawer}>
+          <SettingOutlined />
+          <span>连接配置</span>
+        </button>
         <button className="mkb-sidebar-collapse" type="button" aria-label="收起侧边栏">‹</button>
       </aside>
 
@@ -1096,6 +1381,7 @@ export default function KnowledgeOpenApiPage() {
                   style={{ width: 190 }}
                 />
                 <Button size="small" icon={<BranchesOutlined />} onClick={notifyReadOnlyAction}>批量选择</Button>
+                <Button size="small" icon={<SettingOutlined />} onClick={openConfigDrawer}>连接配置</Button>
                 <Button size="small" type="primary" onClick={notifyReadOnlyAction}>
                   创建
                 </Button>
@@ -1372,6 +1658,97 @@ export default function KnowledgeOpenApiPage() {
           </aside>
         </div>
       </Modal>
+
+      <Drawer
+        title="知识库连接配置"
+        width={520}
+        open={configOpen}
+        onClose={() => setConfigOpen(false)}
+        extra={<Button size="small" icon={<ReloadOutlined />} loading={configLoading} onClick={() => void loadKnowledgeConfig()}>刷新</Button>}
+        footer={
+          <div className="mkb-config-footer">
+            <Button onClick={() => setConfigOpen(false)}>取消</Button>
+            <Button type="primary" loading={savingConfig} onClick={() => void saveConfig()}>保存配置</Button>
+          </div>
+        }
+      >
+        <div className="mkb-config-drawer">
+          <Alert
+            type={configForm.configured ? 'success' : 'warning'}
+            showIcon
+            message={configForm.configured ? '当前已配置 MaxKB OpenAPI 连接' : '请配置 MaxKB 地址和 OpenAPI Key'}
+          />
+
+          <label>
+            <span>MaxKB 管理端地址</span>
+            <Input
+              value={configForm.adminBaseUrl}
+              placeholder="http://localhost:3000"
+              onChange={(event) => updateConfigField('adminBaseUrl', event.target.value)}
+            />
+          </label>
+
+          <label>
+            <span>工作空间 ID</span>
+            <Input
+              value={configForm.workspaceId}
+              placeholder="default"
+              onChange={(event) => updateConfigField('workspaceId', event.target.value)}
+            />
+          </label>
+
+          <label>
+            <span>OpenAPI 访问地址</span>
+            <Input
+              value={configForm.accessUrl}
+              placeholder="http://localhost:3000/openapi/knowledge/v1/workspaces/default"
+              onChange={(event) => updateConfigField('accessUrl', event.target.value)}
+            />
+          </label>
+
+          <label>
+            <span>OpenAPI Key</span>
+            <Input.Password
+              value={configForm.apiKey}
+              placeholder="请输入 MaxKB OpenAPI Key"
+              onChange={(event) => updateConfigField('apiKey', event.target.value)}
+            />
+          </label>
+
+          <label>
+            <span>默认知识库 ID</span>
+            <Input
+              value={configForm.defaultKnowledgeId}
+              placeholder="用于前台问答召回，可留空"
+              onChange={(event) => updateConfigField('defaultKnowledgeId', event.target.value)}
+            />
+          </label>
+
+          <div className="mkb-config-sync">
+            <Text strong>同步 OpenAPI Key</Text>
+            <Input.Password
+              value={adminToken}
+              placeholder="MaxKB 管理端 Token，仅用于同步 Key"
+              onChange={(event) => setAdminToken(event.target.value)}
+            />
+            <Button loading={syncingKeys} onClick={() => void syncKeys()}>同步 Key</Button>
+          </div>
+
+          {syncedKeys.length > 0 ? (
+            <label>
+              <span>选择已同步 Key</span>
+              <Select
+                placeholder="选择后自动填入 OpenAPI Key"
+                onChange={selectSyncedKey}
+                options={syncedKeys.map((item, index) => ({
+                  value: String(item.id ?? item.name ?? item.secret_key ?? index),
+                  label: item.name || item.id || `OpenAPI Key ${index + 1}`,
+                }))}
+              />
+            </label>
+          ) : null}
+        </div>
+      </Drawer>
 
       <Drawer title="原始数据" width={720} open={Boolean(detailRecord)} onClose={() => setDetailRecord(null)}>
         {detailRecord ? (

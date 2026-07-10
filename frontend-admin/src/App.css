@@ -1250,6 +1250,29 @@
   color: #ffbd2e;
 }
 
+.mkb-config-entry {
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #3f4d62;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mkb-config-entry:hover {
+  background: #eef4ff;
+  color: #2f6bff;
+}
+
+.mkb-config-entry .anticon {
+  color: #4a76ff;
+}
+
 .mkb-sidebar-collapse {
   position: absolute;
   top: 30px;
@@ -1684,6 +1707,25 @@
   object-fit: contain;
 }
 
+.mkb-document-rich img.is-error,
+.mkb-rich-image-list img.is-error {
+  display: none;
+}
+
+.mkb-image-error-tip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  margin: 8px 0;
+  padding: 4px 10px;
+  border: 1px solid #ffd8bf;
+  border-radius: 4px;
+  background: #fff2e8;
+  color: #ad4e00;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .mkb-document-rich code {
   padding: 2px 5px;
   border-radius: 3px;
@@ -1719,6 +1761,42 @@
 .mkb-raw-data {
   display: grid;
   gap: 12px;
+}
+
+.mkb-config-drawer {
+  display: grid;
+  gap: 16px;
+}
+
+.mkb-config-drawer label,
+.mkb-config-sync {
+  display: grid;
+  gap: 8px;
+}
+
+.mkb-config-drawer label > span {
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mkb-config-drawer .ant-input,
+.mkb-config-drawer .ant-input-affix-wrapper,
+.mkb-config-drawer .ant-select-selector {
+  border-radius: 6px;
+}
+
+.mkb-config-sync {
+  padding: 12px;
+  border: 1px solid #e5eaf2;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.mkb-config-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .mkb-paragraph-edit-modal .ant-modal-content {

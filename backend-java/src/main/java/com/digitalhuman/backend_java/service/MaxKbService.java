@@ -13,15 +13,22 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
+import java.net.URI;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -225,6 +232,49 @@ public class MaxKbService {
         return effectiveConfig().defaultKnowledgeId();
     }
 
+    public ResponseEntity<byte[]> proxyAsset(String path) {
+        RuntimeConfig config = effectiveConfig();
+        ensureConfigured(config);
+        String assetPath = normalizeAssetPath(config, path);
+        List<String> candidatePaths = buildAssetPathCandidates(assetPath);
+        String lastErrorMessage = null;
+
+        for (String candidatePath : candidatePaths) {
+            HttpUrl url = HttpUrl.parse(trimTrailingSlash(config.adminBaseUrl()) + candidatePath);
+            if (url == null) {
+                lastErrorMessage = "图片地址不合法";
+                continue;
+            }
+            Request request = new Request.Builder()
+                    .url(url)
+                    .header("Authorization", "Bearer " + config.apiKey())
+                    .get()
+                    .build();
+            try (Response response = httpClient.newCall(request).execute()) {
+                byte[] body = response.body() == null ? new byte[0] : response.body().bytes();
+                if (!response.isSuccessful()) {
+                    lastErrorMessage = body.length == 0 ? "HTTP " + response.code() : new String(body);
+                    continue;
+                }
+                HttpHeaders headers = new HttpHeaders();
+                String contentType = response.header("Content-Type");
+                if (contentType != null && !contentType.isBlank()) {
+                    headers.setContentType(org.springframework.http.MediaType.parseMediaType(contentType));
+                } else {
+                    headers.setContentType(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM);
+                }
+                headers.set(HttpHeaders.CACHE_CONTROL, "private, max-age=300");
+                return ResponseEntity.status(HttpStatusCode.valueOf(response.code())).headers(headers).body(body);
+            } catch (IOException exception) {
+                lastErrorMessage = exception.getMessage();
+            }
+        }
+
+        throw new ResponseStatusException(
+                HttpStatus.BAD_GATEWAY,
+                "MaxKB 图片资源加载失败: " + (lastErrorMessage == null ? "未知错误" : lastErrorMessage));
+    }
+
     private JsonNode get(String path, Map<String, String> query) {
         Request request = baseRequest(path, query).get().build();
         return executeJson(request);
@@ -359,6 +409,81 @@ public class MaxKbService {
             normalized.put("problem_list", problemList);
         }
         return normalized;
+    }
+
+    private List<String> buildAssetPathCandidates(String assetPath) {
+        String fileId = extractOssFileId(assetPath);
+        Set<String> paths = new LinkedHashSet<>();
+        paths.add("/admin/oss/file/" + fileId);
+        paths.add("/oss/file/" + fileId);
+        paths.add(assetPath);
+        return new ArrayList<>(paths);
+    }
+
+    private String extractOssFileId(String assetPath) {
+        String pathOnly = assetPath.split("\\?", 2)[0];
+        String marker = "/oss/file/";
+        int index = pathOnly.indexOf(marker);
+        if (index < 0) {
+            marker = "/.oss/file/";
+            index = pathOnly.indexOf(marker);
+        }
+        if (index < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MaxKB 图片路径不正确");
+        }
+        String fileId = pathOnly.substring(index + marker.length());
+        int slashIndex = fileId.indexOf('/');
+        if (slashIndex >= 0) {
+            fileId = fileId.substring(0, slashIndex);
+        }
+        if (fileId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MaxKB 图片 ID 不能为空");
+        }
+        return fileId;
+    }
+
+    private String normalizeAssetPath(RuntimeConfig config, String path) {
+        String value = normalize(path);
+        if (value.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MaxKB 图片路径不能为空");
+        }
+        if (value.startsWith("http://") || value.startsWith("https://")) {
+            try {
+                URI source = URI.create(value);
+                URI base = URI.create(trimTrailingSlash(config.adminBaseUrl()));
+                if (source.getHost() == null
+                        || base.getHost() == null
+                        || !source.getScheme().equalsIgnoreCase(base.getScheme())
+                        || !source.getHost().equalsIgnoreCase(base.getHost())
+                        || source.getPort() != base.getPort()) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "只允许代理当前 MaxKB 服务下的图片资源");
+                }
+                value = source.getRawPath() + (source.getRawQuery() == null ? "" : "?" + source.getRawQuery());
+            } catch (IllegalArgumentException exception) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MaxKB 图片地址不合法", exception);
+            }
+        }
+        while (value.startsWith("./")) {
+            value = value.substring(1);
+        }
+        if (!value.startsWith("/")) {
+            value = "/" + value;
+        }
+        while (value.startsWith("/./")) {
+            value = value.substring(2);
+        }
+        if (!isAllowedAssetPath(value)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "只允许代理 MaxKB /oss/file 或 /.oss/file 图片资源");
+        }
+        return value;
+    }
+
+    private boolean isAllowedAssetPath(String value) {
+        return value.startsWith("/oss/file/")
+                || value.startsWith("/.oss/file/")
+                || value.startsWith("/admin/oss/file/")
+                || value.contains("/oss/file/")
+                || value.contains("/.oss/file/");
     }
 
     private void ensureConfigured() {
