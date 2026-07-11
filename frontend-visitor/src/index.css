@@ -29,3 +29,11 @@ body {
   min-height: 100vh;
   min-height: 100dvh;
 }
+
+@media (max-width: 768px) {
+  .authenticated-app > .page-shell,
+  .authenticated-app > .home-screen,
+  .authenticated-app > .module-screen {
+    padding-bottom: calc(var(--mobile-nav-height) + var(--safe-bottom));
+  }
+}

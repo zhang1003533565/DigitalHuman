@@ -375,3 +375,50 @@
     padding: 12px;
   }
 }
+
+@media (max-width: 768px) {
+  .route-shell {
+    overflow-y: auto;
+  }
+
+  .route-planner {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+  }
+
+  .route-detail {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .route-detail__map {
+    min-height: 260px;
+  }
+
+  .route-detail__content,
+  .route-timeline {
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .route-node {
+    position: relative;
+  }
+
+  .route-node:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 30px;
+    bottom: -10px;
+    left: 14px;
+    width: 2px;
+    background: rgba(110, 224, 255, 0.32);
+  }
+
+  .route-filter button,
+  .route-detail__map-link {
+    min-height: var(--touch-target);
+  }
+}

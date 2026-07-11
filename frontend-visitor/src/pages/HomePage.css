@@ -479,6 +479,17 @@
 }
 
 @media (max-width: 768px) {
+  .home-page {
+    overflow-x: hidden;
+  }
+
+  .hp-button,
+  .hp-trip-planner__submit,
+  .hp-trip-planner input,
+  .hp-trip-planner select {
+    min-height: var(--touch-target);
+  }
+
   .hp-scroll {
     padding: 0 16px 24px;
   }

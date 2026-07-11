@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 import './App.css'
 import {
@@ -20,6 +20,7 @@ import { ProfilePage } from './pages/ProfilePage'
 import { TravelTipsPage } from './pages/TravelTipsPage'
 import { SpotRecommendPage } from './pages/SpotRecommendPage'
 import { RouteRecommendListPage } from './pages/RouteRecommendListPage'
+import { MobileBottomNav } from './components/MobileBottomNav'
 
 function ProtectedRoute({ user }: { user: SessionUser | null }) {
   const location = useLocation()
@@ -29,15 +30,16 @@ function ProtectedRoute({ user }: { user: SessionUser | null }) {
     return <Navigate to={`/login?redirect=${encodeURIComponent(redirect)}`} replace />
   }
 
-  return <Outlet />
+  return (
+    <div className="authenticated-app">
+      <Outlet />
+      <MobileBottomNav />
+    </div>
+  )
 }
 
 function App() {
-  const [user, setUser] = useState<SessionUser | null>(null)
-
-  useEffect(() => {
-    setUser(getStoredUser())
-  }, [])
+  const [user, setUser] = useState<SessionUser | null>(() => getStoredUser())
 
   function handleLogin(nextUser: SessionUser) {
     setUser(saveUser(nextUser))

@@ -90,3 +90,13 @@
   color: rgba(243, 248, 255, 0.4);
   font-size: 15px;
 }
+@media (max-width: 768px) {
+  .spot-page__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .spot-page__back,
+  .spot-page__card a {
+    min-height: var(--touch-target);
+  }
+}

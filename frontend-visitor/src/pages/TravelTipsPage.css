@@ -168,3 +168,18 @@
     font-size: 17px;
   }
 }
+@media (max-width: 768px) {
+  .tips-category-bar {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+
+  .tips-category-bar button {
+    min-height: var(--touch-target);
+    flex: 0 0 auto;
+  }
+
+  .tips-grid {
+    grid-template-columns: 1fr;
+  }
+}

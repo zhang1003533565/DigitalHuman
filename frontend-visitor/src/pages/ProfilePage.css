@@ -198,4 +198,29 @@
   }
 }
 
+@media (max-width: 768px) {
+  .profile-grid,
+  .profile-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-card {
+    align-items: center;
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .profile-card__meta {
+    align-items: center;
+  }
+
+  .profile-section {
+    padding: 20px 16px;
+  }
+
+  .profile-form__input {
+    min-height: var(--touch-target);
+  }
+}
+
 /* end profile page */

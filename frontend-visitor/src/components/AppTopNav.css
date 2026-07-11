@@ -346,3 +346,29 @@
     font-size: 17px;
   }
 }
+@media (max-width: 768px) {
+  .app-topbar {
+    min-height: 56px;
+    padding: 8px 12px;
+  }
+
+  .app-topbar__nav {
+    display: none;
+  }
+
+  .app-topbar__brand {
+    min-width: 0;
+    font-size: 15px;
+  }
+
+  .app-topbar__brand a {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .user-menu__avatar {
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+  }
+}

@@ -2,3 +2,12 @@
   min-height: 160px;
 }
 
+@media (max-width: 768px) {
+  .history-page .feature-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .history-page .feature-card {
+    min-height: 0;
+  }
+}

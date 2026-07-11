@@ -1,0 +1,6 @@
+:root {
+  --touch-target: 44px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --mobile-nav-height: 64px;
+  --mobile-breakpoint: 768px;
+}

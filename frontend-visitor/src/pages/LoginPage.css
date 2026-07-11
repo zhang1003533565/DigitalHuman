@@ -1078,3 +1078,19 @@
     width: 120px;
   }
 }
+
+@media (max-width: 768px) {
+  .auth-stage,
+  .auth-form {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-screen {
+    overflow-y: auto;
+  }
+
+  .auth-input,
+  .auth-form button {
+    min-height: var(--touch-target);
+  }
+}
