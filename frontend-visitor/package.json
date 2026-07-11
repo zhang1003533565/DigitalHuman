@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test:contracts": "tsc src/api/contracts.ts --ignoreConfig --outDir node_modules/.tmp/contracts-test --target es2023 --module nodenext --moduleResolution nodenext --skipLibCheck && node src/api/contracts.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
