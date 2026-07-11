@@ -2,6 +2,8 @@ package com.digitalhuman.backend_java.service;
 
 import com.digitalhuman.backend_java.dto.GuideChatResponse;
 import com.digitalhuman.backend_java.dto.GuideChatRequest;
+import com.digitalhuman.backend_java.dto.FeedbackRequest;
+import com.digitalhuman.backend_java.model.UserFeedback;
 import com.digitalhuman.backend_java.repository.AdminModelConfigRepository;
 import com.digitalhuman.backend_java.repository.AdminProviderConfigRepository;
 import com.digitalhuman.backend_java.repository.GuideMessageRepository;
@@ -19,6 +21,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import org.mockito.ArgumentCaptor;
 
 class GuideServiceTests {
 
@@ -26,20 +30,56 @@ class GuideServiceTests {
     private GuideSessionRepository sessionRepository;
     private ScenicRouteService scenicRouteService;
     private AdminModelConfigRepository modelConfigRepository;
+    private UserFeedbackRepository feedbackRepository;
 
     @BeforeEach
     void setUp() {
         sessionRepository = mock(GuideSessionRepository.class);
         scenicRouteService = mock(ScenicRouteService.class);
         modelConfigRepository = mock(AdminModelConfigRepository.class);
+        feedbackRepository = mock(UserFeedbackRepository.class);
         service = spy(new GuideService(
                 sessionRepository,
                 mock(GuideMessageRepository.class),
-                mock(UserFeedbackRepository.class),
+                feedbackRepository,
                 scenicRouteService,
                 modelConfigRepository,
                 mock(AdminProviderConfigRepository.class),
                 mock(MaxKbService.class)));
+    }
+
+    @Test
+    void saveFeedbackKeepsContext() {
+        FeedbackRequest request = new FeedbackRequest();
+        request.setSessionId("session-2");
+        request.setTraceId("trace-2");
+        request.setRouteId("route-3");
+        request.setMessageId(42L);
+        request.setQuestion("路线是否合理？");
+        request.setRating(4);
+
+        service.saveFeedback(request);
+
+        ArgumentCaptor<UserFeedback> captor = ArgumentCaptor.forClass(UserFeedback.class);
+        verify(feedbackRepository).save(captor.capture());
+        UserFeedback saved = captor.getValue();
+        assertEquals("route-3", saved.getRouteId());
+        assertEquals(42L, saved.getMessageId());
+        assertEquals("PENDING", saved.getStatus());
+        assertEquals("CONTEXTUAL", saved.getCategory());
+    }
+
+    @Test
+    void saveFeedbackWithoutContextIsGeneral() {
+        FeedbackRequest request = new FeedbackRequest();
+        request.setQuestion("普通意见");
+        request.setRating(3);
+
+        service.saveFeedback(request);
+
+        ArgumentCaptor<UserFeedback> captor = ArgumentCaptor.forClass(UserFeedback.class);
+        verify(feedbackRepository).save(captor.capture());
+        assertEquals("GENERAL", captor.getValue().getCategory());
     }
 
     @Test

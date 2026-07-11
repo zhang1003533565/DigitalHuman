@@ -12,6 +12,12 @@ export function GuideResultCards({ result, onSuggestion }: GuideResultCardsProps
 
   if (!hasActions && !result.sources.length) return null
 
+  const withContext = (params: URLSearchParams) => {
+    if (result.sessionId) params.set('sessionId', result.sessionId)
+    if (result.traceId) params.set('traceId', result.traceId)
+    return params.toString()
+  }
+
   return (
     <div className="guide-result-cards">
       {result.relatedSpots.length ? (
@@ -19,7 +25,7 @@ export function GuideResultCards({ result, onSuggestion }: GuideResultCardsProps
           <strong>相关景点</strong>
           <div className="guide-result-card__actions">
             {result.relatedSpots.map((spot) => (
-              <button key={spot} type="button" onClick={() => navigate(`/map?spot=${encodeURIComponent(spot)}`)}>
+              <button key={spot} type="button" onClick={() => navigate(`/map?${withContext(new URLSearchParams({ spotName: spot, spot }))}`)}>
                 {spot}
               </button>
             ))}
@@ -32,7 +38,7 @@ export function GuideResultCards({ result, onSuggestion }: GuideResultCardsProps
           <strong>推荐路线</strong>
           <div className="guide-result-card__actions">
             {result.recommendedRoutes.map((route) => (
-              <button key={route} type="button" onClick={() => navigate(`/routes?route=${encodeURIComponent(route)}`)}>
+              <button key={route} type="button" onClick={() => navigate(`/routes?${withContext(new URLSearchParams({ routeId: route, route }))}`)}>
                 {route}
               </button>
             ))}

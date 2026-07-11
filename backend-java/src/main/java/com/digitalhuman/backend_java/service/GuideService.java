@@ -436,6 +436,12 @@ public class GuideService {
         UserFeedback feedback = new UserFeedback();
         feedback.setSessionId(request.getSessionId());
         feedback.setTraceId(request.getTraceId());
+        feedback.setRouteId(request.getRouteId());
+        feedback.setMessageId(request.getMessageId());
+        feedback.setStatus("PENDING");
+        boolean hasContext = hasText(request.getSessionId()) || hasText(request.getTraceId())
+                || hasText(request.getRouteId()) || request.getMessageId() != null;
+        feedback.setCategory(hasText(request.getCategory()) ? request.getCategory() : hasContext ? "CONTEXTUAL" : "GENERAL");
         feedback.setQuestion(request.getQuestion());
         feedback.setAnswer(request.getAnswer());
         feedback.setHelpful(request.isHelpful());
@@ -443,6 +449,10 @@ public class GuideService {
         feedback.setComment(request.getComment());
         feedback.setCreatedAt(LocalDateTime.now());
         feedbackRepository.save(feedback);
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     public List<FeedbackRecordDto> getFeedbackRecords() {

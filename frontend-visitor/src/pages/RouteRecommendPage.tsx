@@ -1,7 +1,10 @@
+/* eslint-disable react-hooks/set-state-in-effect -- selected route mirrors asynchronously loaded route options. */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import axios from 'axios'
+import { useLocation, useNavigate } from 'react-router-dom'
 import './RouteRecommendPage.css'
 import { AppTopNav } from '../components/AppTopNav'
+import { readTripPlan, resolveRouteId } from './navigationContext'
 
 type Props = {
   onLogout: () => void
@@ -111,13 +114,19 @@ function getRouteScore(route: ScenicRoute) {
 }
 
 export function RouteRecommendPage({ onLogout }: Props) {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const cachedPlan = useMemo(() => readTripPlan(window.sessionStorage.getItem('digitalhuman.tripPlan')), [])
   const [filters, setFilters] = useState<FilterState>({
     interest: '',
     duration: '',
     intensity: '',
   })
   const [routes, setRoutes] = useState<ScenicRoute[]>([])
-  const [selectedRouteId, setSelectedRouteId] = useState('')
+  const [selectedRouteId, setSelectedRouteId] = useState(() => resolveRouteId(
+    location.search,
+    window.sessionStorage.getItem('digitalhuman.tripPlan'),
+  ))
   const [loadError, setLoadError] = useState('')
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [amapApi, setAmapApi] = useState<any>(null)
@@ -139,7 +148,8 @@ export function RouteRecommendPage({ onLogout }: Props) {
           if (current && response.data.some((route) => route.id === current)) {
             return current
           }
-          return response.data[0]?.id ?? ''
+          const cachedId = cachedPlan?.route?.id ?? ''
+          return response.data.some((route) => route.id === cachedId) ? cachedId : response.data[0]?.id ?? ''
         })
       } catch (error) {
         console.error(error)
@@ -148,7 +158,7 @@ export function RouteRecommendPage({ onLogout }: Props) {
     }
 
     void loadRoutes()
-  }, [filters.interest])
+  }, [cachedPlan?.route?.id, filters.interest])
 
   useEffect(() => {
     let cancelled = false
@@ -372,6 +382,16 @@ export function RouteRecommendPage({ onLogout }: Props) {
                       <span key={tag} className="info-tag">{tag}</span>
                     ))}
                   </div>
+                  {cachedPlan?.route?.id === selectedRoute.id ? (
+                    <p className="route-detail__saved">已恢复你刚刚保存的行程规划</p>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="route-detail__map-link"
+                    onClick={() => navigate(`/map?routeId=${encodeURIComponent(selectedRoute.id)}`)}
+                  >
+                    在景区地图中查看
+                  </button>
                 </div>
 
                 <div className="route-timeline">

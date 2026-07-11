@@ -149,6 +149,9 @@
   gap: 8px;
 }
 
+.route-detail__saved { color: #77d9ff; font-weight: 700; }
+.route-detail__map-link { margin-top: 14px; border: 0; border-radius: 999px; padding: 10px 16px; color: #fff; background: #1677ff; cursor: pointer; }
+
 .route-card__stats b,
 .route-detail__chips span {
   padding: 4px 8px;

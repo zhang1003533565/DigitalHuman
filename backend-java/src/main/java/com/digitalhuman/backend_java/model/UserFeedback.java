@@ -23,6 +23,20 @@ public class UserFeedback {
     @Column(length = 80)
     private String traceId;
 
+    @Column(length = 80)
+    private String routeId;
+
+    private Long messageId;
+
+    @Column(nullable = false, length = 30)
+    private String status = "PENDING";
+
+    @Column(nullable = false, length = 30)
+    private String category;
+
+    @Column(length = 1000)
+    private String adminNote;
+
     @Column(nullable = false, length = 500)
     private String question;
 
@@ -56,6 +70,17 @@ public class UserFeedback {
     public void setTraceId(String traceId) {
         this.traceId = traceId;
     }
+
+    public String getRouteId() { return routeId; }
+    public void setRouteId(String routeId) { this.routeId = routeId; }
+    public Long getMessageId() { return messageId; }
+    public void setMessageId(Long messageId) { this.messageId = messageId; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+    public String getCategory() { return category; }
+    public void setCategory(String category) { this.category = category; }
+    public String getAdminNote() { return adminNote; }
+    public void setAdminNote(String adminNote) { this.adminNote = adminNote; }
 
     public String getQuestion() {
         return question;

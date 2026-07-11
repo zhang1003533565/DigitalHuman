@@ -8,6 +8,9 @@ public class FeedbackRequest {
 
     private String sessionId;
     private String traceId;
+    private String routeId;
+    private Long messageId;
+    private String category;
 
     @NotBlank(message = "问题不能为空")
     private String question;
@@ -37,6 +40,13 @@ public class FeedbackRequest {
     public void setTraceId(String traceId) {
         this.traceId = traceId;
     }
+
+    public String getRouteId() { return routeId; }
+    public void setRouteId(String routeId) { this.routeId = routeId; }
+    public Long getMessageId() { return messageId; }
+    public void setMessageId(Long messageId) { this.messageId = messageId; }
+    public String getCategory() { return category; }
+    public void setCategory(String category) { this.category = category; }
 
     public String getQuestion() {
         return question;

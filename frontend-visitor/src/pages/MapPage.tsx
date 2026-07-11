@@ -1,8 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/set-state-in-effect -- AMap SDK is untyped and this legacy page synchronizes imperative map state in effects. */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import axios from 'axios'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import './MapPage.css'
 import { AppTopNav } from '../components/AppTopNav'
+import { parseNavigationContext } from './navigationContext'
 
 type Props = {
   onLogout: () => void
@@ -47,6 +49,9 @@ type CardPosition = {
   left: number
   top: number
 }
+
+type RouteCoordinate = { longitude: number; latitude: number }
+type MapRoute = { id: string; name: string; polyline?: RouteCoordinate[]; nodes?: Array<{ coordinate: RouteCoordinate }> }
 
 const AMAP_KEY = '5b01b946c26d0f94f7d2ddb9d09ff26f'
 const AMAP_SECURITY_KEY = '692196a068ef6c9cad53a55fc9e47ad7'
@@ -146,9 +151,13 @@ function buildFallbackCategories(facilities: ScenicFacility[]): ScenicCategory[]
 
 export function MapPage({ onLogout }: Props) {
   const navigate = useNavigate()
+  const location = useLocation()
+  const context = useMemo(() => parseNavigationContext(location.search), [location.search])
   const [spots, setSpots] = useState<ScenicSpot[]>([])
   const [facilities, setFacilities] = useState<ScenicFacility[]>([])
   const [categories, setCategories] = useState<ScenicCategory[]>([])
+  const [activeRoute, setActiveRoute] = useState<MapRoute | null>(null)
+  const [mapReady, setMapReady] = useState(false)
   const [activeCategory, setActiveCategory] = useState('all')
   const [categoryPage, setCategoryPage] = useState(0)
   const [keyword, setKeyword] = useState('')
@@ -162,6 +171,7 @@ export function MapPage({ onLogout }: Props) {
   const scenicCenterMarkerRef = useRef<any>(null)
   const facilityMarkersRef = useRef<any[]>([])
   const searchMarkersRef = useRef<any[]>([])
+  const routePolylineRef = useRef<any>(null)
   const selectedFacilityRef = useRef<ScenicFacility | null>(null)
   const initialUserPositionRef = useRef<[number, number] | null>(null)
   const hasAutoLocatedRef = useRef(false)
@@ -242,6 +252,22 @@ export function MapPage({ onLogout }: Props) {
   }, [])
 
   useEffect(() => {
+    if (!context.routeId) {
+      setActiveRoute(null)
+      return
+    }
+    axios.get<MapRoute[]>('/api/user/scenic/routes/recommend')
+      .then(({ data }) => setActiveRoute(data.find((route) => route.id === context.routeId || route.name === context.routeId) ?? null))
+      .catch((error) => console.warn('load selected route failed', error))
+  }, [context.routeId])
+
+  useEffect(() => {
+    const selected = facilities.find((facility) => String(facility.id) === context.spotId
+      || facility.name === context.spotName)
+    if (selected) setSelectedFacility(selected)
+  }, [context.spotId, context.spotName, facilities])
+
+  useEffect(() => {
     setCategoryPage(0)
   }, [categories.length])
 
@@ -288,6 +314,7 @@ export function MapPage({ onLogout }: Props) {
           viewMode: '2D',
         })
         mapInstanceRef.current = map
+        setMapReady(true)
 
         scenicCenterMarkerRef.current = new AMap.Marker({
           position: LINGSHAN_CENTER,
@@ -414,6 +441,22 @@ export function MapPage({ onLogout }: Props) {
     }
   }, [filteredFacilities, hasAutoFitFacilities, selectedFacility])
 
+  useEffect(() => {
+    const map = mapInstanceRef.current
+    const AMap = window.AMap
+    if (!map || !AMap) return
+    if (routePolylineRef.current) map.remove?.(routePolylineRef.current)
+    const path = (activeRoute?.polyline?.length ? activeRoute.polyline : activeRoute?.nodes?.map((node) => node.coordinate) ?? [])
+      .map((point) => [point.longitude, point.latitude])
+    if (path.length < 2) {
+      routePolylineRef.current = null
+      return
+    }
+    routePolylineRef.current = new AMap.Polyline({ path, strokeColor: '#1677ff', strokeWeight: 8, strokeOpacity: 0.9 })
+    map.add?.(routePolylineRef.current)
+    map.setFitView?.([routePolylineRef.current], false, [72, 72, 72, 72], 15)
+  }, [activeRoute, mapReady])
+
   const handleZoom = (delta: number) => {
     const map = mapInstanceRef.current
     if (!map) return
@@ -504,6 +547,7 @@ export function MapPage({ onLogout }: Props) {
         <div className="map-page">
           <div className="map-page__main">
             <div ref={mapContainerRef} className="map-page__canvas" />
+            {activeRoute ? <div className="map-route-context">正在展示：{activeRoute.name}</div> : null}
 
             {selectedFacility && cardPosition ? (
               <article
@@ -528,7 +572,7 @@ export function MapPage({ onLogout }: Props) {
                   <button
                     type="button"
                     className="map-spot-card__action"
-                    onClick={() => navigate('/routes')}
+                    onClick={() => navigate(`/routes?spotId=${encodeURIComponent(String(selectedFacility.id))}`)}
                   >
                     路线导航
                   </button>
