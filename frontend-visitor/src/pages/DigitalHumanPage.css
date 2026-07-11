@@ -549,6 +549,52 @@
   font-size: 12px;
 }
 
+.guide-result-cards {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.guide-result-card {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid rgba(118, 203, 255, 0.18);
+  border-radius: 12px;
+  background: rgba(8, 31, 63, 0.28);
+}
+
+.guide-result-card strong {
+  color: rgba(227, 244, 255, 0.9);
+  font-size: 12px;
+}
+
+.guide-result-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.guide-result-card__actions button {
+  min-height: 28px;
+  padding: 4px 9px;
+  border: 1px solid rgba(90, 188, 255, 0.28);
+  border-radius: 999px;
+  color: rgba(230, 246, 255, 0.92);
+  background: rgba(58, 164, 255, 0.12);
+  cursor: pointer;
+}
+
+.guide-result-card__actions button:hover {
+  background: rgba(58, 164, 255, 0.24);
+}
+
+.guide-result-card__actions--suggestions button {
+  border-color: rgba(255, 211, 106, 0.3);
+  color: rgba(255, 229, 159, 0.96);
+  background: rgba(255, 211, 106, 0.1);
+}
+
 .digital-human-answer__sources span {
   background: rgba(255, 255, 255, 0.08);
   color: rgba(214, 233, 255, 0.72);

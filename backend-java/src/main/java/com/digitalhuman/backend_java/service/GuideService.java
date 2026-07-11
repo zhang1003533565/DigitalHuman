@@ -269,7 +269,8 @@ public class GuideService {
         saveMessage(sessionId, traceId, "user", request.getQuestion());
         saveMessage(sessionId, traceId, "assistant", answerText);
 
-        return new GuideChatResponse(sessionId, traceId, answerText, relatedSpots, recommendedRoutes, sources);
+        return new GuideChatResponse(sessionId, traceId, answerText, relatedSpots, recommendedRoutes,
+                buildSuggestions(answerText, relatedSpots, recommendedRoutes), sources);
     }
 
     public GuideChatResponse quickChat(GuideChatRequest request) {
@@ -298,11 +299,18 @@ public class GuideService {
         new Thread(() -> {
             try {
                 List<GuideSourceDto> sources = retrieveGuideSources(request.getQuestion(), request.getKnowledgeId());
+                List<String> relatedSpots = spots.stream().map(ScenicSpotDto::getName).limit(2).toList();
+                List<String> recommendedRoutes = recommendRoutes(request.getInterest()).stream()
+                        .map(ScenicRouteDto::getName)
+                        .toList();
                 // 先发送 sessionId 等元信息
                 emitter.send(SseEmitter.event().name("meta")
                         .data(objectMapper.writeValueAsString(Map.of(
                                 "sessionId", finalSessionId,
                                 "traceId", traceId,
+                                "relatedSpots", relatedSpots,
+                                "recommendedRoutes", recommendedRoutes,
+                                "suggestions", buildSuggestions("", relatedSpots, recommendedRoutes),
                                 "sources", sources))));
 
                 // 调用 ai-service 流式接口
@@ -386,6 +394,21 @@ public class GuideService {
         }).start();
 
         return emitter;
+    }
+
+    List<String> buildSuggestions(String answerText, List<String> relatedSpots, List<String> recommendedRoutes) {
+        List<String> suggestions = new ArrayList<>(3);
+        if (relatedSpots != null && !relatedSpots.isEmpty() && relatedSpots.get(0) != null && !relatedSpots.get(0).isBlank()) {
+            suggestions.add("查看" + relatedSpots.get(0).trim() + "位置");
+        }
+        if (recommendedRoutes != null && !recommendedRoutes.isEmpty()) {
+            suggestions.add("推荐适合我的路线");
+        }
+        suggestions.add("还有哪些注意事项");
+        if (suggestions.size() < 3) {
+            suggestions.add("附近还有什么值得去");
+        }
+        return suggestions.stream().filter(suggestion -> !suggestion.isBlank()).distinct().limit(3).toList();
     }
 
     private String firstWarningOrDefault(JsonNode chunk, String defaultMessage) {

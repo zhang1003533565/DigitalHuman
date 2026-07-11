@@ -24,6 +24,8 @@ import {
   sanitizeSpeechText,
 } from '../digitalHuman/streamingSpeech'
 import { AppTopNav } from '../components/AppTopNav'
+import { GuideResultCards } from '../components/GuideResultCards'
+import { normalizeGuideChatResult, type GuideChatResult } from '../api/contracts'
 
 type DigitalHumanPageProps = {
   onLogout: () => void
@@ -48,7 +50,10 @@ type DigitalChatMessage = {
   content: ReactNode
   time: Date
   status?: 'sent' | 'read' | 'failed'
+  result?: GuideChatResult
 }
+
+export type GuideRuntimeState = 'loading' | 'idle' | 'listening' | 'thinking' | 'speaking' | 'error'
 
 type SpeechQueueItem = {
   id: number
@@ -187,7 +192,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
   const [runtimeModels, setRuntimeModels] = useState<RuntimeDigitalHumanModel[]>([])
   const [status, setStatus] = useState('正在加载 Live2D 模型...')
   const [isReady, setIsReady] = useState(false)
-  const [isSpeaking, setIsSpeaking] = useState(false)
+  const [runtimeState, setRuntimeState] = useState<GuideRuntimeState>('loading')
   const [sessionId, setSessionId] = useState(() => window.sessionStorage.getItem(GUIDE_SESSION_KEY) ?? '')
   const [draft, setDraft] = useState('')
   const [selectedFactoryId, setSelectedFactoryId] = useState(FACTORY_OPTIONS[0].id)
@@ -217,6 +222,8 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
   const selectedFactory =
     FACTORY_OPTIONS.find((factory) => factory.id === selectedFactoryId) ??
     FACTORY_OPTIONS[0]
+
+  const isSpeaking = runtimeState === 'speaking'
 
   const canSend = isReady && draft.trim().length > 0
 
@@ -508,6 +515,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     async function loadSelectedModel() {
       try {
         setIsReady(false)
+        setRuntimeState('loading')
         setStatus(`正在加载 ${selectedModel.name}...`)
 
         await loadLive2dScripts()
@@ -592,11 +600,13 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
         modelRef.current = model
         app.start()
         setIsReady(true)
+        setRuntimeState('idle')
         setStatus(`${selectedModel.name} 已就绪，可以开始导览问答。`)
       } catch (error) {
         console.error(error)
         appRef.current?.start()
         setStatus(`${selectedModel.name} 加载失败，请检查 public/live2d 资源是否完整。`)
+        setRuntimeState('error')
       }
     }
 
@@ -608,13 +618,8 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
       }
     }
   }, [
-    selectedModel.name,
-    selectedModel.url,
+    selectedModel,
     config.costumeId,
-    selectedModel.bodyMotionGroup,
-    selectedModel.scaleMultiplier,
-    selectedModel.xOffsetRatio,
-    selectedModel.yOffsetRatio,
     markInteraction,
     triggerConfiguredAction,
   ])
@@ -727,7 +732,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     if (!nextItem) {
       isAudioStartingRef.current = false
       if (!isAnswerStreamingRef.current) {
-        setIsSpeaking(false)
+        setRuntimeState('idle')
         setStatus('导览回答已生成。')
       }
       return
@@ -787,6 +792,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
 
     isAudioStartingRef.current = false
     isAudioPlayingRef.current = true
+    setRuntimeState('speaking')
     setStatus('正在播放导览语音。')
     prefetchSpeechSegments(runId)
 
@@ -815,10 +821,13 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     })
   }
 
-  async function handleSend(event?: FormEvent<HTMLFormElement>) {
+  function handleSend(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault()
+    void sendQuestion(draft)
+  }
 
-    const question = draft.trim()
+  async function sendQuestion(questionInput: string) {
+    const question = questionInput.trim()
     if (!question) return
     markInteraction()
 
@@ -833,7 +842,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
 
     setMessages((current) => [...current, userMessage])
     setDraft('')
-    setIsSpeaking(true)
+    setRuntimeState('thinking')
     setStatus('正在生成导览回答...')
     resetSpeechQueue()
     const requestRunId = speechRunIdRef.current
@@ -864,6 +873,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
       let speechBuffer = ''
       let speakableAnswer = ''
       let mainSpeechSegmentCount = 0
+      let guideResult = normalizeGuideChatResult({})
 
       const queueAnswerSpeech = (flush = false) => {
         if (!isCurrentRequest()) return
@@ -950,6 +960,20 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
               window.sessionStorage.setItem(GUIDE_SESSION_KEY, nextSessionId)
             }
 
+            if (parsed.relatedSpots || parsed.recommendedRoutes || parsed.suggestions || parsed.sources) {
+              guideResult = normalizeGuideChatResult({
+                sessionId: nextSessionId,
+                traceId: parsed.traceId,
+                relatedSpots: parsed.relatedSpots,
+                recommendedRoutes: parsed.recommendedRoutes,
+                suggestions: parsed.suggestions,
+                sources: parsed.sources,
+              })
+              setMessages((current) => current.map((msg) => (
+                msg.id === assistantMsgId ? { ...msg, result: guideResult } : msg
+              )))
+            }
+
             // token 事件：逐字输出
             if (parsed.token) {
               fullAnswer += parsed.token
@@ -1003,6 +1027,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
           )
         )
         isAnswerStreamingRef.current = false
+        setRuntimeState('error')
         void playNextSpeechSegment(requestRunId)
         return
       }
@@ -1010,6 +1035,10 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
       setStatus('导览回答已生成，语音正在分段播放。')
       void triggerConfiguredAction({ text: `${question}\n${fullAnswer}` })
       isAnswerStreamingRef.current = false
+      guideResult = { ...guideResult, answerText: fullAnswer }
+      setMessages((current) => current.map((msg) => (
+        msg.id === assistantMsgId ? { ...msg, result: guideResult } : msg
+      )))
       void playNextSpeechSegment(requestRunId)
     } catch (error) {
       console.error(error)
@@ -1018,6 +1047,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
       }
       isAnswerStreamingRef.current = false
       setStatus('导览请求失败，请确认问答服务和 TTS 服务已启动。')
+      setRuntimeState('error')
       enqueueCurrentSpeechSegments(['这次导览请求失败了，请稍后再试。'])
       setMessages((current) =>
         current.map((msg) =>
@@ -1066,7 +1096,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
       <section className="live2d-page live2d-page--presentation">
         <canvas ref={canvasRef} className="live2d-canvas" />
         <div className="digital-human-stage-glow" aria-hidden />
-        <div className="digital-human-status" aria-live="polite">
+        <div className="digital-human-status" data-runtime-state={runtimeState} aria-live="polite">
           <span className={isReady ? 'digital-human-status__dot digital-human-status__dot--ready' : 'digital-human-status__dot'} />
           <span>{status}</span>
         </div>
@@ -1183,6 +1213,12 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
                   {!isOwn ? <span className="digital-chat-message__avatar" aria-hidden>灵</span> : null}
                   <div className="digital-chat-message__bubble">
                     <div className="digital-chat-message__content">{message.content}</div>
+                    {message.result ? (
+                      <GuideResultCards result={message.result} onSuggestion={(suggestion) => {
+                        setDraft(suggestion)
+                        void sendQuestion(suggestion)
+                      }} />
+                    ) : null}
                   </div>
                   <time className="digital-chat-message__time">{formatChatTime(message.time)}</time>
                   {isOwn ? <span className="digital-chat-message__avatar digital-chat-message__avatar--own" aria-hidden>我</span> : null}
@@ -1193,7 +1229,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
           </main>
 
           <footer className="digital-chat-composer">
-            <form className="digital-chat-form" onSubmit={(event) => void handleSend(event)}>
+            <form className="digital-chat-form" onSubmit={handleSend}>
               <textarea
                 value={draft}
                 placeholder="请输入您的问题..."

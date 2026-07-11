@@ -9,14 +9,20 @@ public class GuideChatResponse {
     private final String answerText;
     private final List<String> relatedSpots;
     private final List<String> recommendedRoutes;
+    private final List<String> suggestions;
     private final List<GuideSourceDto> sources;
 
     public GuideChatResponse(String sessionId, String traceId, String answerText, List<String> relatedSpots, List<String> recommendedRoutes, List<GuideSourceDto> sources) {
+        this(sessionId, traceId, answerText, relatedSpots, recommendedRoutes, List.of(), sources);
+    }
+
+    public GuideChatResponse(String sessionId, String traceId, String answerText, List<String> relatedSpots, List<String> recommendedRoutes, List<String> suggestions, List<GuideSourceDto> sources) {
         this.sessionId = sessionId;
         this.traceId = traceId;
         this.answerText = answerText;
         this.relatedSpots = relatedSpots;
         this.recommendedRoutes = recommendedRoutes;
+        this.suggestions = suggestions;
         this.sources = sources;
     }
 
@@ -38,6 +44,10 @@ public class GuideChatResponse {
 
     public List<String> getRecommendedRoutes() {
         return recommendedRoutes;
+    }
+
+    public List<String> getSuggestions() {
+        return suggestions;
     }
 
     public List<GuideSourceDto> getSources() {
