@@ -75,6 +75,31 @@ class GuideServiceTests {
     }
 
     @Test
+    void chatPersistsKnowledgeHitOnAssistantMessage() {
+        when(sessionRepository.findById("session-1")).thenReturn(Optional.empty());
+        when(scenicRouteService.recommendRoutes(null)).thenReturn(List.of());
+        com.digitalhuman.backend_java.dto.GuideSourceDto source = new com.digitalhuman.backend_java.dto.GuideSourceDto();
+        source.setKnowledgeName("知识库");
+        source.setContent("命中内容");
+        doReturn(List.of(source)).when(service).retrieveGuideSources("问题", null);
+        doReturn("回答").when(service).buildAnswer(org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.anyList());
+        GuideChatRequest request = new GuideChatRequest();
+        request.setSessionId("session-1");
+        request.setQuestion("问题");
+
+        service.chat(request);
+
+        ArgumentCaptor<GuideMessage> captor = ArgumentCaptor.forClass(GuideMessage.class);
+        verify(messageRepository, org.mockito.Mockito.atLeast(2)).save(captor.capture());
+        GuideMessage assistant = captor.getAllValues().stream()
+                .filter(message -> "assistant".equals(message.getRole()))
+                .findFirst()
+                .orElseThrow();
+        assertTrue(assistant.isKnowledgeHit());
+    }
+
+    @Test
     void saveFeedbackKeepsContext() {
         FeedbackRequest request = new FeedbackRequest();
         request.setSessionId("session-2");

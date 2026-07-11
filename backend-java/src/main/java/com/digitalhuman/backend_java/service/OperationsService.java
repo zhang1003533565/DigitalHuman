@@ -8,6 +8,9 @@ import com.digitalhuman.backend_java.repository.GuideSessionRepository;
 import com.digitalhuman.backend_java.repository.UserFeedbackRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
+import java.util.Locale;
+import java.util.stream.Stream;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,16 +37,17 @@ public class OperationsService {
     public OperationsOverviewDto getOverview() {
         long sessionCount = sessionRepository.countPersistedSessions();
         long feedbackCount = feedbackRepository.countPersistedFeedback();
+        long assistantMessageCount = messageRepository.countAssistantMessages();
         Double averageRating = feedbackRepository.averagePersistedRating();
         return new OperationsOverviewDto(
                 sessionCount,
                 sessionCount,
                 messageRepository.countPersistedMessages(),
                 percentage(feedbackRepository.countHelpfulFeedback(), feedbackCount),
-                percentage(feedbackRepository.countFeedbackWithAnswer(), feedbackCount),
+                percentage(messageRepository.countKnowledgeHitAssistantMessages(), assistantMessageCount),
                 averageRating == null ? 0.0 : averageRating,
-                rankedItems(feedbackRepository.findPopularQuestions()),
-                rankedItems(feedbackRepository.findPopularRoutes()),
+                rankedItems(feedbackRepository.findPopularQuestions(PageRequest.of(0, RANKING_LIMIT))),
+                rankedItems(feedbackRepository.findPopularRoutes(PageRequest.of(0, RANKING_LIMIT))),
                 List.of(aiServiceHealth())
         );
     }
@@ -62,8 +66,18 @@ public class OperationsService {
     private ServiceHealthItem aiServiceHealth() {
         try {
             JsonNode health = adminSettingsService.getAiServiceHealth();
-            String status = health == null ? "degraded" : health.path("status").asText("degraded");
-            String message = health == null ? "健康检查未返回数据" : health.path("message").asText("");
+            String rawStatus = health == null ? "" : health.path("status").asText("");
+            String normalizedStatus = rawStatus.toLowerCase(Locale.ROOT);
+            String status = switch (normalizedStatus) {
+                case "ok", "healthy", "up" -> normalizedStatus;
+                default -> "degraded";
+            };
+            String message = health == null
+                    ? "健康检查未返回数据"
+                    : Stream.of(health.path("message").asText(""), health.path("detail").asText(""))
+                            .filter(value -> !value.isBlank())
+                            .reduce((left, right) -> left + "; " + right)
+                            .orElse("");
             return new ServiceHealthItem("ai-service", status, message);
         } catch (Exception exception) {
             return new ServiceHealthItem("ai-service", "degraded", String.valueOf(exception.getMessage()));

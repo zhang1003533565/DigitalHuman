@@ -11,4 +11,11 @@ public interface GuideMessageRepository extends JpaRepository<GuideMessage, Long
 
     @Query("select count(message) from GuideMessage message")
     long countPersistedMessages();
+
+    @Query("select count(message) from GuideMessage message where lower(message.role) = 'assistant'")
+    long countAssistantMessages();
+
+    @Query("select count(message) from GuideMessage message "
+            + "where lower(message.role) = 'assistant' and message.knowledgeHit = true")
+    long countKnowledgeHitAssistantMessages();
 }

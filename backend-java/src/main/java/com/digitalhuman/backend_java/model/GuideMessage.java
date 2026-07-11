@@ -30,6 +30,9 @@ public class GuideMessage {
     @Column(nullable = false, columnDefinition = "LONGTEXT")
     private String content;
 
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean knowledgeHit;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
@@ -69,6 +72,14 @@ public class GuideMessage {
 
     public void setContent(String content) {
         this.content = content;
+    }
+
+    public boolean isKnowledgeHit() {
+        return knowledgeHit;
+    }
+
+    public void setKnowledgeHit(boolean knowledgeHit) {
+        this.knowledgeHit = knowledgeHit;
     }
 
     public LocalDateTime getCreatedAt() {

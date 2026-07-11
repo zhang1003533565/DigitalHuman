@@ -267,7 +267,7 @@ public class GuideService {
 
         touchSession(sessionId);
         saveMessage(sessionId, traceId, "user", request.getQuestion());
-        GuideMessage assistantMessage = saveMessage(sessionId, traceId, "assistant", answerText);
+        GuideMessage assistantMessage = saveMessage(sessionId, traceId, "assistant", answerText, !sources.isEmpty());
 
         return new GuideChatResponse(sessionId, traceId, assistantMessage.getId(), answerText, relatedSpots, recommendedRoutes,
                 buildSuggestions(answerText, relatedSpots, recommendedRoutes), sources);
@@ -380,7 +380,8 @@ public class GuideService {
                 String answerText = fullAnswer.toString().trim();
                 touchSession(finalSessionId);
                 saveMessage(finalSessionId, traceId, "user", request.getQuestion());
-                GuideMessage assistantMessage = saveMessage(finalSessionId, traceId, "assistant", answerText);
+                GuideMessage assistantMessage = saveMessage(
+                        finalSessionId, traceId, "assistant", answerText, !sources.isEmpty());
                 emitter.send(SseEmitter.event().name("meta")
                         .data(objectMapper.writeValueAsString(Map.of("messageId", assistantMessage.getId()))));
 
@@ -764,11 +765,16 @@ public class GuideService {
     }
 
     private GuideMessage saveMessage(String sessionId, String traceId, String role, String content) {
+        return saveMessage(sessionId, traceId, role, content, false);
+    }
+
+    private GuideMessage saveMessage(String sessionId, String traceId, String role, String content, boolean knowledgeHit) {
         GuideMessage message = new GuideMessage();
         message.setSessionId(sessionId);
         message.setTraceId(traceId);
         message.setRole(role);
         message.setContent("assistant".equalsIgnoreCase(role) ? sanitizeStageDirections(content) : content);
+        message.setKnowledgeHit("assistant".equalsIgnoreCase(role) && knowledgeHit);
         message.setCreatedAt(LocalDateTime.now());
         return messageRepository.save(message);
     }
