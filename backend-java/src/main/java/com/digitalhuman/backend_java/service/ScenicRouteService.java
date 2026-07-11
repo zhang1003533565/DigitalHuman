@@ -5,6 +5,8 @@ import com.digitalhuman.backend_java.dto.ScenicRouteDto.CoordinateDto;
 import com.digitalhuman.backend_java.dto.ScenicRouteDto.RouteFacilityDto;
 import com.digitalhuman.backend_java.dto.ScenicRouteDto.RouteNodeDto;
 import com.digitalhuman.backend_java.dto.ScenicRouteSaveRequest;
+import com.digitalhuman.backend_java.dto.TripPlanRequest;
+import com.digitalhuman.backend_java.dto.TripPlanResponse;
 import com.digitalhuman.backend_java.model.ScenicRoute;
 import com.digitalhuman.backend_java.model.ScenicRouteFacility;
 import com.digitalhuman.backend_java.model.ScenicRouteNode;
@@ -12,12 +14,19 @@ import com.digitalhuman.backend_java.repository.ScenicRouteRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 public class ScenicRouteService {
+
+    private static final Pattern HOURS_PATTERN = Pattern.compile("(\\d+(?:\\.\\d+)?)");
 
     private final ScenicRouteRepository routeRepository;
 
@@ -40,6 +49,20 @@ public class ScenicRouteService {
                 .filter(route -> interest == null || interest.isBlank() || route.getSuitableFor().contains(interest))
                 .map(this::toDto)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public TripPlanResponse planTrip(TripPlanRequest request) {
+        List<ScenicRoute> routes = routeRepository.findByEnabledTrueOrderBySortOrderAsc();
+        if (routes.isEmpty()) {
+            return TripPlanResponse.empty("暂无可用路线，请先在管理后台启用路线");
+        }
+
+        return routes.stream()
+                .map(route -> score(route, request))
+                .max(Comparator.comparingInt(ScoredRoute::score))
+                .map(this::toResponse)
+                .orElseThrow();
     }
 
     @Transactional(readOnly = true)
@@ -156,6 +179,83 @@ public class ScenicRouteService {
                 nodes,
                 facilities,
                 nodes.stream().map(RouteNodeDto::getCoordinate).toList());
+    }
+
+    private ScoredRoute score(ScenicRoute route, TripPlanRequest request) {
+        int score = 0;
+        List<String> reasons = new ArrayList<>();
+
+        if (containsIgnoreCase(route.getSuitableFor(), request.interest())
+                || containsIgnoreCase(route.getTagsCsv(), request.interest())) {
+            score += 40;
+            reasons.add("兴趣偏好匹配");
+        }
+        if (routeHours(route.getDuration()) <= request.durationHours()) {
+            score += 25;
+            reasons.add("路线时长不超过预算");
+        }
+        if (containsIgnoreCase(route.getIntensity(), request.intensity())) {
+            score += 20;
+            reasons.add("游览强度匹配");
+        }
+        if (matchesCompanion(route, request.groupType())) {
+            score += 15;
+            reasons.add("同行人类型匹配");
+        }
+        return new ScoredRoute(route, score, reasons);
+    }
+
+    private TripPlanResponse toResponse(ScoredRoute scoredRoute) {
+        boolean fallbackUsed = scoredRoute.score() < 100;
+        List<String> reasons = new ArrayList<>(scoredRoute.reasons());
+        List<String> reminders = new ArrayList<>();
+        if (fallbackUsed) {
+            reasons.add("暂无完全匹配路线，已按综合得分推荐最接近的官方路线");
+            reminders.add("部分条件未完全匹配，可在管理后台补充更多官方路线");
+        }
+        if (scoredRoute.route().getBestTime() != null && !scoredRoute.route().getBestTime().isBlank()) {
+            reminders.add("建议游览时间：" + scoredRoute.route().getBestTime());
+        }
+        if (reminders.isEmpty()) {
+            reminders.add("请根据现场客流和开放情况灵活调整行程");
+        }
+        return new TripPlanResponse(toDto(scoredRoute.route()), scoredRoute.score(), reasons, reminders, fallbackUsed);
+    }
+
+    private boolean matchesCompanion(ScenicRoute route, String companionType) {
+        String searchable = String.join(",",
+                defaultText(route.getSuitableFor(), ""),
+                defaultText(route.getTagsCsv(), ""));
+        if (containsIgnoreCase(searchable, companionType)) {
+            return true;
+        }
+        return switch (companionType.toLowerCase(Locale.ROOT)) {
+            case "family" -> containsAny(searchable, "亲子", "家庭", "老人", "儿童");
+            case "friends" -> containsAny(searchable, "朋友", "好友", "同伴");
+            case "couple" -> containsAny(searchable, "情侣", "伴侣");
+            case "solo" -> containsAny(searchable, "独自", "单人", "个人");
+            default -> false;
+        };
+    }
+
+    private boolean containsAny(String value, String... candidates) {
+        return Arrays.stream(candidates).anyMatch(candidate -> containsIgnoreCase(value, candidate));
+    }
+
+    private boolean containsIgnoreCase(String value, String expected) {
+        return value != null && expected != null && !expected.isBlank()
+                && value.toLowerCase(Locale.ROOT).contains(expected.toLowerCase(Locale.ROOT));
+    }
+
+    private double routeHours(String duration) {
+        if (duration == null) {
+            return Double.POSITIVE_INFINITY;
+        }
+        Matcher matcher = HOURS_PATTERN.matcher(duration);
+        return matcher.find() ? Double.parseDouble(matcher.group(1)) : Double.POSITIVE_INFINITY;
+    }
+
+    private record ScoredRoute(ScenicRoute route, int score, List<String> reasons) {
     }
 
     private String normalizeId(String value, String prefix) {
