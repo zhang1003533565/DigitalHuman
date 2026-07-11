@@ -26,7 +26,9 @@ import java.util.regex.Pattern;
 @Service
 public class ScenicRouteService {
 
-    private static final Pattern HOURS_PATTERN = Pattern.compile("(\\d+(?:\\.\\d+)?)");
+    private static final Pattern DURATION_PATTERN = Pattern.compile(
+            "^\\s*(?:约|大约)?\\s*(\\d+(?:\\.\\d+)?)"
+                    + "(?:\\s*[-—~～至到]\\s*(\\d+(?:\\.\\d+)?))?\\s*(小时|分钟)\\s*$");
 
     private final ScenicRouteRepository routeRepository;
 
@@ -251,8 +253,13 @@ public class ScenicRouteService {
         if (duration == null) {
             return Double.POSITIVE_INFINITY;
         }
-        Matcher matcher = HOURS_PATTERN.matcher(duration);
-        return matcher.find() ? Double.parseDouble(matcher.group(1)) : Double.POSITIVE_INFINITY;
+        Matcher matcher = DURATION_PATTERN.matcher(duration);
+        if (!matcher.matches()) {
+            return Double.POSITIVE_INFINITY;
+        }
+        String upperBound = matcher.group(2) == null ? matcher.group(1) : matcher.group(2);
+        double value = Double.parseDouble(upperBound);
+        return "分钟".equals(matcher.group(3)) ? value / 60 : value;
     }
 
     private record ScoredRoute(ScenicRoute route, int score, List<String> reasons) {

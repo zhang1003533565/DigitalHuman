@@ -68,6 +68,58 @@ class ScenicRouteServiceTests {
         assertTrue(result.reminders().contains("暂无可用路线，请先在管理后台启用路线"));
     }
 
+    @Test
+    void planTripAwardsDurationPointsForNinetyMinutesWithinTwoHours() {
+        when(repository.findByEnabledTrueOrderBySortOrderAsc()).thenReturn(List.of(
+                route("route-minutes", "历史文化", "90分钟", "深度步行", "首次来访")));
+
+        TripPlanResponse result = service.planTrip(new TripPlanRequest("自然风光", 2, "轻松少走", "family"));
+
+        assertEquals(25, result.score());
+    }
+
+    @Test
+    void planTripUsesDurationRangeUpperBound() {
+        when(repository.findByEnabledTrueOrderBySortOrderAsc()).thenReturn(List.of(
+                route("route-range", "历史文化", "约4-5小时", "深度步行", "首次来访")));
+
+        TripPlanResponse fourHourResult = service.planTrip(new TripPlanRequest("自然风光", 4, "轻松少走", "family"));
+        TripPlanResponse fiveHourResult = service.planTrip(new TripPlanRequest("自然风光", 5, "轻松少走", "family"));
+
+        assertEquals(0, fourHourResult.score());
+        assertEquals(25, fiveHourResult.score());
+    }
+
+    @Test
+    void planTripDoesNotAwardDurationPointsWhenDurationCannotBeParsedReliably() {
+        when(repository.findByEnabledTrueOrderBySortOrderAsc()).thenReturn(List.of(
+                route("route-unknown", "历史文化", "半天", "深度步行", "首次来访")));
+
+        TripPlanResponse result = service.planTrip(new TripPlanRequest("自然风光", 8, "轻松少走", "family"));
+
+        assertEquals(0, result.score());
+    }
+
+    @Test
+    void planTripAwardsExactlyTwentyPointsForIntensityMatch() {
+        when(repository.findByEnabledTrueOrderBySortOrderAsc()).thenReturn(List.of(
+                route("route-intensity", "历史文化", "6小时", "轻松少走", "首次来访")));
+
+        TripPlanResponse result = service.planTrip(new TripPlanRequest("自然风光", 1, "轻松少走", "family"));
+
+        assertEquals(20, result.score());
+    }
+
+    @Test
+    void planTripAwardsExactlyFifteenPointsForCompanionMatch() {
+        when(repository.findByEnabledTrueOrderBySortOrderAsc()).thenReturn(List.of(
+                route("route-family", "历史文化", "6小时", "深度步行", "亲子家庭")));
+
+        TripPlanResponse result = service.planTrip(new TripPlanRequest("自然风光", 1, "轻松少走", "family"));
+
+        assertEquals(15, result.score());
+    }
+
     private ScenicRoute route(String id, String suitableFor, String duration, String intensity, String tags) {
         ScenicRoute route = new ScenicRoute();
         route.setId(id);
