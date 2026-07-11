@@ -34,6 +34,7 @@ type VoiceConfigPageProps = {
   saving: boolean
   testing: boolean
   options: VoiceOption[]
+  onOpenManual: () => void
   onSave: () => void
   onTest: () => void
   onReset: () => void
@@ -784,6 +785,7 @@ export default function VoiceConfigPage({
   saving,
   testing,
   options,
+  onOpenManual,
   onSave,
   onTest,
   onReset,
@@ -794,14 +796,11 @@ export default function VoiceConfigPage({
   const [searchKeyword, setSearchKeyword] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [isCreateModalOpen, setCreateModalOpen] = useState(false)
-  const [customVoices, setCustomVoices] = useState<VoiceCardRecord[]>([])
   const [playingVoiceId, setPlayingVoiceId] = useState<string>('zh-CN-XiaoxiaoNeural')
   const [previewTime, setPreviewTime] = useState('00:00 / 00:08')
   const [createForm] = Form.useForm<CreateVoiceFormValues>()
 
-  const mergedCatalog = useMemo(() => {
-    return [...customVoices, ...VOICE_CATALOG]
-  }, [customVoices])
+  const mergedCatalog = useMemo(() => VOICE_CATALOG, [])
 
   useEffect(() => {
     const matched = mergedCatalog.find((item) => item.voiceId === selectedVoice)
@@ -857,30 +856,14 @@ export default function VoiceConfigPage({
   }
 
   const handlePlayVoice = (voiceId: string) => {
-    setPlayingVoiceId(voiceId)
-    setPreviewTime('00:00 / 00:08')
-    window.setTimeout(() => {
-      if (playingVoiceId === voiceId) {
-        setPreviewTime('00:08 / 00:08')
-      }
-    }, 900)
+    const voice = mergedCatalog.find((item) => item.voiceId === voiceId)
+    if (voice) handleSelectVoice(voice)
+    onTest()
   }
 
   const handleCreateVoice = async () => {
-    const values = await createForm.validateFields()
-    const nextVoice: VoiceCardRecord = {
-      key: `custom-${values.voiceId}`,
-      voiceName: values.voiceName,
-      voiceId: values.voiceId,
-      tags: [values.language, values.gender, values.style].filter(Boolean),
-      accent: 'blue',
-      provider: values.provider,
-    }
-
-    setCustomVoices((current) => [nextVoice, ...current])
-    handleSelectVoice(nextVoice)
-    createForm.resetFields()
-    setCreateModalOpen(false)
+    await createForm.validateFields()
+    onOpenManual()
   }
 
   const handleVoiceMenuAction = (voiceId: string, action: 'copy' | 'setCurrent') => {
@@ -922,9 +905,9 @@ export default function VoiceConfigPage({
               type="primary"
               icon={<PlusOutlined />}
               className="voice-settings-primary-btn"
-              onClick={() => setCreateModalOpen(true)}
+              onClick={onOpenManual}
             >
-              新增音色
+              手动维护
             </Button>
           </div>
 

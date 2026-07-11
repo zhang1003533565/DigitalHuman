@@ -10,6 +10,9 @@ import com.digitalhuman.backend_java.repository.AdminModelConfigRepository;
 import com.digitalhuman.backend_java.repository.AdminProviderConfigRepository;
 import com.digitalhuman.backend_java.service.AdminSettingsService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpServer;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -89,6 +92,53 @@ class AdminSettingsControllerTests {
         assertThat(response.isSuccess()).isFalse();
         assertThat(response.getMessage()).isEqualTo("模型测试失败");
         assertThat(response.getDetail()).doesNotContain(secret);
+    }
+
+    @Test
+    void upstreamTwoHundredFailureDoesNotForwardArbitraryDetail() throws Exception {
+        assertUpstreamFailureIsSafe(200, "{\"success\":false,\"provider\":\"DeepSeek\",\"category\":\"chat\",\"modelId\":\"deepseek-chat\",\"message\":\"failed\",\"detail\":\"foreign-secret-token\"}");
+    }
+
+    @Test
+    void upstreamFourHundredDoesNotForwardArbitraryDetail() throws Exception {
+        assertUpstreamFailureIsSafe(400, "{\"message\":\"invalid foreign-secret-token credential\"}");
+    }
+
+    private void assertUpstreamFailureIsSafe(int status, String body) throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/admin/model-test", exchange -> {
+            byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(status, bytes.length);
+            exchange.getResponseBody().write(bytes);
+            exchange.close();
+        });
+        server.start();
+        try {
+            AdminSettingsService service = new AdminSettingsService(modelRepository, providerRepository, new ObjectMapper());
+            ReflectionTestUtils.setField(service, "aiServiceUrl", "http://127.0.0.1:" + server.getAddress().getPort());
+            controller = new AdminSettingsController(service);
+            AdminModelConfig model = new AdminModelConfig();
+            model.setCategory(ModelCategory.CHAT);
+            model.setProvider("DeepSeek");
+            model.setModelId("deepseek-chat");
+            when(modelRepository.findByCategoryAndModelIdIgnoreCase(ModelCategory.CHAT, "deepseek-chat"))
+                    .thenReturn(Optional.of(model));
+            when(providerRepository.findByProviderIgnoreCase("DeepSeek"))
+                    .thenReturn(Optional.of(provider("DeepSeek", "https://api.example.com", "configured-key")));
+            AdminModelTestRequestDto request = new AdminModelTestRequestDto();
+            request.setCategory("chat");
+            request.setModelId("deepseek-chat");
+            request.setText("hello");
+
+            AdminModelTestResponseDto response = controller.testModel(request);
+
+            assertThat(response.isSuccess()).isFalse();
+            assertThat(response.getProvider()).isEqualTo("DeepSeek");
+            assertThat(response.getModelId()).isEqualTo("deepseek-chat");
+            assertThat(response.getDetail()).doesNotContain("foreign-secret-token", "configured-key");
+        } finally {
+            server.stop(0);
+        }
     }
 
     private static AdminProviderConfig provider(String provider, String baseUrl, String apiKey) {

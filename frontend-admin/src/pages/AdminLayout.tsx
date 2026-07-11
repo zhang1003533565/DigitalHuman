@@ -737,6 +737,7 @@ function SettingsPanel() {
           saving={saving}
           testing={testingCategory === 'embedding'}
           options={embeddingOptions.map((item) => ({ value: item.value, provider: item.label.split(' · ')[0] }))}
+          onOpenManual={() => setActiveSettingsTab('model-catalog')}
           onSave={() => void handleSave()}
           onTest={() => void handleTestModel('embedding')}
           onDeleteOption={(option) => void handleDeleteModelOption('embedding', option)}
@@ -756,6 +757,7 @@ function SettingsPanel() {
           saving={saving}
           testing={testingCategory === 'speech'}
           options={manualSpeechOptions.length ? manualSpeechOptions : voiceOptions}
+          onOpenManual={() => setActiveSettingsTab('model-catalog')}
           onSave={() => void handleSave()}
           onTest={() => void handleTestModel('speech')}
           onReset={() => {
@@ -796,7 +798,7 @@ function SettingsPanel() {
           options={chatOptions.map((item) => ({ value: item.value, provider: item.label.split(' · ')[0] }))}
           onOpenManual={() => setActiveSettingsTab('model-catalog')}
           onSave={() => void handleSave()}
-          onTest={() => void handleTestModel('chat')}
+          onTest={(payload) => void handleTestModel('chat', payload)}
           result={renderTestResult('chat', testResults.chat)}
         />
       ),

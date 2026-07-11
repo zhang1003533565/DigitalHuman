@@ -30,7 +30,7 @@ type ChatConfigPageProps = {
   options: ChatOption[]
   onOpenManual: () => void
   onSave: () => void
-  onTest: () => void
+  onTest: (payload?: { promptText?: string }) => void
   result: ReactNode
 }
 
@@ -1045,14 +1045,14 @@ export default function ChatConfigPage({
 
   const handlePlayTest = (record: ChatModelRecord) => {
     handleSelectModel(record)
-    onTest()
+    onTest({ promptText: testInput.trim() })
   }
 
   const handleSendMessage = () => {
     const question = testInput.trim()
     if (!question) return
 
-    onTest()
+    onTest({ promptText: question })
   }
 
   const handleSave = async () => {
@@ -1313,7 +1313,7 @@ export default function ChatConfigPage({
               <Button type="primary" className="chat-config-save-btn" loading={saving} onClick={() => void handleSave()}>
                 保存设置
               </Button>
-              <Button className="chat-config-border-btn" loading={testing} onClick={onTest}>
+              <Button className="chat-config-border-btn" loading={testing} onClick={() => onTest({ promptText: testInput.trim() })}>
                 测试当前模型
               </Button>
               <Button className="chat-config-default-btn" onClick={handleReset}>

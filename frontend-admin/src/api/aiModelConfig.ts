@@ -40,6 +40,19 @@ export type ModelOption = {
   modelId: string
 }
 
+export type ModelCatalog = {
+  embeddingModels: ModelOption[]
+  speechModels: ModelOption[]
+  visionModels: ModelOption[]
+  chatModels: ModelOption[]
+  multimodalModels: ModelOption[]
+}
+
+export async function getModelCatalog(): Promise<ModelCatalog> {
+  const response = await axios.get<ModelCatalog>('/api/admin/settings/model-options', { timeout: TIMEOUT })
+  return response.data
+}
+
 export async function getModelSettings(): Promise<ModelSettings> {
   const response = await axios.get<ModelSettings>('/api/admin/settings/models', { timeout: TIMEOUT })
   return response.data
@@ -52,6 +65,11 @@ export async function addModelOption(option: ModelOption) {
 
 export async function selectModelOption(option: ModelOption) {
   const response = await axios.put('/api/admin/settings/model-options/select', option, { timeout: TIMEOUT })
+  return response.data
+}
+
+export async function removeModelOption(option: ModelOption) {
+  const response = await axios.post('/api/admin/settings/model-options/delete', option, { timeout: TIMEOUT })
   return response.data
 }
 

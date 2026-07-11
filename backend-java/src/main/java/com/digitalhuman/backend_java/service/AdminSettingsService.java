@@ -41,6 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AdminSettingsService {
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
     private static final String MASKED_API_KEY = "********";
+    private static final String UPSTREAM_TEST_FAILURE_DETAIL = "上游模型服务调用失败，请检查提供方配置或稍后重试";
     private static final Path PROJECT_ROOT = Path.of("").toAbsolutePath().getParent();
     private static final Path AI_SERVICE_ROOT = PROJECT_ROOT.resolve("ai-service");
     private static final Map<String, String> PROVIDER_DOC_FILES = Map.of(
@@ -330,17 +331,27 @@ public class AdminSettingsService {
             try (Response response = httpClient.newCall(httpRequest).execute()) {
                 String responseBody = response.body() != null ? response.body().string() : "";
                 if (!response.isSuccessful()) {
-                    String detail = sanitizeSecret(extractAiServiceErrorMessage(responseBody, "模型测试失败"), apiKey);
-                    return buildTestErrorResponse(provider, categoryKey, item.getModelId(), detail);
+                    System.err.println("[WARN] 模型测试上游失败，provider=" + provider + ", model=" + item.getModelId()
+                            + ", status=" + response.code());
+                    return buildTestErrorResponse(provider, categoryKey, item.getModelId(), UPSTREAM_TEST_FAILURE_DETAIL);
                 }
-                return objectMapper.readValue(responseBody, AdminModelTestResponseDto.class);
+                AdminModelTestResponseDto upstream = objectMapper.readValue(responseBody, AdminModelTestResponseDto.class);
+                if (!upstream.isSuccess()) {
+                    System.err.println("[WARN] 模型测试上游返回失败结果，provider=" + provider + ", model=" + item.getModelId());
+                    return buildTestErrorResponse(provider, categoryKey, item.getModelId(), UPSTREAM_TEST_FAILURE_DETAIL);
+                }
+                return upstream;
             }
         } catch (IOException exception) {
+            System.err.println("[WARN] 模型测试连接上游异常，provider=" + provider + ", model=" + item.getModelId()
+                    + ", type=" + exception.getClass().getSimpleName());
             return buildTestErrorResponse(provider, categoryKey, item.getModelId(),
-                    sanitizeSecret("无法连接 ai-service：" + exception.getMessage(), apiKey));
+                    UPSTREAM_TEST_FAILURE_DETAIL);
         } catch (Exception exception) {
+            System.err.println("[WARN] 模型测试处理上游响应异常，provider=" + provider + ", model=" + item.getModelId()
+                    + ", type=" + exception.getClass().getSimpleName());
             return buildTestErrorResponse(provider, categoryKey, item.getModelId(),
-                    sanitizeSecret("模型测试异常：" + exception.getMessage(), apiKey));
+                    UPSTREAM_TEST_FAILURE_DETAIL);
         }
     }
 
@@ -361,11 +372,6 @@ public class AdminSettingsService {
 
     private boolean isMaskedApiKey(String apiKey) {
         return MASKED_API_KEY.equals(apiKey) || apiKey.matches("^[*•]+$");
-    }
-
-    private String sanitizeSecret(String detail, String apiKey) {
-        String safeDetail = normalize(detail, "模型测试失败");
-        return apiKey == null || apiKey.isBlank() ? safeDetail : safeDetail.replace(apiKey, MASKED_API_KEY);
     }
 
     public AgentModelBindingPayloadDto getAgentModelBindings() {

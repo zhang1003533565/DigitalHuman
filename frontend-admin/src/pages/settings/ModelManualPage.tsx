@@ -10,6 +10,16 @@ import {
 } from '@ant-design/icons'
 import { Alert, Button, Card, Dropdown, Form, Input, Modal, Pagination, Select, Table, Tag, Tooltip, message } from 'antd'
 import type { MenuProps, TableColumnsType } from 'antd'
+import {
+  addModelOption,
+  getModelCatalog,
+  getModelSettings,
+  getProviderConfigs,
+  removeModelOption,
+  saveProviderConfig,
+  selectModelOption,
+  testModel,
+} from '../../api/aiModelConfig'
 
 type ModelCategory = 'embedding' | 'speech' | 'vision' | 'chat' | 'multimodal'
 type AddedModelStatus = 'current' | 'candidate'
@@ -110,132 +120,6 @@ const PROTOCOL_OPTIONS = [
   { value: 'openai_compatible', label: '兼容 OpenAI 协议' },
   { value: 'dashscope', label: 'DashScope 协议' },
   { value: 'custom', label: '自定义协议' },
-]
-
-const INITIAL_PROVIDERS: ProviderItem[] = [
-  {
-    provider: 'DeepSeek',
-    baseUrl: 'https://api.deepseek.com',
-    apiKey: 'sk-********deepseek',
-    protocol: 'openai_compatible',
-    status: 'success',
-    lastTestedAt: '2025-05-21 14:35',
-  },
-  {
-    provider: 'Qwen',
-    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    apiKey: 'sk-********dashscope',
-    protocol: 'openai_compatible',
-    status: 'untested',
-  },
-  {
-    provider: 'Local TTS',
-    baseUrl: 'http://localhost:8000',
-    apiKey: 'local-secret',
-    protocol: 'custom',
-    status: 'success',
-    lastTestedAt: '2025-05-20 10:12',
-  },
-  {
-    provider: 'BGE',
-    baseUrl: 'http://localhost:8000/v1',
-    apiKey: 'local-secret',
-    protocol: 'openai_compatible',
-    status: 'success',
-    lastTestedAt: '2025-05-19 09:48',
-  },
-]
-
-const SUPPORTED_MODELS: SupportedModel[] = [
-  {
-    id: DEFAULT_CHAT_MODEL_ID,
-    name: 'DeepSeek',
-    provider: 'DeepSeek',
-    category: 'chat',
-    categoryLabel: '对话模型',
-    capabilities: ['对话模型', '推理', '问答', '长上下文'],
-    description: '高性能对话模型，支持长文本理解与复杂推理，适合问答与创作场景。',
-  },
-  {
-    id: 'deepseek-r1',
-    name: 'DeepSeek-R1',
-    provider: 'DeepSeek',
-    category: 'chat',
-    categoryLabel: '对话模型',
-    capabilities: ['对话模型', '推理', '代码', '数学'],
-    description: '强化推理能力的对话模型，擅长逻辑分析与代码生成。',
-  },
-  {
-    id: 'Qwen2.5-VL-7B-Instruct',
-    name: 'Qwen2.5-VL-7B-Instruct',
-    provider: 'Qwen',
-    category: 'multimodal',
-    categoryLabel: '多模态模型',
-    capabilities: ['多模态模型', '视觉问答', 'OCR', '推理'],
-    description: '面向图文理解与问答的多模态模型，可处理景区图片、票务截图与导览问答。',
-  },
-  {
-    id: 'qwen-max',
-    name: 'Qwen-Max',
-    provider: 'Qwen',
-    category: 'chat',
-    categoryLabel: '对话模型',
-    capabilities: ['对话模型', '问答', '长上下文'],
-    description: '通用对话与知识问答模型，适合后台智能客服和内容辅助生成。',
-  },
-  {
-    id: 'zh-CN-XiaoxiaoNeural',
-    name: 'zh-CN-XiaoxiaoNeural',
-    provider: 'Local TTS',
-    category: 'speech',
-    categoryLabel: '语音音色',
-    capabilities: ['语音音色', '中文', '自然语音'],
-    description: '清晰自然的中文女声音色，可用于数字人讲解与语音播报。',
-  },
-  {
-    id: 'bge-m3',
-    name: 'bge-m3',
-    provider: 'BGE',
-    category: 'embedding',
-    categoryLabel: '嵌入模型',
-    capabilities: ['嵌入模型', '检索', '多语言'],
-    description: '适合第三方知识召回的多语言向量模型，支持中文语义检索。',
-  },
-]
-
-const INITIAL_ADDED_MODELS: AddedModel[] = [
-  {
-    key: `chat:DeepSeek:${DEFAULT_CHAT_MODEL_ID}`,
-    category: 'chat',
-    categoryLabel: '对话模型',
-    provider: 'DeepSeek',
-    modelId: DEFAULT_CHAT_MODEL_ID,
-    status: 'current',
-  },
-  {
-    key: 'multimodal:Qwen:Qwen2.5-VL-7B-Instruct',
-    category: 'multimodal',
-    categoryLabel: '多模态模型',
-    provider: 'Qwen',
-    modelId: 'Qwen2.5-VL-7B-Instruct',
-    status: 'candidate',
-  },
-  {
-    key: 'speech:Local TTS:zh-CN-XiaoxiaoNeural',
-    category: 'speech',
-    categoryLabel: '语音音色',
-    provider: 'Local TTS',
-    modelId: 'zh-CN-XiaoxiaoNeural',
-    status: 'candidate',
-  },
-  {
-    key: 'embedding:BGE:bge-m3',
-    category: 'embedding',
-    categoryLabel: '嵌入模型',
-    provider: 'BGE',
-    modelId: 'bge-m3',
-    status: 'candidate',
-  },
 ]
 
 const MODEL_MANUAL_STYLES = `
@@ -665,12 +549,6 @@ function toCatalog(models: AddedModel[]): AdminModelCatalog {
   return emptyCatalog
 }
 
-function formatNow() {
-  const date = new Date()
-  const pad = (value: number) => String(value).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
-
 function getProviderInitial(provider: string) {
   if (provider === 'DeepSeek') return 'DS'
   if (provider === 'Qwen') return 'Q'
@@ -693,8 +571,8 @@ export default function ModelManualPage({ onCatalogChange, onProviderConfigsChan
   const [addModelForm] = Form.useForm<AddModelFormValues>()
   const [newProviderForm] = Form.useForm<ProviderFormValues>()
 
-  const [providers, setProviders] = useState<ProviderItem[]>(INITIAL_PROVIDERS)
-  const [selectedProvider, setSelectedProvider] = useState('DeepSeek')
+  const [providers, setProviders] = useState<ProviderItem[]>([])
+  const [selectedProvider, setSelectedProvider] = useState('')
   const [searchKeyword, setSearchKeyword] = useState('')
   const [capabilityFilter, setCapabilityFilter] = useState<string>('all')
   const [alertVisible, setAlertVisible] = useState(true)
@@ -703,7 +581,7 @@ export default function ModelManualPage({ onCatalogChange, onProviderConfigsChan
   const [providerModalOpen, setProviderModalOpen] = useState(false)
   const [addingModel, setAddingModel] = useState(false)
   const [testingModelKey, setTestingModelKey] = useState<string | null>(null)
-  const [addedModels, setAddedModels] = useState<AddedModel[]>(INITIAL_ADDED_MODELS)
+  const [addedModels, setAddedModels] = useState<AddedModel[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
 
@@ -722,6 +600,40 @@ export default function ModelManualPage({ onCatalogChange, onProviderConfigsChan
 
   const providerSubmitDisabled = !providerValues?.provider || !providerValues?.baseUrl || !providerValues?.apiKey || !providerValues?.protocol
   const addModelDisabled = !addModelValues?.category || !addModelValues?.provider || !addModelValues?.modelId
+
+  const loadRemoteConfig = async () => {
+    try {
+      const [providerConfigs, settings] = await Promise.all([getProviderConfigs(), getModelSettings()])
+      const catalogResponse = await getModelCatalog()
+      const selectedByCategory: Record<ModelCategory, string> = {
+        embedding: settings.embeddingModel,
+        speech: settings.speechModel,
+        vision: settings.visionModel,
+        chat: settings.chatModel,
+        multimodal: settings.multimodalModel,
+      }
+      const models = Object.values(catalogResponse).flat().map((option) => ({
+        key: `${option.category}:${option.provider}:${option.modelId}`,
+        category: option.category as ModelCategory,
+        categoryLabel: CATEGORY_BY_VALUE[option.category as ModelCategory],
+        provider: option.provider,
+        modelId: option.modelId,
+        status: selectedByCategory[option.category as ModelCategory] === option.modelId ? 'current' as const : 'candidate' as const,
+      }))
+      const nextProviders = providerConfigs.map((item) => ({ ...item, protocol: item.protocol ?? 'openai_compatible', status: 'untested' as const }))
+      setProviders(nextProviders)
+      setAddedModels(models)
+      setSelectedProvider((current) => current || nextProviders[0]?.provider || '')
+      onCatalogChange?.(toCatalog(models))
+      onProviderConfigsChange?.(nextProviders)
+    } catch {
+      message.error('模型配置加载失败，请检查后端服务')
+    }
+  }
+
+  useEffect(() => {
+    void loadRemoteConfig()
+  }, [])
 
   useEffect(() => {
     if (!selectedProviderConfig) return
@@ -757,14 +669,23 @@ export default function ModelManualPage({ onCatalogChange, onProviderConfigsChan
 
   const filteredSupportedModels = useMemo(() => {
     const normalizedKeyword = searchKeyword.trim().toLowerCase()
-    return SUPPORTED_MODELS.filter((model) => {
+    const remoteModels: SupportedModel[] = addedModels.map((model) => ({
+      id: model.modelId,
+      name: model.modelId,
+      provider: model.provider,
+      category: model.category,
+      categoryLabel: model.categoryLabel,
+      capabilities: [model.categoryLabel],
+      description: `${model.provider} 提供的 ${model.categoryLabel}`,
+    }))
+    return remoteModels.filter((model) => {
       const matchesProvider = model.provider === selectedProvider
       const matchesCategory = capabilityFilter === 'all' || model.category === capabilityFilter
       const searchableText = `${model.id} ${model.name} ${model.description} ${model.capabilities.join(' ')}`.toLowerCase()
       const matchesKeyword = !normalizedKeyword || searchableText.includes(normalizedKeyword)
       return matchesProvider && matchesCategory && matchesKeyword
     })
-  }, [capabilityFilter, searchKeyword, selectedProvider])
+  }, [addedModels, capabilityFilter, searchKeyword, selectedProvider])
 
   const pagedAddedModels = useMemo(() => {
     const start = (currentPage - 1) * pageSize
@@ -780,53 +701,36 @@ export default function ModelManualPage({ onCatalogChange, onProviderConfigsChan
   const handleSaveProvider = async () => {
     const values = await providerForm.validateFields()
     setSavingProvider(true)
-    window.setTimeout(() => {
-      setProviders((current) =>
-        current.map((item) =>
-          item.provider === values.provider
-            ? {
-                ...item,
-                ...values,
-              }
-            : item,
-        ),
-      )
+    try {
+      await saveProviderConfig(values)
+      await loadRemoteConfig()
       setSavingProvider(false)
       message.success('提供方配置已保存')
-    }, 450)
+    } catch {
+      setSavingProvider(false)
+      message.error('提供方配置保存失败')
+    }
   }
 
   const handleTestConnection = async () => {
     const values = await providerForm.validateFields()
     setTestingConnection(true)
-    window.setTimeout(() => {
-      setProviders((current) =>
-        current.map((item) =>
-          item.provider === values.provider
-            ? {
-                ...item,
-                ...values,
-                status: 'success',
-                lastTestedAt: formatNow(),
-              }
-            : item,
-        ),
-      )
+    const model = addedModels.find((item) => item.provider === values.provider)
+    if (!model) {
       setTestingConnection(false)
-      message.success(`${values.provider} 连接测试成功`)
-    }, 700)
+      message.warning('请先为该提供方添加模型，再执行真实连接测试')
+      return
+    }
+    const response = await testModel({ category: model.category, modelId: model.modelId, text: '连接测试' })
+    setTestingConnection(false)
+    if (response.success) message.success(`${values.provider} 连接测试成功`)
+    else message.error(response.detail ?? response.message)
   }
 
   const handleCreateProvider = async () => {
     const values = await newProviderForm.validateFields()
-    const nextProvider: ProviderItem = {
-      ...values,
-      status: 'untested',
-    }
-    setProviders((current) => {
-      const withoutDuplicate = current.filter((item) => item.provider !== values.provider)
-      return [...withoutDuplicate, nextProvider]
-    })
+    await saveProviderConfig(values)
+    await loadRemoteConfig()
     setSelectedProvider(values.provider)
     setProviderModalOpen(false)
     newProviderForm.resetFields()
@@ -836,26 +740,9 @@ export default function ModelManualPage({ onCatalogChange, onProviderConfigsChan
   const handleAddModel = async () => {
     const values = await addModelForm.validateFields()
     setAddingModel(true)
-    window.setTimeout(() => {
-      const nextModel: AddedModel = {
-        key: `${values.category}:${values.provider}:${values.modelId}`,
-        category: values.category,
-        categoryLabel: CATEGORY_BY_VALUE[values.category],
-        provider: values.provider,
-        modelId: values.modelId,
-        status: 'candidate',
-      }
-
-      setAddedModels((current) => {
-        const exists = current.some((item) => item.key === nextModel.key)
-        if (exists) {
-          message.warning('候选列表中已存在该模型')
-          return current
-        }
-        setCurrentPage(1)
-        message.success(`模型 ${values.modelId} 已添加到候选列表`)
-        return [nextModel, ...current]
-      })
+    try {
+      await addModelOption(values)
+      await loadRemoteConfig()
       addModelForm.setFieldsValue({
         category: 'chat',
         provider: selectedProviderConfig.provider,
@@ -863,25 +750,25 @@ export default function ModelManualPage({ onCatalogChange, onProviderConfigsChan
         capabilityInput: '',
       })
       setAddingModel(false)
-    }, 350)
+      message.success(`模型 ${values.modelId} 已添加到候选列表`)
+    } catch {
+      setAddingModel(false)
+      message.error('模型添加失败')
+    }
   }
 
-  const handleSetCurrent = (record: AddedModel) => {
-    setAddedModels((current) =>
-      current.map((item) => ({
-        ...item,
-        status: item.category === record.category && item.key === record.key ? 'current' : item.category === record.category ? 'candidate' : item.status,
-      })),
-    )
+  const handleSetCurrent = async (record: AddedModel) => {
+    await selectModelOption(record)
+    await loadRemoteConfig()
     message.success(`${record.modelId} 已设为当前使用`)
   }
 
-  const handleTestModel = (record: AddedModel) => {
+  const handleTestModel = async (record: AddedModel) => {
     setTestingModelKey(record.key)
-    window.setTimeout(() => {
-      setTestingModelKey(null)
-      message.success(`${record.modelId} 测试通过`)
-    }, 650)
+    const response = await testModel({ category: record.category, modelId: record.modelId, text: '模型连通性测试' })
+    setTestingModelKey(null)
+    if (response.success) message.success(`${record.modelId} 测试通过`)
+    else message.error(response.detail ?? response.message)
   }
 
   const columns: TableColumnsType<AddedModel> = [
@@ -940,7 +827,7 @@ export default function ModelManualPage({ onCatalogChange, onProviderConfigsChan
                     message.success('模型 ID 已复制')
                   }
                   if (key === 'remove') {
-                    setAddedModels((current) => current.filter((item) => item.key !== record.key))
+                    void removeModelOption(record).then(loadRemoteConfig).catch(() => message.error('移除模型失败'))
                   }
                 },
               }}

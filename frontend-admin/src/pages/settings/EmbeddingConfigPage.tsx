@@ -39,6 +39,7 @@ type EmbeddingConfigPageProps = {
   saving: boolean
   testing: boolean
   options: EmbeddingOption[]
+  onOpenManual: () => void
   onSave: () => void
   onTest: () => void
   onDeleteOption?: (option: EmbeddingOption) => void
@@ -797,6 +798,7 @@ export default function EmbeddingConfigPage({
   saving,
   testing,
   options,
+  onOpenManual,
   onSave,
   onTest,
   onDeleteOption,
@@ -808,7 +810,6 @@ export default function EmbeddingConfigPage({
   const [searchKeyword, setSearchKeyword] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [isCreateModalOpen, setCreateModalOpen] = useState(false)
-  const [customModels, setCustomModels] = useState<EmbeddingModelRecord[]>([])
   const [selectedKey, setSelectedKey] = useState<string>(BASE_EMBEDDING_MODELS[0].key)
   const [draft, setDraft] = useState<EmbeddingModelDraft>(() => toDraft(BASE_EMBEDDING_MODELS[0]))
   const [retrievalText, setRetrievalText] = useState(BASE_EMBEDDING_MODELS[0].sampleQuery)
@@ -823,8 +824,8 @@ export default function EmbeddingConfigPage({
   }, [options])
 
   const embeddingModels = useMemo(
-    () => [...customModels, ...mergedBaseModels],
-    [customModels, mergedBaseModels],
+    () => mergedBaseModels,
+    [mergedBaseModels],
   )
 
   useEffect(() => {
@@ -931,46 +932,11 @@ export default function EmbeddingConfigPage({
   }
 
   const handleCreateModel = async () => {
-    const values = await createForm.validateFields()
-    const providerTone: ProviderTone = values.provider.includes('OpenAI')
-      ? 'green'
-      : values.provider.includes('Moka')
-        ? 'purple'
-        : 'blue'
-
-    const nextModel: EmbeddingModelRecord = {
-      key: `custom-${values.modelCode}`,
-      modelName: values.modelName,
-      modelCode: values.modelCode,
-      provider: values.provider,
-      providerTone,
-      vectorDimension: values.vectorDimension,
-      purpose: values.purpose,
-      maxInputLength: values.maxInputLength,
-      endpoint: values.endpoint,
-      externalKbCount: 0,
-      sampleQuery: '请输入测试文本',
-      connectionStatus: 'connected',
-      retrievalResults: [
-        { id: `${values.modelCode}-1`, title: '新模型检索结果示例一', similarity: 90.28 },
-        { id: `${values.modelCode}-2`, title: '新模型检索结果示例二', similarity: 87.66 },
-        { id: `${values.modelCode}-3`, title: '新模型检索结果示例三', similarity: 84.92 },
-      ],
-      isCustom: true,
-    }
-
-    setCustomModels((current) => [nextModel, ...current])
-    handleSelectModel(nextModel)
-    createForm.resetFields()
-    setCreateModalOpen(false)
+    await createForm.validateFields()
+    onOpenManual()
   }
 
   const handleDelete = (model: EmbeddingModelRecord) => {
-    if (model.isCustom) {
-      setCustomModels((current) => current.filter((item) => item.key !== model.key))
-      return
-    }
-
     if (onDeleteOption) {
       onDeleteOption({
         value: model.modelCode,
@@ -1023,9 +989,9 @@ export default function EmbeddingConfigPage({
               type="primary"
               icon={<PlusOutlined />}
               className="embedding-settings-primary-btn"
-              onClick={() => setCreateModalOpen(true)}
+              onClick={onOpenManual}
             >
-              新增模型
+              手动维护
             </Button>
           </div>
 
