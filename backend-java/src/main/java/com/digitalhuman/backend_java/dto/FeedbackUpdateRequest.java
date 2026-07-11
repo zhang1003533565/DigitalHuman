@@ -1,4 +1,6 @@
 package com.digitalhuman.backend_java.dto;
 
-public record FeedbackUpdateRequest(String status, String category, String adminNote) {
+import jakarta.validation.constraints.Size;
+
+public record FeedbackUpdateRequest(String status, String category, @Size(max = 1000) String adminNote) {
 }

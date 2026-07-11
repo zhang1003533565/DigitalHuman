@@ -12,8 +12,8 @@
   UserOutlined,
   MenuOutlined,
 } from '@ant-design/icons'
-import { Button, Drawer, Grid, Layout, Menu } from 'antd'
-import { useState } from 'react'
+import { Button, Drawer, Layout, Menu } from 'antd'
+import { useEffect, useState } from 'react'
 import type { MenuProps } from 'antd'
 
 type AdminSidebarProps = {
@@ -27,6 +27,18 @@ type AdminSidebarProps = {
 const { Sider } = Layout
 
 const PARENT_MENU_KEYS = new Set(['spots', 'avatar-group'])
+const MOBILE_NAV_QUERY = '(max-width: 768px)'
+
+function useMobileNavigation() {
+  const [mobile, setMobile] = useState(() => window.matchMedia(MOBILE_NAV_QUERY).matches)
+  useEffect(() => {
+    const media = window.matchMedia(MOBILE_NAV_QUERY)
+    const update = () => setMobile(media.matches)
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
+  return mobile
+}
 
 const menuItems: MenuProps['items'] = [
   { key: 'dashboard', icon: <BarChartOutlined />, label: '数据总览' },
@@ -62,12 +74,12 @@ const menuItems: MenuProps['items'] = [
 
 export default function AdminSidebar({ activeKey, displayName, role, onLogout, onSelect }: AdminSidebarProps) {
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const screens = Grid.useBreakpoint()
+  const mobile = useMobileNavigation()
   const navigation = (
     <Menu theme="dark" mode="inline" selectedKeys={[activeKey]} defaultOpenKeys={['spots', 'avatar-group']} items={menuItems}
       onClick={({ key }) => { if (!PARENT_MENU_KEYS.has(key)) { onSelect(key); setDrawerOpen(false) } }} />
   )
-  if (!screens.md) {
+  if (mobile) {
     return <>
       <Button className="admin-mobile-menu" type="primary" icon={<MenuOutlined />} onClick={() => setDrawerOpen(true)}>菜单</Button>
       <Drawer className="admin-nav-drawer" placement="left" width={280} open={drawerOpen} onClose={() => setDrawerOpen(false)} title="数字人管理后台">

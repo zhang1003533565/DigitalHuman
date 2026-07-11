@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/admin/guide")
@@ -43,7 +44,7 @@ public class AdminGuideController {
 
     @PatchMapping("/feedback/{id}")
     public FeedbackRecordDto updateFeedback(@PathVariable("id") Long id,
-                                            @RequestBody FeedbackUpdateRequest request) {
+                                            @Valid @RequestBody FeedbackUpdateRequest request) {
         return guideService.updateFeedback(id, request.status(), request.category(), request.adminNote());
     }
 }
