@@ -970,6 +970,10 @@
     border-radius: 18px;
   }
 
+  .map-page--spot-selected .map-side {
+    display: none;
+  }
+
   .map-spot-card {
     top: auto;
     right: 12px;

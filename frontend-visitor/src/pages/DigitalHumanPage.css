@@ -9,34 +9,6 @@
   overscroll-behavior: none;
 }
 
-@media (max-width: 768px) {
-  .live2d-page {
-    display: grid;
-    grid-template-rows: minmax(180px, 38vh) minmax(0, 1fr);
-    overflow-y: auto;
-  }
-
-  .live2d-canvas {
-    position: relative;
-    min-height: 180px;
-  }
-
-  .digital-human-chat {
-    position: relative;
-    inset: auto;
-    width: auto;
-    height: auto;
-    min-height: 420px;
-    margin: 0 10px 10px;
-  }
-
-  .digital-chat-actions > .digital-chat-select > button,
-  .digital-chat-voice,
-  .digital-chat-send {
-    min-height: var(--touch-target);
-  }
-}
-
 .module-topbar {
   position: absolute;
   top: 24px;
@@ -780,5 +752,33 @@
     right: 12vw;
     bottom: calc(min(58vh, 560px) + 44px);
     height: 48vw;
+  }
+}
+
+@media (max-width: 768px) {
+  .live2d-page {
+    display: grid;
+    grid-template-rows: minmax(180px, 38vh) minmax(0, 1fr);
+    overflow-y: auto;
+  }
+
+  .live2d-canvas {
+    position: relative;
+    min-height: 180px;
+  }
+
+  .digital-human-chat {
+    position: relative;
+    inset: auto;
+    width: auto;
+    height: auto;
+    min-height: 420px;
+    margin: 0 10px 10px;
+  }
+
+  .digital-chat-actions > .digital-chat-select > button,
+  .digital-chat-voice,
+  .digital-chat-send {
+    min-height: var(--touch-target);
   }
 }

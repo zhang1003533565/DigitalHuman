@@ -1,9 +1,8 @@
 import { NavLink } from 'react-router-dom'
-import { DIGITAL_HUMAN_ROUTE } from '../digitalHuman/shared'
 
 const ITEMS = [
   { to: '/home', label: '首页', icon: '⌂' },
-  { to: DIGITAL_HUMAN_ROUTE, label: 'AI 导览', icon: '◉' },
+  { to: '/modules/digital-human', label: 'AI 导览', icon: '◉' },
   { to: '/routes', label: '路线', icon: '⌁' },
   { to: '/map', label: '地图', icon: '◇' },
   { to: '/profile', label: '我的', icon: '○' },
