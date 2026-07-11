@@ -459,7 +459,7 @@ public class GuideService {
                 .toList();
     }
 
-    private String buildAnswer(String sessionId, String question, String interest, List<GuideSourceDto> sources) {
+    String buildAnswer(String sessionId, String question, String interest, List<GuideSourceDto> sources) {
         String answer = queryLeaderChatAgent(sessionId, question, interest, sources);
         if (answer != null && !answer.isBlank()) {
             return answer;
@@ -627,7 +627,7 @@ public class GuideService {
         return basePrompt + " 用户当前偏好方向：" + interest.trim() + "。" + buildKnowledgeContext(sources);
     }
 
-    private List<GuideSourceDto> retrieveGuideSources(String question, String knowledgeId) {
+    List<GuideSourceDto> retrieveGuideSources(String question, String knowledgeId) {
         if (question == null || question.isBlank()) {
             return List.of();
         }

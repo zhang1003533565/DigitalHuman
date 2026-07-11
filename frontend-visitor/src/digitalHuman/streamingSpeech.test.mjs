@@ -2,10 +2,21 @@ import assert from 'node:assert/strict'
 import {
   extractSpeakableSegments,
   joinQuickReplyAndAnswer,
+  resolveStreamOutcome,
   sanitizeAnswerText,
   sanitizeSpeechText,
   stripDuplicateGreeting,
 } from './streamingSpeech.ts'
+
+assert.deepEqual(
+  resolveStreamOutcome({ streamError: '主模型不可用，已降级', fullAnswer: '这是回退 token' }),
+  { state: 'error', status: '主模型不可用，已降级' },
+)
+
+assert.deepEqual(
+  resolveStreamOutcome({ streamError: '', fullAnswer: '正常回答' }),
+  { state: 'success', status: '导览回答已生成，语音正在分段播放。' },
+)
 
 const joined = joinQuickReplyAndAnswer('你好呀，灵山很好逛。', '我推荐上午先去灵山大佛。')
 assert.equal(joined, '你好呀，灵山很好逛。\n\n我推荐上午先去灵山大佛。')

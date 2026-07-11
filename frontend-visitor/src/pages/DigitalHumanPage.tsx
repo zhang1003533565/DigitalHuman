@@ -20,6 +20,7 @@ import {
 } from '../digitalHuman/shared'
 import {
   extractSpeakableSegments,
+  resolveStreamOutcome,
   sanitizeAnswerText,
   sanitizeSpeechText,
 } from '../digitalHuman/streamingSpeech'
@@ -186,6 +187,10 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
   const isAudioStartingRef = useRef(false)
   const isAnswerStreamingRef = useRef(false)
   const speechRunIdRef = useRef(0)
+  const speechOutcomeRef = useRef<ReturnType<typeof resolveStreamOutcome>>({
+    state: 'success',
+    status: '导览回答已生成。',
+  })
   const backendModelIdRef = useRef<string | null>(null)
   const [config, setConfig] = useState<DigitalHumanConfig>(DEFAULT_CONFIG)
   const [selectedModelId, setSelectedModelId] = useState(() => getStoredSelectedModelId() ?? DEFAULT_CONFIG.modelId)
@@ -732,8 +737,9 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     if (!nextItem) {
       isAudioStartingRef.current = false
       if (!isAnswerStreamingRef.current) {
-        setRuntimeState('idle')
-        setStatus('导览回答已生成。')
+        const outcome = speechOutcomeRef.current
+        setRuntimeState(outcome.state === 'error' ? 'error' : 'idle')
+        setStatus(outcome.status)
       }
       return
     }
@@ -843,6 +849,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
     setMessages((current) => [...current, userMessage])
     setDraft('')
     setRuntimeState('thinking')
+    speechOutcomeRef.current = { state: 'success', status: '导览回答已生成。' }
     setStatus('正在生成导览回答...')
     resetSpeechQueue()
     const requestRunId = speechRunIdRef.current
@@ -1014,9 +1021,11 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
         return
       }
       queueAnswerSpeech(true)
+      const streamOutcome = resolveStreamOutcome({ streamError, fullAnswer })
+      speechOutcomeRef.current = streamOutcome
 
       if (!fullAnswer.trim()) {
-        const fallbackMessage = streamError || '当前主智能体暂时不可用，请确认 ai-service 已启动，并在后台完成 CHAT 模型配置。'
+        const fallbackMessage = streamOutcome.status
         setStatus(fallbackMessage)
         enqueueCurrentSpeechSegments([fallbackMessage])
         setMessages((current) =>
@@ -1032,7 +1041,8 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
         return
       }
 
-      setStatus('导览回答已生成，语音正在分段播放。')
+      setStatus(streamOutcome.status)
+      setRuntimeState(streamOutcome.state === 'error' ? 'error' : 'thinking')
       void triggerConfiguredAction({ text: `${question}\n${fullAnswer}` })
       isAnswerStreamingRef.current = false
       guideResult = { ...guideResult, answerText: fullAnswer }
