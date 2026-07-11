@@ -1058,6 +1058,10 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
       isAnswerStreamingRef.current = false
       setStatus('导览请求失败，请确认问答服务和 TTS 服务已启动。')
       setRuntimeState('error')
+      speechOutcomeRef.current = {
+        state: 'error',
+        status: '导览请求失败，请确认问答服务和 TTS 服务已启动。',
+      }
       enqueueCurrentSpeechSegments(['这次导览请求失败了，请稍后再试。'])
       setMessages((current) =>
         current.map((msg) =>

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import {
   extractSpeakableSegments,
   joinQuickReplyAndAnswer,
@@ -12,6 +13,15 @@ assert.deepEqual(
   resolveStreamOutcome({ streamError: '主模型不可用，已降级', fullAnswer: '这是回退 token' }),
   { state: 'error', status: '主模型不可用，已降级' },
 )
+
+const digitalHumanPageSource = readFileSync(new URL('../pages/DigitalHumanPage.tsx', import.meta.url), 'utf8')
+const requestCatchStart = digitalHumanPageSource.indexOf("setStatus('导览请求失败，请确认问答服务和 TTS 服务已启动。')")
+const catchOutcomeAssignment = digitalHumanPageSource.indexOf('speechOutcomeRef.current = {', requestCatchStart)
+const catchFallbackEnqueue = digitalHumanPageSource.indexOf("enqueueCurrentSpeechSegments(['这次导览请求失败了，请稍后再试。'])", requestCatchStart)
+assert.ok(requestCatchStart >= 0)
+assert.ok(catchOutcomeAssignment > requestCatchStart)
+assert.ok(catchOutcomeAssignment < catchFallbackEnqueue)
+assert.match(digitalHumanPageSource.slice(catchOutcomeAssignment, catchFallbackEnqueue), /state:\s*'error'/)
 
 assert.deepEqual(
   resolveStreamOutcome({ streamError: '', fullAnswer: '正常回答' }),
