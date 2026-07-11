@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 
 import { apiClient, getApiProblem } from '../api/client'
 import type { TripPlanRequest, TripPlanResponse } from '../api/contracts'
+import { createTripPlanCache } from '../pages/navigationContext'
 
 type TripPlannerProps = {
   onPlanned: (routeId: string) => void
@@ -29,7 +30,7 @@ export function TripPlanner({ onPlanned }: TripPlannerProps) {
       if (!data.route?.id) {
         throw new Error(data.reminders[0] || '暂时没有匹配的路线')
       }
-      sessionStorage.setItem('digitalhuman.tripPlan', JSON.stringify(data))
+      sessionStorage.setItem('digitalhuman.tripPlan', createTripPlanCache(data))
       onPlanned(data.route.id)
     } catch (requestError) {
       setError(getApiProblem(requestError).message)

@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Optional;
+import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -74,12 +75,43 @@ class GuideServiceTests {
         FeedbackRequest request = new FeedbackRequest();
         request.setQuestion("普通意见");
         request.setRating(3);
+        request.setCategory("CONTEXTUAL");
 
         service.saveFeedback(request);
 
         ArgumentCaptor<UserFeedback> captor = ArgumentCaptor.forClass(UserFeedback.class);
         verify(feedbackRepository).save(captor.capture());
         assertEquals("GENERAL", captor.getValue().getCategory());
+    }
+
+    @Test
+    void feedbackRecordsExposeModerationAndContextFields() {
+        UserFeedback feedback = new UserFeedback();
+        feedback.setId(7L);
+        feedback.setSessionId("session-2");
+        feedback.setTraceId("trace-2");
+        feedback.setRouteId("route-3");
+        feedback.setMessageId(42L);
+        feedback.setQuestion("问题");
+        feedback.setAnswer("回答");
+        feedback.setHelpful(true);
+        feedback.setRating(5);
+        feedback.setComment("意见");
+        feedback.setStatus("RESOLVED");
+        feedback.setCategory("CONTEXTUAL");
+        feedback.setAdminNote("已处理");
+        feedback.setCreatedAt(LocalDateTime.of(2026, 7, 11, 12, 0));
+        when(feedbackRepository.findAllByOrderByCreatedAtDesc()).thenReturn(List.of(feedback));
+
+        var record = service.getFeedbackRecords().get(0);
+
+        assertEquals(7L, record.getId());
+        assertEquals("route-3", record.getRouteId());
+        assertEquals(42L, record.getMessageId());
+        assertEquals("RESOLVED", record.getStatus());
+        assertEquals("CONTEXTUAL", record.getCategory());
+        assertEquals("已处理", record.getAdminNote());
+        assertEquals(feedback.getCreatedAt(), record.getCreatedAt());
     }
 
     @Test

@@ -441,7 +441,7 @@ public class GuideService {
         feedback.setStatus("PENDING");
         boolean hasContext = hasText(request.getSessionId()) || hasText(request.getTraceId())
                 || hasText(request.getRouteId()) || request.getMessageId() != null;
-        feedback.setCategory(hasText(request.getCategory()) ? request.getCategory() : hasContext ? "CONTEXTUAL" : "GENERAL");
+        feedback.setCategory(hasContext ? "CONTEXTUAL" : "GENERAL");
         feedback.setQuestion(request.getQuestion());
         feedback.setAnswer(request.getAnswer());
         feedback.setHelpful(request.isHelpful());
@@ -458,14 +458,20 @@ public class GuideService {
     public List<FeedbackRecordDto> getFeedbackRecords() {
         return feedbackRepository.findAllByOrderByCreatedAtDesc().stream()
                 .map(feedback -> new FeedbackRecordDto(
+                        feedback.getId(),
                         feedback.getSessionId(),
                         feedback.getTraceId(),
+                        feedback.getRouteId(),
+                        feedback.getMessageId(),
                         feedback.getQuestion(),
                         feedback.getAnswer(),
                         feedback.isHelpful(),
                         feedback.getRating(),
                         feedback.getComment(),
-                        toEpochMillis(feedback.getCreatedAt())))
+                        feedback.getStatus(),
+                        feedback.getCategory(),
+                        feedback.getAdminNote(),
+                        feedback.getCreatedAt()))
                 .toList();
     }
 

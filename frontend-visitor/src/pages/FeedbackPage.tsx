@@ -15,7 +15,12 @@ type FeedbackRecord = {
   helpful: boolean
   rating: number
   comment: string
-  timestamp: number
+  createdAt: string
+  routeId?: string
+  messageId?: number
+  status: string
+  category: string
+  adminNote?: string
 }
 
 export function FeedbackPage({ onLogout }: Props) {
@@ -33,11 +38,11 @@ export function FeedbackPage({ onLogout }: Props) {
         sessionId: context.sessionId || undefined,
         traceId: context.traceId || undefined,
         routeId: context.routeId || undefined,
+        messageId: context.messageId,
         question: '游客普通意见',
         helpful: true,
         rating: 5,
         comment: value,
-        category: context.sessionId || context.traceId || context.routeId ? 'CONTEXTUAL' : 'GENERAL',
       })
       setComment('')
       setSubmitState('感谢反馈，已提交。')
@@ -79,12 +84,13 @@ export function FeedbackPage({ onLogout }: Props) {
             </article>
           ) : (
             records.map((record) => (
-              <article key={`${record.sessionId}-${record.timestamp}`} className="feature-card">
+              <article key={`${record.sessionId}-${record.createdAt}`} className="feature-card">
                 <p className="card-kicker">{record.helpful ? '有帮助' : '待优化'}</p>
                 <h2>{record.question}</h2>
                 <p>{record.answer || '暂无回答摘要'}</p>
                 <p>评分：{record.rating}/5</p>
                 {record.comment ? <p>意见：{record.comment}</p> : null}
+                <p>分类：{record.category} · 状态：{record.status}</p>
               </article>
             ))
           )}

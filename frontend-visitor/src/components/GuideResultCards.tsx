@@ -4,9 +4,10 @@ import type { GuideChatResult } from '../api/contracts'
 type GuideResultCardsProps = {
   result: GuideChatResult
   onSuggestion: (suggestion: string) => void
+  messageId?: number
 }
 
-export function GuideResultCards({ result, onSuggestion }: GuideResultCardsProps) {
+export function GuideResultCards({ result, onSuggestion, messageId }: GuideResultCardsProps) {
   const navigate = useNavigate()
   const hasActions = result.relatedSpots.length || result.recommendedRoutes.length || result.suggestions.length
 
@@ -15,6 +16,7 @@ export function GuideResultCards({ result, onSuggestion }: GuideResultCardsProps
   const withContext = (params: URLSearchParams) => {
     if (result.sessionId) params.set('sessionId', result.sessionId)
     if (result.traceId) params.set('traceId', result.traceId)
+    if (messageId !== undefined) params.set('messageId', String(messageId))
     return params.toString()
   }
 

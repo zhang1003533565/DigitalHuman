@@ -55,6 +55,9 @@ public class UserFeedback {
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+
     public String getSessionId() {
         return sessionId;
     }

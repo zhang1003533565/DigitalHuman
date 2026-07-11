@@ -137,6 +137,10 @@ export function RouteRecommendPage({ onLogout }: Props) {
   const mapOverlaysRef = useRef<any[]>([])
 
   useEffect(() => {
+    setSelectedRouteId(resolveRouteId(location.search, window.sessionStorage.getItem('digitalhuman.tripPlan')))
+  }, [location.search])
+
+  useEffect(() => {
     async function loadRoutes() {
       setLoadError('')
       try {
