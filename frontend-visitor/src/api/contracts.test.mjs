@@ -7,3 +7,8 @@ assert.deepEqual(normalizeGuideChatResult({ answerText: '欢迎', suggestions: [
 const resultFromFinalStreamMeta = normalizeGuideChatResult({ sessionId: 'session-1', traceId: 'trace-1', messageId: 42 })
 assert.equal(resultFromFinalStreamMeta.messageId, 42)
 assert.match(buildGuideNavigationSearchParams(resultFromFinalStreamMeta, { routeId: 'route-3' }).toString(), /messageId=42/)
+const feedbackHref = `/feedback?${buildGuideNavigationSearchParams(resultFromFinalStreamMeta, { routeId: 'route-3', spotName: '灵山大佛' })}`
+assert.match(feedbackHref, /^\/feedback\?/)
+assert.match(feedbackHref, /messageId=42/)
+assert.match(feedbackHref, /sessionId=session-1/)
+assert.match(feedbackHref, /traceId=trace-1/)

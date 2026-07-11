@@ -24,6 +24,9 @@ assert.ok(catchOutcomeAssignment < catchFallbackEnqueue)
 assert.match(digitalHumanPageSource.slice(catchOutcomeAssignment, catchFallbackEnqueue), /state:\s*'error'/)
 assert.match(digitalHumanPageSource, /parsed\.messageId/)
 assert.match(digitalHumanPageSource, /messageId=\{message\.messageId\}/)
+const guideResultCardsSource = readFileSync(new URL('../components/GuideResultCards.tsx', import.meta.url), 'utf8')
+assert.match(guideResultCardsSource, /评价本次回答/)
+assert.match(guideResultCardsSource, /`\/feedback\?\$\{feedbackSearch\}`/)
 
 assert.deepEqual(
   resolveStreamOutcome({ streamError: '', fullAnswer: '正常回答' }),

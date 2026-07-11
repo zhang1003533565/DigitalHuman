@@ -10,10 +10,15 @@ type GuideResultCardsProps = {
 export function GuideResultCards({ result, onSuggestion, messageId }: GuideResultCardsProps) {
   const navigate = useNavigate()
   const hasActions = result.relatedSpots.length || result.recommendedRoutes.length || result.suggestions.length
-
-  if (!hasActions && !result.sources.length) return null
-
   const linkedResult = messageId === undefined ? result : { ...result, messageId }
+  const hasFeedbackContext = Boolean(linkedResult.sessionId || linkedResult.traceId || linkedResult.messageId !== undefined)
+
+  if (!hasActions && !result.sources.length && !hasFeedbackContext) return null
+
+  const feedbackSearch = buildGuideNavigationSearchParams(linkedResult, {
+    routeId: result.recommendedRoutes[0],
+    spotName: result.relatedSpots[0],
+  })
 
   return (
     <div className="guide-result-cards">
@@ -54,6 +59,12 @@ export function GuideResultCards({ result, onSuggestion, messageId }: GuideResul
             ))}
           </div>
         </section>
+      ) : null}
+
+      {hasFeedbackContext ? (
+        <a className="guide-result-card__feedback" href={`/feedback?${feedbackSearch}`}>
+          评价本次回答
+        </a>
       ) : null}
     </div>
   )
