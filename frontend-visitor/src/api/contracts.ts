@@ -29,6 +29,7 @@ export type TripPlanResponse = {
 export type GuideChatResult = {
   sessionId: string
   traceId: string
+  messageId?: number
   answerText: string
   relatedSpots: string[]
   recommendedRoutes: string[]
@@ -59,10 +60,30 @@ export function normalizeGuideChatResult(input: Partial<GuideChatResult>): Guide
   return {
     sessionId: input.sessionId ?? '',
     traceId: input.traceId ?? '',
+    messageId: input.messageId,
     answerText: input.answerText ?? '',
     relatedSpots: input.relatedSpots ?? [],
     recommendedRoutes: input.recommendedRoutes ?? [],
     suggestions: input.suggestions ?? [],
     sources: input.sources ?? [],
   }
+}
+
+export function buildGuideNavigationSearchParams(
+  result: Pick<GuideChatResult, 'sessionId' | 'traceId' | 'messageId'>,
+  target: { routeId?: string; spotName?: string },
+) {
+  const params = new URLSearchParams()
+  if (target.routeId) {
+    params.set('routeId', target.routeId)
+    params.set('route', target.routeId)
+  }
+  if (target.spotName) {
+    params.set('spotName', target.spotName)
+    params.set('spot', target.spotName)
+  }
+  if (result.sessionId) params.set('sessionId', result.sessionId)
+  if (result.traceId) params.set('traceId', result.traceId)
+  if (result.messageId !== undefined) params.set('messageId', String(result.messageId))
+  return params
 }

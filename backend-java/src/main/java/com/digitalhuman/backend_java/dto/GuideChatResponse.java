@@ -6,6 +6,7 @@ public class GuideChatResponse {
 
     private final String sessionId;
     private final String traceId;
+    private final Long messageId;
     private final String answerText;
     private final List<String> relatedSpots;
     private final List<String> recommendedRoutes;
@@ -17,8 +18,13 @@ public class GuideChatResponse {
     }
 
     public GuideChatResponse(String sessionId, String traceId, String answerText, List<String> relatedSpots, List<String> recommendedRoutes, List<String> suggestions, List<GuideSourceDto> sources) {
+        this(sessionId, traceId, null, answerText, relatedSpots, recommendedRoutes, suggestions, sources);
+    }
+
+    public GuideChatResponse(String sessionId, String traceId, Long messageId, String answerText, List<String> relatedSpots, List<String> recommendedRoutes, List<String> suggestions, List<GuideSourceDto> sources) {
         this.sessionId = sessionId;
         this.traceId = traceId;
+        this.messageId = messageId;
         this.answerText = answerText;
         this.relatedSpots = relatedSpots;
         this.recommendedRoutes = recommendedRoutes;
@@ -33,6 +39,8 @@ public class GuideChatResponse {
     public String getTraceId() {
         return traceId;
     }
+
+    public Long getMessageId() { return messageId; }
 
     public String getAnswerText() {
         return answerText;

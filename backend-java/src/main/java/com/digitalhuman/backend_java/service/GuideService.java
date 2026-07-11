@@ -267,9 +267,9 @@ public class GuideService {
 
         touchSession(sessionId);
         saveMessage(sessionId, traceId, "user", request.getQuestion());
-        saveMessage(sessionId, traceId, "assistant", answerText);
+        GuideMessage assistantMessage = saveMessage(sessionId, traceId, "assistant", answerText);
 
-        return new GuideChatResponse(sessionId, traceId, answerText, relatedSpots, recommendedRoutes,
+        return new GuideChatResponse(sessionId, traceId, assistantMessage.getId(), answerText, relatedSpots, recommendedRoutes,
                 buildSuggestions(answerText, relatedSpots, recommendedRoutes), sources);
     }
 
@@ -380,7 +380,9 @@ public class GuideService {
                 String answerText = fullAnswer.toString().trim();
                 touchSession(finalSessionId);
                 saveMessage(finalSessionId, traceId, "user", request.getQuestion());
-                saveMessage(finalSessionId, traceId, "assistant", answerText);
+                GuideMessage assistantMessage = saveMessage(finalSessionId, traceId, "assistant", answerText);
+                emitter.send(SseEmitter.event().name("meta")
+                        .data(objectMapper.writeValueAsString(Map.of("messageId", assistantMessage.getId()))));
 
                 emitter.complete();
 
@@ -761,14 +763,14 @@ public class GuideService {
         sessionRepository.save(session);
     }
 
-    private void saveMessage(String sessionId, String traceId, String role, String content) {
+    private GuideMessage saveMessage(String sessionId, String traceId, String role, String content) {
         GuideMessage message = new GuideMessage();
         message.setSessionId(sessionId);
         message.setTraceId(traceId);
         message.setRole(role);
         message.setContent("assistant".equalsIgnoreCase(role) ? sanitizeStageDirections(content) : content);
         message.setCreatedAt(LocalDateTime.now());
-        messageRepository.save(message);
+        return messageRepository.save(message);
     }
 
     private String sanitizeStageDirections(String content) {

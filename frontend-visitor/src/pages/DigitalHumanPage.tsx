@@ -52,6 +52,7 @@ type DigitalChatMessage = {
   time: Date
   status?: 'sent' | 'read' | 'failed'
   result?: GuideChatResult
+  messageId?: number
 }
 
 export type GuideRuntimeState = 'loading' | 'idle' | 'listening' | 'thinking' | 'speaking' | 'error'
@@ -981,6 +982,13 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
               )))
             }
 
+            if (Number.isSafeInteger(parsed.messageId)) {
+              guideResult = normalizeGuideChatResult({ ...guideResult, messageId: parsed.messageId })
+              setMessages((current) => current.map((msg) => (
+                msg.id === assistantMsgId ? { ...msg, messageId: parsed.messageId, result: guideResult } : msg
+              )))
+            }
+
             // token 事件：逐字输出
             if (parsed.token) {
               fullAnswer += parsed.token
@@ -1228,7 +1236,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
                   <div className="digital-chat-message__bubble">
                     <div className="digital-chat-message__content">{message.content}</div>
                     {message.result ? (
-                      <GuideResultCards result={message.result} onSuggestion={(suggestion) => {
+                      <GuideResultCards result={message.result} messageId={message.messageId} onSuggestion={(suggestion) => {
                         setDraft(suggestion)
                         void sendQuestion(suggestion)
                       }} />

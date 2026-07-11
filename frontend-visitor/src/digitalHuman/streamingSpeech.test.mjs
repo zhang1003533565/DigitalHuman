@@ -22,6 +22,8 @@ assert.ok(requestCatchStart >= 0)
 assert.ok(catchOutcomeAssignment > requestCatchStart)
 assert.ok(catchOutcomeAssignment < catchFallbackEnqueue)
 assert.match(digitalHumanPageSource.slice(catchOutcomeAssignment, catchFallbackEnqueue), /state:\s*'error'/)
+assert.match(digitalHumanPageSource, /parsed\.messageId/)
+assert.match(digitalHumanPageSource, /messageId=\{message\.messageId\}/)
 
 assert.deepEqual(
   resolveStreamOutcome({ streamError: '', fullAnswer: '正常回答' }),

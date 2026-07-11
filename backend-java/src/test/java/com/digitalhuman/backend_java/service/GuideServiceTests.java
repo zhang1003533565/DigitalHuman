@@ -7,6 +7,7 @@ import com.digitalhuman.backend_java.model.UserFeedback;
 import com.digitalhuman.backend_java.repository.AdminModelConfigRepository;
 import com.digitalhuman.backend_java.repository.AdminProviderConfigRepository;
 import com.digitalhuman.backend_java.repository.GuideMessageRepository;
+import com.digitalhuman.backend_java.model.GuideMessage;
 import com.digitalhuman.backend_java.repository.GuideSessionRepository;
 import com.digitalhuman.backend_java.repository.UserFeedbackRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,6 +24,8 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.doAnswer;
 import org.mockito.ArgumentCaptor;
 
 class GuideServiceTests {
@@ -32,6 +35,7 @@ class GuideServiceTests {
     private ScenicRouteService scenicRouteService;
     private AdminModelConfigRepository modelConfigRepository;
     private UserFeedbackRepository feedbackRepository;
+    private GuideMessageRepository messageRepository;
 
     @BeforeEach
     void setUp() {
@@ -39,14 +43,35 @@ class GuideServiceTests {
         scenicRouteService = mock(ScenicRouteService.class);
         modelConfigRepository = mock(AdminModelConfigRepository.class);
         feedbackRepository = mock(UserFeedbackRepository.class);
+        messageRepository = mock(GuideMessageRepository.class);
+        doAnswer(invocation -> {
+            GuideMessage message = invocation.getArgument(0);
+            if ("assistant".equals(message.getRole())) message.setId(42L);
+            return message;
+        }).when(messageRepository).save(any(GuideMessage.class));
         service = spy(new GuideService(
                 sessionRepository,
-                mock(GuideMessageRepository.class),
+                messageRepository,
                 feedbackRepository,
                 scenicRouteService,
                 modelConfigRepository,
                 mock(AdminProviderConfigRepository.class),
                 mock(MaxKbService.class)));
+    }
+
+    @Test
+    void chatResponseIncludesPersistedAssistantMessageId() {
+        when(sessionRepository.findById("session-1")).thenReturn(Optional.empty());
+        when(scenicRouteService.recommendRoutes(null)).thenReturn(List.of());
+        doReturn(List.of()).when(service).retrieveGuideSources("问题", null);
+        doReturn("回答").when(service).buildAnswer("session-1", "问题", null, List.of());
+        GuideChatRequest request = new GuideChatRequest();
+        request.setSessionId("session-1");
+        request.setQuestion("问题");
+
+        GuideChatResponse response = service.chat(request);
+
+        assertEquals(42L, response.getMessageId());
     }
 
     @Test
