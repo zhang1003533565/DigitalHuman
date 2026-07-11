@@ -6,11 +6,24 @@ export type TripPlanRequest = {
 }
 
 export type TripPlanResponse = {
-  planId: string
-  traceId: string
-  summary: string
-  recommendedRoutes: string[]
-  relatedSpots: string[]
+  route: {
+    id: string
+    name: string
+    suitableFor: string
+    duration: string
+    distance: string
+    intensity: string
+    reason: string
+    bestTime: string
+    sortOrder: number
+    enabled: boolean
+    tags: string[]
+    spots: string[]
+  } | null
+  score: number
+  reasons: string[]
+  reminders: string[]
+  fallbackUsed: boolean
 }
 
 export type GuideChatResult = {
