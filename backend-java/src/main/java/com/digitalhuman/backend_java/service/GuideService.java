@@ -33,6 +33,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.BufferedReader;
@@ -42,6 +44,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
@@ -51,6 +54,8 @@ import java.time.ZoneId;
 
 @Service
 public class GuideService {
+    private static final Set<String> FEEDBACK_STATUSES = Set.of("PENDING", "PROCESSING", "RESOLVED");
+    private static final Set<String> FEEDBACK_CATEGORIES = Set.of("GENERAL", "CONTEXTUAL", "CONTENT", "ROUTE", "SERVICE");
 
     private static final Logger log = LoggerFactory.getLogger(GuideService.class);
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
@@ -460,7 +465,29 @@ public class GuideService {
 
     public List<FeedbackRecordDto> getFeedbackRecords() {
         return feedbackRepository.findAllByOrderByCreatedAtDesc().stream()
-                .map(feedback -> new FeedbackRecordDto(
+                .map(this::toFeedbackRecord)
+                .toList();
+    }
+
+    public FeedbackRecordDto updateFeedback(Long id, String status, String category, String adminNote) {
+        if (!FEEDBACK_STATUSES.contains(status)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "status 仅支持 PENDING/PROCESSING/RESOLVED");
+        }
+        if (!FEEDBACK_CATEGORIES.contains(category)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "category 仅支持 GENERAL/CONTEXTUAL/CONTENT/ROUTE/SERVICE");
+        }
+        UserFeedback feedback = feedbackRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "反馈不存在"));
+        feedback.setStatus(status);
+        feedback.setCategory(category);
+        feedback.setAdminNote(adminNote == null ? null : adminNote.trim());
+        feedbackRepository.save(feedback);
+        return toFeedbackRecord(feedback);
+    }
+
+    private FeedbackRecordDto toFeedbackRecord(UserFeedback feedback) {
+        return new FeedbackRecordDto(
                         feedback.getId(),
                         feedback.getSessionId(),
                         feedback.getTraceId(),
@@ -474,8 +501,7 @@ public class GuideService {
                         feedback.getStatus(),
                         feedback.getCategory(),
                         feedback.getAdminNote(),
-                        feedback.getCreatedAt()))
-                .toList();
+                        feedback.getCreatedAt());
     }
 
     String buildAnswer(String sessionId, String question, String interest, List<GuideSourceDto> sources) {

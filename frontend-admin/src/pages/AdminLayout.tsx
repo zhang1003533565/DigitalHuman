@@ -8,7 +8,6 @@ import {
   Input,
   Table,
   Tag,
-  Statistic,
   Row,
   Col,
   Select,
@@ -41,6 +40,8 @@ import ModelEmotionPage from './ModelEmotionPage'
 import HomeConfigPage from './HomeConfigPage'
 import AiModelManagementPage from './AiModelManagementPage'
 import KnowledgeOpenApiPage from './KnowledgeOpenApiPage'
+import OperationsDashboardPage from './OperationsDashboardPage'
+import FeedbackManagementPage from './FeedbackManagementPage'
 import type { LoginResult } from '../types/admin'
 
 const { Content } = Layout
@@ -148,15 +149,6 @@ type SpotRow = {
   area: string
   openHours: string
   tags: string[]
-}
-
-type FeedbackRow = {
-  key: string
-  traceId?: string
-  question: string
-  helpful: string
-  rating: string
-  comment: string
 }
 
 type AdminModelSettings = {
@@ -299,32 +291,6 @@ const spotColumns: TableColumnsType<SpotRow> = [
     render: (tags: string[]) => tags.map((tag) => <Tag key={tag}>{tag}</Tag>),
   },
 ]
-
-const feedbackColumns: TableColumnsType<FeedbackRow> = [
-  { title: 'Trace', dataIndex: 'traceId', render: (value?: string) => value || '-' },
-  { title: '问题', dataIndex: 'question' },
-  { title: '帮助情况', dataIndex: 'helpful' },
-  { title: '评分', dataIndex: 'rating' },
-  { title: '意见', dataIndex: 'comment' },
-]
-
-function DashboardPanel() {
-  return (
-    <div className="admin-panel-grid">
-      <Row gutter={[16, 16]}>
-        <Col xs={24} md={6}><Card><Statistic title="景点管理" value="运行中" /></Card></Col>
-        <Col xs={24} md={6}><Card><Statistic title="路线配置" value="运行中" /></Card></Col>
-        <Col xs={24} md={6}><Card><Statistic title="数字人配置" value="运行中" /></Card></Col>
-        <Col xs={24} md={6}><Card><Statistic title="AI 模型" value="可配置" /></Card></Col>
-      </Row>
-      <Card title="系统总览">
-        <Typography.Paragraph>
-          后台已移除本地知识上传、构建、向量检索、审核和评测链路。导览问答继续通过基础对话智能体调用已配置的大模型。
-        </Typography.Paragraph>
-      </Card>
-    </div>
-  )
-}
 
 function SpotsPanel() {
   const [data, setData] = useState<SpotRow[]>([])
@@ -1013,36 +979,6 @@ function SettingsPanel() {
   )
 }
 
-function FeedbackPanel() {
-  const [data, setData] = useState<FeedbackRow[]>([])
-
-  useEffect(() => {
-    async function loadFeedback() {
-      const response = await axios.get('/api/admin/guide/feedback')
-      setData(
-        response.data.map(
-          (item: { sessionId: string; traceId?: string; question: string; helpful: boolean; rating: number; comment: string }) => ({
-            key: `${item.sessionId}-${item.question}`,
-            traceId: item.traceId,
-            question: item.question,
-            helpful: item.helpful ? '有帮助' : '待优化',
-            rating: `${item.rating}/5`,
-            comment: item.comment || '-',
-          }),
-        ),
-      )
-    }
-
-    void loadFeedback()
-  }, [])
-
-  return (
-    <Card title="游客反馈分析">
-      <Table columns={feedbackColumns} dataSource={data} pagination={false} />
-    </Card>
-  )
-}
-
 function QaPanel() {
   return (
     <Card title="问答记录查询">
@@ -1080,7 +1016,7 @@ function renderPanel(activeKey: MenuKey) {
     case 'voice-scripts':
       return <VoiceScriptPage />
     case 'feedback':
-      return <FeedbackPanel />
+      return <FeedbackManagementPage />
     case 'qa':
       return <QaPanel />
     case 'ai-models':
@@ -1089,7 +1025,7 @@ function renderPanel(activeKey: MenuKey) {
       return <KnowledgeOpenApiPage />
     case 'dashboard':
     default:
-      return <DashboardPanel />
+      return <OperationsDashboardPage />
   }
 }
 

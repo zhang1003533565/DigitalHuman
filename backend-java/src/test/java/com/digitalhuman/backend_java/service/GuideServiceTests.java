@@ -19,6 +19,7 @@ import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
@@ -162,6 +163,32 @@ class GuideServiceTests {
         assertEquals("CONTEXTUAL", record.getCategory());
         assertEquals("已处理", record.getAdminNote());
         assertEquals(feedback.getCreatedAt(), record.getCreatedAt());
+    }
+
+    @Test
+    void updateFeedbackPersistsValidatedModerationFields() {
+        UserFeedback feedback = new UserFeedback();
+        feedback.setId(7L);
+        when(feedbackRepository.findById(7L)).thenReturn(Optional.of(feedback));
+
+        var record = service.updateFeedback(7L, "RESOLVED", "ROUTE", "已联系路线负责人");
+
+        assertEquals("RESOLVED", feedback.getStatus());
+        assertEquals("ROUTE", feedback.getCategory());
+        assertEquals("已联系路线负责人", feedback.getAdminNote());
+        assertEquals(7L, record.getId());
+        verify(feedbackRepository).save(feedback);
+    }
+
+    @Test
+    void updateFeedbackRejectsUnsupportedStatusAndCategory() {
+        UserFeedback feedback = new UserFeedback();
+        when(feedbackRepository.findById(7L)).thenReturn(Optional.of(feedback));
+
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> service.updateFeedback(7L, "UNKNOWN", "ROUTE", null));
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> service.updateFeedback(7L, "PENDING", "UNKNOWN", null));
     }
 
     @Test

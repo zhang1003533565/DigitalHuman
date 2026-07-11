@@ -2871,3 +2871,95 @@ mark {
   border-radius: 2px;
   padding: 0 2px;
 }
+
+.operations-rankings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.operations-chart {
+  height: 300px;
+}
+
+.service-health-list {
+  display: grid;
+  gap: 12px;
+}
+
+.service-health-list > div {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto minmax(180px, 2fr);
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.feedback-form {
+  margin-top: 24px;
+}
+
+.admin-mobile-menu {
+  display: none;
+}
+
+@media (max-width: 1024px) {
+  .admin-sider {
+    flex: 0 0 200px !important;
+    max-width: 200px !important;
+    min-width: 200px !important;
+    width: 200px !important;
+  }
+
+  .admin-brand {
+    padding-inline: 16px;
+  }
+
+  .admin-content {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .admin-mobile-menu {
+    display: inline-flex;
+    position: fixed;
+    z-index: 20;
+    top: 12px;
+    left: 12px;
+  }
+
+  .admin-content {
+    padding: 64px 12px 16px;
+  }
+
+  .operations-rankings {
+    grid-template-columns: 1fr;
+  }
+
+  .operations-chart {
+    height: 240px;
+  }
+
+  .service-health-list > div {
+    grid-template-columns: 1fr auto;
+  }
+
+  .service-health-list .ant-typography {
+    grid-column: 1 / -1;
+  }
+
+  .admin-nav-drawer .ant-drawer-body,
+  .admin-nav-drawer .ant-menu {
+    background: #001529;
+  }
+
+  .admin-nav-drawer .ant-drawer-body {
+    padding: 12px;
+  }
+
+  .feedback-form .ant-form-item {
+    width: 100%;
+  }
+}
