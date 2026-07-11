@@ -794,6 +794,7 @@ function SettingsPanel() {
           saving={saving}
           testing={testingCategory === 'chat'}
           options={chatOptions.map((item) => ({ value: item.value, provider: item.label.split(' · ')[0] }))}
+          onOpenManual={() => setActiveSettingsTab('model-catalog')}
           onSave={() => void handleSave()}
           onTest={() => void handleTestModel('chat')}
           result={renderTestResult('chat', testResults.chat)}

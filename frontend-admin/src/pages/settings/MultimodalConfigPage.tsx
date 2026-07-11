@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
-  EllipsisOutlined,
   InfoCircleOutlined,
   PlusOutlined,
   PlayCircleOutlined,
@@ -8,8 +7,8 @@ import {
   SendOutlined,
   UploadOutlined,
 } from '@ant-design/icons'
-import { Button, Card, Dropdown, Form, Input, InputNumber, Modal, Pagination, Select, Tag, Upload, message } from 'antd'
-import type { FormInstance, MenuProps, UploadProps } from 'antd'
+import { Button, Card, Form, Input, InputNumber, Modal, Pagination, Select, Tag, Upload } from 'antd'
+import type { FormInstance, UploadProps } from 'antd'
 
 type AdminModelSettings = {
   embeddingModel: string
@@ -406,12 +405,6 @@ const MULTIMODAL_PAGE_STYLES = `
   }
 `
 
-const MORE_MENU_ITEMS: MenuProps['items'] = [
-  { key: 'edit', label: '编辑模型' },
-  { key: 'copy', label: '复制配置' },
-  { key: 'delete', label: '删除模型' },
-]
-
 function buildResultBlocks(testResult?: MultimodalConfigPageProps['testResult'] | null): ResultBlock[] {
   return [
     { key: 'caption', title: '图片描述', color: '#00B42A', text: testResult?.caption ?? '画面包含湖泊、雪山、栈道与亭台，整体风景开阔清晰。' },
@@ -434,7 +427,6 @@ export default function MultimodalConfigPage({
 }: MultimodalConfigPageProps) {
   const [configForm] = Form.useForm<MultimodalModelFormValues>()
   const [createForm] = Form.useForm<CreateMultimodalModelValues>()
-  const [customModels, setCustomModels] = useState<MultimodalModelRecord[]>([])
   const [searchText, setSearchText] = useState('')
   const [selectedKey, setSelectedKey] = useState(BASE_MODELS[0].key)
   const [page, setPage] = useState(1)
@@ -443,7 +435,7 @@ export default function MultimodalConfigPage({
   const [imageDataUrl, setImageDataUrl] = useState(DEFAULT_IMAGE)
   const [mode, setMode] = useState<'caption' | 'ocr' | 'reason' | 'summary' | 'qa'>('caption')
 
-  const allModels = useMemo(() => [...customModels, ...BASE_MODELS], [customModels])
+  const allModels = useMemo(() => BASE_MODELS, [])
   const selectedModelValue = Form.useWatch('multimodalModel', form)
   const currentOption = options.find((item) => item.value === selectedModelValue)
 
@@ -492,7 +484,6 @@ export default function MultimodalConfigPage({
 
   const handlePlay = (model: MultimodalModelRecord) => {
     handleSelectModel(model)
-    message.info('已触发测试（mock）')
     onTest({ promptText, imageDataUrl, mode })
   }
 
@@ -510,7 +501,6 @@ export default function MultimodalConfigPage({
   const handleSend = () => {
     const value = promptText.trim()
     if (!value) return
-    message.success('已生成多模态结果（mock）')
     onTest({ promptText: value, imageDataUrl, mode })
   }
 
@@ -529,26 +519,8 @@ export default function MultimodalConfigPage({
     setMode('caption')
   }
   const handleCreateModel = async () => {
-    const values = await createForm.validateFields()
-    const providerTone: ProviderTone = values.provider.includes('OpenAI') ? 'openai' : values.provider.includes('Qwen') ? 'qwen' : values.provider.includes('Google') ? 'google' : values.provider.includes('InternLM') ? 'internlm' : 'zhipu'
-    const nextModel: MultimodalModelRecord = {
-      key: `custom-${values.modelCode}`,
-      modelName: values.modelName,
-      modelCode: values.modelCode,
-      provider: values.provider,
-      providerTone,
-      contextLength: values.contextLength,
-      maxImageSize: values.maxImageSize,
-      endpoint: values.endpoint,
-      externalKbCount: 0,
-      capabilityTags: ['图文理解', '问答'],
-    }
-    setCustomModels((current) => [nextModel, ...current])
-    setSelectedKey(nextModel.key)
-    form.setFieldValue('multimodalModel', nextModel.modelCode)
-    createForm.resetFields()
-    setAddOpen(false)
-    message.success('模型已新增（mock）')
+    await createForm.validateFields()
+    onOpenManual()
   }
 
   return (
@@ -564,8 +536,8 @@ export default function MultimodalConfigPage({
               value={searchText}
               onChange={(event) => setSearchText(event.target.value)}
             />
-            <Button type="primary" icon={<PlusOutlined />} className="multimodal-settings-primary-btn" onClick={() => setAddOpen(true)}>
-              新增模型
+            <Button type="primary" icon={<PlusOutlined />} className="multimodal-settings-primary-btn" onClick={onOpenManual}>
+              手动维护
             </Button>
           </div>
           <div className="multimodal-settings-list">
@@ -601,9 +573,6 @@ export default function MultimodalConfigPage({
                   </div>
                   <div className="multimodal-settings-item__actions" onClick={(event) => event.stopPropagation()}>
                     <Button type="text" shape="circle" className="multimodal-settings-icon-btn" icon={<PlayCircleOutlined />} onClick={() => handlePlay(item)} />
-                    <Dropdown trigger={['click']} menu={{ items: MORE_MENU_ITEMS, onClick: () => message.info('仅作页面展示（mock）') }}>
-                      <Button type="text" shape="circle" className="multimodal-settings-icon-btn" icon={<EllipsisOutlined />} />
-                    </Dropdown>
                   </div>
                 </button>
               )

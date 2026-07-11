@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
-  EllipsisOutlined,
   PauseCircleOutlined,
   PlayCircleOutlined,
   PlusOutlined,
@@ -9,8 +8,8 @@ import {
   SoundOutlined,
   UploadOutlined,
 } from '@ant-design/icons'
-import { Button, Card, Dropdown, Form, Input, Modal, Pagination, Select, Tag, Upload, message } from 'antd'
-import type { FormInstance, MenuProps, UploadProps } from 'antd'
+import { Button, Card, Form, Input, Modal, Pagination, Select, Tag, Upload } from 'antd'
+import type { FormInstance, UploadProps } from 'antd'
 
 type AdminModelSettings = {
   embeddingModel: string
@@ -1086,12 +1085,6 @@ const ICON_CLASS_MAP: Record<VisionTone, string> = {
   red: 'vision-settings-icon--red',
 }
 
-const MORE_MENU_ITEMS: MenuProps['items'] = [
-  { key: 'edit', label: '编辑模型' },
-  { key: 'copy', label: '复制配置' },
-  { key: 'delete', label: '删除模型' },
-]
-
 export default function VisionConfigPage({
   form,
   loading,
@@ -1258,10 +1251,7 @@ export default function VisionConfigPage({
   }
 
   const handleCreate = async () => {
-    const values = await createForm.validateFields()
-    message.success(`已新增模型：${values.modelName}`)
-    setAddModalOpen(false)
-    createForm.resetFields()
+    await createForm.validateFields()
     onOpenManual()
   }
 
@@ -1279,8 +1269,8 @@ export default function VisionConfigPage({
               value={searchText}
               onChange={(event) => setSearchText(event.target.value)}
             />
-            <Button type="primary" icon={<PlusOutlined />} className="vision-settings-primary-btn" onClick={() => setAddModalOpen(true)}>
-              新增模型
+            <Button type="primary" icon={<PlusOutlined />} className="vision-settings-primary-btn" onClick={onOpenManual}>
+              手动维护
             </Button>
           </div>
 
@@ -1319,9 +1309,6 @@ export default function VisionConfigPage({
                         icon={previewPlaying && active ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
                         onClick={() => handlePlay(item)}
                       />
-                      <Dropdown trigger={['click']} menu={{ items: MORE_MENU_ITEMS, onClick: () => message.info('该操作为页面示意，暂未接入后端。') }}>
-                        <Button type="text" shape="circle" className="vision-settings-icon-btn" icon={<EllipsisOutlined />} />
-                      </Dropdown>
                     </div>
                   </button>
                 )

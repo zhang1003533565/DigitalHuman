@@ -40,6 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AdminSettingsService {
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
+    private static final String MASKED_API_KEY = "********";
     private static final Path PROJECT_ROOT = Path.of("").toAbsolutePath().getParent();
     private static final Path AI_SERVICE_ROOT = PROJECT_ROOT.resolve("ai-service");
     private static final Map<String, String> PROVIDER_DOC_FILES = Map.of(
@@ -165,7 +166,7 @@ public class AdminSettingsService {
                     AdminProviderConfigDto dto = new AdminProviderConfigDto();
                     dto.setProvider(item.getProvider());
                     dto.setBaseUrl(item.getBaseUrl());
-                    dto.setApiKey(item.getApiKey());
+                    dto.setApiKey(maskApiKey(item.getApiKey()));
                     dto.setProtocol(item.getProtocol());
                     return dto;
                 })
@@ -176,15 +177,21 @@ public class AdminSettingsService {
     public AdminProviderConfigDto saveProviderConfig(AdminProviderConfigDto request) {
         String provider = normalize(request.getProvider(), "");
         String baseUrl = normalize(request.getBaseUrl(), "");
-        String apiKey = normalize(request.getApiKey(), "");
+        String requestedApiKey = normalize(request.getApiKey(), "");
         String protocol = normalize(request.getProtocol(), "openai_compatible");
-        if (provider.isBlank() || baseUrl.isBlank() || apiKey.isBlank()) {
-            throw new IllegalArgumentException("提供方、Base URL、API Key 都不能为空");
+        if (provider.isBlank() || baseUrl.isBlank()) {
+            throw new IllegalArgumentException("提供方和 Base URL 不能为空");
         }
 
         // 1) 写入 Java MySQL
         AdminProviderConfig entity = adminProviderConfigRepository.findByProviderIgnoreCase(provider)
                 .orElseGet(AdminProviderConfig::new);
+        String apiKey = isMaskedApiKey(requestedApiKey) || requestedApiKey.isBlank()
+                ? normalize(entity.getApiKey(), "")
+                : requestedApiKey;
+        if (apiKey.isBlank()) {
+            throw new IllegalArgumentException("API Key 不能为空");
+        }
         entity.setProvider(provider);
         entity.setBaseUrl(baseUrl);
         entity.setApiKey(apiKey);
@@ -216,7 +223,7 @@ public class AdminSettingsService {
         AdminProviderConfigDto result = new AdminProviderConfigDto();
         result.setProvider(provider);
         result.setBaseUrl(baseUrl);
-        result.setApiKey(apiKey);
+        result.setApiKey(maskApiKey(apiKey));
         result.setProtocol(protocol);
         return result;
     }
@@ -323,17 +330,17 @@ public class AdminSettingsService {
             try (Response response = httpClient.newCall(httpRequest).execute()) {
                 String responseBody = response.body() != null ? response.body().string() : "";
                 if (!response.isSuccessful()) {
-                    String detail = extractAiServiceErrorMessage(responseBody, "模型测试失败");
+                    String detail = sanitizeSecret(extractAiServiceErrorMessage(responseBody, "模型测试失败"), apiKey);
                     return buildTestErrorResponse(provider, categoryKey, item.getModelId(), detail);
                 }
                 return objectMapper.readValue(responseBody, AdminModelTestResponseDto.class);
             }
         } catch (IOException exception) {
             return buildTestErrorResponse(provider, categoryKey, item.getModelId(),
-                    "无法连接 ai-service：" + exception.getMessage());
+                    sanitizeSecret("无法连接 ai-service：" + exception.getMessage(), apiKey));
         } catch (Exception exception) {
             return buildTestErrorResponse(provider, categoryKey, item.getModelId(),
-                    "模型测试异常：" + exception.getMessage());
+                    sanitizeSecret("模型测试异常：" + exception.getMessage(), apiKey));
         }
     }
 
@@ -346,6 +353,19 @@ public class AdminSettingsService {
         dto.setMessage("模型测试失败");
         dto.setDetail(detail);
         return dto;
+    }
+
+    private String maskApiKey(String apiKey) {
+        return normalize(apiKey, "").isBlank() ? "" : MASKED_API_KEY;
+    }
+
+    private boolean isMaskedApiKey(String apiKey) {
+        return MASKED_API_KEY.equals(apiKey) || apiKey.matches("^[*•]+$");
+    }
+
+    private String sanitizeSecret(String detail, String apiKey) {
+        String safeDetail = normalize(detail, "模型测试失败");
+        return apiKey == null || apiKey.isBlank() ? safeDetail : safeDetail.replace(apiKey, MASKED_API_KEY);
     }
 
     public AgentModelBindingPayloadDto getAgentModelBindings() {

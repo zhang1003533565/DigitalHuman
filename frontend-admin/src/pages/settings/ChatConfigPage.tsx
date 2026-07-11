@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
-  EllipsisOutlined,
   InfoCircleOutlined,
   PlusOutlined,
   PlayCircleOutlined,
   SearchOutlined,
   SendOutlined,
 } from '@ant-design/icons'
-import { Button, Card, Dropdown, Form, Input, InputNumber, Modal, Pagination, Select, message } from 'antd'
-import type { FormInstance, MenuProps } from 'antd'
+import { Button, Card, Form, Input, InputNumber, Modal, Pagination, Select } from 'antd'
+import type { FormInstance } from 'antd'
 
 type AdminModelSettings = {
   embeddingModel: string
@@ -29,6 +28,7 @@ type ChatConfigPageProps = {
   saving: boolean
   testing: boolean
   options: ChatOption[]
+  onOpenManual: () => void
   onSave: () => void
   onTest: () => void
   result: ReactNode
@@ -937,23 +937,13 @@ const CHAT_PAGE_STYLES = `
   }
 `
 
-const MORE_MENU_ITEMS: MenuProps['items'] = [
-  { key: 'edit', label: '编辑模型' },
-  { key: 'copy', label: '复制配置' },
-  { key: 'delete', label: '删除模型' },
-]
-
-function createAssistantReply(question: string, record: ChatModelRecord) {
-  const tags = record.purposeTags.join('、')
-  return `已收到你的问题「${question}」。当前模型 ${record.provider} / ${record.modelName} 适合处理 ${tags} 场景，建议结合第三方知识服务、路线推荐和游客常见问答继续展开。`
-}
-
 export default function ChatConfigPage({
   form,
   loading,
   saving,
   testing,
   options,
+  onOpenManual,
   onSave,
   onTest,
   result,
@@ -964,7 +954,6 @@ export default function ChatConfigPage({
   const [page, setPage] = useState(1)
   const [addOpen, setAddOpen] = useState(false)
   const [selectedKey, setSelectedKey] = useState(CHAT_MODELS[0].key)
-  const [customModels, setCustomModels] = useState<ChatModelRecord[]>([])
   const [messages, setMessages] = useState<ChatMessage[]>([
     { id: 'm1', role: 'user', content: '请介绍一下景区最值得看的地方。' },
     {
@@ -978,7 +967,7 @@ export default function ChatConfigPage({
 
   const watchedChatModel = Form.useWatch('chatModel', form)
 
-  const allModels = useMemo(() => [...customModels, ...CHAT_MODELS], [customModels])
+  const allModels = useMemo(() => CHAT_MODELS, [])
 
   const selectedRecord = useMemo(() => {
     return allModels.find((item) => item.key === selectedKey) ?? allModels[0]
@@ -1056,7 +1045,6 @@ export default function ChatConfigPage({
 
   const handlePlayTest = (record: ChatModelRecord) => {
     handleSelectModel(record)
-    message.info('已触发模型测试（mock）')
     onTest()
   }
 
@@ -1064,24 +1052,11 @@ export default function ChatConfigPage({
     const question = testInput.trim()
     if (!question) return
 
-    const userMessage: ChatMessage = {
-      id: `u-${Date.now()}`,
-      role: 'user',
-      content: question,
-    }
-    const assistantMessage: ChatMessage = {
-      id: `a-${Date.now()}`,
-      role: 'assistant',
-      content: createAssistantReply(question, selectedRecord),
-    }
-
-    setMessages((current) => [...current, userMessage, assistantMessage])
-    setTestInput('')
+    onTest()
   }
 
   const handleSave = async () => {
     await configForm.validateFields()
-    message.success('已保存设置（mock）')
     onSave()
   }
 
@@ -1112,42 +1087,8 @@ export default function ChatConfigPage({
   }
 
   const handleCreateModel = async () => {
-    const values = await createForm.validateFields()
-    const providerTone: ProviderTone = values.provider.includes('OpenAI')
-      ? 'openai'
-      : values.provider.includes('Qwen')
-        ? 'qwen'
-        : values.provider.includes('智谱')
-          ? 'zhipu'
-          : values.provider.includes('Moonshot')
-            ? 'moonshot'
-            : 'deepseek'
-
-    const newRecord: ChatModelRecord = {
-      key: `custom-${values.modelCode}`,
-      modelName: values.modelName,
-      modelCode: values.modelCode,
-      provider: values.provider,
-      providerTone,
-      contextLength: values.contextLength,
-      maxOutput: values.maxOutput,
-      endpoint: values.endpoint,
-      purposeTags: ['自定义模型', '新增配置'],
-      temperature: 0.7,
-      topP: 0.9,
-      frequencyPenalty: 0,
-      presencePenalty: 0,
-    }
-
-    setCustomModels((current) => [newRecord, ...current])
-    handleSelectModel(newRecord)
-    createForm.resetFields()
-    setAddOpen(false)
-    message.success('模型已新增（mock）')
-  }
-
-  const handleMenuClick: MenuProps['onClick'] = (info) => {
-    message.info(`${String(info.key)}（mock）`)
+    await createForm.validateFields()
+    onOpenManual()
   }
 
   if (!selectedRecord) {
@@ -1168,8 +1109,8 @@ export default function ChatConfigPage({
               prefix={<SearchOutlined style={{ color: TEXT_MUTED }} />}
               placeholder="搜索模型名称或标识"
             />
-            <Button type="primary" icon={<PlusOutlined />} className="chat-config-primary-btn" onClick={() => setAddOpen(true)}>
-              新增模型
+            <Button type="primary" icon={<PlusOutlined />} className="chat-config-primary-btn" onClick={onOpenManual}>
+              手动维护
             </Button>
           </div>
 
@@ -1213,9 +1154,6 @@ export default function ChatConfigPage({
                       loading={testing && item.key === selectedKey}
                       onClick={() => handlePlayTest(item)}
                     />
-                    <Dropdown trigger={['click']} menu={{ items: MORE_MENU_ITEMS, onClick: handleMenuClick }}>
-                      <Button type="text" shape="circle" className="chat-config-icon-btn" icon={<EllipsisOutlined />} />
-                    </Dropdown>
                   </div>
                 </button>
               )
