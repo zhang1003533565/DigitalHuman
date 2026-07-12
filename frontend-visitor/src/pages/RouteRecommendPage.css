@@ -387,16 +387,31 @@
     height: auto;
   }
 
+  .route-planner,
+  .route-detail,
+  .route-detail__content,
+  .route-timeline {
+    min-width: 0;
+  }
+
   .route-detail {
     display: flex;
     flex-direction: column;
+    overflow: visible;
   }
 
   .route-detail__map {
-    min-height: 260px;
+    flex: 0 0 auto;
+    min-height: 280px;
   }
 
-  .route-detail__content,
+  .route-detail__content {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+  }
+
   .route-timeline {
     display: flex;
     flex-direction: column;
@@ -411,7 +426,7 @@
     content: '';
     position: absolute;
     top: 30px;
-    bottom: -10px;
+    bottom: 0;
     left: 14px;
     width: 2px;
     background: rgba(110, 224, 255, 0.32);

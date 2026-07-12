@@ -612,7 +612,7 @@
     top: auto;
     left: 18px;
     right: 18px;
-    bottom: calc(min(58vh, 560px) + 28px);
+    bottom: 16px;
     max-width: none;
   }
 
@@ -736,7 +736,7 @@
 
   .live2d-page--presentation::after {
     left: 50%;
-    bottom: calc(min(58vh, 560px) + 36px);
+    bottom: 36px;
     width: min(74vw, 480px);
     height: 118px;
     transform: translateX(-50%) perspective(640px) rotateX(62deg);
@@ -750,7 +750,7 @@
   .digital-human-stage-glow::before {
     left: 12vw;
     right: 12vw;
-    bottom: calc(min(58vh, 560px) + 44px);
+    bottom: 44px;
     height: 48vw;
   }
 }
@@ -758,13 +758,21 @@
 @media (max-width: 768px) {
   .live2d-page {
     display: grid;
-    grid-template-rows: minmax(180px, 38vh) minmax(0, 1fr);
-    overflow-y: auto;
+    grid-template-rows: minmax(220px, 42vh) auto;
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
   }
 
   .live2d-canvas {
     position: relative;
-    min-height: 180px;
+    min-height: 220px;
+  }
+
+  .digital-human-status {
+    right: 18px;
+    bottom: 16px;
+    left: 18px;
   }
 
   .digital-human-chat {
@@ -773,7 +781,7 @@
     width: auto;
     height: auto;
     min-height: 420px;
-    margin: 0 10px 10px;
+    margin: 0 10px 16px;
   }
 
   .digital-chat-actions > .digital-chat-select > button,
