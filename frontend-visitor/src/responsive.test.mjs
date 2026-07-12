@@ -48,7 +48,12 @@ assert.match(digitalMobile, /\.guide-result-card__actions button\s*\{[^}]*min-he
 
 assert.match(mapPage, /map-page--spot-selected/, 'map exposes selected-spot state to responsive CSS')
 assert.doesNotMatch(mapPage, /<aside className="map-side"[^>]*aria-hidden/, 'visible desktop map sidebar must remain exposed to assistive technology')
-assert.match(mapCss, /\.map-page--spot-selected\s+\.map-side\s*\{[^}]*display:\s*none/s, 'selected spot card hides the mobile map side card')
+const mapMobile = mapCss.slice(mapCss.lastIndexOf('@media (max-width: 768px)'))
+assert.match(mapMobile, /\.map-page\s*\{[^}]*display:\s*grid[^}]*height:\s*auto/s, 'mobile map and services use document flow')
+assert.match(mapMobile, /\.map-page__main\s*\{[^}]*height:\s*clamp\(480px,\s*68vh,\s*680px\)/s, 'mobile map has a stable visible height')
+assert.match(mapMobile, /\.map-side\s*\{[^}]*position:\s*relative[^}]*inset:\s*auto/s, 'mobile services no longer cover the map')
+assert.doesNotMatch(mapMobile, /\.map-side\s*\{[^}]*position:\s*fixed/s, 'mobile services must not be fixed')
+assert.match(mapMobile, /\.map-spot-card\s*\{[^}]*bottom:\s*calc\(var\(--mobile-nav-height\)\s*\+\s*var\(--safe-bottom\)\s*\+\s*12px\)/s, 'selected spot card clears mobile navigation')
 const routeMobile = routeCss.slice(routeCss.lastIndexOf('@media (max-width: 768px)'))
 assert.match(routeMobile, /\.route-detail\s*\{[^}]*display:\s*flex[^}]*flex-direction:\s*column/s, 'route detail stacks map and content')
 assert.match(routeMobile, /\.route-detail__content\s*\{[^}]*position:\s*relative[^}]*overflow:\s*visible/s, 'route summary and timeline remain in flow')

@@ -950,37 +950,39 @@
 
 @media (max-width: 768px) {
   .map-page {
-    display: block;
-    height: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    height: auto;
+    overflow: visible;
   }
 
   .map-page__main {
-    height: 100%;
+    height: clamp(480px, 68vh, 680px);
     min-height: 480px;
   }
 
   .map-side {
-    position: fixed;
-    right: 12px;
-    bottom: calc(var(--mobile-nav-height) + var(--safe-bottom) + 12px);
-    left: 12px;
-    z-index: 20;
-    max-height: min(42vh, 360px);
-    overflow-y: auto;
+    position: relative;
+    inset: auto;
+    z-index: auto;
+    max-height: none;
+    overflow: visible;
     border-radius: 18px;
   }
 
   .map-page--spot-selected .map-side {
-    display: none;
+    display: grid;
   }
 
   .map-spot-card {
+    position: fixed;
     top: auto;
     right: 12px;
-    bottom: 12px;
+    bottom: calc(var(--mobile-nav-height) + var(--safe-bottom) + 12px);
     left: 12px;
     width: auto;
-    max-height: 45vh;
+    max-height: min(45vh, 420px);
     overflow-y: auto;
   }
 
