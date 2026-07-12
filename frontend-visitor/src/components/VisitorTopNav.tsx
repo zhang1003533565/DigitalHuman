@@ -31,7 +31,8 @@ export function VisitorTopNav({ onLogout }: VisitorTopNavProps) {
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const avatarRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
-  const suppressFocusOpen = useRef(false)
+  const shouldFocusActionRef = useRef(false)
+  const profileActionRef = useRef<HTMLButtonElement>(null)
   const user: SessionUser | null = getStoredUser()
 
   const openDropdown = useCallback(() => {
@@ -53,22 +54,27 @@ export function VisitorTopNav({ onLogout }: VisitorTopNavProps) {
 
   const toggleDropdown = useCallback(() => {
     if (dropdownOpen) {
+      shouldFocusActionRef.current = false
       setDropdownOpen(false)
       return
     }
+    shouldFocusActionRef.current = true
     openDropdown()
   }, [dropdownOpen, openDropdown])
 
   const closeDropdownAndRestoreFocus = useCallback(() => {
-    suppressFocusOpen.current = true
+    shouldFocusActionRef.current = false
     setDropdownOpen(false)
     avatarRef.current?.focus()
-    suppressFocusOpen.current = false
   }, [])
 
-  function handleAvatarFocus() {
-    if (!suppressFocusOpen.current) openDropdown()
-  }
+  useEffect(() => {
+    if (!dropdownOpen || !shouldFocusActionRef.current) return
+
+    shouldFocusActionRef.current = false
+    const frame = requestAnimationFrame(() => profileActionRef.current?.focus())
+    return () => cancelAnimationFrame(frame)
+  }, [dropdownOpen])
 
   useEffect(() => {
     if (!dropdownOpen) return
@@ -133,11 +139,9 @@ export function VisitorTopNav({ onLogout }: VisitorTopNavProps) {
           className="visitor-user-menu__avatar"
           type="button"
           aria-label="用户菜单"
-          aria-haspopup="true"
           aria-expanded={dropdownOpen}
           aria-controls={dropdownOpen ? USER_MENU_ID : undefined}
           onClick={toggleDropdown}
-          onFocus={handleAvatarFocus}
         >
           {getInitials(user?.displayName || user?.username || '')}
         </button>
@@ -167,6 +171,7 @@ export function VisitorTopNav({ onLogout }: VisitorTopNavProps) {
               </div>
               <div className="visitor-user-menu__divider" />
               <button
+                ref={profileActionRef}
                 className="visitor-user-menu__item"
                 type="button"
                 onClick={() => {
