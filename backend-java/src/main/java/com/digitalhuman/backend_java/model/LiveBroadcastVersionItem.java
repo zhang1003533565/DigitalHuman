@@ -5,11 +5,20 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.Immutable;
 
 @Entity
-@Table(name = "live_broadcast_version_item")
+@Immutable
+@Table(
+        name = "live_broadcast_version_item",
+        indexes = @Index(
+                name = "idx_live_version_item_version_sort_id",
+                columnList = "version_id, sort_order, id"
+        )
+)
 public class LiveBroadcastVersionItem {
 
     @Id
