@@ -18,10 +18,10 @@
 
 ```bash
 cd backend-java
-./mvnw -Dtest=LiveTimelineResolverTests,LiveBroadcastServiceTests,LiveBroadcastControllerTests,LiveBroadcastPersistenceTests,GuideServiceTests,UserGuideControllerTests test
+./mvnw test
 ```
 
-结果：退出码 0；36 项测试，0 failures，0 errors，0 skipped。
+结果：退出码 0；68 项测试，0 failures，0 errors，0 skipped。
 
 覆盖包括：
 
@@ -54,6 +54,9 @@ for test_file in $(find src -name '*.test.mjs' -print | sort); do node "$test_fi
 - 地图主按钮进入受保护 `/live` 路由。
 - 地图直播状态请求使用 generation guard，过期响应不会覆盖新状态。
 - 问答完成和停止本地回答只重新同步服务器直播进度。
+- 可见页面每 30 秒同步发布版本；首次失败提供重试，后台同步失败保留旧时间轴与当前语音。
+- 提问开始后，迟到的后台同步成功或失败响应均被请求代际和互动状态仲裁丢弃，不会切换 phase 或中断个人回答。
+- 游客状态使用独立 `VisitorLiveItemDto`，原生返回 `itemId`，不复用管理端草稿 DTO。
 - SpeechRecognition 不可用、异步错误与 `start()` 同步异常均有可见错误路径。
 - 页面与子元素统一 `box-sizing: border-box`，移动布局、触摸手势和底栏安全区契约通过。
 
