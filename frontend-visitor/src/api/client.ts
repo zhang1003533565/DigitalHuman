@@ -31,7 +31,11 @@ const BUSINESS_MESSAGE_STATUSES = new Set([400, 422])
 function safeBusinessMessage(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined
   const message = value.trim()
-  if (!message || message.length > 200 || /[<>\u0000-\u001f\u007f]/.test(message)) return undefined
+  const containsUnsafeCharacter = Array.from(message).some((character) => {
+    const codePoint = character.codePointAt(0) ?? 0
+    return character === '<' || character === '>' || codePoint <= 31 || codePoint === 127
+  })
+  if (!message || message.length > 200 || containsUnsafeCharacter) return undefined
   return message
 }
 

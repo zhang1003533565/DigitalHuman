@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect -- drawer state is initialized from the selected facility when opened */
 import { useEffect, useRef, useState } from 'react'
 import dayjs, { type Dayjs } from 'dayjs'
 import {
@@ -22,23 +23,55 @@ import {
   updateScenicFacility,
 } from '../../api/scenic'
 
-const AMAP_KEY = '5b01b946c26d0f94f7d2ddb9d09ff26f'
-const AMAP_SECURITY_KEY = '692196a068ef6c9cad53a55fc9e47ad7'
+const AMAP_KEY = import.meta.env.VITE_AMAP_KEY
+const AMAP_SECURITY_KEY = import.meta.env.VITE_AMAP_SECURITY_KEY
 const LINGSHAN_CENTER: [number, number] = [120.1009, 31.4259]
 const LINGSHAN_BOUNDS_SW: [number, number] = [120.0759, 31.4009]
 const LINGSHAN_BOUNDS_NE: [number, number] = [120.1259, 31.4509]
 
+type AMapLngLat = {
+  getLng: () => number
+  getLat: () => number
+}
+
+type AMapBounds = {
+  contains: (position: AMapLngLat) => boolean
+}
+
+type AMapInstance = {
+  destroy?: () => void
+  on: (event: 'click', handler: (event: AMapEvent) => void) => void
+  setLimitBounds?: (bounds: AMapBounds) => void
+  setZoomAndCenter?: (zoom: number, center: [number, number]) => void
+}
+
+type AMapMarker = {
+  getPosition: () => AMapLngLat
+  on: (event: 'dragend', handler: (event: AMapEvent) => void) => void
+  setPosition: (position: [number, number]) => void
+}
+
+type AMapEvent = { lnglat?: AMapLngLat }
+
+type AMapApi = {
+  LngLat: new (lng: number, lat: number) => AMapLngLat
+  Bounds: new (southWest: AMapLngLat, northEast: AMapLngLat) => AMapBounds
+  Map: new (container: HTMLDivElement, options: object) => AMapInstance
+  Marker: new (options: object) => AMapMarker
+}
+
 declare global {
   interface Window {
     _AMapSecurityConfig?: { securityJsCode: string }
-    AMap?: any
+    AMap?: AMapApi
   }
 }
 
-let amapLoaderPromise: Promise<any> | null = null
+let amapLoaderPromise: Promise<AMapApi> | null = null
 
-function loadAMap(): Promise<any> {
+function loadAMap(): Promise<AMapApi> {
   if (typeof window === 'undefined') return Promise.reject(new Error('no window'))
+  if (!AMAP_KEY || !AMAP_SECURITY_KEY) return Promise.reject(new Error('地图服务未配置'))
   if (window.AMap) return Promise.resolve(window.AMap)
   if (amapLoaderPromise) return amapLoaderPromise
 
@@ -47,7 +80,14 @@ function loadAMap(): Promise<any> {
     const script = document.createElement('script')
     script.src = `https://webapi.amap.com/maps?v=2.0&key=${AMAP_KEY}`
     script.async = true
-    script.onload = () => resolve(window.AMap)
+    script.onload = () => {
+      if (window.AMap) {
+        resolve(window.AMap)
+      } else {
+        amapLoaderPromise = null
+        reject(new Error('地图脚本加载后未提供 AMap API'))
+      }
+    }
     script.onerror = (error) => {
       amapLoaderPromise = null
       reject(error)
@@ -109,9 +149,9 @@ export default function SpotDrawer({
   const [coverImage, setCoverImage] = useState('')
   const [galleryImages, setGalleryImages] = useState<string[]>([])
   const mapContainerRef = useRef<HTMLDivElement | null>(null)
-  const mapInstanceRef = useRef<any>(null)
-  const markerRef = useRef<any>(null)
-  const boundsRef = useRef<any>(null)
+  const mapInstanceRef = useRef<AMapInstance>(null)
+  const markerRef = useRef<AMapMarker>(null)
+  const boundsRef = useRef<AMapBounds>(null)
 
   const destroyMap = () => {
     if (mapInstanceRef.current) {
@@ -223,7 +263,7 @@ export default function SpotDrawer({
         markerRef.current = marker
         updateLocationFields(initialLng, initialLat)
 
-        map.on('click', (event: any) => {
+        map.on('click', (event: AMapEvent) => {
           const lngLat = event?.lnglat
           if (!lngLat) return
           if (boundsRef.current && !boundsRef.current.contains(lngLat)) {
@@ -233,7 +273,7 @@ export default function SpotDrawer({
           setMarkerPosition(lngLat.getLng(), lngLat.getLat())
         })
 
-        marker.on('dragend', (event: any) => {
+        marker.on('dragend', (event: AMapEvent) => {
           const lngLat = event?.lnglat ?? marker.getPosition()
           if (!lngLat) return
           if (boundsRef.current && !boundsRef.current.contains(lngLat)) {

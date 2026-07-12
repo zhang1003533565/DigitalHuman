@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
-import axios from 'axios'
+/* eslint-disable react-hooks/set-state-in-effect -- remote data is loaded when the active tab changes */
+import { useCallback, useEffect, useState } from 'react'
+import axios, { AxiosError } from 'axios'
 import {
   Button,
   Card,
@@ -49,7 +50,7 @@ export default function HomeConfigPage() {
   const [activeTab, setActiveTab] = useState('ALL')
   const [form] = Form.useForm()
 
-  const loadItems = async () => {
+  const loadItems = useCallback(async () => {
     setLoading(true)
     try {
       const params = activeTab === 'ALL' ? {} : { type: activeTab }
@@ -60,11 +61,11 @@ export default function HomeConfigPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [activeTab])
 
   useEffect(() => {
     void loadItems()
-  }, [activeTab])
+  }, [loadItems])
 
   const openCreate = () => {
     setEditingItem(null)
@@ -100,8 +101,9 @@ export default function HomeConfigPage() {
     try {
       await axios.patch(`/api/admin/home-config/${id}/toggle`, { enabled })
       void loadItems()
-    } catch (e: any) {
-      message.error('切换失败: ' + (e?.response?.data?.message || e.message))
+    } catch (error: unknown) {
+      const e = error as AxiosError<{ message?: string }>
+      message.error('切换失败: ' + (e.response?.data?.message || e.message))
     }
   }
 

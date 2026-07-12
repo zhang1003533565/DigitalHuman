@@ -10,11 +10,15 @@ import com.digitalhuman.backend_java.repository.AdminModelConfigRepository;
 import com.digitalhuman.backend_java.repository.AdminProviderConfigRepository;
 import com.digitalhuman.backend_java.service.AdminSettingsService;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sun.net.httpserver.HttpServer;
-import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
+import okhttp3.Call;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Protocol;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -43,7 +47,7 @@ class AdminSettingsControllerTests {
 
     @Test
     void providerResponsesMaskStoredApiKeys() {
-        AdminProviderConfig stored = provider("DeepSeek", "https://api.example.com", "sk-secret-value");
+        AdminProviderConfig stored = provider("DeepSeek", "https://api.example.com", "provider-secret-value");
         when(providerRepository.findAllByOrderByProviderAsc()).thenReturn(List.of(stored));
 
         List<AdminProviderConfigDto> response = controller.getProviderConfigs();
@@ -54,18 +58,18 @@ class AdminSettingsControllerTests {
 
     @Test
     void maskedOrEmptyApiKeyDoesNotOverwriteStoredSecret() {
-        AdminProviderConfig stored = provider("DeepSeek", "https://old.example.com", "sk-existing-secret");
+        AdminProviderConfig stored = provider("DeepSeek", "https://old.example.com", "provider-existing-secret");
         when(providerRepository.findByProviderIgnoreCase("DeepSeek")).thenReturn(Optional.of(stored));
         when(providerRepository.save(any(AdminProviderConfig.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         AdminProviderConfigDto masked = request("DeepSeek", "https://new.example.com", "********");
         AdminProviderConfigDto maskedResponse = controller.saveProviderConfig(masked);
-        assertThat(stored.getApiKey()).isEqualTo("sk-existing-secret");
+        assertThat(stored.getApiKey()).isEqualTo("provider-existing-secret");
         assertThat(maskedResponse.getApiKey()).isEqualTo("********");
 
         AdminProviderConfigDto empty = request("DeepSeek", "https://newer.example.com", "   ");
         AdminProviderConfigDto emptyResponse = controller.saveProviderConfig(empty);
-        assertThat(stored.getApiKey()).isEqualTo("sk-existing-secret");
+        assertThat(stored.getApiKey()).isEqualTo("provider-existing-secret");
         assertThat(emptyResponse.getApiKey()).isEqualTo("********");
         verify(providerRepository, times(2)).save(stored);
     }
@@ -105,40 +109,45 @@ class AdminSettingsControllerTests {
     }
 
     private void assertUpstreamFailureIsSafe(int status, String body) throws Exception {
-        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
-        server.createContext("/admin/model-test", exchange -> {
-            byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-            exchange.sendResponseHeaders(status, bytes.length);
-            exchange.getResponseBody().write(bytes);
-            exchange.close();
-        });
-        server.start();
-        try {
-            AdminSettingsService service = new AdminSettingsService(modelRepository, providerRepository, new ObjectMapper());
-            ReflectionTestUtils.setField(service, "aiServiceUrl", "http://127.0.0.1:" + server.getAddress().getPort());
-            controller = new AdminSettingsController(service);
-            AdminModelConfig model = new AdminModelConfig();
-            model.setCategory(ModelCategory.CHAT);
-            model.setProvider("DeepSeek");
-            model.setModelId("deepseek-chat");
-            when(modelRepository.findByCategoryAndModelIdIgnoreCase(ModelCategory.CHAT, "deepseek-chat"))
-                    .thenReturn(Optional.of(model));
-            when(providerRepository.findByProviderIgnoreCase("DeepSeek"))
-                    .thenReturn(Optional.of(provider("DeepSeek", "https://api.example.com", "configured-key")));
-            AdminModelTestRequestDto request = new AdminModelTestRequestDto();
-            request.setCategory("chat");
-            request.setModelId("deepseek-chat");
-            request.setText("hello");
+        OkHttpClient httpClient = mock(OkHttpClient.class);
+        Call call = mock(Call.class);
+        when(httpClient.newCall(any(Request.class))).thenReturn(call);
+        when(call.execute()).thenAnswer(invocation -> upstreamResponse(status, body));
 
-            AdminModelTestResponseDto response = controller.testModel(request);
+        AdminSettingsService service = new AdminSettingsService(modelRepository, providerRepository, new ObjectMapper());
+        ReflectionTestUtils.setField(service, "aiServiceUrl", "http://ai-service.test");
+        ReflectionTestUtils.setField(service, "httpClient", httpClient);
+        controller = new AdminSettingsController(service);
+        AdminModelConfig model = new AdminModelConfig();
+        model.setCategory(ModelCategory.CHAT);
+        model.setProvider("DeepSeek");
+        model.setModelId("deepseek-chat");
+        when(modelRepository.findByCategoryAndModelIdIgnoreCase(ModelCategory.CHAT, "deepseek-chat"))
+                .thenReturn(Optional.of(model));
+        when(providerRepository.findByProviderIgnoreCase("DeepSeek"))
+                .thenReturn(Optional.of(provider("DeepSeek", "https://api.example.com", "configured-key")));
+        AdminModelTestRequestDto request = new AdminModelTestRequestDto();
+        request.setCategory("chat");
+        request.setModelId("deepseek-chat");
+        request.setText("hello");
 
-            assertThat(response.isSuccess()).isFalse();
-            assertThat(response.getProvider()).isEqualTo("DeepSeek");
-            assertThat(response.getModelId()).isEqualTo("deepseek-chat");
-            assertThat(response.getDetail()).doesNotContain("foreign-secret-token", "configured-key");
-        } finally {
-            server.stop(0);
-        }
+        AdminModelTestResponseDto response = controller.testModel(request);
+
+        assertThat(response.isSuccess()).isFalse();
+        assertThat(response.getProvider()).isEqualTo("DeepSeek");
+        assertThat(response.getModelId()).isEqualTo("deepseek-chat");
+        assertThat(response.getDetail()).doesNotContain("foreign-secret-token", "configured-key");
+    }
+
+    private static Response upstreamResponse(int status, String body) {
+        Request request = new Request.Builder().url("http://ai-service.test/admin/model-test").build();
+        return new Response.Builder()
+                .request(request)
+                .protocol(Protocol.HTTP_1_1)
+                .code(status)
+                .message("test response")
+                .body(ResponseBody.create(body, MediaType.get("application/json")))
+                .build();
     }
 
     private static AdminProviderConfig provider(String provider, String baseUrl, String apiKey) {

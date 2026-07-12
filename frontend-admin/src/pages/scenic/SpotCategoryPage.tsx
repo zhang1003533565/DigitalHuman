@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect -- effects load remote categories and initialize pagination */
 import { useEffect, useMemo, useState } from 'react'
 import {
   Button,

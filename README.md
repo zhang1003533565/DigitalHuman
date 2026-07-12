@@ -86,6 +86,9 @@ cd ..
 ```bash
 cd frontend-admin
 npm install
+# 如需在景点管理中使用地图选点，在本地环境配置：
+# VITE_AMAP_KEY=...
+# VITE_AMAP_SECURITY_KEY=...
 cd ..
 ```
 
@@ -207,6 +210,12 @@ pnpm dev
 ```text
 http://localhost:5173
 ```
+
+## 验证记录
+
+全系统升级的最新可复现验证结果、未执行项与剩余风险见：
+
+- [docs/verification/2026-07-11-full-system-upgrade.md](docs/verification/2026-07-11-full-system-upgrade.md)
 
 ## Docker Compose
 

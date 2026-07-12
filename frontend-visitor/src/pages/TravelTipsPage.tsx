@@ -49,9 +49,11 @@ export function TravelTipsPage({ onLogout }: Props) {
       try {
         const response = await axios.get<TravelTip[]>('/api/user/travel-tips')
         setTips(response.data)
-      } catch (err: any) {
-        console.error('加载贴士失败:', err?.response?.status, err?.response?.data)
-        setError(err?.response?.data?.message || '加载失败')
+      } catch (error: unknown) {
+        const status = axios.isAxiosError(error) ? error.response?.status : undefined
+        const responseData = axios.isAxiosError<{ message?: string }>(error) ? error.response?.data : undefined
+        console.error('加载贴士失败:', status, responseData)
+        setError(responseData?.message || '加载失败')
       }
     }
     void loadTips()

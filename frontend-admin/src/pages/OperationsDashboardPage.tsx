@@ -24,6 +24,8 @@ function useOverviewRegion() {
   return { data, loading, error, load }
 }
 
+type OverviewRegionState = ReturnType<typeof useOverviewRegion>
+
 function RegionError({ message, retry }: { message: string; retry: () => void }) {
   return <Alert type="error" showIcon message={message} action={<Button size="small" onClick={retry}>重试</Button>} />
 }
@@ -41,23 +43,23 @@ function RankingChart({ title, data }: { title: string; data: RankedItem[] }) {
   return <Card title={title}>{data.length ? <div ref={chartRef} className="operations-chart" /> : <Empty description="暂无排行数据" />}</Card>
 }
 
-function MetricsRegion() {
-  const { data, loading, error, load } = useOverviewRegion()
+function MetricsRegion({ region }: { region: OverviewRegionState }) {
+  const { data, loading, error, load } = region
   if (loading) return <Card title="核心指标"><Skeleton active /></Card>
   if (error || !data) return <RegionError message={error || '核心指标不可用'} retry={() => void load()} />
   const metrics = [['游客数', data.visitorCount], ['会话数', data.sessionCount], ['消息数', data.messageCount], ['问答成功率', data.successRate, '%'], ['知识命中率', data.knowledgeHitRate, '%'], ['平均评分', data.averageRating]] as const
   return <Row gutter={[16, 16]}>{metrics.map(([title, value, suffix]) => <Col xs={24} sm={12} lg={8} key={title}><Card><Statistic title={title} value={value} suffix={suffix} precision={suffix || title === '平均评分' ? 1 : 0} /></Card></Col>)}</Row>
 }
 
-function RankingsRegion() {
-  const { data, loading, error, load } = useOverviewRegion()
+function RankingsRegion({ region }: { region: OverviewRegionState }) {
+  const { data, loading, error, load } = region
   if (loading) return <Card title="热门排行"><Skeleton active /></Card>
   if (error || !data) return <RegionError message={error || '排行数据不可用'} retry={() => void load()} />
   return <div className="operations-rankings"><RankingChart title="热门问题" data={data.popularQuestions ?? []} /><RankingChart title="热门路线" data={data.popularRoutes ?? []} /></div>
 }
 
-function HealthRegion() {
-  const { data, loading, error, load } = useOverviewRegion()
+function HealthRegion({ region }: { region: OverviewRegionState }) {
+  const { data, loading, error, load } = region
   if (loading) return <Card title="服务健康"><Skeleton active /></Card>
   if (error || !data) return <RegionError message={error || '健康状态不可用'} retry={() => void load()} />
   const health = data.serviceHealth ?? []
@@ -68,5 +70,6 @@ function HealthRegion() {
 }
 
 export default function OperationsDashboardPage() {
-  return <div className="admin-panel-grid operations-dashboard"><Typography.Title level={3}>运营总览</Typography.Title><MetricsRegion /><RankingsRegion /><HealthRegion /></div>
+  const region = useOverviewRegion()
+  return <div className="admin-panel-grid operations-dashboard"><Typography.Title level={3}>运营总览</Typography.Title><MetricsRegion region={region} /><RankingsRegion region={region} /><HealthRegion region={region} /></div>
 }

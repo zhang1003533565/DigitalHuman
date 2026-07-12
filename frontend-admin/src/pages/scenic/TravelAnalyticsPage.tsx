@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect -- initial analytics data is loaded from the backend on mount */
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import {
   Button,
@@ -235,7 +236,9 @@ export default function TravelAnalyticsPage() {
   ) => {
     event.preventDefault()
     rowDragRef.current = { rowKey, startY: event.clientY, startHeight: currentHeight }
+    // eslint-disable-next-line react-hooks/immutability -- drag feedback intentionally updates the browser-owned cursor style
     document.body.style.userSelect = 'none'
+    // eslint-disable-next-line react-hooks/immutability -- drag feedback intentionally updates the browser-owned cursor style
     document.body.style.cursor = 'row-resize'
   }
 
@@ -323,7 +326,7 @@ export default function TravelAnalyticsPage() {
     })
 
     return businessColumns
-  }, [columnWidths, fontSize, form, loadRows, rowHeights])
+  }, [columnWidths, fontSize, form, loadRows, pagination, rowHeights])
 
   const uploadProps: UploadProps = {
     accept: '.xlsx',

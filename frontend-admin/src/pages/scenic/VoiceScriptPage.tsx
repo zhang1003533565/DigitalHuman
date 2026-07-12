@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect -- initial scripts are loaded from the backend on mount */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Button,

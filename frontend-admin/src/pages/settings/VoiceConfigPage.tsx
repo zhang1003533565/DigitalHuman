@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect -- effects synchronize the selected voice and pagination */
 import { useEffect, useMemo, useState } from 'react'
 import {
   EllipsisOutlined,

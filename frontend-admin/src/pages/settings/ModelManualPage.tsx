@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+/* eslint-disable react-hooks/set-state-in-effect -- remote configuration is loaded on mount */
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ClockCircleOutlined,
   FileTextOutlined,
@@ -601,7 +602,7 @@ export default function ModelManualPage({ onCatalogChange, onProviderConfigsChan
   const providerSubmitDisabled = !providerValues?.provider || !providerValues?.baseUrl || !providerValues?.apiKey || !providerValues?.protocol
   const addModelDisabled = !addModelValues?.category || !addModelValues?.provider || !addModelValues?.modelId
 
-  const loadRemoteConfig = async () => {
+  const loadRemoteConfig = useCallback(async () => {
     try {
       const [providerConfigs, settings] = await Promise.all([getProviderConfigs(), getModelSettings()])
       const catalogResponse = await getModelCatalog()
@@ -629,11 +630,11 @@ export default function ModelManualPage({ onCatalogChange, onProviderConfigsChan
     } catch {
       message.error('模型配置加载失败，请检查后端服务')
     }
-  }
+  }, [onCatalogChange, onProviderConfigsChange])
 
   useEffect(() => {
     void loadRemoteConfig()
-  }, [])
+  }, [loadRemoteConfig])
 
   useEffect(() => {
     if (!selectedProviderConfig) return
@@ -715,16 +716,20 @@ export default function ModelManualPage({ onCatalogChange, onProviderConfigsChan
   const handleTestConnection = async () => {
     const values = await providerForm.validateFields()
     setTestingConnection(true)
-    const model = addedModels.find((item) => item.provider === values.provider)
-    if (!model) {
+    try {
+      const model = addedModels.find((item) => item.provider === values.provider)
+      if (!model) {
+        message.warning('请先为该提供方添加模型，再执行真实连接测试')
+        return
+      }
+      const response = await testModel({ category: model.category, modelId: model.modelId, text: '连接测试' })
+      if (response.success) message.success(`${values.provider} 连接测试成功`)
+      else message.error(response.detail ?? response.message)
+    } catch {
+      message.error(`${values.provider} 连接测试失败`)
+    } finally {
       setTestingConnection(false)
-      message.warning('请先为该提供方添加模型，再执行真实连接测试')
-      return
     }
-    const response = await testModel({ category: model.category, modelId: model.modelId, text: '连接测试' })
-    setTestingConnection(false)
-    if (response.success) message.success(`${values.provider} 连接测试成功`)
-    else message.error(response.detail ?? response.message)
   }
 
   const handleCreateProvider = async () => {
@@ -765,10 +770,15 @@ export default function ModelManualPage({ onCatalogChange, onProviderConfigsChan
 
   const handleTestModel = async (record: AddedModel) => {
     setTestingModelKey(record.key)
-    const response = await testModel({ category: record.category, modelId: record.modelId, text: '模型连通性测试' })
-    setTestingModelKey(null)
-    if (response.success) message.success(`${record.modelId} 测试通过`)
-    else message.error(response.detail ?? response.message)
+    try {
+      const response = await testModel({ category: record.category, modelId: record.modelId, text: '模型连通性测试' })
+      if (response.success) message.success(`${record.modelId} 测试通过`)
+      else message.error(response.detail ?? response.message)
+    } catch {
+      message.error(`${record.modelId} 测试失败`)
+    } finally {
+      setTestingModelKey(null)
+    }
   }
 
   const columns: TableColumnsType<AddedModel> = [

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect -- effects keep Ant Design form state and pagination synchronized */
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   InfoCircleOutlined,

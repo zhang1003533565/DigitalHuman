@@ -42,6 +42,7 @@ assert.match(digitalMobile, /\.live2d-canvas\s*\{[^}]*position:\s*relative/s, 'd
 assert.match(digitalMobile, /\.digital-human-chat\s*\{[^}]*position:\s*relative[^}]*inset:\s*auto[^}]*width:\s*auto/s, 'digital-human chat participates in the mobile stack')
 
 assert.match(mapPage, /map-page--spot-selected/, 'map exposes selected-spot state to responsive CSS')
+assert.doesNotMatch(mapPage, /<aside className="map-side"[^>]*aria-hidden/, 'visible desktop map sidebar must remain exposed to assistive technology')
 assert.match(mapCss, /\.map-page--spot-selected\s+\.map-side\s*\{[^}]*display:\s*none/s, 'selected spot card hides the mobile map side card')
 assert.match(routeCss, /@media\s*\(max-width:\s*768px\)[\s\S]*\.route-planner\s*\{[^}]*flex-direction:\s*column/s, 'route planner stacks vertically')
 assert.match(loginCss, /@media\s*\(max-width:\s*768px\)[\s\S]*\.auth-stage,[\s\S]*\.auth-form\s*\{[^}]*grid-template-columns:\s*1fr/s, 'login form is single-column')

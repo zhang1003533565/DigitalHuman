@@ -322,7 +322,7 @@ export const LoginDigitalHumanAssistant = forwardRef<
     }
 
     returnFrameRef.current = window.requestAnimationFrame(step)
-  }, [])
+  }, [syncBubblePosition])
 
   const scheduleReturnToHome = useCallback(() => {
     clearReturnAnimation()
@@ -360,7 +360,7 @@ export const LoginDigitalHumanAssistant = forwardRef<
     }
 
     syncBubblePosition()
-  }, [])
+  }, [syncBubblePosition])
 
   const playMotion = useCallback((motion: MotionOption | SpeechMotion) => {
     const model = modelRef.current

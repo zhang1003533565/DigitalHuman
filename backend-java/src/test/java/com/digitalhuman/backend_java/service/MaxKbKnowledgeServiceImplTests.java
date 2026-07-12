@@ -4,17 +4,19 @@ import com.digitalhuman.backend_java.model.MaxKbAccount;
 import com.digitalhuman.backend_java.repository.MaxKbAccountRepository;
 import com.digitalhuman.backend_java.service.impl.MaxKbKnowledgeServiceImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Optional;
+import okhttp3.Call;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Protocol;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -24,21 +26,15 @@ import static org.mockito.Mockito.when;
 
 class MaxKbKnowledgeServiceImplTests {
 
-    private HttpServer server;
     private MaxKbKnowledgeServiceImpl service;
-    private String capturedAuthorization;
-    private String capturedQuery;
+    private Request capturedRequest;
 
     @BeforeEach
-    void setUp() throws IOException {
-        server = HttpServer.create(new InetSocketAddress(0), 0);
-        server.createContext("/openapi/knowledge/v1/workspaces/ws-1/knowledges/kb-1/documents", this::handleDocuments);
-        server.start();
-
+    void setUp() throws Exception {
         MaxKbAccount account = new MaxKbAccount();
         account.setId(1L);
         account.setAccountName("景区知识库");
-        account.setBaseUrl("http://127.0.0.1:" + server.getAddress().getPort());
+        account.setBaseUrl("http://maxkb.test");
         account.setApiKey("mkb_secret_key");
         account.setWorkspaceId("ws-1");
         account.setStatus(1);
@@ -46,13 +42,14 @@ class MaxKbKnowledgeServiceImplTests {
         MaxKbAccountRepository repository = mock(MaxKbAccountRepository.class);
         when(repository.findById(1L)).thenReturn(Optional.of(account));
         service = new MaxKbKnowledgeServiceImpl(repository, new ObjectMapper(), 5);
-    }
-
-    @AfterEach
-    void tearDown() {
-        if (server != null) {
-            server.stop(0);
-        }
+        OkHttpClient httpClient = mock(OkHttpClient.class);
+        Call call = mock(Call.class);
+        when(httpClient.newCall(org.mockito.ArgumentMatchers.any(Request.class))).thenAnswer(invocation -> {
+            capturedRequest = invocation.getArgument(0);
+            return call;
+        });
+        when(call.execute()).thenAnswer(invocation -> successfulResponse());
+        ReflectionTestUtils.setField(service, "httpClient", httpClient);
     }
 
     @Test
@@ -60,18 +57,21 @@ class MaxKbKnowledgeServiceImplTests {
         Object response = service.listDocuments(1L, "kb-1", Map.of("page", "1"));
 
         assertInstanceOf(Map.class, response);
-        assertEquals("Bearer mkb_secret_key", capturedAuthorization);
-        assertTrue(capturedQuery.contains("page=1"));
-        assertTrue(capturedQuery.contains("task_type=1"));
+        assertEquals("Bearer mkb_secret_key", capturedRequest.header("Authorization"));
+        assertTrue(capturedRequest.url().query().contains("page=1"));
+        assertTrue(capturedRequest.url().query().contains("task_type=1"));
     }
 
-    private void handleDocuments(HttpExchange exchange) throws IOException {
-        capturedAuthorization = exchange.getRequestHeaders().getFirst("Authorization");
-        capturedQuery = exchange.getRequestURI().getRawQuery();
-        byte[] payload = "{\"code\":200,\"data\":{\"records\":[]}}".getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().set("Content-Type", "application/json");
-        exchange.sendResponseHeaders(200, payload.length);
-        exchange.getResponseBody().write(payload);
-        exchange.close();
+    private Response successfulResponse() {
+        return new Response.Builder()
+                .request(capturedRequest)
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body(ResponseBody.create(
+                        "{\"code\":200,\"data\":{\"records\":[]}}",
+                        MediaType.get("application/json")
+                ))
+                .build();
     }
 }

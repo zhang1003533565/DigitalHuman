@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect -- effects reset preview state and synchronize pagination */
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   PauseCircleOutlined,

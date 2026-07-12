@@ -287,7 +287,7 @@ export default function AiModelManagementPage() {
                 <Form.Item label="API Key" name="apiKey" rules={[{ required: true, message: '请输入 API Key' }]}>
                   <Input
                     type={showKey ? 'text' : 'password'}
-                    placeholder="例如：sk-xxxxxxxxxxxxxxxxxxxxxxxx"
+                    placeholder="请输入服务商 API Key"
                     suffix={showKey ? <EyeOutlined onClick={() => setShowKey(false)} /> : <EyeInvisibleOutlined onClick={() => setShowKey(true)} />}
                     onFocus={(e) => { (e.target as HTMLInputElement).select?.() }}
                   />

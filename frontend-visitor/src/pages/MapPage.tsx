@@ -693,7 +693,7 @@ export function MapPage({ onLogout }: Props) {
             </div>
           </div>
 
-          <aside className="map-side" aria-hidden={Boolean(selectedFacility && cardPosition)}>
+          <aside className="map-side">
             <div className="side-card live-card">
               <div className="side-card__head">
                 <h3>AI数字人直播</h3>

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect -- effects synchronize remote knowledge data with the current selection */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import axios from 'axios'
 import {
@@ -15,6 +16,7 @@ import {
   message,
 } from 'antd'
 import type { TableColumnsType } from 'antd'
+import type { TextAreaRef } from 'antd/es/input/TextArea'
 import {
   ArrowLeftOutlined,
   BoldOutlined,
@@ -908,7 +910,7 @@ export default function KnowledgeOpenApiPage() {
   const [loadingParagraphProblems, setLoadingParagraphProblems] = useState(false)
   const [savingParagraph, setSavingParagraph] = useState(false)
   const documentsRequestSeq = useRef(0)
-  const editContentInputRef = useRef<any>(null)
+  const editContentInputRef = useRef<TextAreaRef>(null)
 
   const selectedKnowledge = useMemo(
     () => knowledges.find((item) => item.idText === selectedKnowledgeId),

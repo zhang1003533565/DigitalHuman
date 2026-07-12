@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 import requests
+from fastapi import HTTPException
 
 from agents.basic_chat_agent.agent import BasicChatAgent
 from agents.common.types import AgentContext, normalize_agent_result, normalize_timeout_seconds
@@ -57,6 +58,18 @@ class AgentContractTests(unittest.TestCase):
 
         self.assertEqual(answer, "欢迎")
         self.assertEqual(post.call_args.kwargs["timeout"], 7.5)
+
+    def test_stream_response_is_closed_when_http_status_check_fails(self) -> None:
+        response = Mock()
+        response.raise_for_status.side_effect = requests.HTTPError(response=response)
+        response.json.return_value = {"error": {"message": "bad request"}}
+        client = OpenAICompatibleProviderClient("DeepSeek", "https://example.invalid", "secret")
+
+        with patch("model_providers.openai_compatible_client.requests.post", return_value=response):
+            with self.assertRaises(HTTPException):
+                list(client.chat_completion_stream(model_id="chat-model", messages=[]))
+
+        response.close.assert_called_once_with()
 
     def test_leader_timeout_returns_safe_degraded_result(self) -> None:
         client = Mock()
