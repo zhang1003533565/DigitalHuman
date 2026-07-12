@@ -51,6 +51,27 @@ class LiveBroadcastControllerTests {
     }
 
     @Test
+    void adminCanReadDraftItems() throws Exception {
+        when(tokens.getSession("admin")).thenReturn(Optional.of(new AuthSession(3L,"a","a", UserRole.ADMIN)));
+        when(service.listItems()).thenReturn(List.of(new LiveScriptItemDto(7L, "title", "content", 5000L, 0, true, null)));
+
+        mvc.perform(get("/api/admin/live-broadcast/items").header("Authorization", "Bearer admin"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(7L))
+                .andExpect(jsonPath("$[0].enabled").value(true));
+        verify(service).listItems();
+    }
+
+    @Test
+    void regularUserCannotAccessAdminLiveBroadcast() throws Exception {
+        when(tokens.getSession("user-admin")).thenReturn(Optional.of(new AuthSession(2L,"u","u", UserRole.USER)));
+
+        mvc.perform(get("/api/admin/live-broadcast/items").header("Authorization", "Bearer user-admin"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(service);
+    }
+
+    @Test
     void visitorStatusRequiresLogin() throws Exception {
         mvc.perform(get("/api/user/live/status")).andExpect(status().isUnauthorized());
     }

@@ -183,6 +183,7 @@ export function MapPage({ onLogout }: Props) {
   const selectedFacilityRef = useRef<ScenicFacility | null>(null)
   const initialUserPositionRef = useRef<[number, number] | null>(null)
   const hasAutoLocatedRef = useRef(false)
+  const liveStatusGenerationRef = useRef(0)
 
   const updateSelectedCardPosition = (facility: ScenicFacility | null) => {
     const map = mapInstanceRef.current
@@ -216,18 +217,26 @@ export function MapPage({ onLogout }: Props) {
   useEffect(() => {
     let controller: AbortController | null = null
     const syncMapLiveStatus = () => {
+      const generation = ++liveStatusGenerationRef.current
       controller?.abort()
       const currentController = new AbortController()
       controller = currentController
       getLiveStatus({ signal: currentController.signal })
-        .then((status) => setLiveStatus(status.status === 'live' ? 'live' : 'ready'))
-        .catch(() => { if (!currentController.signal.aborted) setLiveStatus('error') })
+        .then((status) => {
+          if (generation !== liveStatusGenerationRef.current || currentController.signal.aborted) return
+          setLiveStatus(status.status === 'live' ? 'live' : 'ready')
+        })
+        .catch(() => {
+          if (generation !== liveStatusGenerationRef.current || currentController.signal.aborted) return
+          setLiveStatus('error')
+        })
     }
     const handleVisibility = () => { if (document.visibilityState === 'visible') syncMapLiveStatus() }
     syncMapLiveStatus()
     const refreshTimer = window.setInterval(syncMapLiveStatus, 30_000)
     document.addEventListener('visibilitychange', handleVisibility)
     return () => {
+      liveStatusGenerationRef.current += 1
       controller?.abort()
       window.clearInterval(refreshTimer)
       document.removeEventListener('visibilitychange', handleVisibility)

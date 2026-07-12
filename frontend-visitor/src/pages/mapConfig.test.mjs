@@ -17,6 +17,7 @@ assert.match(mapPage, /live-card__btn--primary[^>]*onClick=\{\(\) => navigate\('
 assert.match(mapPage, /live-card__btn--ghost[^>]*onClick=\{\(\) => navigate\(DIGITAL_HUMAN_ROUTE\)\}/s)
 assert.match(mapPage, /getLiveStatus\(\{ signal: currentController\.signal \}\)/)
 assert.match(mapPage, /liveStatus === 'live' \? '在线' : liveStatus === 'error' \? '同步失败' : '准备中'/)
+assert.match(mapPage, /liveStatusGenerationRef\.current[\s\S]*generation !== liveStatusGenerationRef\.current/, 'stale map live-status requests must not overwrite a newer generation')
 assert.match(mapPage, /setInterval\(syncMapLiveStatus, 30_000\)/)
 assert.match(mapPage, /visibilitychange/)
 assert.match(mapPage, /clearInterval\(refreshTimer\)/)

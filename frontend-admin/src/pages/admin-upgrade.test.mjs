@@ -33,6 +33,7 @@ assert.match(sidebar, /key:\s*'live-broadcast'[\s\S]*?label:\s*'数字人直播'
 assert.match(layout, /LiveBroadcastManagementPage/)
 assert.match(layout, /'live-broadcast':\s*'\/admin\/live-broadcast'/)
 assert.match(layout, /case\s*'live-broadcast':[\s\S]*?<LiveBroadcastManagementPage\s*\/>/)
+assert.match(layout, /user\.role\s*===\s*'OBSERVER'[\s\S]*activeKey\s*===\s*'live-broadcast'[\s\S]*无权访问数字人直播管理/)
 assert.match(liveBroadcast, /listLiveItems/)
 assert.match(liveBroadcast, /publishLiveBroadcast/)
 assert.match(liveBroadcast, /const \[mutationPending, setMutationPending\] = useState\(false\)/)

@@ -1,3 +1,4 @@
+.live-broadcast-page, .live-broadcast-page * { box-sizing: border-box; }
 .live-broadcast-page { min-height: 100%; color: #f8fafc; background: #07111f; touch-action: pan-y; }
 .live-broadcast-page__body { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(320px, .75fr); gap: 24px; padding: 24px; }
 .live-stage { position: relative; min-height: 620px; overflow: hidden; border: 1px solid rgba(125,211,252,.2); border-radius: 28px; background: radial-gradient(circle at 50% 35%, #164e63, #07111f 68%); }

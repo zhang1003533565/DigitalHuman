@@ -1041,6 +1041,7 @@ export function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: (
   const location = useLocation()
   const navigate = useNavigate()
   const activeKey = getMenuKeyFromPath(location.pathname)
+  const isObserverLiveRoute = user.role === 'OBSERVER' && activeKey === 'live-broadcast'
 
   useEffect(() => {
     if (location.pathname === '/' || location.pathname === '/admin') {
@@ -1060,7 +1061,16 @@ export function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: (
       <Layout>
         <Content className="admin-content">
           <AdminPanelErrorBoundary resetKey={activeKey}>
-            {renderPanel(activeKey)}
+            {isObserverLiveRoute ? (
+              <Card title="无权访问数字人直播管理">
+                <Typography.Paragraph type="secondary">
+                  观察员账号仅可查看已授权的后台信息，直播文案维护与发布仅限管理员。
+                </Typography.Paragraph>
+                <Button type="primary" onClick={() => navigate(ADMIN_HOME_PATH, { replace: true })}>
+                  返回运营看板
+                </Button>
+              </Card>
+            ) : renderPanel(activeKey)}
           </AdminPanelErrorBoundary>
         </Content>
       </Layout>

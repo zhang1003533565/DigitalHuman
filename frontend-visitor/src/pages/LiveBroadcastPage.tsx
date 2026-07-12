@@ -303,7 +303,13 @@ export function LiveBroadcastPage({ onLogout }: LiveBroadcastPageProps) {
     recognition.onerror = () => {
       if (mountedRef.current && recognitionGenerationRef.current === generation) setInteractionError('没有识别到语音，请重试或使用文字提问。')
     }
-    recognition.start()
+    try {
+      recognition.start()
+    } catch {
+      recognitionRef.current = null
+      recognitionGenerationRef.current += 1
+      setInteractionError('语音识别启动失败，请重试或使用文字提问。')
+    }
   }
 
   const nextItem = position && snapshot?.items?.[(position.itemIndex + 1) % (snapshot.items.length || 1)]
