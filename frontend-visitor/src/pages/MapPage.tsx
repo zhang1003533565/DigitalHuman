@@ -53,8 +53,8 @@ type CardPosition = {
 type RouteCoordinate = { longitude: number; latitude: number }
 type MapRoute = { id: string; name: string; polyline?: RouteCoordinate[]; nodes?: Array<{ coordinate: RouteCoordinate }> }
 
-const AMAP_KEY = '5b01b946c26d0f94f7d2ddb9d09ff26f'
-const AMAP_SECURITY_KEY = '692196a068ef6c9cad53a55fc9e47ad7'
+const AMAP_KEY = import.meta.env.VITE_AMAP_KEY
+const AMAP_SECURITY_KEY = import.meta.env.VITE_AMAP_SECURITY_KEY
 const LINGSHAN_CENTER: [number, number] = [120.1009, 31.4259]
 const CARD_WIDTH = 260
 const CARD_HEIGHT = 190
@@ -76,6 +76,9 @@ let amapLoaderPromise: Promise<any> | null = null
 
 function loadAMap(): Promise<any> {
   if (typeof window === 'undefined') return Promise.reject(new Error('no window'))
+  if (!AMAP_KEY || !AMAP_SECURITY_KEY) {
+    return Promise.reject(new Error('地图服务未配置，请联系管理员'))
+  }
   if (window.AMap) return Promise.resolve(window.AMap)
   if (amapLoaderPromise) return amapLoaderPromise
 
@@ -158,6 +161,7 @@ export function MapPage({ onLogout }: Props) {
   const [categories, setCategories] = useState<ScenicCategory[]>([])
   const [activeRoute, setActiveRoute] = useState<MapRoute | null>(null)
   const [mapReady, setMapReady] = useState(false)
+  const [mapError, setMapError] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   const [categoryPage, setCategoryPage] = useState(0)
   const [keyword, setKeyword] = useState('')
@@ -375,6 +379,9 @@ export function MapPage({ onLogout }: Props) {
       })
       .catch((error) => {
         console.error('AMap load failed', error)
+        if (!cancelled) {
+          setMapError(error instanceof Error ? error.message : '地图加载失败，请稍后重试')
+        }
       })
 
     return () => {
@@ -547,6 +554,11 @@ export function MapPage({ onLogout }: Props) {
         <div className={`map-page${selectedFacility && cardPosition ? ' map-page--spot-selected' : ''}`}>
           <div className="map-page__main">
             <div ref={mapContainerRef} className="map-page__canvas" />
+            {mapError ? (
+              <div className="map-route-context" role="alert">
+                {mapError} <button type="button" onClick={() => window.location.reload()}>重新加载</button>
+              </div>
+            ) : null}
             {activeRoute ? <div className="map-route-context">正在展示：{activeRoute.name}</div> : null}
 
             {selectedFacility && cardPosition ? (

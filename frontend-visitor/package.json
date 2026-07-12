@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test:contracts": "tsc src/api/contracts.ts --ignoreConfig --outDir node_modules/.tmp/contracts-test --target es2023 --module nodenext --moduleResolution nodenext --skipLibCheck && node src/api/contracts.test.mjs",
+    "test:client": "tsc src/api/client.ts --ignoreConfig --outDir node_modules/.tmp/client-test --target es2023 --module esnext --moduleResolution bundler --skipLibCheck && node src/api/client.test.mjs",
     "test:navigation": "tsc src/pages/navigationContext.ts --ignoreConfig --outDir node_modules/.tmp/navigation-test --target es2023 --module nodenext --moduleResolution nodenext --skipLibCheck && node src/pages/navigationContext.test.mjs",
     "preview": "vite preview"
   },

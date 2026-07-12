@@ -193,8 +193,14 @@ http://localhost:5174
 
 ```bash
 cd frontend-visitor
+cp .env.example .env.local
+# 在 .env.local 中填写 VITE_AMAP_KEY 与 VITE_AMAP_SECURITY_KEY
 pnpm dev
 ```
+
+地图页面通过 `VITE_AMAP_KEY` 和 `VITE_AMAP_SECURITY_KEY` 读取高德地图配置。真实密钥只应写入本地 `.env.local` 或部署平台的环境变量，不要提交到仓库。未配置时，地图区域会显示可恢复的错误提示，不会导致整个游客端崩溃。
+
+后端会为每个请求返回 `X-Trace-Id`。调用方可以传入 8–128 位、仅包含字母、数字、点、下划线、冒号或连字符的标识；缺失或非法时后端会生成 UUID。
 
 默认地址通常是：
 
