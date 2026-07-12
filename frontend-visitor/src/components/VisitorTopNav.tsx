@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Link, NavLink, useNavigate } from 'react-router-dom'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { getStoredUser, type SessionUser } from '../auth/session'
 import { DIGITAL_HUMAN_ROUTE } from '../digitalHuman/shared'
 import './VisitorTopNav.css'
@@ -8,13 +8,13 @@ import './VisitorTopNav.css'
 type VisitorTopNavProps = { onLogout: () => void }
 
 const VISITOR_NAV_ITEMS = [
-  { to: '/home', label: '首页' },
-  { to: DIGITAL_HUMAN_ROUTE, label: 'AI 导览' },
-  { to: '/routes', label: '路线推荐' },
-  { to: '/map', label: '景点地图' },
-  { to: '/tips', label: '游览贴士' },
-  { to: '/feedback', label: '反馈记录' },
-  { to: '/history', label: '会话历史' },
+  { to: '/home', label: '首页', activeFor: ['/home'] },
+  { to: DIGITAL_HUMAN_ROUTE, label: 'AI 导览', activeFor: [DIGITAL_HUMAN_ROUTE] },
+  { to: '/routes', label: '路线推荐', activeFor: ['/routes', '/route-recommend'] },
+  { to: '/map', label: '景点地图', activeFor: ['/map', '/spot-recommend'] },
+  { to: '/tips', label: '游览贴士', activeFor: ['/tips'] },
+  { to: '/feedback', label: '反馈记录', activeFor: ['/feedback'] },
+  { to: '/history', label: '会话历史', activeFor: ['/history'] },
 ]
 
 const USER_MENU_ID = 'visitor-user-menu'
@@ -27,6 +27,7 @@ export function VisitorTopNav({ onLogout }: VisitorTopNavProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({})
   const navigate = useNavigate()
+  const location = useLocation()
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const avatarRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -88,9 +89,14 @@ export function VisitorTopNav({ onLogout }: VisitorTopNavProps) {
 
     document.addEventListener('pointerdown', handlePointerDown)
     document.addEventListener('keydown', handleKeyDown)
+    function handleResize() {
+      setDropdownOpen(false)
+    }
+    window.addEventListener('resize', handleResize)
     return () => {
       document.removeEventListener('pointerdown', handlePointerDown)
       document.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('resize', handleResize)
     }
   }, [closeDropdownAndRestoreFocus, dropdownOpen])
 
@@ -113,8 +119,8 @@ export function VisitorTopNav({ onLogout }: VisitorTopNavProps) {
           <NavLink
             key={item.to}
             to={item.to}
-            className={({ isActive }) =>
-              `visitor-topbar__link${isActive ? ' visitor-topbar__link--active' : ''}`
+            className={() =>
+              `visitor-topbar__link${item.activeFor.includes(location.pathname) ? ' visitor-topbar__link--active' : ''}`
             }
           >
             {item.label}
@@ -127,7 +133,7 @@ export function VisitorTopNav({ onLogout }: VisitorTopNavProps) {
           className="visitor-user-menu__avatar"
           type="button"
           aria-label="用户菜单"
-          aria-haspopup="menu"
+          aria-haspopup="true"
           aria-expanded={dropdownOpen}
           aria-controls={dropdownOpen ? USER_MENU_ID : undefined}
           onClick={toggleDropdown}
@@ -140,7 +146,8 @@ export function VisitorTopNav({ onLogout }: VisitorTopNavProps) {
             <div
               ref={menuRef}
               id={USER_MENU_ID}
-              role="menu"
+              role="group"
+              aria-label="用户操作"
               className="visitor-user-menu__dropdown"
               style={dropdownStyle}
               onMouseEnter={openDropdown}
@@ -162,7 +169,6 @@ export function VisitorTopNav({ onLogout }: VisitorTopNavProps) {
               <button
                 className="visitor-user-menu__item"
                 type="button"
-                role="menuitem"
                 onClick={() => {
                   setDropdownOpen(false)
                   navigate('/profile')
@@ -177,7 +183,6 @@ export function VisitorTopNav({ onLogout }: VisitorTopNavProps) {
               <button
                 className="visitor-user-menu__item visitor-user-menu__item--danger"
                 type="button"
-                role="menuitem"
                 onClick={handleLogoutClick}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
