@@ -1,0 +1,25 @@
+.live-broadcast-page { min-height: 100%; color: #f8fafc; background: #07111f; touch-action: pan-y; }
+.live-broadcast-page__body { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(320px, .75fr); gap: 24px; padding: 24px; }
+.live-stage { position: relative; min-height: 620px; overflow: hidden; border: 1px solid rgba(125,211,252,.2); border-radius: 28px; background: radial-gradient(circle at 50% 35%, #164e63, #07111f 68%); }
+.live-stage__canvas { width: 100%; height: 100%; position: absolute; inset: 0; touch-action: none; }
+.live-stage__badge { position: absolute; top: 20px; left: 20px; padding: 8px 14px; border-radius: 999px; background: #dc2626; font-weight: 700; }
+.live-stage__subtitle { position: absolute; right: 24px; bottom: 24px; left: 24px; padding: 18px; border-radius: 18px; background: rgba(2,6,23,.82); backdrop-filter: blur(14px); }
+.live-stage__subtitle p { margin: 8px 0; font-size: 1.1rem; line-height: 1.7; }
+.live-stage__progress { height: 5px; margin: 12px 0; overflow: hidden; border-radius: 9px; background: rgba(255,255,255,.18); }
+.live-stage__progress span { display: block; height: 100%; background: #38bdf8; transition: width .25s linear; }
+.live-interaction { align-self: start; padding: 24px; border: 1px solid rgba(125,211,252,.18); border-radius: 24px; background: #0f1d30; touch-action: pan-y; }
+.live-interaction__back { color: #7dd3fc; }
+.live-interaction__hint { color: #94a3b8; line-height: 1.6; }
+.live-interaction__answer { max-height: 260px; margin: 18px 0; padding: 16px; overflow-y: auto; border-radius: 14px; background: #172a43; line-height: 1.7; touch-action: pan-y; }
+.live-interaction textarea { box-sizing: border-box; width: 100%; min-height: 132px; padding: 14px; resize: vertical; border: 1px solid #334155; border-radius: 14px; color: white; background: #081526; }
+.live-interaction__actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.live-interaction button { min-height: 44px; padding: 0 16px; border: 0; border-radius: 12px; color: white; background: #0369a1; }
+.live-interaction button:last-child { background: #475569; }
+@media (max-width: 768px) {
+  .live-broadcast-page { padding-bottom: calc(var(--mobile-nav-height) + var(--safe-bottom) + 16px); }
+  .live-broadcast-page__body { grid-template-columns: 1fr; padding: 12px; }
+  .live-stage { min-height: min(62vh, 540px); }
+  .live-stage__subtitle { right: 12px; bottom: 12px; left: 12px; }
+  .live-interaction { position: relative; padding: 18px; }
+  .live-interaction__actions button { flex: 1 1 120px; }
+}

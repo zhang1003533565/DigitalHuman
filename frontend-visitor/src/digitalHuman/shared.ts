@@ -287,6 +287,17 @@ export const DEFAULT_RATE = 0
 export const DEFAULT_VOLUME = 0
 export const DEFAULT_PITCH = 0
 export const DIGITAL_HUMAN_ROUTE = '/modules/digital-human'
+export const LIVE_BROADCAST_ROUTE = '/live'
+
+export function createTtsPayload(text: string, voice = VOICE_OPTIONS[0].id) {
+  return {
+    text,
+    voice,
+    rate: formatPercent(DEFAULT_RATE),
+    volume: formatPercent(DEFAULT_VOLUME),
+    pitch: formatPitch(DEFAULT_PITCH),
+  }
+}
 
 let live2dScriptsPromise: Promise<void> | null = null
 

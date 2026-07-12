@@ -19,6 +19,7 @@ const routeCss = read('pages/RouteRecommendPage.css')
 const loginCss = read('pages/LoginPage.css')
 const homeCss = read('pages/HomePage.css')
 const profileCss = read('pages/ProfilePage.css')
+const liveBroadcastCss = read('pages/LiveBroadcastPage.css')
 
 assert.match(tokens, /--touch-target:\s*44px/, 'touch targets must be at least 44px')
 assert.match(tokens, /--safe-bottom:\s*env\(safe-area-inset-bottom/, 'safe-area bottom inset is required')
@@ -93,7 +94,12 @@ const routedPageStyles = [
   'RouteRecommendPage.css',
   'SpotRecommendPage.css',
   'TravelTipsPage.css',
+  'LiveBroadcastPage.css',
 ]
+
+const liveMobile = liveBroadcastCss.slice(liveBroadcastCss.lastIndexOf('@media (max-width: 768px)'))
+assert.match(liveMobile, /\.live-broadcast-page__body\s*\{[^}]*grid-template-columns:\s*1fr/s, 'live broadcast stage and interaction stack naturally')
+assert.match(liveMobile, /padding-bottom:\s*calc\(var\(--mobile-nav-height\) \+ var\(--safe-bottom\) \+ 16px\)/, 'live broadcast reserves navigation safe area')
 
 for (const stylesheet of routedPageStyles) {
   assert.match(

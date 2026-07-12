@@ -21,6 +21,7 @@ import { TravelTipsPage } from './pages/TravelTipsPage'
 import { SpotRecommendPage } from './pages/SpotRecommendPage'
 import { RouteRecommendListPage } from './pages/RouteRecommendListPage'
 import { MobileBottomNav } from './components/MobileBottomNav'
+import { LiveBroadcastPage } from './pages/LiveBroadcastPage'
 
 function ProtectedRoute({ user }: { user: SessionUser | null }) {
   const location = useLocation()
@@ -69,6 +70,7 @@ function App() {
           path={DIGITAL_HUMAN_ROUTE}
           element={<DigitalHumanPage onLogout={handleLogout} />}
         />
+        <Route path="/live" element={<LiveBroadcastPage onLogout={handleLogout} />} />
         <Route path="/routes" element={<RouteRecommendPage onLogout={handleLogout} />} />
         <Route path="/map" element={<MapPage onLogout={handleLogout} />} />
         <Route path="/spot-recommend" element={<SpotRecommendPage onLogout={handleLogout} />} />
