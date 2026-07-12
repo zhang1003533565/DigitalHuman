@@ -1,0 +1,227 @@
+.visitor-topbar {
+  position: relative;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  min-height: 64px;
+  padding: 8px 4.2vw;
+  border-bottom: 1px solid rgba(194, 213, 233, 0.12);
+  background: rgba(3, 14, 28, 0.96);
+}
+
+.page-shell > .visitor-topbar {
+  margin: 0;
+}
+
+.module-screen > .visitor-topbar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+}
+
+.visitor-topbar__brand {
+  flex-shrink: 0;
+  min-width: 280px;
+}
+
+.visitor-topbar__brand a {
+  color: #f6f7f9;
+  font-family: "Songti SC", "STSong", serif;
+  font-size: 25px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-decoration: none;
+}
+
+.visitor-topbar__nav {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(12px, 2.7vw, 42px);
+  min-width: 0;
+}
+
+.visitor-topbar__link {
+  position: relative;
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  padding: 0 4px;
+  color: rgba(239, 243, 249, 0.68);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.18s ease;
+}
+
+.visitor-topbar__link:hover {
+  color: #fff;
+}
+
+.visitor-topbar__link--active {
+  color: #f1c76f;
+}
+
+.visitor-topbar__link--active::after {
+  position: absolute;
+  right: 2px;
+  bottom: -8px;
+  left: 2px;
+  height: 2px;
+  border-radius: 2px;
+  background: #e2ad4b;
+  content: "";
+}
+
+.visitor-user-menu {
+  position: absolute;
+  top: 50%;
+  right: 26px;
+  z-index: 10;
+  transform: translateY(-50%);
+}
+
+.visitor-user-menu__avatar {
+  display: flex;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(196, 216, 239, 0.36);
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(36, 52, 75, 0.86);
+  cursor: pointer;
+  font-family: Georgia, serif;
+  font-size: 17px;
+  font-weight: 500;
+  transition: border-color 0.18s ease, transform 0.18s ease;
+}
+
+.visitor-user-menu__avatar:hover {
+  border-color: rgba(255, 255, 255, 0.45);
+  transform: translateY(-1px);
+}
+
+.visitor-user-menu__dropdown {
+  z-index: 9999;
+  min-width: 220px;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(11, 22, 40, 0.96);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(20px);
+}
+
+.visitor-user-menu__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+}
+
+.visitor-user-menu__avatar--lg {
+  width: 44px;
+  height: 44px;
+  cursor: default;
+  font-size: 17px;
+}
+
+.visitor-user-menu__avatar--lg:hover {
+  transform: none;
+}
+
+.visitor-user-menu__info {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.visitor-user-menu__name {
+  overflow: hidden;
+  color: #f8fbff;
+  font-size: 14px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.visitor-user-menu__role {
+  color: rgba(248, 251, 255, 0.48);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.visitor-user-menu__divider {
+  height: 1px;
+  margin: 6px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.visitor-user-menu__item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  color: rgba(248, 251, 255, 0.84);
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+}
+
+.visitor-user-menu__item:hover {
+  color: #f8fbff;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.visitor-user-menu__item--danger {
+  color: rgba(255, 120, 100, 0.84);
+}
+
+.visitor-user-menu__item--danger:hover {
+  color: #ff7060;
+  background: rgba(255, 70, 50, 0.12);
+}
+
+@media (max-width: 768px) {
+  .visitor-topbar {
+    min-height: 56px;
+    padding: 8px 12px;
+  }
+
+  .visitor-topbar__brand {
+    min-width: 0;
+  }
+
+  .visitor-topbar__brand a {
+    overflow: hidden;
+    font-size: 22px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .visitor-topbar__nav {
+    display: none;
+  }
+
+  .visitor-user-menu {
+    right: 12px;
+  }
+
+  .visitor-user-menu__avatar {
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+  }
+}
