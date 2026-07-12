@@ -1,5 +1,5 @@
-import { apiClient } from './client'
-import type { LiveStatus, LiveTimelineItem } from '../live/liveTimeline'
+import { apiClient } from './client.ts'
+import type { LiveStatus, LiveTimelineItem } from '../live/liveTimeline.ts'
 
 type PublishedLiveStatus = {
   status: 'published'
@@ -27,10 +27,18 @@ export type LiveStatusSnapshot = LiveStatus & {
   clockOffsetMs: number
 }
 
-export async function getLiveStatus(): Promise<LiveStatusSnapshot> {
-  const { data } = await apiClient.get<VisitorLiveStatusResponse>('/user/live/status')
-  const receivedAtClientMs = Date.now()
-  const clockOffsetMs = Date.parse(data.serverTime) - receivedAtClientMs
+type GetLiveStatusOptions = {
+  signal?: AbortSignal
+  now?: () => number
+}
+
+export async function getLiveStatus(options: GetLiveStatusOptions = {}): Promise<LiveStatusSnapshot> {
+  const now = options.now ?? Date.now
+  const sentAtClientMs = now()
+  const { data } = await apiClient.get<VisitorLiveStatusResponse>('/user/live/status', { signal: options.signal })
+  const receivedAtClientMs = now()
+  const clientMidpointMs = sentAtClientMs + (receivedAtClientMs - sentAtClientMs) / 2
+  const clockOffsetMs = Date.parse(data.serverTime) - clientMidpointMs
 
   if (data.status !== 'published') {
     return { status: 'notPublished', serverTime: data.serverTime, receivedAtClientMs, clockOffsetMs }

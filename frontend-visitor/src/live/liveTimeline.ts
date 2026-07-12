@@ -27,23 +27,44 @@ export function getCalibratedNow(clientNowMs: number, clockOffsetMs: number) {
   return clientNowMs + clockOffsetMs
 }
 
-export function resolveLivePosition(status: LiveStatus, clientNowMs: number): LivePosition | null {
+export function resolveLivePosition(status: LiveStatus, calibratedNowMs: number): LivePosition | null {
   const items = status.items ?? []
   const publishedAtMs = Date.parse(status.publishedAt ?? '')
-  const totalDurationMs = items.reduce((total, item) => total + item.durationMs, 0)
 
   if (
     status.status !== 'live'
     || status.versionId === undefined
     || items.length === 0
     || !Number.isFinite(publishedAtMs)
-    || items.some((item) => !Number.isFinite(item.durationMs) || item.durationMs <= 0)
-    || totalDurationMs <= 0
+    || !Number.isSafeInteger(publishedAtMs)
+    || !Number.isFinite(calibratedNowMs)
+    || !Number.isSafeInteger(calibratedNowMs)
+    || !Number.isFinite(status.totalDurationMs)
+    || !Number.isSafeInteger(status.totalDurationMs)
+    || (status.totalDurationMs ?? 0) <= 0
   ) {
     return null
   }
 
-  const elapsedMs = Math.max(0, clientNowMs - publishedAtMs)
+  let totalDurationMs = 0
+  for (const item of items) {
+    if (!Number.isFinite(item.durationMs) || !Number.isSafeInteger(item.durationMs) || item.durationMs <= 0) {
+      return null
+    }
+    if (totalDurationMs > Number.MAX_SAFE_INTEGER - item.durationMs) {
+      return null
+    }
+    totalDurationMs += item.durationMs
+  }
+  if (totalDurationMs !== status.totalDurationMs) {
+    return null
+  }
+
+  const rawElapsedMs = calibratedNowMs - publishedAtMs
+  if (!Number.isSafeInteger(rawElapsedMs)) {
+    return null
+  }
+  const elapsedMs = Math.max(0, rawElapsedMs)
   const cycleOffsetMs = elapsedMs % totalDurationMs
   let itemStartMs = 0
 
@@ -63,4 +84,11 @@ export function resolveLivePosition(status: LiveStatus, clientNowMs: number): Li
   }
 
   return null
+}
+
+export function resolveCurrentLivePosition(
+  status: LiveStatus & { clockOffsetMs: number },
+  clientNowMs: number,
+): LivePosition | null {
+  return resolveLivePosition(status, getCalibratedNow(clientNowMs, status.clockOffsetMs))
 }
