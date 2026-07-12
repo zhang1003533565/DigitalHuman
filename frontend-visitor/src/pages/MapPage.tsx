@@ -214,11 +214,24 @@ export function MapPage({ onLogout }: Props) {
   }
 
   useEffect(() => {
-    const controller = new AbortController()
-    getLiveStatus({ signal: controller.signal })
-      .then((status) => setLiveStatus(status.status === 'live' ? 'live' : 'ready'))
-      .catch(() => { if (!controller.signal.aborted) setLiveStatus('error') })
-    return () => controller.abort()
+    let controller: AbortController | null = null
+    const syncMapLiveStatus = () => {
+      controller?.abort()
+      const currentController = new AbortController()
+      controller = currentController
+      getLiveStatus({ signal: currentController.signal })
+        .then((status) => setLiveStatus(status.status === 'live' ? 'live' : 'ready'))
+        .catch(() => { if (!currentController.signal.aborted) setLiveStatus('error') })
+    }
+    const handleVisibility = () => { if (document.visibilityState === 'visible') syncMapLiveStatus() }
+    syncMapLiveStatus()
+    const refreshTimer = window.setInterval(syncMapLiveStatus, 30_000)
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => {
+      controller?.abort()
+      window.clearInterval(refreshTimer)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
   }, [])
 
   useEffect(() => {
