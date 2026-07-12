@@ -41,7 +41,7 @@ function useMobileNavigation() {
   return mobile
 }
 
-const menuItems: MenuProps['items'] = [
+const menuItems: NonNullable<MenuProps['items']> = [
   { key: 'dashboard', icon: <BarChartOutlined />, label: '数据总览' },
   { key: 'home-config', icon: <HomeOutlined />, label: '首页配置' },
   {
@@ -74,11 +74,17 @@ const menuItems: MenuProps['items'] = [
   { key: 'knowledge', icon: <BookOutlined />, label: '知识库对接站' },
 ]
 
+function getMenuItems(role: string): NonNullable<MenuProps['items']> {
+  return role === 'ADMIN'
+    ? menuItems
+    : menuItems.filter((item) => item?.key !== 'live-broadcast')
+}
+
 export default function AdminSidebar({ activeKey, displayName, role, onLogout, onSelect }: AdminSidebarProps) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const mobile = useMobileNavigation()
   const navigation = (
-    <Menu theme="dark" mode="inline" selectedKeys={[activeKey]} defaultOpenKeys={['spots', 'avatar-group']} items={menuItems}
+    <Menu theme="dark" mode="inline" selectedKeys={[activeKey]} defaultOpenKeys={['spots', 'avatar-group']} items={getMenuItems(role)}
       onClick={({ key }) => { if (!PARENT_MENU_KEYS.has(key)) { onSelect(key); setDrawerOpen(false) } }} />
   )
   if (mobile) {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ArrowDownOutlined,
   ArrowUpOutlined,
@@ -67,24 +67,44 @@ export default function LiveBroadcastManagementPage() {
   const [items, setItems] = useState<LiveScriptItem[]>([])
   const [summary, setSummary] = useState<LivePublishSummary | null>(null)
   const [loading, setLoading] = useState(false)
+  const [mutationPending, setMutationPending] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [publishing, setPublishing] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<LiveScriptItem | null>(null)
   const [form] = Form.useForm<LiveScriptItemPayload>()
+  const operationPendingRef = useRef(false)
+  const refreshGenerationRef = useRef(0)
+
+  const runDraftMutation = async (operation: () => Promise<void>) => {
+    if (operationPendingRef.current) return false
+    operationPendingRef.current = true
+    setMutationPending(true)
+    try {
+      await operation()
+      return true
+    } finally {
+      operationPendingRef.current = false
+      setMutationPending(false)
+    }
+  }
 
   const refresh = useCallback(async () => {
+    const generation = ++refreshGenerationRef.current
     setLoading(true)
     try {
       const [nextItems, nextSummary] = await Promise.all([
         listLiveItems(),
         getPublishedLiveSummary(),
       ])
-      setItems(nextItems)
-      setSummary(nextSummary)
+      if (generation === refreshGenerationRef.current) {
+        setItems(nextItems)
+        setSummary(nextSummary)
+      }
     } catch (error) {
       message.error(`加载直播文案失败：${errorMessage(error)}`)
     } finally {
-      setLoading(false)
+      if (generation === refreshGenerationRef.current) setLoading(false)
     }
   }, [])
 
@@ -114,27 +134,33 @@ export default function LiveBroadcastManagementPage() {
   const saveItem = async () => {
     try {
       const payload = await form.validateFields()
-      setSaving(true)
-      if (editingItem) {
-        await updateLiveItem(editingItem.id, payload)
-      } else {
-        await createLiveItem(payload)
-      }
-      message.success('草稿已保存，发布后才会对游客生效')
-      setModalOpen(false)
-      await refresh()
+      await runDraftMutation(async () => {
+        setSaving(true)
+        try {
+          if (editingItem) {
+            await updateLiveItem(editingItem.id, payload)
+          } else {
+            await createLiveItem(payload)
+          }
+          message.success('草稿已保存，发布后才会对游客生效')
+          setModalOpen(false)
+          await refresh()
+        } finally {
+          setSaving(false)
+        }
+      })
     } catch (error) {
       if (isFormValidationError(error)) return
       message.error(`保存失败：${errorMessage(error)}`)
-    } finally {
-      setSaving(false)
     }
   }
 
   const toggleItem = async (item: LiveScriptItem, enabled: boolean) => {
     try {
-      await updateLiveItem(item.id, toPayload(item, enabled))
-      await refresh()
+      await runDraftMutation(async () => {
+        await updateLiveItem(item.id, toPayload(item, enabled))
+        await refresh()
+      })
     } catch (error) {
       message.error(`更新失败：${errorMessage(error)}`)
     }
@@ -142,9 +168,11 @@ export default function LiveBroadcastManagementPage() {
 
   const removeItem = async (id: number) => {
     try {
-      await deleteLiveItem(id)
-      message.success('草稿已删除')
-      await refresh()
+      await runDraftMutation(async () => {
+        await deleteLiveItem(id)
+        message.success('草稿已删除')
+        await refresh()
+      })
     } catch (error) {
       message.error(`删除失败：${errorMessage(error)}`)
     }
@@ -156,21 +184,33 @@ export default function LiveBroadcastManagementPage() {
     const reordered = [...items]
     ;[reordered[index], reordered[targetIndex]] = [reordered[targetIndex], reordered[index]]
     try {
-      setItems(reordered)
-      setItems(await reorderLiveItems(reordered.map((item) => item.id)))
+      await runDraftMutation(async () => {
+        setItems(reordered)
+        try {
+          setItems(await reorderLiveItems(reordered.map((item) => item.id)))
+        } catch (error) {
+          setItems(await listLiveItems())
+          throw error
+        }
+      })
     } catch (error) {
-      setItems(items)
       message.error(`排序失败：${errorMessage(error)}`)
     }
   }
 
   const publish = async () => {
+    if (operationPendingRef.current) return
+    operationPendingRef.current = true
+    setPublishing(true)
     try {
       await publishLiveBroadcast()
       message.success('直播文案已发布')
       await refresh()
     } catch (error) {
       message.error(`发布失败：${errorMessage(error)}`)
+    } finally {
+      operationPendingRef.current = false
+      setPublishing(false)
     }
   }
 
@@ -189,7 +229,7 @@ export default function LiveBroadcastManagementPage() {
       dataIndex: 'enabled',
       width: 80,
       render: (enabled: boolean, item) => (
-        <Switch checked={enabled} onChange={(checked) => void toggleItem(item, checked)} />
+        <Switch disabled={mutationPending || publishing} loading={mutationPending} checked={enabled} onChange={(checked) => void toggleItem(item, checked)} />
       ),
     },
     {
@@ -197,11 +237,11 @@ export default function LiveBroadcastManagementPage() {
       width: 270,
       render: (_, item, index) => (
         <Space wrap>
-          <Button aria-label="上移" icon={<ArrowUpOutlined />} disabled={index === 0} onClick={() => void moveItem(index, -1)} />
-          <Button aria-label="下移" icon={<ArrowDownOutlined />} disabled={index === items.length - 1} onClick={() => void moveItem(index, 1)} />
-          <Button type="link" icon={<EditOutlined />} onClick={() => openEdit(item)}>编辑</Button>
-          <Popconfirm title="确认删除这条草稿？" onConfirm={() => void removeItem(item.id)}>
-            <Button type="link" danger>删除</Button>
+          <Button aria-label="上移" icon={<ArrowUpOutlined />} loading={mutationPending} disabled={mutationPending || publishing || index === 0} onClick={() => void moveItem(index, -1)} />
+          <Button aria-label="下移" icon={<ArrowDownOutlined />} loading={mutationPending} disabled={mutationPending || publishing || index === items.length - 1} onClick={() => void moveItem(index, 1)} />
+          <Button type="link" icon={<EditOutlined />} disabled={mutationPending || publishing} onClick={() => openEdit(item)}>编辑</Button>
+          <Popconfirm disabled={mutationPending || publishing} title="确认删除这条草稿？" onConfirm={() => void removeItem(item.id)}>
+            <Button type="link" danger loading={mutationPending} disabled={mutationPending || publishing}>删除</Button>
           </Popconfirm>
         </Space>
       ),
@@ -209,7 +249,7 @@ export default function LiveBroadcastManagementPage() {
   ]
 
   return (
-    <Space direction="vertical" size="large" style={{ width: '100%' }}>
+    <Space className="live-broadcast-management-page" direction="vertical" size="large">
       <Card title="当前发布版本">
         {summary ? (
           <Row gutter={[16, 16]}>
@@ -225,9 +265,9 @@ export default function LiveBroadcastManagementPage() {
         title="数字人直播文案"
         extra={(
           <Space wrap>
-            <Button icon={<PlusOutlined />} onClick={openCreate}>新增文案</Button>
-            <Popconfirm title="确认立即发布当前已启用的草稿？" onConfirm={() => void publish()}>
-              <Button type="primary">立即发布</Button>
+            <Button icon={<PlusOutlined />} disabled={mutationPending || publishing} onClick={openCreate}>新增文案</Button>
+            <Popconfirm disabled={mutationPending || publishing || loading} title="确认立即发布当前已启用的草稿？" onConfirm={() => void publish()}>
+              <Button type="primary" loading={publishing} disabled={mutationPending || publishing || loading}>立即发布</Button>
             </Popconfirm>
           </Space>
         )}
@@ -235,13 +275,16 @@ export default function LiveBroadcastManagementPage() {
         <Typography.Paragraph type="secondary">
           编辑、启用和排序只保存为草稿，点击“立即发布”后才会更新游客端直播内容。
         </Typography.Paragraph>
-        <Table rowKey="id" loading={loading} dataSource={items} columns={columns} pagination={false} scroll={{ x: 900 }} />
+        <Table rowKey="id" loading={loading || mutationPending} dataSource={items} columns={columns} pagination={false} scroll={{ x: 900 }} />
       </Card>
 
       <Modal
         title={editingItem ? '编辑直播文案' : '新增直播文案'}
         open={modalOpen}
         confirmLoading={saving}
+        okButtonProps={{ disabled: mutationPending && !saving }}
+        cancelButtonProps={{ disabled: saving }}
+        closable={!saving}
         onOk={() => void saveItem()}
         onCancel={() => setModalOpen(false)}
         width={680}
