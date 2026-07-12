@@ -10,3 +10,8 @@ for (const file of ['MapPage.tsx', 'RouteRecommendPage.tsx']) {
 }
 
 console.log('map configuration error source tests passed')
+
+const mapPage = readFileSync(new URL('MapPage.tsx', import.meta.url), 'utf8')
+assert.match(mapPage, /import\s+\{\s*DIGITAL_HUMAN_ROUTE\s*\}\s+from\s+'\.\.\/digitalHuman\/shared'/)
+assert.match(mapPage, /live-card__btn--primary[^>]*onClick=\{\(\) => navigate\('\/live'\)\}/s)
+assert.match(mapPage, /live-card__btn--ghost[^>]*onClick=\{\(\) => navigate\(DIGITAL_HUMAN_ROUTE\)\}/s)

@@ -4,6 +4,7 @@ import axios from 'axios'
 import { useLocation, useNavigate } from 'react-router-dom'
 import './MapPage.css'
 import { VisitorTopNav } from '../components/VisitorTopNav'
+import { DIGITAL_HUMAN_ROUTE } from '../digitalHuman/shared'
 import { parseNavigationContext } from './navigationContext'
 
 type Props = {
@@ -717,10 +718,10 @@ export function MapPage({ onLogout }: Props) {
                 </div>
               </div>
               <div className="live-card__actions">
-                <button type="button" className="live-card__btn live-card__btn--primary">
+                <button type="button" className="live-card__btn live-card__btn--primary" onClick={() => navigate('/live')}>
                   进入直播间
                 </button>
-                <button type="button" className="live-card__btn live-card__btn--ghost">
+                <button type="button" className="live-card__btn live-card__btn--ghost" onClick={() => navigate(DIGITAL_HUMAN_ROUTE)}>
                   语音互动
                 </button>
               </div>
