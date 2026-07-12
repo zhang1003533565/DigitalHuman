@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Form, HTTPException
@@ -15,12 +16,13 @@ from agents.model_binding_service import (
     update_agent_bindings,
 )
 from agents.runtime_test_service import test_agent_runtime
-from agents.common.types import AgentContext, AgentResult
+from agents.common.types import AgentContext, AgentResult, FALLBACK_ANSWER, normalize_agent_result
 from schemas import AgentOutputResponse
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 leader = LeaderAgent()
 basic_chat_agent = BasicChatAgent()
+logger = logging.getLogger(__name__)
 
 
 class BasicChatRequest(BaseModel):
@@ -78,7 +80,11 @@ def leader_chat(request: BasicChatRequest) -> BasicChatResponse:
             "timeoutSeconds": request.timeout_seconds,
         },
     )
-    result = leader.run(context)
+    try:
+        result = leader.run(context)
+    except Exception as exc:
+        logger.exception("leader chat failed error_type=%s", type(exc).__name__)
+        result = _router_degraded_result(leader.name)
     return BasicChatResponse(
         success=result.success,
         agent=result.agent,
@@ -118,11 +124,15 @@ def leader_chat_stream(request: BasicChatRequest):
     def _sse_generator():
         try:
             for token in token_gen:
-                chunk = json.dumps({"token": token}, ensure_ascii=False)
+                payload: dict[str, object] = {"token": token}
+                if token == FALLBACK_ANSWER:
+                    payload["degraded"] = True
+                chunk = json.dumps(payload, ensure_ascii=False)
                 yield f"data: {chunk}\n\n"
         except Exception as exc:
-            error_payload = json.dumps({"error": str(exc)}, ensure_ascii=False)
-            yield f"data: {error_payload}\n\n"
+            logger.exception("leader chat stream failed error_type=%s", type(exc).__name__)
+            chunk = json.dumps({"token": FALLBACK_ANSWER, "degraded": True}, ensure_ascii=False)
+            yield f"data: {chunk}\n\n"
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(_sse_generator(), media_type="text/event-stream")
@@ -144,7 +154,11 @@ def basic_chat(request: BasicChatRequest) -> BasicChatResponse:
             "timeoutSeconds": request.timeout_seconds,
         },
     )
-    result = basic_chat_agent.run(context)
+    try:
+        result = basic_chat_agent.run(context)
+    except Exception as exc:
+        logger.exception("basic chat failed error_type=%s", type(exc).__name__)
+        result = _router_degraded_result(basic_chat_agent.name)
     return BasicChatResponse(
         success=result.success,
         agent=result.agent,
@@ -185,11 +199,15 @@ def basic_chat_stream(request: BasicChatRequest):
     def _sse_generator():
         try:
             for token in token_gen:
-                chunk = json.dumps({"token": token}, ensure_ascii=False)
+                payload: dict[str, object] = {"token": token}
+                if token == FALLBACK_ANSWER:
+                    payload["degraded"] = True
+                chunk = json.dumps(payload, ensure_ascii=False)
                 yield f"data: {chunk}\n\n"
         except Exception as exc:
-            error_payload = json.dumps({"error": str(exc)}, ensure_ascii=False)
-            yield f"data: {error_payload}\n\n"
+            logger.exception("basic chat stream failed error_type=%s", type(exc).__name__)
+            chunk = json.dumps({"token": FALLBACK_ANSWER, "degraded": True}, ensure_ascii=False)
+            yield f"data: {chunk}\n\n"
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(_sse_generator(), media_type="text/event-stream")
@@ -214,3 +232,12 @@ def runtime_test(agent: str = Form(...), task: str = Form(...)) -> dict[str, obj
         return test_agent_runtime(agent, task)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _router_degraded_result(agent: str) -> AgentResult:
+    return AgentResult(
+        agent=agent,
+        success=True,
+        output=normalize_agent_result({"answer": FALLBACK_ANSWER}, degraded=True),
+        warnings=[],
+    )

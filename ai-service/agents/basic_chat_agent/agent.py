@@ -1,11 +1,20 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Generator
 
+import requests
+from fastapi import HTTPException
+
 from agents.common.base import BaseAgent
-from agents.common.types import AgentContext, AgentResult
+from agents.common.types import AgentContext, AgentResult, FALLBACK_ANSWER, normalize_agent_result, normalize_timeout_seconds
 from agents.common.utils import normalize_text
 from model_providers.registry import get_provider_client
+from model_providers.openai_compatible_client import ProviderCallError
+
+
+logger = logging.getLogger(__name__)
+PROVIDER_FAILURES = (ProviderCallError, requests.RequestException, HTTPException)
 
 
 DEFAULT_SYSTEM_PROMPT = (
@@ -23,7 +32,7 @@ class BasicChatAgent(BaseAgent):
 
     def _prepare_messages(
         self, context: AgentContext
-    ) -> tuple[list[dict[str, object]], str, str, dict[str, str]] | AgentResult:
+    ) -> tuple[list[dict[str, object]], str, str, dict[str, str], float] | AgentResult:
         """校验前置条件并构建 messages 列表。
         成功返回 (messages, provider, model, provider_config)，失败返回 AgentResult。
         """
@@ -44,31 +53,53 @@ class BasicChatAgent(BaseAgent):
             )
 
         provider_config = {"provider": provider, "baseUrl": base_url, "apiKey": api_key}
+        timeout_seconds = normalize_timeout_seconds(context.metadata.get("timeoutSeconds"))
 
         history = _normalize_history(context.metadata.get("history"))
         system_prompt = normalize_text(context.metadata.get("systemPrompt")) or DEFAULT_SYSTEM_PROMPT
         messages: list[dict[str, object]] = [{"role": "system", "content": system_prompt}, *history]
         messages.append({"role": "user", "content": message})
-        return messages, provider, model, provider_config
+        return messages, provider, model, provider_config, timeout_seconds
 
     def run(self, context: AgentContext) -> AgentResult:
         prepared = self._prepare_messages(context)
         if isinstance(prepared, AgentResult):
             return prepared
 
-        messages, provider, model, provider_config = prepared
+        messages, provider, model, provider_config, timeout_seconds = prepared
         history_count = len(messages) - 2  # 减去 system prompt + 当前 user message
-        client = get_provider_client(provider, provider_config)
-        answer = client.generate_answer(model, messages, temperature=0.6)
+        try:
+            client = get_provider_client(provider, provider_config)
+            answer = client.generate_answer(
+                model, messages, temperature=0.6, timeout_seconds=timeout_seconds
+            )
+            output = normalize_agent_result(
+                {
+                    "answer": answer,
+                    "usedProvider": provider,
+                    "usedModel": model,
+                    "historyCount": history_count,
+                },
+                provider=provider,
+                model=model,
+            )
+        except PROVIDER_FAILURES as exc:
+            logger.warning(
+                "basic chat provider call degraded provider=%s model=%s error_type=%s",
+                provider,
+                model,
+                type(exc).__name__,
+            )
+            output = normalize_agent_result(
+                {"answer": FALLBACK_ANSWER, "usedProvider": provider, "usedModel": model, "historyCount": history_count},
+                provider=provider,
+                model=model,
+                degraded=True,
+            )
         return AgentResult(
             agent=self.name,
             success=True,
-            output={
-                "answer": answer,
-                "usedProvider": provider,
-                "usedModel": model,
-                "historyCount": history_count,
-            },
+            output=output,
             warnings=[],
         )
 
@@ -78,9 +109,24 @@ class BasicChatAgent(BaseAgent):
         if isinstance(prepared, AgentResult):
             return prepared
 
-        messages, provider, model, provider_config = prepared
-        client = get_provider_client(provider, provider_config)
-        return client.generate_answer_stream(model, messages, temperature=0.6)
+        messages, provider, model, provider_config, timeout_seconds = prepared
+
+        def _safe_stream() -> Generator[str, None, None]:
+            try:
+                client = get_provider_client(provider, provider_config)
+                yield from client.generate_answer_stream(
+                    model, messages, temperature=0.6, timeout_seconds=timeout_seconds
+                )
+            except PROVIDER_FAILURES as exc:
+                logger.warning(
+                    "basic chat provider stream degraded provider=%s model=%s error_type=%s",
+                    provider,
+                    model,
+                    type(exc).__name__,
+                )
+                yield FALLBACK_ANSWER
+
+        return _safe_stream()
 
 
 def _normalize_history(raw_history: Any) -> list[dict[str, str]]:

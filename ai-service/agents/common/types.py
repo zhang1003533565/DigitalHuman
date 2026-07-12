@@ -1,10 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import math
 from typing import Any
 
 
 FALLBACK_ANSWER = "当前智能导览服务暂时繁忙。您可以先游览景区主要景点，并以现场公告和工作人员指引为准。"
+
+
+def normalize_timeout_seconds(value: object, default: float = 90.0) -> float:
+    try:
+        timeout = float(value)
+    except (TypeError, ValueError):
+        return default
+    return timeout if math.isfinite(timeout) and 0 < timeout <= 600 else default
 
 
 def normalize_agent_result(

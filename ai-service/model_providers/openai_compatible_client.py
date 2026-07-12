@@ -8,6 +8,14 @@ import requests
 from fastapi import HTTPException
 
 
+class ProviderCallError(Exception):
+    """Expected provider/network failure safe for agent degradation."""
+
+
+class ProviderTimeoutError(ProviderCallError):
+    pass
+
+
 @dataclass
 class OpenAICompatibleProviderClient:
     provider: str
@@ -55,6 +63,7 @@ class OpenAICompatibleProviderClient:
         messages: list[dict[str, object]],
         temperature: float = 0.2,
         max_tokens: int | None = None,
+        timeout_seconds: float = 90.0,
     ) -> str:
         try:
             payload: dict[str, object] = {
@@ -69,14 +78,16 @@ class OpenAICompatibleProviderClient:
                 self._url("/chat/completions"),
                 headers=self._headers(),
                 json=payload,
-                timeout=45,
+                timeout=timeout_seconds,
             )
             response.raise_for_status()
         except requests.HTTPError as exc:
             detail = extract_http_error_detail(exc.response)
             raise HTTPException(status_code=400, detail=f"对话接口测试失败：{detail}") from exc
+        except requests.Timeout as exc:
+            raise ProviderTimeoutError("provider request timed out") from exc
         except requests.RequestException as exc:
-            raise HTTPException(status_code=502, detail=f"对话接口连接失败：{exc}") from exc
+            raise ProviderCallError("provider request failed") from exc
 
         choices = response.json().get("choices") or []
         if not choices:
@@ -91,6 +102,7 @@ class OpenAICompatibleProviderClient:
         messages: list[dict[str, object]],
         temperature: float = 0.2,
         max_tokens: int | None = None,
+        timeout_seconds: float = 90.0,
     ) -> Generator[str, None, None]:
         payload: dict[str, object] = {
             "model": model_id,
@@ -106,15 +118,17 @@ class OpenAICompatibleProviderClient:
                 self._url("/chat/completions"),
                 headers=self._headers(),
                 json=payload,
-                timeout=45,
+                timeout=timeout_seconds,
                 stream=True,
             )
             response.raise_for_status()
         except requests.HTTPError as exc:
             detail = extract_http_error_detail(exc.response)
             raise HTTPException(status_code=400, detail=f"对话接口流式调用失败：{detail}") from exc
+        except requests.Timeout as exc:
+            raise ProviderTimeoutError("provider stream timed out") from exc
         except requests.RequestException as exc:
-            raise HTTPException(status_code=502, detail=f"对话接口流式连接失败：{exc}") from exc
+            raise ProviderCallError("provider stream failed") from exc
 
         try:
             for line in response.iter_lines(decode_unicode=True):
@@ -137,9 +151,10 @@ class OpenAICompatibleProviderClient:
                     token = delta.get("content") or ""
                     if token:
                         yield token
-        except requests.RequestException:
-            # 流式传输中途网络中断，静默结束
-            pass
+        except requests.Timeout as exc:
+            raise ProviderTimeoutError("provider stream timed out") from exc
+        except requests.RequestException as exc:
+            raise ProviderCallError("provider stream failed") from exc
         finally:
             response.close()
 

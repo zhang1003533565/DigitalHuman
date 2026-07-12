@@ -1,12 +1,16 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
-from typing import Any, Callable, Generator, TypeVar
+import logging
+from typing import Any, Generator
+
+import requests
+from fastapi import HTTPException
 
 from agents.common.base import BaseAgent
-from agents.common.types import AgentContext, AgentResult, FALLBACK_ANSWER, normalize_agent_result
+from agents.common.types import AgentContext, AgentResult, FALLBACK_ANSWER, normalize_agent_result, normalize_timeout_seconds
 from agents.common.utils import normalize_text
 from model_providers.registry import get_provider_client
+from model_providers.openai_compatible_client import ProviderCallError
 
 
 DEFAULT_SYSTEM_PROMPT = (
@@ -18,7 +22,8 @@ DEFAULT_SYSTEM_PROMPT = (
     "请将回复字数控制在200字以内。"
 )
 
-_T = TypeVar("_T")
+logger = logging.getLogger(__name__)
+PROVIDER_FAILURES = (ProviderCallError, requests.RequestException, HTTPException)
 
 
 class LeaderAgent(BaseAgent):
@@ -34,9 +39,8 @@ class LeaderAgent(BaseAgent):
         history_count = len(messages) - 2
         try:
             client = get_provider_client(provider, provider_config)
-            answer = _call_with_timeout(
-                lambda: client.generate_answer(model, messages, temperature=0.6),
-                timeout_seconds,
+            answer = client.generate_answer(
+                model, messages, temperature=0.6, timeout_seconds=timeout_seconds
             )
             output = normalize_agent_result(
                 {
@@ -49,7 +53,13 @@ class LeaderAgent(BaseAgent):
                 provider=provider,
                 model=model,
             )
-        except Exception:
+        except PROVIDER_FAILURES as exc:
+            logger.warning(
+                "leader provider call degraded provider=%s model=%s error_type=%s",
+                provider,
+                model,
+                type(exc).__name__,
+            )
             output = normalize_agent_result(
                 {
                     "answer": FALLBACK_ANSWER,
@@ -74,19 +84,32 @@ class LeaderAgent(BaseAgent):
         if isinstance(prepared, AgentResult):
             return prepared
 
-        messages, provider, model, provider_config, _timeout_seconds = prepared
-        client = get_provider_client(provider, provider_config)
-        stream_fn = getattr(client, "generate_answer_stream", None)
-        if callable(stream_fn):
-            return stream_fn(model, messages, temperature=0.6)
+        messages, provider, model, provider_config, timeout_seconds = prepared
 
-        answer = client.generate_answer(model, messages, temperature=0.6)
+        def _safe_stream() -> Generator[str, None, None]:
+            try:
+                client = get_provider_client(provider, provider_config)
+                stream_fn = getattr(client, "generate_answer_stream", None)
+                if callable(stream_fn):
+                    yield from stream_fn(
+                        model, messages, temperature=0.6, timeout_seconds=timeout_seconds
+                    )
+                    return
+                answer = client.generate_answer(
+                    model, messages, temperature=0.6, timeout_seconds=timeout_seconds
+                )
+                if answer:
+                    yield answer
+            except PROVIDER_FAILURES as exc:
+                logger.warning(
+                    "leader provider stream degraded provider=%s model=%s error_type=%s",
+                    provider,
+                    model,
+                    type(exc).__name__,
+                )
+                yield FALLBACK_ANSWER
 
-        def _single_chunk() -> Generator[str, None, None]:
-            if answer:
-                yield answer
-
-        return _single_chunk()
+        return _safe_stream()
 
     def chat(self, message: str) -> dict[str, object]:
         message = (message or "").strip()
@@ -122,34 +145,12 @@ class LeaderAgent(BaseAgent):
             )
 
         provider_config = {"provider": provider, "baseUrl": base_url, "apiKey": api_key}
-        timeout_seconds = _normalize_timeout(context.metadata.get("timeoutSeconds"))
+        timeout_seconds = normalize_timeout_seconds(context.metadata.get("timeoutSeconds"))
         history = _normalize_history(context.metadata.get("history"))
         system_prompt = normalize_text(context.metadata.get("systemPrompt")) or DEFAULT_SYSTEM_PROMPT
         messages: list[dict[str, object]] = [{"role": "system", "content": system_prompt}, *history]
         messages.append({"role": "user", "content": message})
         return messages, provider, model, provider_config, timeout_seconds
-
-
-def _normalize_timeout(value: object) -> float:
-    try:
-        timeout = float(value)
-    except (TypeError, ValueError):
-        return 90.0
-    return timeout if 0 < timeout <= 600 else 90.0
-
-
-def _call_with_timeout(call: Callable[[], _T], timeout_seconds: float) -> _T:
-    executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="leader-provider")
-    future = executor.submit(call)
-    try:
-        return future.result(timeout=timeout_seconds)
-    except FutureTimeoutError:
-        future.cancel()
-        raise
-    finally:
-        executor.shutdown(wait=False, cancel_futures=True)
-
-
 def _normalize_history(raw_history: Any) -> list[dict[str, str]]:
     if not isinstance(raw_history, list):
         return []
