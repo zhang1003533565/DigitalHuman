@@ -29,7 +29,7 @@
 
 ## 响应式宽度
 
-未进行真实浏览器视觉验收。静态验证 `responsive.test.mjs` 已覆盖全局 `44px` 触控 token、safe-area、移动底栏、11 个游客端路由页的 `768px` 断点，以及管理端 `768px`/`1024px` 规则；构建在默认桌面样式下通过。
+未进行真实浏览器视觉验收。游客端静态验证来自 `frontend-visitor/src/responsive.test.mjs`，覆盖全局 `44px` 触控 token、safe-area、移动底栏及 11 个游客端路由页的 `768px` 断点；管理端 `768px`/`1024px` 断点与导航结构验证来自 `frontend-admin/src/pages/admin-upgrade.test.mjs`。两个前端在默认桌面样式下构建通过。
 
 | 宽度 | 登录/首页/数字人/路线/地图/历史/反馈/管理页 | 证据状态 |
 | --- | --- | --- |
@@ -53,5 +53,3 @@
 - 管理端如使用地图选点，部署环境必须同时配置 `VITE_AMAP_KEY` 与 `VITE_AMAP_SECURITY_KEY`。
 
 管理端没有使用文件级 `react-hooks/set-state-in-effect` 豁免。远程请求初始化、Ant Design Form 与受控选择同步、受控分页重置等确需在 effect 中更新状态的点，使用了紧邻具体语句且写明原因的 `eslint-disable-next-line`；其余类型和依赖问题直接修复。
-
-响应式静态证据来源：游客端为 `frontend-visitor/src/responsive.test.mjs`，管理端断点与导航结构为 `frontend-admin/src/pages/admin-upgrade.test.mjs`。
