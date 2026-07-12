@@ -186,10 +186,20 @@
 }
 
 @media (max-width: 768px) {
+  .authenticated-app {
+    height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+
   .authenticated-app > .page-shell,
   .authenticated-app > .home-screen,
   .authenticated-app > .module-screen {
-    padding-bottom: calc(var(--mobile-nav-height) + var(--safe-bottom));
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+    padding-bottom: calc(var(--mobile-nav-height) + var(--safe-bottom) + 16px);
   }
 
   .mobile-bottom-nav {
