@@ -11,6 +11,7 @@ import com.digitalhuman.backend_java.dto.ScenicRouteDto.CoordinateDto;
 import com.digitalhuman.backend_java.dto.ScenicRouteDto.RouteFacilityDto;
 import com.digitalhuman.backend_java.dto.ScenicRouteDto.RouteNodeDto;
 import com.digitalhuman.backend_java.dto.ScenicSpotDto;
+import com.digitalhuman.backend_java.config.TraceIdFilter;
 import com.digitalhuman.backend_java.model.AdminModelConfig;
 import com.digitalhuman.backend_java.model.AdminProviderConfig;
 import com.digitalhuman.backend_java.model.GuideMessage;
@@ -32,6 +33,8 @@ import okhttp3.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
@@ -47,6 +50,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.time.LocalDateTime;
@@ -193,6 +198,7 @@ public class GuideService {
     private final AdminModelConfigRepository modelConfigRepository;
     private final AdminProviderConfigRepository providerConfigRepository;
     private final MaxKbService maxKbService;
+    private final Executor guideStreamExecutor;
 
     private static RouteNodeDto node(
             String id,
@@ -225,6 +231,7 @@ public class GuideService {
         return coordinates;
     }
 
+    @Autowired
     public GuideService(
             GuideSessionRepository sessionRepository,
             GuideMessageRepository messageRepository,
@@ -232,7 +239,8 @@ public class GuideService {
             ScenicRouteService scenicRouteService,
             AdminModelConfigRepository modelConfigRepository,
             AdminProviderConfigRepository providerConfigRepository,
-            MaxKbService maxKbService) {
+            MaxKbService maxKbService,
+            @Qualifier("guideStreamExecutor") Executor guideStreamExecutor) {
         this.sessionRepository = sessionRepository;
         this.messageRepository = messageRepository;
         this.feedbackRepository = feedbackRepository;
@@ -240,12 +248,21 @@ public class GuideService {
         this.modelConfigRepository = modelConfigRepository;
         this.providerConfigRepository = providerConfigRepository;
         this.maxKbService = maxKbService;
+        this.guideStreamExecutor = guideStreamExecutor;
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(60, TimeUnit.SECONDS)
                 .writeTimeout(30, TimeUnit.SECONDS)
                 .build();
         this.objectMapper = new ObjectMapper();
+    }
+
+    GuideService(GuideSessionRepository sessionRepository, GuideMessageRepository messageRepository,
+            UserFeedbackRepository feedbackRepository, ScenicRouteService scenicRouteService,
+            AdminModelConfigRepository modelConfigRepository, AdminProviderConfigRepository providerConfigRepository,
+            MaxKbService maxKbService) {
+        this(sessionRepository, messageRepository, feedbackRepository, scenicRouteService, modelConfigRepository,
+                providerConfigRepository, maxKbService, Runnable::run);
     }
 
     public List<ScenicSpotDto> getAllSpots() {
@@ -262,12 +279,12 @@ public class GuideService {
             sessionId = "session-" + UUID.randomUUID();
         }
 
-        String traceId = "chat-" + UUID.randomUUID();
+        String traceId = currentOrGeneratedTraceId();
         List<GuideSourceDto> sources = retrieveGuideSources(request.getQuestion(), request.getKnowledgeId());
         String answerText = buildAnswer(sessionId, request.getQuestion(), request.getInterest(), sources);
         List<String> relatedSpots = spots.stream().map(ScenicSpotDto::getName).limit(2).toList();
         List<String> recommendedRoutes = recommendRoutes(request.getInterest()).stream()
-                .map(ScenicRouteDto::getName)
+                .map(ScenicRouteDto::getId)
                 .toList();
 
         touchSession(sessionId);
@@ -283,7 +300,7 @@ public class GuideService {
         if (sessionId == null || sessionId.isBlank()) {
             sessionId = "session-" + UUID.randomUUID();
         }
-        String traceId = "quick-" + UUID.randomUUID();
+        String traceId = currentOrGeneratedTraceId();
         String answerText = queryLeaderQuickReply(sessionId, request.getQuestion(), request.getInterest());
         if (answerText == null || answerText.isBlank()) {
             answerText = "您好呀，我在听。";
@@ -296,17 +313,17 @@ public class GuideService {
         if (sessionId == null || sessionId.isBlank()) {
             sessionId = "session-" + UUID.randomUUID();
         }
-        String traceId = "chat-" + UUID.randomUUID();
+        String traceId = currentOrGeneratedTraceId();
         String finalSessionId = sessionId;
 
         SseEmitter emitter = new SseEmitter(120_000L);
 
-        new Thread(() -> {
+        Runnable streamTask = () -> {
             try {
                 List<GuideSourceDto> sources = retrieveGuideSources(request.getQuestion(), request.getKnowledgeId());
                 List<String> relatedSpots = spots.stream().map(ScenicSpotDto::getName).limit(2).toList();
                 List<String> recommendedRoutes = recommendRoutes(request.getInterest()).stream()
-                        .map(ScenicRouteDto::getName)
+                        .map(ScenicRouteDto::getId)
                         .toList();
                 // 先发送 sessionId 等元信息
                 emitter.send(SseEmitter.event().name("meta")
@@ -328,6 +345,7 @@ public class GuideService {
 
                 Request httpRequest = new Request.Builder()
                         .url(url)
+                        .header(TraceIdFilter.TRACE_ID_HEADER, traceId)
                         .post(RequestBody.create(objectMapper.writeValueAsString(payload), JSON))
                         .build();
 
@@ -353,9 +371,9 @@ public class GuideService {
                             JsonNode chunk = objectMapper.readTree(dataStr);
                             // 检查是否有错误
                             if (chunk.has("error")) {
-                                String errorText = chunk.get("error").asText("当前主智能体暂时不可用，请检查模型配置。");
+                                String errorText = "当前主智能体暂时不可用，请稍后重试。";
                                 emitter.send(SseEmitter.event().name("error")
-                                        .data(objectMapper.writeValueAsString(Map.of("error", errorText))));
+                                        .data(objectMapper.writeValueAsString(Map.of("code", "AI_STREAM_ERROR", "message", errorText))));
                                 if (fullAnswer.isEmpty()) {
                                     fullAnswer.append(errorText);
                                     emitter.send(SseEmitter.event().data(Map.of("token", errorText)));
@@ -363,7 +381,7 @@ public class GuideService {
                                 break;
                             }
                             if (chunk.has("success") && !chunk.path("success").asBoolean(true)) {
-                                String errorText = firstWarningOrDefault(chunk, "当前主智能体暂时不可用，请在后台管理中完成 CHAT 模型与 Provider 配置。");
+                                String errorText = "当前主智能体暂时不可用，请在后台管理中检查模型配置。";
                                 fullAnswer.append(errorText);
                                 emitter.send(SseEmitter.event().data(Map.of(
                                         "error", errorText,
@@ -394,12 +412,22 @@ public class GuideService {
 
             } catch (Exception exc) {
                 try {
-                    emitter.send(SseEmitter.event().name("error").data(exc.getMessage()));
+                    emitter.send(SseEmitter.event().name("error").data(objectMapper.writeValueAsString(
+                            Map.of("code", "GUIDE_STREAM_ERROR", "message", "导览服务暂时不可用，请稍后重试。"))));
                 } catch (Exception ignore) {}
                 emitter.completeWithError(exc);
                 log.warn("Chat stream failed", exc);
             }
-        }).start();
+        };
+        try {
+            guideStreamExecutor.execute(streamTask);
+        } catch (RejectedExecutionException rejected) {
+            try {
+                emitter.send(SseEmitter.event().name("error").data(objectMapper.writeValueAsString(
+                        Map.of("code", "GUIDE_BUSY", "message", "导览服务繁忙，请稍后重试。"))));
+            } catch (IOException ignored) { }
+            emitter.complete();
+        }
 
         return emitter;
     }
@@ -469,6 +497,14 @@ public class GuideService {
                 .toList();
     }
 
+    public List<FeedbackRecordDto> getFeedbackRecordsForSession(String sessionId) {
+        if (!hasText(sessionId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "sessionId 不能为空");
+        }
+        return feedbackRepository.findBySessionIdOrderByCreatedAtDesc(sessionId.trim()).stream()
+                .map(this::toFeedbackRecord).toList();
+    }
+
     public FeedbackRecordDto updateFeedback(Long id, String status, String category, String adminNote) {
         if (!FEEDBACK_STATUSES.contains(status)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "status 仅支持 PENDING/PROCESSING/RESOLVED");
@@ -487,6 +523,8 @@ public class GuideService {
     }
 
     private FeedbackRecordDto toFeedbackRecord(UserFeedback feedback) {
+        String status = hasText(feedback.getStatus()) ? feedback.getStatus() : "PENDING";
+        String category = hasText(feedback.getCategory()) ? feedback.getCategory() : "GENERAL";
         return new FeedbackRecordDto(
                         feedback.getId(),
                         feedback.getSessionId(),
@@ -498,8 +536,8 @@ public class GuideService {
                         feedback.isHelpful(),
                         feedback.getRating(),
                         feedback.getComment(),
-                        feedback.getStatus(),
-                        feedback.getCategory(),
+                        status,
+                        category,
                         feedback.getAdminNote(),
                         feedback.getCreatedAt());
     }
@@ -523,6 +561,7 @@ public class GuideService {
 
             Request httpRequest = new Request.Builder()
                     .url(url)
+                    .header(TraceIdFilter.TRACE_ID_HEADER, currentOrGeneratedTraceId())
                     .post(RequestBody.create(objectMapper.writeValueAsString(payload), JSON))
                     .build();
 
@@ -555,6 +594,7 @@ public class GuideService {
 
             Request httpRequest = new Request.Builder()
                     .url(url)
+                    .header(TraceIdFilter.TRACE_ID_HEADER, currentOrGeneratedTraceId())
                     .post(RequestBody.create(objectMapper.writeValueAsString(payload), JSON))
                     .build();
 
@@ -819,5 +859,10 @@ public class GuideService {
 
     private long toEpochMillis(LocalDateTime value) {
         return value.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+    }
+
+    private String currentOrGeneratedTraceId() {
+        String current = TraceIdFilter.currentTraceId();
+        return current == null || current.isBlank() ? "chat-" + UUID.randomUUID() : current;
     }
 }

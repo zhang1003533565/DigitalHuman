@@ -45,6 +45,7 @@ knowledge:
     timeout-seconds: ${KNOWLEDGE_MAXKB_TIMEOUT_SECONDS:30}
 
 app:
+  ai-service-admin-token: ${AI_SERVICE_ADMIN_TOKEN:}
   auth:
     seed-users:
       - username: admin

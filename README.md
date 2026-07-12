@@ -39,6 +39,7 @@ DigitalHuman/
 ```properties
 app.backend-base-url=http://127.0.0.1:8080
 app.ai-service-url=http://127.0.0.1:18755
+app.ai-service-admin-token=${AI_SERVICE_ADMIN_TOKEN:}
 app.qdrant-url=http://127.0.0.1:6333
 ```
 
@@ -47,6 +48,14 @@ app.qdrant-url=http://127.0.0.1:6333
 - `backend-java` 会导入这份配置
 - `ai-service` 会先读取这份配置，再读取 `ai-service/.env`
 - `ai-service/.env` 只建议放本地覆盖项，例如模型密钥
+
+Java 与 AI 服务间的 Provider 管理接口必须配置相同的 `AI_SERVICE_ADMIN_TOKEN`。Java 通过
+`X-Service-Token` 转发；缺少令牌返回 401，令牌错误返回 403。Provider 查询只返回
+`apiKeyMasked` 与 `configured`，绝不返回明文 API Key。
+
+已有 MySQL 数据库升级反馈字段时，先执行
+`backend-java/src/main/resources/db/migration/manual/2026-07-12-user-feedback-backfill.sql`。
+脚本先回填历史空值，末尾包含可选的 `ALTER TABLE` 收紧语句；应用部署期间 JPA 字段保持 nullable，避免旧表启动失败。
 
 ## 环境要求
 

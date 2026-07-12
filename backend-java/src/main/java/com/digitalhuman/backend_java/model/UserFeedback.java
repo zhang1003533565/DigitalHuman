@@ -28,10 +28,10 @@ public class UserFeedback {
 
     private Long messageId;
 
-    @Column(nullable = false, length = 30)
+    @Column(length = 30)
     private String status = "PENDING";
 
-    @Column(nullable = false, length = 30)
+    @Column(length = 30)
     private String category;
 
     @Column(length = 1000)

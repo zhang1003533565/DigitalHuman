@@ -2,6 +2,7 @@ package com.digitalhuman.backend_java.controller;
 
 import com.digitalhuman.backend_java.dto.FeedbackRequest;
 import com.digitalhuman.backend_java.dto.FeedbackResponse;
+import com.digitalhuman.backend_java.dto.FeedbackRecordDto;
 import com.digitalhuman.backend_java.dto.GuideChatRequest;
 import com.digitalhuman.backend_java.dto.GuideChatResponse;
 import com.digitalhuman.backend_java.dto.GuideMessageDto;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -52,5 +54,10 @@ public class UserGuideController {
     public FeedbackResponse saveFeedback(@Valid @RequestBody FeedbackRequest request) {
         guideService.saveFeedback(request);
         return new FeedbackResponse(true, "反馈已提交");
+    }
+
+    @GetMapping("/feedback")
+    public List<FeedbackRecordDto> getFeedback(@RequestParam("sessionId") String sessionId) {
+        return guideService.getFeedbackRecordsForSession(sessionId);
     }
 }

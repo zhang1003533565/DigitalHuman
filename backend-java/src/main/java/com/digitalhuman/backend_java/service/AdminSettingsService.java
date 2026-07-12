@@ -55,6 +55,9 @@ public class AdminSettingsService {
     @Value("${ai.service-url}")
     private String aiServiceUrl;
 
+    @Value("${app.ai-service-admin-token:}")
+    private String aiServiceAdminToken = "";
+
     private final AdminModelConfigRepository adminModelConfigRepository;
     private final AdminProviderConfigRepository adminProviderConfigRepository;
     private final ObjectMapper objectMapper;
@@ -209,6 +212,7 @@ public class AdminSettingsService {
             String payload = objectMapper.writeValueAsString(payloadDto);
             Request httpRequest = new Request.Builder()
                     .url(aiServiceUrl + "/admin/providers")
+                    .header("X-Service-Token", aiServiceAdminToken)
                     .put(RequestBody.create(payload, JSON))
                     .build();
             try (Response response = httpClient.newCall(httpRequest).execute()) {
@@ -254,6 +258,7 @@ public class AdminSettingsService {
             String payload = objectMapper.writeValueAsString(request);
             Request httpRequest = new Request.Builder()
                     .url(aiServiceUrl + "/admin/providers/delete")
+                    .header("X-Service-Token", aiServiceAdminToken)
                     .post(RequestBody.create(payload, JSON))
                     .build();
             try (Response response = httpClient.newCall(httpRequest).execute()) {

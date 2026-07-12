@@ -3,7 +3,14 @@
 FastAPI service for DigitalHuman AI capabilities.
 """
 
-from fastapi import FastAPI, HTTPException
+import contextvars
+import hmac
+import logging
+import os
+import re
+import uuid
+
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from agents.router import router as agents_router
 
 from model_capabilities.testing.model_test_service import test_model
@@ -19,6 +26,44 @@ app = FastAPI(
 )
 app.include_router(tts_router)
 app.include_router(agents_router)
+
+TRACE_ID_HEADER = "X-Trace-Id"
+SERVICE_TOKEN_HEADER = "X-Service-Token"
+TRACE_ID_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{8,128}$")
+request_trace_id = contextvars.ContextVar("request_trace_id", default="")
+logger = logging.getLogger(__name__)
+
+
+@app.middleware("http")
+async def trace_requests(request: Request, call_next):
+    supplied = request.headers.get(TRACE_ID_HEADER, "")
+    trace_id = supplied if TRACE_ID_PATTERN.fullmatch(supplied) else str(uuid.uuid4())
+    token = request_trace_id.set(trace_id)
+    request.state.trace_id = trace_id
+    try:
+        logger.info("request started method=%s path=%s trace_id=%s", request.method, request.url.path, trace_id)
+        response: Response = await call_next(request)
+        response.headers[TRACE_ID_HEADER] = trace_id
+        return response
+    finally:
+        request_trace_id.reset(token)
+
+
+def require_admin_token(x_service_token: str | None = Header(default=None, alias=SERVICE_TOKEN_HEADER)) -> None:
+    expected = os.getenv("AI_SERVICE_ADMIN_TOKEN", "")
+    if not x_service_token:
+        raise HTTPException(status_code=401, detail="service token required")
+    if not expected or not hmac.compare_digest(x_service_token.encode(), expected.encode()):
+        raise HTTPException(status_code=403, detail="invalid service token")
+
+
+def provider_response(item: dict[str, object]) -> ProviderConfigResponse:
+    api_key = str(item.get("apiKey") or item.get("api_key") or "")
+    masked = "" if not api_key else ("*" * max(4, min(12, len(api_key) - 4)) + api_key[-4:])
+    return ProviderConfigResponse.model_validate({
+        "provider": item.get("provider"), "baseUrl": item.get("baseUrl") or item.get("base_url"),
+        "apiKeyMasked": masked, "configured": bool(api_key), "protocol": item.get("protocol")
+    })
 
 
 @app.get("/health")
@@ -50,18 +95,18 @@ def model_test(request: ModelTestRequest) -> ModelTestResponse:
         raise HTTPException(status_code=500, detail=f"模型测试内部异常：{exc}") from exc
 
 
-@app.get("/admin/providers", response_model=list[ProviderConfigResponse])
+@app.get("/admin/providers", response_model=list[ProviderConfigResponse], dependencies=[Depends(require_admin_token)])
 def list_provider_configs() -> list[ProviderConfigResponse]:
-    return [ProviderConfigResponse.model_validate(item) for item in load_provider_configs()]
+    return [provider_response(item) for item in load_provider_configs()]
 
 
-@app.put("/admin/providers", response_model=ProviderConfigResponse)
+@app.put("/admin/providers", response_model=ProviderConfigResponse, dependencies=[Depends(require_admin_token)])
 def update_provider_config(request: ProviderConfigRequest) -> ProviderConfigResponse:
     saved = save_provider_config(request.provider, request.base_url, request.api_key, request.protocol)
-    return ProviderConfigResponse.model_validate(saved)
+    return provider_response(saved)
 
 
-@app.post("/admin/providers/delete")
+@app.post("/admin/providers/delete", dependencies=[Depends(require_admin_token)])
 def remove_provider_config(request: ProviderDeleteRequest) -> dict[str, bool]:
     delete_provider_config(request.provider)
     return {"success": True}

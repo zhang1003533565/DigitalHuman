@@ -9,6 +9,7 @@ import org.springframework.data.domain.Pageable;
 public interface UserFeedbackRepository extends JpaRepository<UserFeedback, Long> {
 
     List<UserFeedback> findAllByOrderByCreatedAtDesc();
+    List<UserFeedback> findBySessionIdOrderByCreatedAtDesc(String sessionId);
 
     @Query("select count(feedback) from UserFeedback feedback")
     long countPersistedFeedback();

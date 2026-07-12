@@ -27,7 +27,10 @@ export function FeedbackPage({ onLogout }: Props) {
   const [records, setRecords] = useState<FeedbackRecord[]>([])
   const [comment, setComment] = useState('')
   const [submitState, setSubmitState] = useState('')
+  const [loadState, setLoadState] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [reloadKey, setReloadKey] = useState(0)
   const context = parseNavigationContext(window.location.search)
+  const sessionId = context.sessionId || window.sessionStorage.getItem('digitalhuman.visitor.guideSessionId') || ''
 
   async function submitGeneralFeedback() {
     const value = comment.trim()
@@ -35,7 +38,7 @@ export function FeedbackPage({ onLogout }: Props) {
     setSubmitState('提交中…')
     try {
       await axios.post('/api/user/guide/feedback', {
-        sessionId: context.sessionId || undefined,
+        sessionId: sessionId || undefined,
         traceId: context.traceId || undefined,
         routeId: context.routeId || undefined,
         messageId: context.messageId,
@@ -52,13 +55,22 @@ export function FeedbackPage({ onLogout }: Props) {
   }
 
   useEffect(() => {
+    if (!sessionId) {
+      return
+    }
     async function loadFeedback() {
-      const response = await axios.get<FeedbackRecord[]>('/api/guide/feedback')
-      setRecords(response.data)
+      setLoadState('loading')
+      try {
+        const response = await axios.get<FeedbackRecord[]>('/api/user/guide/feedback', { params: { sessionId } })
+        setRecords(response.data)
+        setLoadState('idle')
+      } catch {
+        setLoadState('error')
+      }
     }
 
     void loadFeedback()
-  }, [])
+  }, [sessionId, reloadKey])
 
   return (
     <main className="page-shell feedback-page">
@@ -77,10 +89,14 @@ export function FeedbackPage({ onLogout }: Props) {
           {submitState ? <p role="status">{submitState}</p> : null}
         </section>
         <section className="feature-grid">
-          {records.length === 0 ? (
+          {loadState === 'loading' ? (
+            <article className="feature-card"><p role="status">正在加载反馈记录…</p></article>
+          ) : loadState === 'error' ? (
+            <article className="feature-card"><h2>反馈记录加载失败</h2><button type="button" onClick={() => setReloadKey((value) => value + 1)}>重试</button></article>
+          ) : records.length === 0 ? (
             <article className="feature-card">
               <p className="card-kicker">暂无数据</p>
-              <h2>还没有提交反馈</h2>
+              <h2>{sessionId ? '当前会话还没有提交反馈' : '开始一次数字人对话后即可查看反馈记录'}</h2>
             </article>
           ) : (
             records.map((record) => (

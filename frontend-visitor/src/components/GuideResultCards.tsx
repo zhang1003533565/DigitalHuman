@@ -41,7 +41,7 @@ export function GuideResultCards({ result, onSuggestion, messageId }: GuideResul
           <div className="guide-result-card__actions">
             {result.recommendedRoutes.map((route) => (
               <button key={route} type="button" onClick={() => navigate(`/routes?${buildGuideNavigationSearchParams(linkedResult, { routeId: route })}`)}>
-                {route}
+                查看推荐路线
               </button>
             ))}
           </div>

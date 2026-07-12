@@ -20,6 +20,16 @@ import java.time.LocalDateTime;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.argThat;
+import okhttp3.Call;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Protocol;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
+import org.slf4j.MDC;
+import org.springframework.test.util.ReflectionTestUtils;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
@@ -73,6 +83,28 @@ class GuideServiceTests {
         GuideChatResponse response = service.chat(request);
 
         assertEquals(42L, response.getMessageId());
+    }
+
+    @Test
+    void sessionFeedbackIsScopedAndNormalizesLegacyNulls() {
+        UserFeedback feedback = new UserFeedback();
+        feedback.setSessionId("session-1");
+        feedback.setQuestion("问题");
+        feedback.setCreatedAt(LocalDateTime.now());
+        when(feedbackRepository.findBySessionIdOrderByCreatedAtDesc("session-1")).thenReturn(List.of(feedback));
+
+        var records = service.getFeedbackRecordsForSession(" session-1 ");
+
+        assertEquals(1, records.size());
+        assertEquals("PENDING", records.get(0).getStatus());
+        assertEquals("GENERAL", records.get(0).getCategory());
+        verify(feedbackRepository).findBySessionIdOrderByCreatedAtDesc("session-1");
+    }
+
+    @Test
+    void sessionFeedbackRejectsBlankSessionId() {
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> service.getFeedbackRecordsForSession(" "));
     }
 
     @Test
@@ -208,6 +240,48 @@ class GuideServiceTests {
 
         assertEquals(3, response.getSuggestions().size());
         assertTrue(response.getSuggestions().stream().allMatch(suggestion -> !suggestion.isBlank()));
+    }
+
+    @Test
+    void chatReturnsRealRouteIdsInsteadOfDisplayNames() {
+        when(sessionRepository.findById("session-1")).thenReturn(Optional.empty());
+        var route = mock(com.digitalhuman.backend_java.dto.ScenicRouteDto.class);
+        when(route.getId()).thenReturn("route-2");
+        when(route.getName()).thenReturn("自然风光爱好者路线");
+        when(scenicRouteService.recommendRoutes(null)).thenReturn(List.of(route));
+        doReturn(List.of()).when(service).retrieveGuideSources("问题", null);
+        doReturn("回答").when(service).buildAnswer("session-1", "问题", null, List.of());
+        GuideChatRequest request = new GuideChatRequest();
+        request.setSessionId("session-1");
+        request.setQuestion("问题");
+
+        assertEquals(List.of("route-2"), service.chat(request).getRecommendedRoutes());
+    }
+
+    @Test
+    void outboundAiRequestCarriesCurrentTraceId() throws Exception {
+        OkHttpClient client = mock(OkHttpClient.class);
+        Call call = mock(Call.class);
+        when(client.newCall(argThat(request -> "trace-outbound-1234".equals(request.header("X-Trace-Id")))))
+                .thenReturn(call);
+        Response response = new Response.Builder().request(new Request.Builder().url("http://ai.test").build())
+                .protocol(Protocol.HTTP_1_1).code(200).message("ok")
+                .body(ResponseBody.create("{\"success\":true,\"output\":{\"answer\":\"你好呀，我在这里。\"}}",
+                        MediaType.get("application/json"))).build();
+        when(call.execute()).thenReturn(response);
+        ReflectionTestUtils.setField(service, "httpClient", client);
+        ReflectionTestUtils.setField(service, "aiServiceUrl", "http://ai.test");
+        when(messageRepository.findBySessionIdOrderByCreatedAtAsc("session-1")).thenReturn(List.of());
+        GuideChatRequest request = new GuideChatRequest();
+        request.setSessionId("session-1");
+        request.setQuestion("你好");
+        MDC.put("traceId", "trace-outbound-1234");
+        try {
+            assertEquals("trace-outbound-1234", service.quickChat(request).getTraceId());
+        } finally {
+            MDC.clear();
+        }
+        verify(client).newCall(any(Request.class));
     }
 
     @Test

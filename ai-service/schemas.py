@@ -50,7 +50,8 @@ class ProviderConfigRequest(BaseModel):
 class ProviderConfigResponse(BaseModel):
     provider: str
     base_url: str = Field(alias="baseUrl")
-    api_key: str = Field(alias="apiKey")
+    api_key_masked: str = Field(alias="apiKeyMasked")
+    configured: bool
     protocol: str
 
 

@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.slf4j.MDC;
 
 class TraceIdFilterTests {
 
@@ -28,6 +29,20 @@ class TraceIdFilterTests {
 
         assertThat(filter(request).getHeader(TraceIdFilter.TRACE_ID_HEADER))
                 .isEqualTo("web-client_2026:request.42");
+    }
+
+    @Test
+    void exposesTraceDuringRequestAndClearsMdcAfterward() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(TraceIdFilter.TRACE_ID_HEADER, "trace-request-1234");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, (req, res) -> {
+            assertThat(req.getAttribute(TraceIdFilter.TRACE_ID_ATTRIBUTE)).isEqualTo("trace-request-1234");
+            assertThat(MDC.get(TraceIdFilter.MDC_KEY)).isEqualTo("trace-request-1234");
+        });
+
+        assertThat(MDC.get(TraceIdFilter.MDC_KEY)).isNull();
     }
 
     @Test
