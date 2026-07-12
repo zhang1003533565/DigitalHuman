@@ -1,5 +1,6 @@
 package com.digitalhuman.backend_java.service;
 
+import java.math.BigInteger;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -21,8 +22,7 @@ public class LiveTimelineResolver {
                 throw new IllegalArgumentException("直播文案总时长超出范围", exception);
             }
         }
-        long elapsed = Math.max(0, Duration.between(publishedAt, serverTime).toMillis());
-        long cycle = elapsed % total;
+        long cycle = resolveCycleOffset(publishedAt, serverTime, total);
         long cursor = 0;
         for (int index = 0; index < items.size(); index++) {
             TimelineItem item = items.get(index);
@@ -38,6 +38,17 @@ public class LiveTimelineResolver {
             cursor = nextCursor;
         }
         throw new IllegalStateException("直播时间轴无法定位");
+    }
+
+    private long resolveCycleOffset(Instant publishedAt, Instant serverTime, long totalDurationMs) {
+        if (serverTime.isBefore(publishedAt)) {
+            return 0;
+        }
+        Duration elapsed = Duration.between(publishedAt, serverTime);
+        BigInteger elapsedMs = BigInteger.valueOf(elapsed.getSeconds())
+                .multiply(BigInteger.valueOf(1_000))
+                .add(BigInteger.valueOf(elapsed.getNano() / 1_000_000));
+        return elapsedMs.mod(BigInteger.valueOf(totalDurationMs)).longValueExact();
     }
 
     public record TimelineItem(Long itemId, long durationMs) {

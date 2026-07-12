@@ -97,6 +97,26 @@ class LiveTimelineResolverTests {
                 .hasMessage("直播文案总时长超出范围");
     }
 
+    @Test
+    void clampsExtremeTimeBeforePublishToStart() {
+        LiveTimelineResolver.Position position = resolver.resolve(
+                Instant.MAX,
+                Instant.MIN,
+                timeline());
+
+        assertThat(position).isEqualTo(new LiveTimelineResolver.Position(10L, 0, 0, 0, 30_000));
+    }
+
+    @Test
+    void resolvesExtremeFutureTimeWithoutMillisecondOverflow() {
+        LiveTimelineResolver.Position position = resolver.resolve(
+                Instant.MIN,
+                Instant.MAX,
+                timeline());
+
+        assertThat(position).isEqualTo(new LiveTimelineResolver.Position(20L, 1, 19_999, 29_999, 30_000));
+    }
+
     private List<LiveTimelineResolver.TimelineItem> timeline() {
         return List.of(
                 new LiveTimelineResolver.TimelineItem(10L, 10_000),
