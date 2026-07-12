@@ -201,6 +201,7 @@
 @media (max-width: 768px) {
   .profile-grid,
   .profile-stats {
+    min-width: 0;
     grid-template-columns: 1fr;
   }
 
@@ -212,6 +213,9 @@
 
   .profile-card__meta {
     align-items: center;
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
   }
 
   .profile-section {
@@ -220,6 +224,11 @@
 
   .profile-form__input {
     min-height: var(--touch-target);
+  }
+
+  .profile-section:last-child,
+  .profile-stats:last-child {
+    margin-bottom: 16px;
   }
 }
 

@@ -497,13 +497,14 @@
   .hp-hero {
     display: grid;
     grid-template-columns: 1fr;
-    min-height: 680px;
+    min-height: 0;
     margin: 0 -16px;
+    overflow: visible;
   }
 
   .hp-hero__content {
     width: 100%;
-    padding: 42px 20px 210px;
+    padding: 32px 20px 24px;
   }
 
   .hp-trip-planner__fields {
@@ -525,9 +526,13 @@
   }
 
   .hp-guide {
-    right: 0;
-    width: 240px;
-    height: 245px;
+    position: relative;
+    right: auto;
+    bottom: auto;
+    justify-self: end;
+    width: min(240px, 72vw);
+    height: 220px;
+    margin-top: -28px;
   }
 
   .hp-guide img {
@@ -558,10 +563,6 @@
 }
 
 @media (max-width: 480px) {
-  .hp-hero {
-    min-height: 800px;
-  }
-
   .hp-trip-planner__heading {
     align-items: flex-start;
     flex-direction: column;

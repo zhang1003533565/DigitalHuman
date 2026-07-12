@@ -17,6 +17,7 @@ const mapPage = read('pages/MapPage.tsx')
 const mapCss = read('pages/MapPage.css')
 const routeCss = read('pages/RouteRecommendPage.css')
 const loginCss = read('pages/LoginPage.css')
+const homeCss = read('pages/HomePage.css')
 const profileCss = read('pages/ProfilePage.css')
 
 assert.match(tokens, /--touch-target:\s*44px/, 'touch targets must be at least 44px')
@@ -49,7 +50,13 @@ assert.doesNotMatch(mapPage, /<aside className="map-side"[^>]*aria-hidden/, 'vis
 assert.match(mapCss, /\.map-page--spot-selected\s+\.map-side\s*\{[^}]*display:\s*none/s, 'selected spot card hides the mobile map side card')
 assert.match(routeCss, /@media\s*\(max-width:\s*768px\)[\s\S]*\.route-planner\s*\{[^}]*flex-direction:\s*column/s, 'route planner stacks vertically')
 assert.match(loginCss, /@media\s*\(max-width:\s*768px\)[\s\S]*\.auth-stage,[\s\S]*\.auth-form\s*\{[^}]*grid-template-columns:\s*1fr/s, 'login form is single-column')
-assert.match(profileCss, /@media\s*\(max-width:\s*768px\)[\s\S]*\.profile-grid,[\s\S]*\.profile-stats\s*\{[^}]*grid-template-columns:\s*1fr/s, 'profile form content is single-column')
+const homeMobile = homeCss.slice(homeCss.lastIndexOf('@media (max-width: 768px)'))
+assert.doesNotMatch(homeMobile, /\.hp-hero\s*\{[^}]*(?:min-)?height:\s*(?:680|800)px/s, 'home hero must not force tall mobile viewport')
+assert.match(homeCss, /@media\s*\(max-width:\s*480px\)[\s\S]*\.hp-trip-planner__fields\s*\{[^}]*grid-template-columns:\s*1fr/s, 'small phones use a single-column planner')
+
+const profileMobile = profileCss.slice(profileCss.lastIndexOf('@media (max-width: 768px)'))
+assert.match(profileMobile, /\.profile-grid,[\s\S]*\.profile-stats\s*\{[^}]*grid-template-columns:\s*1fr/s, 'profile cards stack in one column')
+assert.match(profileMobile, /\.profile-card__meta\s*\{[^}]*(?:min-width:\s*0|overflow-wrap:\s*anywhere)/s, 'profile identity supports long text')
 
 const routedPageStyles = [
   'DigitalHumanPage.css',
