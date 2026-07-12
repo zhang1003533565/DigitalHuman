@@ -16,3 +16,12 @@ export function parseLiveGuideStreamData(raw: string): LiveGuideStreamEvent | nu
 export function createLiveSpeechKey(versionId: number, itemId: number, generation: number) {
   return `${generation}:${versionId}:${itemId}`
 }
+
+export function shouldSkipBackgroundLiveSync(reason: string, hasInteraction: boolean, activeSyncReason: string | null) {
+  const isBackgroundSync = reason === 'poll' || reason === 'visibility-resume'
+  return isBackgroundSync && (hasInteraction || activeSyncReason !== null)
+}
+
+export function shouldRecoverLiveSpeechAfterSyncFailure(reason: string, hasLiveSnapshot: boolean) {
+  return reason === 'answer-complete' && hasLiveSnapshot
+}
