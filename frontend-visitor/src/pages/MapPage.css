@@ -139,6 +139,8 @@
 
 .map-spot-card {
   position: absolute;
+  top: var(--map-card-top);
+  left: var(--map-card-left);
   z-index: 4;
   width: min(260px, calc(100% - 32px));
   overflow: hidden;

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/set-state-in-effect -- AMap SDK is untyped and this legacy page synchronizes imperative map state in effects. */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import axios from 'axios'
 import { useLocation, useNavigate } from 'react-router-dom'
 import './MapPage.css'
@@ -570,7 +570,10 @@ export function MapPage({ onLogout }: Props) {
             {selectedFacility && cardPosition ? (
               <article
                 className="map-spot-card"
-                style={{ left: `${cardPosition.left}px`, top: `${cardPosition.top}px` }}
+                style={{
+                  '--map-card-left': `${cardPosition.left}px`,
+                  '--map-card-top': `${cardPosition.top}px`,
+                } as CSSProperties}
                 aria-label={`${selectedFacility.name} 信息卡片`}
               >
                 {selectedFacility.image ? (
