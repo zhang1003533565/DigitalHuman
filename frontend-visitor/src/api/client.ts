@@ -26,18 +26,29 @@ const STATUS_MESSAGES: Record<number, string> = {
   504: '服务响应超时，请稍后重试',
 }
 
+const BUSINESS_MESSAGE_STATUSES = new Set([400, 422])
+
+function safeBusinessMessage(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const message = value.trim()
+  if (!message || message.length > 200 || /[<>\u0000-\u001f\u007f]/.test(message)) return undefined
+  return message
+}
+
 export function getApiProblem(error: unknown): ApiProblem {
   if (axios.isAxiosError<ProblemPayload>(error)) {
     const payload = error.response?.data
     const traceHeader = error.response?.headers?.['x-trace-id']
     const status = error.response?.status
+    const businessMessage = status && BUSINESS_MESSAGE_STATUSES.has(status)
+      ? safeBusinessMessage(payload?.message) ?? safeBusinessMessage(payload?.detail)
+      : undefined
 
     return {
       status,
       code: typeof payload?.code === 'string' ? payload.code : undefined,
       message:
-        (typeof payload?.message === 'string' && payload.message) ||
-        (typeof payload?.detail === 'string' && payload.detail) ||
+        businessMessage ||
         (status && STATUS_MESSAGES[status]) ||
         (error.code === 'ERR_NETWORK' ? '网络连接失败，请检查网络后重试' : '') ||
         '请求失败，请稍后重试',

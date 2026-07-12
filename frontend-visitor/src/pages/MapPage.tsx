@@ -73,11 +73,12 @@ declare global {
 }
 
 let amapLoaderPromise: Promise<any> | null = null
+type MapLoadError = { code: 'configMissing' | 'sdkLoadError'; message: string }
 
 function loadAMap(): Promise<any> {
   if (typeof window === 'undefined') return Promise.reject(new Error('no window'))
   if (!AMAP_KEY || !AMAP_SECURITY_KEY) {
-    return Promise.reject(new Error('地图服务未配置，请联系管理员'))
+    return Promise.reject({ code: 'configMissing', message: '地图服务未配置，请联系管理员' } satisfies MapLoadError)
   }
   if (window.AMap) return Promise.resolve(window.AMap)
   if (amapLoaderPromise) return amapLoaderPromise
@@ -88,9 +89,9 @@ function loadAMap(): Promise<any> {
     script.src = `https://webapi.amap.com/maps?v=2.0&key=${AMAP_KEY}`
     script.async = true
     script.onload = () => resolve(window.AMap)
-    script.onerror = (error) => {
+    script.onerror = () => {
       amapLoaderPromise = null
-      reject(error)
+      reject({ code: 'sdkLoadError', message: '地图加载失败，请稍后重试' } satisfies MapLoadError)
     }
     document.head.appendChild(script)
   })
@@ -161,7 +162,7 @@ export function MapPage({ onLogout }: Props) {
   const [categories, setCategories] = useState<ScenicCategory[]>([])
   const [activeRoute, setActiveRoute] = useState<MapRoute | null>(null)
   const [mapReady, setMapReady] = useState(false)
-  const [mapError, setMapError] = useState('')
+  const [mapError, setMapError] = useState<MapLoadError | null>(null)
   const [activeCategory, setActiveCategory] = useState('all')
   const [categoryPage, setCategoryPage] = useState(0)
   const [keyword, setKeyword] = useState('')
@@ -380,7 +381,9 @@ export function MapPage({ onLogout }: Props) {
       .catch((error) => {
         console.error('AMap load failed', error)
         if (!cancelled) {
-          setMapError(error instanceof Error ? error.message : '地图加载失败，请稍后重试')
+          setMapError(error && typeof error === 'object' && 'code' in error
+            ? error as MapLoadError
+            : { code: 'sdkLoadError', message: '地图加载失败，请稍后重试' })
         }
       })
 
@@ -556,7 +559,10 @@ export function MapPage({ onLogout }: Props) {
             <div ref={mapContainerRef} className="map-page__canvas" />
             {mapError ? (
               <div className="map-route-context" role="alert">
-                {mapError} <button type="button" onClick={() => window.location.reload()}>重新加载</button>
+                {mapError.message}
+                {mapError.code === 'sdkLoadError' ? (
+                  <button type="button" onClick={() => window.location.reload()}>重新加载</button>
+                ) : null}
               </div>
             ) : null}
             {activeRoute ? <div className="map-route-context">正在展示：{activeRoute.name}</div> : null}

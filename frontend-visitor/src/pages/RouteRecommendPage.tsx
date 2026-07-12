@@ -70,12 +70,13 @@ declare global {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let amapLoaderPromise: Promise<any> | null = null
+type MapLoadError = { code: 'configMissing' | 'sdkLoadError'; message: string }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function loadAMap(): Promise<any> {
   if (typeof window === 'undefined') return Promise.reject(new Error('no window'))
   if (!AMAP_KEY || !AMAP_SECURITY_KEY) {
-    return Promise.reject(new Error('地图服务未配置，请联系管理员'))
+    return Promise.reject({ code: 'configMissing', message: '地图服务未配置，请联系管理员' } satisfies MapLoadError)
   }
   if (window.AMap) return Promise.resolve(window.AMap)
   if (amapLoaderPromise) return amapLoaderPromise
@@ -86,9 +87,9 @@ function loadAMap(): Promise<any> {
     script.src = `https://webapi.amap.com/maps?v=2.0&key=${AMAP_KEY}`
     script.async = true
     script.onload = () => resolve(window.AMap)
-    script.onerror = (err) => {
+    script.onerror = () => {
       amapLoaderPromise = null
-      reject(err)
+      reject({ code: 'sdkLoadError', message: '地图加载失败，请稍后重试' } satisfies MapLoadError)
     }
     document.head.appendChild(script)
   })
@@ -131,7 +132,7 @@ export function RouteRecommendPage({ onLogout }: Props) {
     window.sessionStorage.getItem('digitalhuman.tripPlan'),
   ))
   const [loadError, setLoadError] = useState('')
-  const [mapError, setMapError] = useState('')
+  const [mapError, setMapError] = useState<MapLoadError | null>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [amapApi, setAmapApi] = useState<any>(null)
   const mapContainerRef = useRef<HTMLDivElement | null>(null)
@@ -189,7 +190,9 @@ export function RouteRecommendPage({ onLogout }: Props) {
       .catch((error) => {
         console.error('AMap load failed', error)
         if (!cancelled) {
-          setMapError(error instanceof Error ? error.message : '地图加载失败，请稍后重试')
+          setMapError(error && typeof error === 'object' && 'code' in error
+            ? error as MapLoadError
+            : { code: 'sdkLoadError', message: '地图加载失败，请稍后重试' })
         }
       })
 
@@ -373,8 +376,10 @@ export function RouteRecommendPage({ onLogout }: Props) {
                 <div ref={mapContainerRef} className="route-detail__map-canvas" />
                 <div className="route-map-fallback">
                   <strong>{selectedRoute.name}</strong>
-                  <span>{mapError || '高德地图加载中，路线节点已就绪'}</span>
-                  {mapError ? <button type="button" onClick={() => window.location.reload()}>重新加载</button> : null}
+                  <span>{mapError?.message || '高德地图加载中，路线节点已就绪'}</span>
+                  {mapError?.code === 'sdkLoadError' ? (
+                    <button type="button" onClick={() => window.location.reload()}>重新加载</button>
+                  ) : null}
                 </div>
               </div>
 
