@@ -42,8 +42,9 @@ for (const selector of ['.live2d-page {', '.live2d-canvas {', '.digital-human-ch
 }
 const digitalMobile = digitalHumanCss.slice(digitalMobileStart)
 assert.match(digitalMobile, /\.live2d-page\s*\{[^}]*grid-template-rows:\s*minmax\(220px,\s*42vh\)\s+auto[^}]*overflow:\s*visible/s, 'digital-human mobile stage and chat form a natural stack')
-assert.match(digitalMobile, /\.live2d-canvas\s*\{[^}]*position:\s*relative/s, 'digital-human canvas participates in the mobile stack')
-assert.match(digitalMobile, /\.digital-human-chat\s*\{[^}]*position:\s*relative[^}]*height:\s*auto/s, 'digital-human chat remains in document flow')
+assert.match(digitalMobile, /\.live2d-canvas,[^}]*\.digital-human-stage-glow,[^}]*\.digital-human-status,[^}]*\.live2d-page--presentation::after\s*\{[^}]*grid-row:\s*1[^}]*grid-column:\s*1/s, 'digital-human stage layers stay inside the first grid row')
+assert.match(digitalMobile, /\.digital-human-chat\s*\{[^}]*grid-row:\s*2[^}]*position:\s*relative[^}]*height:\s*auto/s, 'digital-human chat remains in the second grid row')
+assert.match(digitalMobile, /\.guide-result-card__actions button\s*\{[^}]*min-height:\s*var\(--touch-target\)/s, 'digital-human result actions expose mobile touch targets')
 
 assert.match(mapPage, /map-page--spot-selected/, 'map exposes selected-spot state to responsive CSS')
 assert.doesNotMatch(mapPage, /<aside className="map-side"[^>]*aria-hidden/, 'visible desktop map sidebar must remain exposed to assistive technology')
@@ -52,6 +53,7 @@ const routeMobile = routeCss.slice(routeCss.lastIndexOf('@media (max-width: 768p
 assert.match(routeMobile, /\.route-detail\s*\{[^}]*display:\s*flex[^}]*flex-direction:\s*column/s, 'route detail stacks map and content')
 assert.match(routeMobile, /\.route-detail__content\s*\{[^}]*position:\s*relative[^}]*overflow:\s*visible/s, 'route summary and timeline remain in flow')
 assert.doesNotMatch(routeMobile, /\.route-node:not\(:last-child\)::after\s*\{[^}]*bottom:\s*-\d+px/s, 'timeline connector must not escape its node')
+assert.match(routeMobile, /\.route-filter select\s*\{[^}]*min-height:\s*var\(--touch-target\)/s, 'route filters expose mobile touch targets')
 assert.match(loginCss, /@media\s*\(max-width:\s*768px\)[\s\S]*\.auth-stage,[\s\S]*\.auth-form\s*\{[^}]*grid-template-columns:\s*1fr/s, 'login form is single-column')
 const homeMobile = homeCss.slice(homeCss.lastIndexOf('@media (max-width: 768px)'))
 assert.doesNotMatch(homeMobile, /\.hp-hero\s*\{[^}]*(?:min-)?height:\s*(?:680|800)px/s, 'home hero must not force tall mobile viewport')

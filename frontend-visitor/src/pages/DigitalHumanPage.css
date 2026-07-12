@@ -764,8 +764,16 @@
     overflow: visible;
   }
 
+  .live2d-canvas,
+  .digital-human-stage-glow,
+  .digital-human-status,
+  .live2d-page--presentation::after {
+    grid-row: 1;
+    grid-column: 1;
+  }
+
   .live2d-canvas {
-    position: relative;
+    position: absolute;
     min-height: 220px;
   }
 
@@ -776,6 +784,7 @@
   }
 
   .digital-human-chat {
+    grid-row: 2;
     position: relative;
     inset: auto;
     width: auto;
@@ -787,6 +796,10 @@
   .digital-chat-actions > .digital-chat-select > button,
   .digital-chat-voice,
   .digital-chat-send {
+    min-height: var(--touch-target);
+  }
+
+  .guide-result-card__actions button {
     min-height: var(--touch-target);
   }
 }

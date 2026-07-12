@@ -436,4 +436,8 @@
   .route-detail__map-link {
     min-height: var(--touch-target);
   }
+
+  .route-filter select {
+    min-height: var(--touch-target);
+  }
 }
