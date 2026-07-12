@@ -42,6 +42,7 @@ import AiModelManagementPage from './AiModelManagementPage'
 import KnowledgeOpenApiPage from './KnowledgeOpenApiPage'
 import OperationsDashboardPage from './OperationsDashboardPage'
 import FeedbackManagementPage from './FeedbackManagementPage'
+import LiveBroadcastManagementPage from './LiveBroadcastManagementPage'
 import type { LoginResult } from '../types/admin'
 
 const { Content } = Layout
@@ -101,6 +102,7 @@ type MenuKey =
   | 'scenic-structured'
   | 'voice-scripts'
   | 'feedback'
+  | 'live-broadcast'
   | 'qa'
   | 'ai-models'
   | 'knowledge'
@@ -122,6 +124,7 @@ const menuPathByKey: Record<MenuKey, string> = {
   'scenic-structured': '/admin/scenic-structured',
   'voice-scripts': '/admin/voice-scripts',
   feedback: '/admin/feedback',
+  'live-broadcast': '/admin/live-broadcast',
   qa: '/admin/qa',
   'ai-models': '/admin/ai-models',
   knowledge: '/admin/knowledge',
@@ -1020,6 +1023,8 @@ function renderPanel(activeKey: MenuKey) {
       return <VoiceScriptPage />
     case 'feedback':
       return <FeedbackManagementPage />
+    case 'live-broadcast':
+      return <LiveBroadcastManagementPage />
     case 'qa':
       return <QaPanel />
     case 'ai-models':

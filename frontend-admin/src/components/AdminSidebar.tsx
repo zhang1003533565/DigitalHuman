@@ -11,6 +11,7 @@
   SettingOutlined,
   UserOutlined,
   MenuOutlined,
+  VideoCameraOutlined,
 } from '@ant-design/icons'
 import { Button, Drawer, Layout, Menu } from 'antd'
 import { useEffect, useState } from 'react'
@@ -67,6 +68,7 @@ const menuItems: MenuProps['items'] = [
     ],
   },
   { key: 'feedback', icon: <CommentOutlined />, label: '游客反馈分析' },
+  { key: 'live-broadcast', icon: <VideoCameraOutlined />, label: '数字人直播' },
   { key: 'qa', icon: <SearchOutlined />, label: '问答记录查询' },
   { key: 'ai-models', icon: <ApiOutlined />, label: 'AI 模型管理' },
   { key: 'knowledge', icon: <BookOutlined />, label: '知识库对接站' },
