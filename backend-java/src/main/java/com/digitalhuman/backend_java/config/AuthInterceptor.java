@@ -68,6 +68,9 @@ public class AuthInterceptor implements HandlerInterceptor {
         if (role == UserRole.ADMIN) {
             return true;
         }
+        if (path.startsWith("/api/admin/live-broadcast")) {
+            return false;
+        }
         if (role == UserRole.OBSERVER) {
             return "GET".equalsIgnoreCase(method);
         }
