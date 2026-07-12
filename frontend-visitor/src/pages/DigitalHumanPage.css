@@ -762,6 +762,11 @@
     height: auto;
     min-height: 100%;
     overflow: visible;
+    touch-action: pan-y;
+  }
+
+  .live2d-page--presentation {
+    touch-action: pan-y;
   }
 
   .live2d-canvas,
@@ -775,6 +780,7 @@
   .live2d-canvas {
     position: absolute;
     min-height: 220px;
+    touch-action: none;
   }
 
   .digital-human-status {
@@ -791,6 +797,22 @@
     height: auto;
     min-height: 420px;
     margin: 0 10px 16px;
+    touch-action: pan-y;
+  }
+
+  .digital-chat-select {
+    flex: 0 1 auto;
+    width: max-content;
+    min-width: max-content;
+  }
+
+  .digital-chat-actions > .digital-chat-select > button {
+    min-width: max-content;
+  }
+
+  .digital-chat-actions > .digital-chat-select > button span:first-child {
+    overflow: visible;
+    text-overflow: clip;
   }
 
   .digital-chat-actions > .digital-chat-select > button,
