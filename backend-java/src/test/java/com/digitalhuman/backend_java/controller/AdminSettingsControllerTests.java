@@ -3,6 +3,9 @@ package com.digitalhuman.backend_java.controller;
 import com.digitalhuman.backend_java.dto.AdminModelTestRequestDto;
 import com.digitalhuman.backend_java.dto.AdminModelTestResponseDto;
 import com.digitalhuman.backend_java.dto.AdminProviderConfigDto;
+import com.digitalhuman.backend_java.dto.AgentHealthTestRequestDto;
+import com.digitalhuman.backend_java.dto.AgentModelBindingItemDto;
+import com.digitalhuman.backend_java.dto.AgentModelBindingPayloadDto;
 import com.digitalhuman.backend_java.model.AdminModelConfig;
 import com.digitalhuman.backend_java.model.AdminProviderConfig;
 import com.digitalhuman.backend_java.model.ModelCategory;
@@ -29,6 +32,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import org.mockito.ArgumentCaptor;
 
 class AdminSettingsControllerTests {
 
@@ -108,6 +112,47 @@ class AdminSettingsControllerTests {
         assertUpstreamFailureIsSafe(400, "{\"message\":\"invalid foreign-secret-token credential\"}");
     }
 
+    @Test
+    void agentManagementCallsSendServiceToken() throws Exception {
+        OkHttpClient httpClient = mock(OkHttpClient.class);
+        List<Request> requests = new java.util.ArrayList<>();
+        when(httpClient.newCall(any(Request.class))).thenAnswer(invocation -> {
+            Request request = invocation.getArgument(0);
+            requests.add(request);
+            Call call = mock(Call.class);
+            String body = request.url().encodedPath().endsWith("runtime-test")
+                    ? "{\"agent\":\"basic_chat\",\"success\":true}"
+                    : "{\"items\":[]}";
+            when(call.execute()).thenReturn(upstreamResponse(request, 200, body));
+            return call;
+        });
+
+        AdminSettingsService service = new AdminSettingsService(modelRepository, providerRepository, new ObjectMapper());
+        ReflectionTestUtils.setField(service, "aiServiceUrl", "http://ai-service.test");
+        ReflectionTestUtils.setField(service, "aiServiceAdminToken", "admin-service-token");
+        ReflectionTestUtils.setField(service, "httpClient", httpClient);
+
+        service.getAgentModelBindings();
+        AgentModelBindingItemDto item = new AgentModelBindingItemDto();
+        item.setAgent("basic_chat");
+        item.setCategory("chat");
+        item.setProvider("DeepSeek");
+        item.setModel("deepseek-chat");
+        item.setTimeoutSeconds(30);
+        AgentModelBindingPayloadDto bindings = new AgentModelBindingPayloadDto();
+        bindings.setItems(List.of(item));
+        when(modelRepository.findByCategoryAndProviderIgnoreCaseAndModelIdIgnoreCase(
+                ModelCategory.CHAT, "DeepSeek", "deepseek-chat")).thenReturn(Optional.of(new AdminModelConfig()));
+        service.updateAgentModelBindings(bindings);
+        AgentHealthTestRequestDto runtime = new AgentHealthTestRequestDto();
+        runtime.setAgent("basic_chat");
+        runtime.setTask("hello");
+        service.testAgent(runtime);
+
+        assertThat(requests).hasSize(3).allSatisfy(request ->
+                assertThat(request.header("X-Service-Token")).isEqualTo("admin-service-token"));
+    }
+
     private void assertUpstreamFailureIsSafe(int status, String body) throws Exception {
         OkHttpClient httpClient = mock(OkHttpClient.class);
         Call call = mock(Call.class);
@@ -116,6 +161,7 @@ class AdminSettingsControllerTests {
 
         AdminSettingsService service = new AdminSettingsService(modelRepository, providerRepository, new ObjectMapper());
         ReflectionTestUtils.setField(service, "aiServiceUrl", "http://ai-service.test");
+        ReflectionTestUtils.setField(service, "aiServiceAdminToken", "admin-service-token");
         ReflectionTestUtils.setField(service, "httpClient", httpClient);
         controller = new AdminSettingsController(service);
         AdminModelConfig model = new AdminModelConfig();
@@ -133,6 +179,10 @@ class AdminSettingsControllerTests {
 
         AdminModelTestResponseDto response = controller.testModel(request);
 
+        ArgumentCaptor<Request> requestCaptor = ArgumentCaptor.forClass(Request.class);
+        verify(httpClient).newCall(requestCaptor.capture());
+        assertThat(requestCaptor.getValue().header("X-Service-Token")).isEqualTo("admin-service-token");
+
         assertThat(response.isSuccess()).isFalse();
         assertThat(response.getProvider()).isEqualTo("DeepSeek");
         assertThat(response.getModelId()).isEqualTo("deepseek-chat");
@@ -141,6 +191,10 @@ class AdminSettingsControllerTests {
 
     private static Response upstreamResponse(int status, String body) {
         Request request = new Request.Builder().url("http://ai-service.test/admin/model-test").build();
+        return upstreamResponse(request, status, body);
+    }
+
+    private static Response upstreamResponse(Request request, int status, String body) {
         return new Response.Builder()
                 .request(request)
                 .protocol(Protocol.HTTP_1_1)

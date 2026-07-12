@@ -222,7 +222,7 @@ public class AdminSettingsService {
                 }
             }
         } catch (Exception syncEx) {
-            System.err.println("[WARN] 同步 provider 到 ai-service 异常：" + syncEx.getMessage());
+            System.err.println("[WARN] 同步 provider 到 ai-service 异常，type=" + syncEx.getClass().getSimpleName());
         }
 
         AdminProviderConfigDto result = new AdminProviderConfigDto();
@@ -267,7 +267,7 @@ public class AdminSettingsService {
                 }
             }
         } catch (Exception syncEx) {
-            System.err.println("[WARN] 同步删除 provider 到 ai-service 异常：" + syncEx.getMessage());
+            System.err.println("[WARN] 同步删除 provider 到 ai-service 异常，type=" + syncEx.getClass().getSimpleName());
         }
     }
 
@@ -331,6 +331,7 @@ public class AdminSettingsService {
             ));
             Request httpRequest = new Request.Builder()
                     .url(aiServiceUrl + "/admin/model-test")
+                    .header("X-Service-Token", aiServiceAdminToken)
                     .post(RequestBody.create(payload, JSON))
                     .build();
             try (Response response = httpClient.newCall(httpRequest).execute()) {
@@ -382,6 +383,7 @@ public class AdminSettingsService {
     public AgentModelBindingPayloadDto getAgentModelBindings() {
         Request request = new Request.Builder()
                 .url(aiServiceUrl + "/agents/model-bindings")
+                .header("X-Service-Token", aiServiceAdminToken)
                 .get()
                 .build();
         try (Response response = httpClient.newCall(request).execute()) {
@@ -406,6 +408,7 @@ public class AdminSettingsService {
             String payload = objectMapper.writeValueAsString(request);
             Request httpRequest = new Request.Builder()
                     .url(aiServiceUrl + "/agents/model-bindings")
+                    .header("X-Service-Token", aiServiceAdminToken)
                     .put(RequestBody.create(payload, JSON))
                     .build();
             try (Response response = httpClient.newCall(httpRequest).execute()) {
@@ -454,6 +457,7 @@ public class AdminSettingsService {
                 .build();
         Request runtimeRequest = new Request.Builder()
                 .url(aiServiceUrl + "/agents/runtime-test")
+                .header("X-Service-Token", aiServiceAdminToken)
                 .post(formBody)
                 .build();
 
@@ -480,7 +484,7 @@ public class AdminSettingsService {
             result.setAgent(agent);
             result.setSuccess(false);
             result.setMessage("智能体任务测试失败");
-            result.setDetail(String.valueOf(exception.getMessage()));
+            result.setDetail("智能体任务测试调用失败，请稍后重试");
             return result;
         }
     }
@@ -506,24 +510,14 @@ public class AdminSettingsService {
             } catch (Exception ignored) {
                 // Fallback to wrapped text payload below.
             }
-            String escaped = body
-                    .replace("\\", "\\\\")
-                    .replace("\"", "\\\"")
-                    .replace("\n", "\\n")
-                    .replace("\r", "\\r");
             int code = response.code();
             return objectMapper.readTree(
-                    "{\"status\":\"degraded\",\"httpStatus\":" + code + ",\"message\":\"ai-service health returned non-json body\",\"raw\":\"" + escaped + "\"}"
+                    "{\"status\":\"degraded\",\"httpStatus\":" + code + ",\"message\":\"ai-service health returned non-json body\"}"
             );
         } catch (Exception exception) {
             try {
-                String escaped = String.valueOf(exception.getMessage())
-                        .replace("\\", "\\\\")
-                        .replace("\"", "\\\"")
-                        .replace("\n", "\\n")
-                        .replace("\r", "\\r");
                 return objectMapper.readTree(
-                        "{\"status\":\"down\",\"message\":\"读取 ai-service 健康状态失败\",\"error\":\"" + escaped + "\"}"
+                        "{\"status\":\"down\",\"message\":\"读取 ai-service 健康状态失败\"}"
                 );
             } catch (Exception secondary) {
                 throw new IllegalArgumentException("读取 ai-service 健康状态失败", exception);
@@ -606,24 +600,7 @@ public class AdminSettingsService {
     }
 
     private String extractAiServiceErrorMessage(String responseBody, String fallback) {
-        if (responseBody == null || responseBody.isBlank()) {
-            return fallback;
-        }
-        try {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> payload = objectMapper.readValue(responseBody, Map.class);
-            Object detail = payload.get("detail");
-            if (detail != null) {
-                return String.valueOf(detail);
-            }
-            Object message = payload.get("message");
-            if (message != null) {
-                return String.valueOf(message);
-            }
-        } catch (Exception ignored) {
-            // Fall back to raw body below.
-        }
-        return responseBody;
+        return fallback;
     }
 
     private void ensureProviderConfigured(String provider) {

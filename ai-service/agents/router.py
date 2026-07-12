@@ -4,7 +4,7 @@ import json
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Form, HTTPException
+from fastapi import APIRouter, Depends, Form, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -18,6 +18,7 @@ from agents.model_binding_service import (
 from agents.runtime_test_service import test_agent_runtime
 from agents.common.types import AgentContext, AgentResult, FALLBACK_ANSWER, normalize_agent_result
 from schemas import AgentOutputResponse
+from security import require_admin_token
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 leader = LeaderAgent()
@@ -213,25 +214,27 @@ def basic_chat_stream(request: BasicChatRequest):
     return StreamingResponse(_sse_generator(), media_type="text/event-stream")
 
 
-@router.get("/model-bindings", response_model=AgentModelBindingPayload)
+@router.get("/model-bindings", response_model=AgentModelBindingPayload, dependencies=[Depends(require_admin_token)])
 def list_model_bindings() -> AgentModelBindingPayload:
     return get_agent_bindings()
 
 
-@router.put("/model-bindings", response_model=AgentModelBindingPayload)
+@router.put("/model-bindings", response_model=AgentModelBindingPayload, dependencies=[Depends(require_admin_token)])
 def save_model_bindings(payload: AgentModelBindingPayload) -> AgentModelBindingPayload:
     try:
         return update_agent_bindings(payload)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.warning("invalid agent model bindings error_type=%s", type(exc).__name__)
+        raise HTTPException(status_code=400, detail="智能体模型编排配置无效") from exc
 
 
-@router.post("/runtime-test")
+@router.post("/runtime-test", dependencies=[Depends(require_admin_token)])
 def runtime_test(agent: str = Form(...), task: str = Form(...)) -> dict[str, object]:
     try:
         return test_agent_runtime(agent, task)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.warning("invalid agent runtime test error_type=%s", type(exc).__name__)
+        raise HTTPException(status_code=400, detail="智能体任务测试请求无效") from exc
 
 
 def _router_degraded_result(agent: str) -> AgentResult:

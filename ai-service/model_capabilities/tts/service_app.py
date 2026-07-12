@@ -62,7 +62,7 @@ async def tts_handler(request: TtsRequest):
             raise
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"TTS conversion failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="TTS conversion failed") from e
 
 
 @app.get("/voices")
@@ -71,7 +71,7 @@ async def voices_handler():
         voices = await list_voice_short_names()
         return JSONResponse({"success": True, "voices": voices})
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch voices: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch voices") from e
 
 
 @app.get("/health")

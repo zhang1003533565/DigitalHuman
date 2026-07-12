@@ -102,7 +102,7 @@ def test_speech_model(provider: str, model_id: str, text: str | None = None) -> 
     try:
         size = asyncio.run(synthesize())
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"语音合成测试失败：{exc}") from exc
+        raise HTTPException(status_code=400, detail="语音合成测试失败") from exc
     return ModelTestResult(True, "语音合成测试成功", f"输出音频大小：{size} 字节")
 
 

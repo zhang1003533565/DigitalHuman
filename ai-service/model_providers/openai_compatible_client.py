@@ -35,10 +35,9 @@ class OpenAICompatibleProviderClient:
             )
             response.raise_for_status()
         except requests.HTTPError as exc:
-            detail = extract_http_error_detail(exc.response)
-            raise HTTPException(status_code=400, detail=f"Embedding 接口测试失败：{detail}") from exc
+            raise HTTPException(status_code=400, detail="Embedding 接口测试失败") from exc
         except requests.RequestException as exc:
-            raise HTTPException(status_code=502, detail=f"Embedding 接口连接失败：{exc}") from exc
+            raise HTTPException(status_code=502, detail="Embedding 接口连接失败") from exc
 
         data = response.json().get("data") or []
         if not data:
@@ -82,8 +81,7 @@ class OpenAICompatibleProviderClient:
             )
             response.raise_for_status()
         except requests.HTTPError as exc:
-            detail = extract_http_error_detail(exc.response)
-            raise HTTPException(status_code=400, detail=f"对话接口测试失败：{detail}") from exc
+            raise HTTPException(status_code=400, detail="对话接口测试失败") from exc
         except requests.Timeout as exc:
             raise ProviderTimeoutError("provider request timed out") from exc
         except requests.RequestException as exc:
@@ -123,10 +121,9 @@ class OpenAICompatibleProviderClient:
             )
             response.raise_for_status()
         except requests.HTTPError as exc:
-            detail = extract_http_error_detail(exc.response)
             if exc.response is not None:
                 exc.response.close()
-            raise HTTPException(status_code=400, detail=f"对话接口流式调用失败：{detail}") from exc
+            raise HTTPException(status_code=400, detail="对话接口流式调用失败") from exc
         except requests.Timeout as exc:
             raise ProviderTimeoutError("provider stream timed out") from exc
         except requests.RequestException as exc:

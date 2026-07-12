@@ -51,7 +51,7 @@ async def synthesize_tts(request: TtsRequest) -> Response:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"TTS conversion failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail="TTS conversion failed") from exc
 
 
 @router.get("/voices")
@@ -60,4 +60,4 @@ async def list_tts_voices() -> JSONResponse:
         voices = await list_voice_short_names()
         return JSONResponse({"success": True, "voices": voices})
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch voices: {exc}") from exc
+        raise HTTPException(status_code=500, detail="Failed to fetch voices") from exc

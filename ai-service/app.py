@@ -4,13 +4,11 @@ FastAPI service for DigitalHuman AI capabilities.
 """
 
 import contextvars
-import hmac
 import logging
-import os
 import re
 import uuid
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from agents.router import router as agents_router
 
 from model_capabilities.testing.model_test_service import test_model
@@ -18,6 +16,7 @@ from model_capabilities.tts.router import router as tts_router
 from model_providers.config_store import delete_provider_config, load_provider_configs, save_provider_config
 from runtime.provider_runtime import provider_health_summary
 from schemas import ModelTestRequest, ModelTestResponse, ProviderConfigRequest, ProviderConfigResponse, ProviderDeleteRequest
+from security import require_admin_token
 
 
 app = FastAPI(
@@ -28,7 +27,6 @@ app.include_router(tts_router)
 app.include_router(agents_router)
 
 TRACE_ID_HEADER = "X-Trace-Id"
-SERVICE_TOKEN_HEADER = "X-Service-Token"
 TRACE_ID_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{8,128}$")
 request_trace_id = contextvars.ContextVar("request_trace_id", default="")
 logger = logging.getLogger(__name__)
@@ -49,14 +47,6 @@ async def trace_requests(request: Request, call_next):
         request_trace_id.reset(token)
 
 
-def require_admin_token(x_service_token: str | None = Header(default=None, alias=SERVICE_TOKEN_HEADER)) -> None:
-    expected = os.getenv("AI_SERVICE_ADMIN_TOKEN", "")
-    if not x_service_token:
-        raise HTTPException(status_code=401, detail="service token required")
-    if not expected or not hmac.compare_digest(x_service_token.encode(), expected.encode()):
-        raise HTTPException(status_code=403, detail="invalid service token")
-
-
 def provider_response(item: dict[str, object]) -> ProviderConfigResponse:
     api_key = str(item.get("apiKey") or item.get("api_key") or "")
     masked = "" if not api_key else ("*" * max(4, min(12, len(api_key) - 4)) + api_key[-4:])
@@ -73,7 +63,7 @@ def health() -> dict[str, object]:
     return {"status": "ok", "checks": checks}
 
 
-@app.post("/admin/model-test", response_model=ModelTestResponse)
+@app.post("/admin/model-test", response_model=ModelTestResponse, dependencies=[Depends(require_admin_token)])
 def model_test(request: ModelTestRequest) -> ModelTestResponse:
     try:
         result = test_model(request.provider, request.category, request.model_id, request.text, request.image_data_url, request.mode, request.base_url, request.api_key)
@@ -92,7 +82,8 @@ def model_test(request: ModelTestRequest) -> ModelTestResponse:
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"模型测试内部异常：{exc}") from exc
+        logger.exception("model test failed error_type=%s", type(exc).__name__)
+        raise HTTPException(status_code=500, detail="模型测试内部异常") from exc
 
 
 @app.get("/admin/providers", response_model=list[ProviderConfigResponse], dependencies=[Depends(require_admin_token)])

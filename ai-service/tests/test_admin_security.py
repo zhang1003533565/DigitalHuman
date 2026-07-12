@@ -51,6 +51,36 @@ class AdminProviderSecurityTests(unittest.TestCase):
         self.assertEqual(self.client.get("/health", headers={"X-Trace-Id": supplied}).headers["X-Trace-Id"], supplied)
         self.assertTrue(self.client.get("/health").headers["X-Trace-Id"])
 
+    @patch("app.test_model")
+    def test_model_test_requires_service_token(self, test_model) -> None:
+        payload = {"provider": "DeepSeek", "category": "chat", "modelId": "deepseek-chat"}
+        self.assertEqual(self.client.post("/admin/model-test", json=payload).status_code, 401)
+        self.assertEqual(self.client.post("/admin/model-test", json=payload, headers={"X-Service-Token": "wrong"}).status_code, 403)
+        test_model.return_value = type("Result", (), {
+            "success": True, "message": "ok", "detail": None, "caption": None,
+            "ocr_text": None, "model_answer": None, "scene_summary": None,
+        })()
+        response = self.client.post("/admin/model-test", json=payload, headers={"X-Service-Token": self.token})
+        self.assertEqual(response.status_code, 200)
+
+    def test_agent_management_routes_require_service_token(self) -> None:
+        bindings = {"items": []}
+        for method, path, kwargs in (
+            (self.client.get, "/agents/model-bindings", {}),
+            (self.client.put, "/agents/model-bindings", {"json": bindings}),
+            (self.client.post, "/agents/runtime-test", {"data": {"agent": "basic_chat", "task": "hello"}}),
+        ):
+            self.assertEqual(method(path, **kwargs).status_code, 401)
+            self.assertEqual(method(path, headers={"X-Service-Token": "wrong"}, **kwargs).status_code, 403)
+
+    @patch("agents.router.update_agent_bindings", return_value={"items": []})
+    @patch("agents.router.test_agent_runtime", return_value={"success": True})
+    def test_agent_management_routes_accept_service_token(self, _runtime, _update) -> None:
+        headers = {"X-Service-Token": self.token}
+        self.assertEqual(self.client.get("/agents/model-bindings", headers=headers).status_code, 200)
+        self.assertEqual(self.client.put("/agents/model-bindings", json={"items": []}, headers=headers).status_code, 200)
+        self.assertEqual(self.client.post("/agents/runtime-test", data={"agent": "basic_chat", "task": "hello"}, headers=headers).status_code, 200)
+
 
 if __name__ == "__main__":
     unittest.main()
