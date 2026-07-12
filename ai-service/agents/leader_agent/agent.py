@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Generator
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+from typing import Any, Callable, Generator, TypeVar
 
 from agents.common.base import BaseAgent
-from agents.common.types import AgentContext, AgentResult
+from agents.common.types import AgentContext, AgentResult, FALLBACK_ANSWER, normalize_agent_result
 from agents.common.utils import normalize_text
 from model_providers.registry import get_provider_client
 
@@ -17,6 +18,8 @@ DEFAULT_SYSTEM_PROMPT = (
     "请将回复字数控制在200字以内。"
 )
 
+_T = TypeVar("_T")
+
 
 class LeaderAgent(BaseAgent):
     name = "leader_agent"
@@ -27,20 +30,42 @@ class LeaderAgent(BaseAgent):
         if isinstance(prepared, AgentResult):
             return prepared
 
-        messages, provider, model, provider_config = prepared
+        messages, provider, model, provider_config, timeout_seconds = prepared
         history_count = len(messages) - 2
-        client = get_provider_client(provider, provider_config)
-        answer = client.generate_answer(model, messages, temperature=0.6)
+        try:
+            client = get_provider_client(provider, provider_config)
+            answer = _call_with_timeout(
+                lambda: client.generate_answer(model, messages, temperature=0.6),
+                timeout_seconds,
+            )
+            output = normalize_agent_result(
+                {
+                    "answer": answer,
+                    "usedProvider": provider,
+                    "usedModel": model,
+                    "historyCount": history_count,
+                    "dispatchEnabled": False,
+                },
+                provider=provider,
+                model=model,
+            )
+        except Exception:
+            output = normalize_agent_result(
+                {
+                    "answer": FALLBACK_ANSWER,
+                    "usedProvider": provider,
+                    "usedModel": model,
+                    "historyCount": history_count,
+                    "dispatchEnabled": False,
+                },
+                provider=provider,
+                model=model,
+                degraded=True,
+            )
         return AgentResult(
             agent=self.name,
             success=True,
-            output={
-                "answer": answer,
-                "usedProvider": provider,
-                "usedModel": model,
-                "historyCount": history_count,
-                "dispatchEnabled": False,
-            },
+            output=output,
             warnings=[],
         )
 
@@ -49,7 +74,7 @@ class LeaderAgent(BaseAgent):
         if isinstance(prepared, AgentResult):
             return prepared
 
-        messages, provider, model, provider_config = prepared
+        messages, provider, model, provider_config, _timeout_seconds = prepared
         client = get_provider_client(provider, provider_config)
         stream_fn = getattr(client, "generate_answer_stream", None)
         if callable(stream_fn):
@@ -79,7 +104,7 @@ class LeaderAgent(BaseAgent):
 
     def _prepare_messages(
         self, context: AgentContext
-    ) -> tuple[list[dict[str, object]], str, str, dict[str, str]] | AgentResult:
+    ) -> tuple[list[dict[str, object]], str, str, dict[str, str], float] | AgentResult:
         message = normalize_text(context.metadata.get("message"))
         if not message:
             return AgentResult(agent=self.name, success=False, output={}, warnings=["message 不能为空"])
@@ -97,11 +122,32 @@ class LeaderAgent(BaseAgent):
             )
 
         provider_config = {"provider": provider, "baseUrl": base_url, "apiKey": api_key}
+        timeout_seconds = _normalize_timeout(context.metadata.get("timeoutSeconds"))
         history = _normalize_history(context.metadata.get("history"))
         system_prompt = normalize_text(context.metadata.get("systemPrompt")) or DEFAULT_SYSTEM_PROMPT
         messages: list[dict[str, object]] = [{"role": "system", "content": system_prompt}, *history]
         messages.append({"role": "user", "content": message})
-        return messages, provider, model, provider_config
+        return messages, provider, model, provider_config, timeout_seconds
+
+
+def _normalize_timeout(value: object) -> float:
+    try:
+        timeout = float(value)
+    except (TypeError, ValueError):
+        return 90.0
+    return timeout if 0 < timeout <= 600 else 90.0
+
+
+def _call_with_timeout(call: Callable[[], _T], timeout_seconds: float) -> _T:
+    executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="leader-provider")
+    future = executor.submit(call)
+    try:
+        return future.result(timeout=timeout_seconds)
+    except FutureTimeoutError:
+        future.cancel()
+        raise
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
 
 def _normalize_history(raw_history: Any) -> list[dict[str, str]]:

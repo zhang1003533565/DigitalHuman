@@ -13,7 +13,10 @@ from runtime.provider_runtime import provider_health_summary
 from schemas import ModelTestRequest, ModelTestResponse, ProviderConfigRequest, ProviderConfigResponse, ProviderDeleteRequest
 
 
-app = FastAPI(title="DigitalHuman AI Service")
+app = FastAPI(
+    title="DigitalHuman AI Service",
+    description="AI agent responses use a stable structured output contract with safe degradation.",
+)
 app.include_router(tts_router)
 app.include_router(agents_router)
 

@@ -16,6 +16,7 @@ from agents.model_binding_service import (
 )
 from agents.runtime_test_service import test_agent_runtime
 from agents.common.types import AgentContext, AgentResult
+from schemas import AgentOutputResponse
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 leader = LeaderAgent()
@@ -30,13 +31,14 @@ class BasicChatRequest(BaseModel):
     model: str = Field(default="")
     base_url: str = Field(default="", alias="baseUrl")
     api_key: str = Field(default="", alias="apiKey")
+    timeout_seconds: float = Field(default=90, alias="timeoutSeconds", gt=0, le=600)
 
 
 class BasicChatResponse(BaseModel):
     success: bool
     agent: str
     warnings: list[str] = Field(default_factory=list)
-    output: dict[str, object]
+    output: AgentOutputResponse
 
 
 @router.get("/health")
@@ -73,6 +75,7 @@ def leader_chat(request: BasicChatRequest) -> BasicChatResponse:
             "model": request.model,
             "baseUrl": request.base_url,
             "apiKey": request.api_key,
+            "timeoutSeconds": request.timeout_seconds,
         },
     )
     result = leader.run(context)
@@ -97,6 +100,7 @@ def leader_chat_stream(request: BasicChatRequest):
             "model": request.model,
             "baseUrl": request.base_url,
             "apiKey": request.api_key,
+            "timeoutSeconds": request.timeout_seconds,
         },
     )
     token_gen = leader.run_stream(context)
@@ -137,6 +141,7 @@ def basic_chat(request: BasicChatRequest) -> BasicChatResponse:
             "model": request.model,
             "baseUrl": request.base_url,
             "apiKey": request.api_key,
+            "timeoutSeconds": request.timeout_seconds,
         },
     )
     result = basic_chat_agent.run(context)
@@ -161,6 +166,7 @@ def basic_chat_stream(request: BasicChatRequest):
             "model": request.model,
             "baseUrl": request.base_url,
             "apiKey": request.api_key,
+            "timeoutSeconds": request.timeout_seconds,
         },
     )
     token_gen = basic_chat_agent.run_stream(context)

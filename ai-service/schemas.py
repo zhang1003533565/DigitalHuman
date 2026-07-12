@@ -3,6 +3,19 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 
+class AgentOutputResponse(BaseModel):
+    answer: str
+    spots: list[object] = Field(default_factory=list)
+    routes: list[object] = Field(default_factory=list)
+    suggestions: list[object] = Field(default_factory=list)
+    sources: list[object] = Field(default_factory=list)
+    degraded: bool = False
+    provider: str = ""
+    model: str = ""
+
+    model_config = {"extra": "allow"}
+
+
 class ModelTestRequest(BaseModel):
     provider: str = Field(..., min_length=1)
     category: str = Field(..., min_length=1)
