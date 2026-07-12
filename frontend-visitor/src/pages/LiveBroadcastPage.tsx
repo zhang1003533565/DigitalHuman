@@ -14,6 +14,7 @@ import {
   type PixiApplication,
 } from '../digitalHuman/shared'
 import { resolveCurrentLivePosition, type LivePosition } from '../live/liveTimeline'
+import { createLiveSpeechKey, parseLiveGuideStreamData } from '../live/liveBroadcastRuntime'
 import './LiveBroadcastPage.css'
 
 type LivePhase = 'syncing' | 'broadcasting' | 'asking' | 'answering' | 'resuming' | 'unavailable' | 'error'
@@ -37,9 +38,11 @@ export function LiveBroadcastPage({ onLogout }: LiveBroadcastPageProps) {
   const requestRef = useRef<AbortController | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const audioUrlRef = useRef<string | null>(null)
+  const audioCleanupRef = useRef<(() => void) | null>(null)
   const versionRef = useRef<number | null>(null)
   const syncSequenceRef = useRef(0)
   const spokenItemRef = useRef<string | null>(null)
+  const speechGenerationRef = useRef(0)
   const snapshotRef = useRef<LiveStatusSnapshot | null>(null)
   const [phase, setPhase] = useState<LivePhase>('syncing')
   const [position, setPosition] = useState<LivePosition | null>(null)
@@ -51,34 +54,49 @@ export function LiveBroadcastPage({ onLogout }: LiveBroadcastPageProps) {
   const stopPlayback = useCallback(() => {
     requestRef.current?.abort()
     requestRef.current = null
-    audioRef.current?.pause()
-    if (audioRef.current) {
-      audioRef.current.removeAttribute('src')
-      audioRef.current.load()
-    }
-    audioRef.current = null
+    audioCleanupRef.current?.()
+    audioCleanupRef.current = null
     modelRef.current?.stopSpeaking?.()
     if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current)
     audioUrlRef.current = null
   }, [])
 
-  const playText = useCallback(async (text: string, signal: AbortSignal, onEnded?: () => void) => {
+  const playText = useCallback(async (text: string, signal: AbortSignal) => {
     const response = await axios.post(TTS_ENDPOINT, createTtsPayload(text), { responseType: 'blob', signal })
     if (signal.aborted) return
     const audioUrl = URL.createObjectURL(response.data)
     audioUrlRef.current = audioUrl
     const audio = new Audio(audioUrl)
     audioRef.current = audio
-    audio.addEventListener('ended', () => {
-      if (audioRef.current === audio) audioRef.current = null
-      URL.revokeObjectURL(audioUrl)
-      if (audioUrlRef.current === audioUrl) audioUrlRef.current = null
-      onEnded?.()
-    }, { once: true })
     await new Promise<void>((resolve, reject) => {
-      audio.addEventListener('ended', () => resolve(), { once: true })
-      audio.addEventListener('error', () => reject(new Error('语音播放失败')), { once: true })
-      void audio.play().catch(reject)
+      let settled = false
+      const cleanup = () => {
+        audio.removeEventListener('ended', handleEnded)
+        audio.removeEventListener('error', handleError)
+        signal.removeEventListener('abort', handleAbort)
+        audio.pause()
+        audio.removeAttribute('src')
+        audio.load()
+        if (audioRef.current === audio) audioRef.current = null
+        if (audioUrlRef.current === audioUrl) audioUrlRef.current = null
+        URL.revokeObjectURL(audioUrl)
+      }
+      const settle = (error?: Error) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        if (audioCleanupRef.current === abortPlayback) audioCleanupRef.current = null
+        if (error) reject(error); else resolve()
+      }
+      const handleEnded = () => settle()
+      const handleError = () => settle(new Error('语音播放失败'))
+      const handleAbort = () => settle(new DOMException('播放已取消', 'AbortError'))
+      const abortPlayback = () => handleAbort()
+      audioCleanupRef.current = abortPlayback
+      audio.addEventListener('ended', handleEnded)
+      audio.addEventListener('error', handleError)
+      signal.addEventListener('abort', handleAbort, { once: true })
+      void audio.play().catch((error) => settle(error instanceof Error ? error : new Error(String(error))))
     })
   }, [])
 
@@ -105,6 +123,8 @@ export function LiveBroadcastPage({ onLogout }: LiveBroadcastPageProps) {
   const syncLiveStatus = useCallback(async (reason: string) => {
     const sequence = ++syncSequenceRef.current
     stopPlayback()
+    spokenItemRef.current = null
+    speechGenerationRef.current += 1
     const controller = new AbortController()
     requestRef.current = controller
     setPhase(reason === 'initial' ? 'syncing' : 'resuming')
@@ -141,7 +161,7 @@ export function LiveBroadcastPage({ onLogout }: LiveBroadcastPageProps) {
 
   useEffect(() => {
     if (phase !== 'broadcasting' || !position) return
-    const speechKey = `${position.versionId}:${position.item.itemId}`
+    const speechKey = createLiveSpeechKey(position.versionId, position.item.itemId, speechGenerationRef.current)
     if (spokenItemRef.current === speechKey) return
     spokenItemRef.current = speechKey
     stopPlayback()
@@ -165,7 +185,9 @@ export function LiveBroadcastPage({ onLogout }: LiveBroadcastPageProps) {
       app.stage.addChild(model)
       pixiRef.current = app
       modelRef.current = model
-    }).catch(() => setError('数字人舞台加载失败，直播字幕仍可继续观看。'))
+    }).catch(() => {
+      if (!cancelled) setError('数字人舞台加载失败，直播字幕仍可继续观看。')
+    })
     return () => { cancelled = true; modelRef.current?.destroy?.(); pixiRef.current?.destroy(true, { children: true }) }
   }, [])
 
@@ -178,6 +200,7 @@ export function LiveBroadcastPage({ onLogout }: LiveBroadcastPageProps) {
     setAnswer('')
     const controller = new AbortController()
     requestRef.current = controller
+    let receivedAnswer = false
     try {
       const user = getStoredUser()
       const response = await fetch('/api/user/guide/chat/stream', {
@@ -198,18 +221,29 @@ export function LiveBroadcastPage({ onLogout }: LiveBroadcastPageProps) {
           if (!line.startsWith('data:')) continue
           const raw = line.slice(5).trim(); if (!raw || raw === '[DONE]') continue
           try {
-            const data = JSON.parse(raw)
+            const data = parseLiveGuideStreamData(raw)
+            if (!data) continue
             if (data.sessionId) window.sessionStorage.setItem(LIVE_GUIDE_SESSION_KEY, data.sessionId)
             if (data.token) { fullAnswer += data.token; setAnswer(fullAnswer) }
-          } catch { /* ignore malformed event */ }
+          } catch (parseError) {
+            if (parseError instanceof SyntaxError) continue
+            throw parseError
+          }
         }
       }
-      if (fullAnswer) await playText(fullAnswer, controller.signal)
-      await syncLiveStatus('answer-complete')
+      if (!fullAnswer.trim()) throw new Error('个人问答没有返回有效内容')
+      receivedAnswer = true
+      try {
+        await playText(fullAnswer, controller.signal)
+      } catch (speechError) {
+        if (!controller.signal.aborted) setError(speechError instanceof Error ? `回答已生成，但${speechError.message}` : '回答语音播放失败')
+      }
     } catch (askError) {
       if (controller.signal.aborted) return
       setError(askError instanceof Error ? askError.message : '提问失败')
       setPhase('error')
+    } finally {
+      if (receivedAnswer && !controller.signal.aborted) await syncLiveStatus('answer-complete')
     }
   }
 
@@ -232,13 +266,14 @@ export function LiveBroadcastPage({ onLogout }: LiveBroadcastPageProps) {
 
   const nextItem = position && snapshot?.items?.[(position.itemIndex + 1) % (snapshot.items.length || 1)]
   const progress = position ? Math.min(100, position.itemOffsetMs / position.item.durationMs * 100) : 0
+  const isInteractionBusy = ['syncing', 'asking', 'answering', 'resuming'].includes(phase)
 
   return <div className="live-broadcast-page">
     <VisitorTopNav onLogout={onLogout} />
     <main className="live-broadcast-page__body">
       <section className="live-stage" aria-label="数字人直播舞台">
         <canvas ref={canvasRef} className="live-stage__canvas" />
-        <div className="live-stage__badge">持续直播</div>
+        <div className="live-stage__badge">{snapshot?.status === 'live' ? '直播中' : phase === 'error' ? '同步失败' : '准备中'}</div>
         <div className="live-stage__subtitle" aria-live="polite">
           <strong>{position?.item.title ?? (phase === 'unavailable' ? '直播内容准备中' : '正在同步直播')}</strong>
           <p>{position?.item.content ?? error}</p>
@@ -255,7 +290,7 @@ export function LiveBroadcastPage({ onLogout }: LiveBroadcastPageProps) {
           <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="输入你想了解的问题" />
           <div className="live-interaction__actions">
             <button type="button" onClick={startVoiceQuestion}>语音提问</button>
-            <button type="submit" disabled={!draft.trim() || phase === 'asking'}>发送</button>
+            <button type="submit" disabled={!draft.trim() || isInteractionBusy}>发送</button>
             <button type="button" onClick={() => { stopPlayback(); void syncLiveStatus('answer-complete') }}>停止本地回答</button>
           </div>
         </form>

@@ -6,6 +6,7 @@ import './MapPage.css'
 import { VisitorTopNav } from '../components/VisitorTopNav'
 import { DIGITAL_HUMAN_ROUTE } from '../digitalHuman/shared'
 import { parseNavigationContext } from './navigationContext'
+import { getLiveStatus } from '../api/liveBroadcast'
 
 type Props = {
   onLogout: () => void
@@ -170,6 +171,7 @@ export function MapPage({ onLogout }: Props) {
   const [selectedFacility, setSelectedFacility] = useState<ScenicFacility | null>(null)
   const [cardPosition, setCardPosition] = useState<CardPosition | null>(null)
   const [hasAutoFitFacilities, setHasAutoFitFacilities] = useState(false)
+  const [liveStatus, setLiveStatus] = useState<'loading' | 'live' | 'ready' | 'error'>('loading')
   const mapContainerRef = useRef<HTMLDivElement | null>(null)
   const mapInstanceRef = useRef<any>(null)
   const geolocationRef = useRef<any>(null)
@@ -210,6 +212,14 @@ export function MapPage({ onLogout }: Props) {
 
     setCardPosition({ left, top })
   }
+
+  useEffect(() => {
+    const controller = new AbortController()
+    getLiveStatus({ signal: controller.signal })
+      .then((status) => setLiveStatus(status.status === 'live' ? 'live' : 'ready'))
+      .catch(() => { if (!controller.signal.aborted) setLiveStatus('error') })
+    return () => controller.abort()
+  }, [])
 
   useEffect(() => {
     selectedFacilityRef.current = selectedFacility
@@ -701,20 +711,20 @@ export function MapPage({ onLogout }: Props) {
             <div className="side-card live-card">
               <div className="side-card__head">
                 <h3>AI数字人直播</h3>
-                <span className="side-card__status">在线</span>
+                <span className="side-card__status">{liveStatus === 'live' ? '在线' : liveStatus === 'error' ? '同步失败' : '准备中'}</span>
               </div>
               <div className="live-card__chat">
                 <div className="live-card__msg">
                   <span className="live-card__msg-tag live-card__msg-tag--cyan">灵</span>
-                  <b>灵灵：</b>洗心池有什么特别？
+                  <b>直播讲解示例：</b>景区文化与游览提示
                 </div>
                 <div className="live-card__msg">
                   <span className="live-card__msg-tag live-card__msg-tag--gold">灵</span>
-                  <b>灵灵：</b>灵山大佛多高呢？
+                  <b>直播讲解示例：</b>景点故事与参观礼仪
                 </div>
                 <div className="live-card__msg">
                   <span className="live-card__msg-tag live-card__msg-tag--cyan">灵</span>
-                  <b>灵灵：</b>想了解附近的吃饭地点
+                  <b>直播讲解示例：</b>路线与附近服务介绍
                 </div>
               </div>
               <div className="live-card__actions">
