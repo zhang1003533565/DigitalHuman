@@ -11,7 +11,7 @@ type PublishedLiveStatus = {
   currentItemIndex: number
   currentItemOffsetMs: number
   cycleOffsetMs: number
-  items: Array<Omit<LiveTimelineItem, 'itemId'> & { id: number }>
+  items: LiveTimelineItem[]
 }
 
 type NotPublishedLiveStatus = {
@@ -47,7 +47,7 @@ export async function getLiveStatus(options: GetLiveStatusOptions = {}): Promise
   return {
     ...data,
     status: 'live',
-    items: data.items.map(({ id, ...item }) => ({ ...item, itemId: id })),
+    items: data.items,
     receivedAtClientMs,
     clockOffsetMs,
   }

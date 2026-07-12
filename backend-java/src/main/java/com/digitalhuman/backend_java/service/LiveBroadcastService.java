@@ -88,8 +88,8 @@ public class LiveBroadcastService {
             List<LiveBroadcastVersionItem> items = snapshots.findByVersionIdOrderBySortOrderAscIdAsc(version.getId());
             var position = timelineResolver.resolve(version.getPublishedAt(), serverTime,
                     items.stream().map(i -> new LiveTimelineResolver.TimelineItem(i.getSourceItemId(), i.getDurationMs())).toList());
-            List<LiveScriptItemDto> dtoItems = items.stream().map(i -> new LiveScriptItemDto(i.getSourceItemId(), i.getTitle(),
-                    i.getContent(), i.getDurationMs(), i.getSortOrder(), null, null)).toList();
+            List<VisitorLiveItemDto> dtoItems = items.stream().map(i -> new VisitorLiveItemDto(i.getSourceItemId(), i.getTitle(),
+                    i.getContent(), i.getDurationMs(), i.getSortOrder())).toList();
             return new VisitorLiveStatusDto("published", serverTime, version.getId(), version.getPublishedAt(),
                     position.totalDurationMs(), position.itemId(), position.itemIndex(), position.itemOffsetMs(),
                     position.cycleOffsetMs(), dtoItems);

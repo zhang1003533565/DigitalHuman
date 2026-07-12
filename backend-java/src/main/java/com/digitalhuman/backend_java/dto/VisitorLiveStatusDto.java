@@ -15,7 +15,7 @@ public record VisitorLiveStatusDto(
         Integer currentItemIndex,
         Long currentItemOffsetMs,
         Long cycleOffsetMs,
-        List<LiveScriptItemDto> items
+        List<VisitorLiveItemDto> items
 ) {
     public static VisitorLiveStatusDto notPublished(Instant serverTime) {
         return new VisitorLiveStatusDto("notPublished", serverTime, null, null, null, null, null, null, null, null);

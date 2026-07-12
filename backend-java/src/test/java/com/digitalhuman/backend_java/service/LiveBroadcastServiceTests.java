@@ -74,6 +74,7 @@ class LiveBroadcastServiceTests {
         assertEquals(1, status.currentItemIndex());
         assertEquals(2000L, status.currentItemOffsetMs());
         assertEquals(5000L, status.cycleOffsetMs());
+        assertEquals(1L, status.items().get(0).itemId());
     }
 
     private LiveScriptItem draft(Long id, String title, String content, Long duration, int order, boolean enabled) {

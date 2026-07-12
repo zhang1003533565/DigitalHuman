@@ -34,12 +34,15 @@ type SpeechRecognitionLike = {
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike
 
 const LIVE_GUIDE_SESSION_KEY = 'digitalhuman.visitor.liveGuideSessionId'
+const LIVE_STATUS_POLL_INTERVAL_MS = 30_000
 
 export function LiveBroadcastPage({ onLogout }: LiveBroadcastPageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const modelRef = useRef<Live2DModel | null>(null)
   const pixiRef = useRef<PixiApplication | null>(null)
-  const requestRef = useRef<AbortController | null>(null)
+  const syncRequestRef = useRef<AbortController | null>(null)
+  const playbackRequestRef = useRef<AbortController | null>(null)
+  const interactionRequestRef = useRef<AbortController | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const audioUrlRef = useRef<string | null>(null)
   const audioCleanupRef = useRef<(() => void) | null>(null)
@@ -60,8 +63,8 @@ export function LiveBroadcastPage({ onLogout }: LiveBroadcastPageProps) {
   const [interactionError, setInteractionError] = useState('')
 
   const stopPlayback = useCallback(() => {
-    requestRef.current?.abort()
-    requestRef.current = null
+    playbackRequestRef.current?.abort()
+    playbackRequestRef.current = null
     audioCleanupRef.current?.()
     audioCleanupRef.current = null
     if (modelRef.current) stopSpeech(modelRef.current)
@@ -151,12 +154,17 @@ export function LiveBroadcastPage({ onLogout }: LiveBroadcastPageProps) {
 
   const syncLiveStatus = useCallback(async (reason: string) => {
     const sequence = ++syncSequenceRef.current
-    stopPlayback()
-    spokenItemRef.current = null
-    speechGenerationRef.current += 1
+    const previousSnapshot = snapshotRef.current
+    if (reason === 'answer-complete') {
+      spokenItemRef.current = null
+      speechGenerationRef.current += 1
+    }
+    syncRequestRef.current?.abort()
     const controller = new AbortController()
-    requestRef.current = controller
-    setPhase(reason === 'initial' ? 'syncing' : 'resuming')
+    syncRequestRef.current = controller
+    if (!previousSnapshot || previousSnapshot.status !== 'live') {
+      setPhase(reason === 'initial' ? 'syncing' : 'resuming')
+    }
     setSyncError('')
     try {
       const snapshot = await getLiveStatus({ signal: controller.signal })
@@ -164,10 +172,18 @@ export function LiveBroadcastPage({ onLogout }: LiveBroadcastPageProps) {
       applySnapshot(snapshot)
     } catch (syncError) {
       if (controller.signal.aborted) return
-      setSyncError(syncError instanceof Error ? syncError.message : '直播同步失败')
-      setPhase('error')
+      setSyncError(syncError instanceof Error ? `直播同步失败：${syncError.message}` : '直播同步失败，请重新连接。')
+      if (previousSnapshot?.status === 'live') {
+        spokenItemRef.current = null
+        setPosition(resolveCurrentLivePosition(previousSnapshot, Date.now()))
+        setPhase('broadcasting')
+      } else {
+        setPhase('error')
+      }
+    } finally {
+      if (syncRequestRef.current === controller) syncRequestRef.current = null
     }
-  }, [applySnapshot, stopPlayback])
+  }, [applySnapshot])
 
   useEffect(() => {
     mountedRef.current = true
@@ -176,15 +192,23 @@ export function LiveBroadcastPage({ onLogout }: LiveBroadcastPageProps) {
       const snapshot = snapshotRef.current
       if (snapshot?.status === 'live') setPosition(resolveCurrentLivePosition(snapshot, Date.now()))
     }, 250)
+    const pollTimer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void syncLiveStatus('poll')
+    }, LIVE_STATUS_POLL_INTERVAL_MS)
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') void syncLiveStatus('visibility-resume')
     }
     document.addEventListener('visibilitychange', handleVisibility)
     return () => {
       window.clearInterval(timer)
+      window.clearInterval(pollTimer)
       window.clearTimeout(initialSync)
       document.removeEventListener('visibilitychange', handleVisibility)
       syncSequenceRef.current += 1
+      syncRequestRef.current?.abort()
+      syncRequestRef.current = null
+      interactionRequestRef.current?.abort()
+      interactionRequestRef.current = null
       mountedRef.current = false
       recognitionGenerationRef.current += 1
       recognitionRef.current?.abort?.()
@@ -199,10 +223,16 @@ export function LiveBroadcastPage({ onLogout }: LiveBroadcastPageProps) {
     const speechKey = createLiveSpeechKey(position.versionId, position.item.itemId, speechGenerationRef.current)
     if (spokenItemRef.current === speechKey) return
     spokenItemRef.current = speechKey
+    setInteractionError('')
     stopPlayback()
     const controller = new AbortController()
-    requestRef.current = controller
-    void playText(position.item.content, controller.signal).catch(() => undefined)
+    playbackRequestRef.current = controller
+    void playText(position.item.content, controller.signal).catch((speechError) => {
+      if (controller.signal.aborted) return
+      const message = speechError instanceof Error ? speechError.message : String(speechError)
+      setInteractionError(`直播语音播放失败：${message}，下一条将继续尝试。`)
+      console.warn('直播语音播放失败', { versionId: position.versionId, itemId: position.item.itemId, error: speechError })
+    })
   }, [phase, playText, position, stopPlayback])
 
   useEffect(() => {
@@ -231,11 +261,12 @@ export function LiveBroadcastPage({ onLogout }: LiveBroadcastPageProps) {
     const question = draft.trim()
     if (!question) return
     stopPlayback()
+    interactionRequestRef.current?.abort()
     setPhase('asking')
     setAnswer('')
     setInteractionError('')
     const controller = new AbortController()
-    requestRef.current = controller
+    interactionRequestRef.current = controller
     try {
       const user = getStoredUser()
       const response = await fetch('/api/user/guide/chat/stream', {
@@ -276,6 +307,7 @@ export function LiveBroadcastPage({ onLogout }: LiveBroadcastPageProps) {
       if (controller.signal.aborted) return
       setInteractionError(askError instanceof Error ? askError.message : '提问失败')
     } finally {
+      if (interactionRequestRef.current === controller) interactionRequestRef.current = null
       if (!controller.signal.aborted && mountedRef.current) await syncLiveStatus('answer-complete')
     }
   }
@@ -335,12 +367,14 @@ export function LiveBroadcastPage({ onLogout }: LiveBroadcastPageProps) {
         <p className="live-interaction__hint">提问期间只会暂停你的本地直播语音，不影响其他游客。</p>
         {answer && <div className="live-interaction__answer" aria-live="polite">{answer}</div>}
         {interactionError && <p className="live-interaction__error" role="alert">{interactionError}</p>}
+        {syncError && <p className="live-interaction__sync-error" role="status">{syncError}</p>}
+        {phase === 'error' && <button type="button" onClick={() => void syncLiveStatus('retry')}>重新连接</button>}
         <form onSubmit={askQuestion}>
           <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="输入你想了解的问题" />
           <div className="live-interaction__actions">
             <button type="button" onClick={startVoiceQuestion}>语音提问</button>
             <button type="submit" disabled={!draft.trim() || isInteractionBusy}>发送</button>
-            <button type="button" onClick={() => { stopPlayback(); void syncLiveStatus('answer-complete') }}>停止本地回答</button>
+            <button type="button" onClick={() => { interactionRequestRef.current?.abort(); interactionRequestRef.current = null; stopPlayback(); void syncLiveStatus('answer-complete') }}>停止本地回答</button>
           </div>
         </form>
       </aside>

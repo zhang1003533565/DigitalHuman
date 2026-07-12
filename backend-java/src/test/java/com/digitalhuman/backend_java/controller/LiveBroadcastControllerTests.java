@@ -2,6 +2,7 @@ package com.digitalhuman.backend_java.controller;
 
 import com.digitalhuman.backend_java.config.AuthInterceptor;
 import com.digitalhuman.backend_java.dto.LiveScriptItemDto;
+import com.digitalhuman.backend_java.dto.VisitorLiveItemDto;
 import com.digitalhuman.backend_java.dto.VisitorLiveStatusDto;
 import com.digitalhuman.backend_java.model.AuthSession;
 import com.digitalhuman.backend_java.model.UserRole;
@@ -89,11 +90,13 @@ class LiveBroadcastControllerTests {
     @Test
     void publishedStatusReturnsCompleteSnapshotWithoutDraftFields() throws Exception {
         loginUser();
-        var item = new LiveScriptItemDto(7L, "title", "content", 5000L, 0, null, null);
+        var item = new VisitorLiveItemDto(7L, "title", "content", 5000L, 0);
         when(service.getVisitorStatus()).thenReturn(new VisitorLiveStatusDto("published", Instant.parse("2026-07-12T04:00:05Z"),
                 3L, Instant.parse("2026-07-12T04:00:00Z"), 5000L, 7L, 0, 0L, 0L, List.of(item)));
         mvc.perform(get("/api/user/live/status").header("Authorization", "Bearer user").accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].title").value("title"))
+                .andExpect(jsonPath("$.items[0].itemId").value(7L))
+                .andExpect(jsonPath("$.items[0].id").doesNotExist())
                 .andExpect(jsonPath("$.items[0].enabled").doesNotExist())
                 .andExpect(jsonPath("$.items[0].updatedAt").doesNotExist());
     }
