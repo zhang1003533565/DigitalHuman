@@ -37,3 +37,9 @@
 - 新增可执行同步策略测试，模拟互动期间后台同步、恢复同步竞争、普通后台失败和回答恢复失败，另以页面契约锁定独立错误状态。
 
 追加验证：游客端全部 13 个 `*.test.mjs` 文件、ESLint、Vite build 通过；后端 `LiveBroadcastControllerTests` 与 `LiveBroadcastServiceTests` 通过。
+
+## 最终竞态修复
+
+- 提问开始时仅取消在途的 `poll` / `visibility-resume` 请求并推进同步序号；不会误取消 `answer-complete` 恢复同步。
+- 后台同步成功响应在 `applySnapshot` 前、失败响应在设置错误或 fallback 前再次仲裁；若请求发出后互动已经开始，响应和错误均直接丢弃，不改变 phase、position、spoken key、回答音频或错误状态。
+- 可执行顺序测试覆盖 `poll-start → ask-start → poll-resolve` 与 `poll-start → ask-start → poll-reject`，断言均不 apply、不切换 broadcasting/error、不停止回答播放。

@@ -19,6 +19,7 @@ import { resolveCurrentLivePosition, type LivePosition } from '../live/liveTimel
 import {
   createLiveSpeechKey,
   parseLiveGuideStreamData,
+  shouldDiscardBackgroundLiveSyncResult,
   shouldRecoverLiveSpeechAfterSyncFailure,
   shouldSkipBackgroundLiveSync,
 } from '../live/liveBroadcastRuntime'
@@ -178,9 +179,11 @@ export function LiveBroadcastPage({ onLogout }: LiveBroadcastPageProps) {
     try {
       const snapshot = await getLiveStatus({ signal: controller.signal })
       if (sequence !== syncSequenceRef.current || controller.signal.aborted) return
+      if (shouldDiscardBackgroundLiveSyncResult(reason, interactionRequestRef.current !== null)) return
       applySnapshot(snapshot)
     } catch (syncError) {
       if (controller.signal.aborted) return
+      if (shouldDiscardBackgroundLiveSyncResult(reason, interactionRequestRef.current !== null)) return
       setSyncError(syncError instanceof Error ? `直播同步失败：${syncError.message}` : '直播同步失败，请重新连接。')
       if (shouldRecoverLiveSpeechAfterSyncFailure(reason, previousSnapshot?.status === 'live') && previousSnapshot?.status === 'live') {
         spokenItemRef.current = null
@@ -273,6 +276,12 @@ export function LiveBroadcastPage({ onLogout }: LiveBroadcastPageProps) {
     event.preventDefault()
     const question = draft.trim()
     if (!question) return
+    if (activeSyncReasonRef.current === 'poll' || activeSyncReasonRef.current === 'visibility-resume') {
+      syncSequenceRef.current += 1
+      syncRequestRef.current?.abort()
+      syncRequestRef.current = null
+      activeSyncReasonRef.current = null
+    }
     stopPlayback()
     interactionRequestRef.current?.abort()
     setPhase('asking')

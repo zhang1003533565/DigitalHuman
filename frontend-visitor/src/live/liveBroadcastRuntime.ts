@@ -25,3 +25,7 @@ export function shouldSkipBackgroundLiveSync(reason: string, hasInteraction: boo
 export function shouldRecoverLiveSpeechAfterSyncFailure(reason: string, hasLiveSnapshot: boolean) {
   return reason === 'answer-complete' && hasLiveSnapshot
 }
+
+export function shouldDiscardBackgroundLiveSyncResult(reason: string, hasInteraction: boolean) {
+  return (reason === 'poll' || reason === 'visibility-resume') && hasInteraction
+}

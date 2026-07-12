@@ -3,6 +3,7 @@ import {
   createLiveSpeechKey,
   parseLiveGuideStreamData,
   shouldRecoverLiveSpeechAfterSyncFailure,
+  shouldDiscardBackgroundLiveSyncResult,
   shouldSkipBackgroundLiveSync,
 } from './liveBroadcastRuntime.ts'
 
@@ -16,5 +17,26 @@ assert.equal(shouldSkipBackgroundLiveSync('poll', false, null), false, '空闲�
 assert.equal(shouldRecoverLiveSpeechAfterSyncFailure('poll', true), false, '普通轮询失败不得重置语音键或播放位置')
 assert.equal(shouldRecoverLiveSpeechAfterSyncFailure('visibility-resume', true), false, '可见性同步失败不得重启当前语音')
 assert.equal(shouldRecoverLiveSpeechAfterSyncFailure('answer-complete', true), true, '回答恢复失败应按旧快照全局位置重新播放')
+
+for (const outcome of ['resolve', 'reject']) {
+  let interactionActive = false
+  let applied = false
+  let phase = 'answering'
+  let answerStopped = false
+  const settlePoll = () => {
+    if (shouldDiscardBackgroundLiveSyncResult('poll', interactionActive)) return
+    applied = true
+    phase = outcome === 'resolve' ? 'broadcasting' : 'error'
+    answerStopped = true
+  }
+
+  // poll-start -> ask-start -> poll-resolve/reject
+  interactionActive = true
+  settlePoll()
+
+  assert.equal(applied, false, `poll ${outcome} after ask must not apply`)
+  assert.equal(phase, 'answering', `poll ${outcome} after ask must not change phase`)
+  assert.equal(answerStopped, false, `poll ${outcome} after ask must not stop answer playback`)
+}
 
 console.log('live broadcast runtime tests passed')
