@@ -17,21 +17,40 @@ const expectedItems = [
   ['/history', '会话历史'],
 ]
 
+const navItemsBlock = source.match(/const VISITOR_NAV_ITEMS = \[(.*?)\n\]/s)?.[1]
+assert.ok(navItemsBlock, 'VISITOR_NAV_ITEMS must be a source-level fixed array')
+const actualItems = [...navItemsBlock.matchAll(/\{ to: (?:'([^']+)'|DIGITAL_HUMAN_ROUTE), label: '([^']+)' \}/g)].map(
+  ([, literalPath, label]) => [literalPath || '/modules/digital-human', label],
+)
+assert.deepEqual(actualItems, expectedItems)
+
 assert.match(source, /export function VisitorTopNav/)
 assert.match(source, /type VisitorTopNavProps = \{ onLogout: \(\) => void \}/)
 assert.match(source, /灵山智游/)
 assert.match(source, /getStoredUser\(\)/)
 assert.match(source, /<NavLink/)
 
-for (const [path, label] of expectedItems) {
-  assert.ok(source.includes(`to: '${path}'`) || (path === '/modules/digital-human' && source.includes('to: DIGITAL_HUMAN_ROUTE')))
-  assert.ok(source.includes(`label: '${label}'`))
-}
-
 assert.doesNotMatch(source, /variant|items\?|title\?/)
+assert.match(source, /onClick=\{toggleDropdown\}/)
+assert.match(source, /onFocus=\{handleAvatarFocus\}/)
+assert.match(source, /function handleAvatarFocus\(\)[\s\S]*openDropdown\(\)/)
+assert.match(source, /event\.key === 'Escape'/)
+assert.match(source, /avatarRef\.current\?\.focus\(\)/)
+assert.match(source, /aria-haspopup="menu"/)
+assert.match(source, /aria-expanded=\{dropdownOpen\}/)
+assert.match(source, /aria-controls=\{dropdownOpen \? USER_MENU_ID : undefined\}/)
+assert.match(source, /id=\{USER_MENU_ID\}/)
+assert.match(source, /role="menu"/)
+assert.equal((source.match(/role="menuitem"/g) ?? []).length, 2)
 assert.match(css, /min-height:\s*64px/)
 assert.match(css, /"Songti SC"/)
 assert.match(css, /background:\s*#e2ad4b/)
+assert.match(css, /line-height:\s*1\.1/)
+assert.match(css, /text-shadow:\s*none/)
+assert.match(css, /box-shadow:[^;]*inset/s)
+assert.match(css, /animation:\s*visitorUserMenuIn/)
+assert.match(css, /\.visitor-user-menu__avatar--lg\s*\{[^}]*border-color:/s)
+assert.match(css, /\.visitor-user-menu__item\s*\{[^}]*transition:/s)
 assert.match(css, /\.page-shell > \.visitor-topbar/)
 assert.match(css, /\.module-screen > \.visitor-topbar/)
 assert.match(css, /@media \(max-width: 768px\)/)

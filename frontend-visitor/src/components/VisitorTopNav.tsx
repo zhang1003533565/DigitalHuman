@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { getStoredUser, type SessionUser } from '../auth/session'
@@ -17,6 +17,8 @@ const VISITOR_NAV_ITEMS = [
   { to: '/history', label: '会话历史' },
 ]
 
+const USER_MENU_ID = 'visitor-user-menu'
+
 function getInitials(name: string): string {
   return name ? name.charAt(0).toUpperCase() : 'U'
 }
@@ -27,6 +29,8 @@ export function VisitorTopNav({ onLogout }: VisitorTopNavProps) {
   const navigate = useNavigate()
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const avatarRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const suppressFocusOpen = useRef(false)
   const user: SessionUser | null = getStoredUser()
 
   const openDropdown = useCallback(() => {
@@ -44,6 +48,54 @@ export function VisitorTopNav({ onLogout }: VisitorTopNavProps) {
 
   const closeDropdown = useCallback(() => {
     hoverTimer.current = setTimeout(() => setDropdownOpen(false), 200)
+  }, [])
+
+  const toggleDropdown = useCallback(() => {
+    if (dropdownOpen) {
+      setDropdownOpen(false)
+      return
+    }
+    openDropdown()
+  }, [dropdownOpen, openDropdown])
+
+  const closeDropdownAndRestoreFocus = useCallback(() => {
+    suppressFocusOpen.current = true
+    setDropdownOpen(false)
+    avatarRef.current?.focus()
+    suppressFocusOpen.current = false
+  }, [])
+
+  function handleAvatarFocus() {
+    if (!suppressFocusOpen.current) openDropdown()
+  }
+
+  useEffect(() => {
+    if (!dropdownOpen) return
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target as Node
+      if (!avatarRef.current?.contains(target) && !menuRef.current?.contains(target)) {
+        setDropdownOpen(false)
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        closeDropdownAndRestoreFocus()
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [closeDropdownAndRestoreFocus, dropdownOpen])
+
+  useEffect(() => () => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current)
   }, [])
 
   function handleLogoutClick() {
@@ -75,16 +127,27 @@ export function VisitorTopNav({ onLogout }: VisitorTopNavProps) {
           className="visitor-user-menu__avatar"
           type="button"
           aria-label="用户菜单"
+          aria-haspopup="menu"
+          aria-expanded={dropdownOpen}
+          aria-controls={dropdownOpen ? USER_MENU_ID : undefined}
+          onClick={toggleDropdown}
+          onFocus={handleAvatarFocus}
         >
           {getInitials(user?.displayName || user?.username || '')}
         </button>
         {dropdownOpen &&
           createPortal(
             <div
+              ref={menuRef}
+              id={USER_MENU_ID}
+              role="menu"
               className="visitor-user-menu__dropdown"
               style={dropdownStyle}
               onMouseEnter={openDropdown}
               onMouseLeave={closeDropdown}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') closeDropdownAndRestoreFocus()
+              }}
             >
               <div className="visitor-user-menu__header">
                 <div className="visitor-user-menu__avatar visitor-user-menu__avatar--lg">
@@ -99,6 +162,7 @@ export function VisitorTopNav({ onLogout }: VisitorTopNavProps) {
               <button
                 className="visitor-user-menu__item"
                 type="button"
+                role="menuitem"
                 onClick={() => {
                   setDropdownOpen(false)
                   navigate('/profile')
@@ -113,6 +177,7 @@ export function VisitorTopNav({ onLogout }: VisitorTopNavProps) {
               <button
                 className="visitor-user-menu__item visitor-user-menu__item--danger"
                 type="button"
+                role="menuitem"
                 onClick={handleLogoutClick}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
