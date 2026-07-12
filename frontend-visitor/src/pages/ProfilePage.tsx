@@ -1,5 +1,5 @@
 import { getStoredUser } from '../auth/session'
-import { AppTopNav } from '../components/AppTopNav'
+import { VisitorTopNav } from '../components/VisitorTopNav'
 import './ProfilePage.css'
 
 type ProfilePageProps = {
@@ -23,7 +23,7 @@ export function ProfilePage({ onLogout }: ProfilePageProps) {
 
   return (
     <main className="page-shell">
-      <AppTopNav onLogout={onLogout} />
+      <VisitorTopNav onLogout={onLogout} />
       <section className="page-content">
         <section className="profile-grid">
           <aside className="profile-card">

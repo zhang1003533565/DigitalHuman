@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
 import './TravelTipsPage.css'
-import { AppTopNav } from '../components/AppTopNav'
+import { VisitorTopNav } from '../components/VisitorTopNav'
 
 type Props = {
   onLogout: () => void
@@ -65,7 +65,7 @@ export function TravelTipsPage({ onLogout }: Props) {
 
   return (
     <main className="page-shell travel-tips-page">
-      <AppTopNav onLogout={onLogout} />
+      <VisitorTopNav onLogout={onLogout} />
       <section className="page-content">
         <header className="page-heading">
           <p className="surface-tag">Travel Tips</p>

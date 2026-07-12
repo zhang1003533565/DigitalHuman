@@ -7,6 +7,19 @@ const cssUrl = new URL('./VisitorTopNav.css', import.meta.url)
 const source = readFileSync(fileURLToPath(componentUrl), 'utf8')
 const css = readFileSync(fileURLToPath(cssUrl), 'utf8')
 
+const routedPages = [
+  '../pages/HomePage.tsx',
+  '../pages/DigitalHumanPage.tsx',
+  '../pages/RouteRecommendPage.tsx',
+  '../pages/MapPage.tsx',
+  '../pages/TravelTipsPage.tsx',
+  '../pages/FeedbackPage.tsx',
+  '../pages/HistoryPage.tsx',
+  '../pages/ProfilePage.tsx',
+  '../pages/SpotRecommendPage.tsx',
+  '../pages/RouteRecommendListPage.tsx',
+]
+
 const expectedItems = [
   ['/home', '首页'],
   ['/modules/digital-human', 'AI 导览'],
@@ -55,5 +68,16 @@ assert.match(css, /\.page-shell > \.visitor-topbar/)
 assert.match(css, /\.module-screen > \.visitor-topbar/)
 assert.match(css, /@media \(max-width: 768px\)/)
 assert.doesNotMatch(css, /--home/)
+
+for (const relativePath of routedPages) {
+  const pageUrl = new URL(relativePath, import.meta.url)
+  const page = readFileSync(fileURLToPath(pageUrl), 'utf8')
+  assert.match(page, /import \{ VisitorTopNav \} from '\.\.\/components\/VisitorTopNav'/, relativePath)
+  assert.match(page, /<VisitorTopNav onLogout=\{onLogout\} \/>/, relativePath)
+  const removedPageConfiguration = new RegExp(
+    [['App', 'TopNav'].join(''), ['HOME', 'NAV', 'ITEMS'].join('_'), ['variant', '="home"'].join('')].join('|'),
+  )
+  assert.doesNotMatch(page, removedPageConfiguration, relativePath)
+}
 
 console.log('VisitorTopNav contract passed')

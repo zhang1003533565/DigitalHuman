@@ -24,7 +24,7 @@ import {
   sanitizeAnswerText,
   sanitizeSpeechText,
 } from '../digitalHuman/streamingSpeech'
-import { AppTopNav } from '../components/AppTopNav'
+import { VisitorTopNav } from '../components/VisitorTopNav'
 import { GuideResultCards } from '../components/GuideResultCards'
 import { normalizeGuideChatResult, type GuideChatResult } from '../api/contracts'
 
@@ -1113,7 +1113,7 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
 
   return (
     <main className="module-screen">
-      <AppTopNav onLogout={onLogout} />
+      <VisitorTopNav onLogout={onLogout} />
 
       <section className="live2d-page live2d-page--presentation">
         <canvas ref={canvasRef} className="live2d-canvas" />

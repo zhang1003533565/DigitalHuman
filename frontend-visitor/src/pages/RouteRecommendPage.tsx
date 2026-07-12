@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import axios from 'axios'
 import { useLocation, useNavigate } from 'react-router-dom'
 import './RouteRecommendPage.css'
-import { AppTopNav } from '../components/AppTopNav'
+import { VisitorTopNav } from '../components/VisitorTopNav'
 import { readTripPlan, resolveRouteId } from './navigationContext'
 
 type Props = {
@@ -296,7 +296,7 @@ export function RouteRecommendPage({ onLogout }: Props) {
 
   return (
     <main className="page-shell route-shell">
-      <AppTopNav onLogout={onLogout} />
+      <VisitorTopNav onLogout={onLogout} />
       <section className="route-planner">
         <aside className="route-planner__panel">
           <header className="route-planner__heading">

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import axios from 'axios'
 import { useLocation, useNavigate } from 'react-router-dom'
 import './MapPage.css'
-import { AppTopNav } from '../components/AppTopNav'
+import { VisitorTopNav } from '../components/VisitorTopNav'
 import { parseNavigationContext } from './navigationContext'
 
 type Props = {
@@ -551,7 +551,7 @@ export function MapPage({ onLogout }: Props) {
 
   return (
     <main className="page-shell">
-      <AppTopNav onLogout={onLogout} />
+      <VisitorTopNav onLogout={onLogout} />
 
       <section className="page-content">
         <div className={`map-page${selectedFacility && cardPosition ? ' map-page--spot-selected' : ''}`}>

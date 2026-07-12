@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './HomePage.css'
 import { type SessionUser } from '../auth/session'
-import { AppTopNav } from '../components/AppTopNav'
+import { VisitorTopNav } from '../components/VisitorTopNav'
 import { AsyncState } from '../components/AsyncState'
 import { TripPlanner } from '../components/TripPlanner'
 
@@ -28,14 +28,6 @@ type HomePageProps = {
   user: SessionUser
   onLogout: () => void
 }
-
-const HOME_NAV_ITEMS = [
-  { to: '/home', label: '首页' },
-  { to: '/modules/digital-human', label: 'AI 导览' },
-  { to: '/routes', label: '路线' },
-  { to: '/map', label: '地图' },
-  { to: '/tips', label: '游览贴士' },
-]
 
 const EMPTY_HOME_DATA: HomeData = {
   banners: [],
@@ -76,7 +68,7 @@ export function HomePage({ user, onLogout }: HomePageProps) {
 
   return (
     <main className="page-shell home-page">
-      <AppTopNav onLogout={onLogout} title="灵山智游" items={HOME_NAV_ITEMS} variant="home" />
+      <VisitorTopNav onLogout={onLogout} />
 
       <div className="hp-scroll">
         <section className="hp-hero" aria-labelledby="home-hero-title">

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import axios from 'axios'
 import { useNavigate } from 'react-router-dom'
 import './HistoryPage.css'
-import { AppTopNav } from '../components/AppTopNav'
+import { VisitorTopNav } from '../components/VisitorTopNav'
 import { DIGITAL_HUMAN_ROUTE } from '../digitalHuman/shared'
 
 type Props = {
@@ -37,7 +37,7 @@ export function HistoryPage({ onLogout }: Props) {
 
   return (
     <main className="page-shell history-page">
-      <AppTopNav onLogout={onLogout} />
+      <VisitorTopNav onLogout={onLogout} />
       <section className="page-content">
         <header className="page-heading">
           <p className="surface-tag">History</p>

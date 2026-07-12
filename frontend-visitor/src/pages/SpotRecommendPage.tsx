@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AppTopNav } from '../components/AppTopNav'
+import { VisitorTopNav } from '../components/VisitorTopNav'
 import './SpotRecommendPage.css'
 
 interface SpotItem {
@@ -23,7 +23,7 @@ export function SpotRecommendPage({ onLogout }: { onLogout: () => void }) {
 
   return (
     <main className="page-shell">
-      <AppTopNav onLogout={onLogout} />
+      <VisitorTopNav onLogout={onLogout} />
       <section className="page-content">
         <div className="spot-page">
           <div className="spot-page__header">

@@ -9,7 +9,7 @@ const read = (path) => readFileSync(join(sourceRoot, path), 'utf8')
 const tokens = read('styles/tokens.css')
 const app = read('App.tsx')
 const main = read('main.tsx')
-const topNavCss = read('components/AppTopNav.css')
+const topNavCss = read('components/VisitorTopNav.css')
 const bottomNav = read('components/MobileBottomNav.tsx')
 const indexCss = read('index.css')
 const digitalHumanCss = read('pages/DigitalHumanPage.css')
@@ -28,7 +28,7 @@ assert.match(bottomNav, /首页[\s\S]*AI 导览[\s\S]*路线[\s\S]*地图[\s\S]*
 for (const path of ['/home', '/modules/digital-human', '/routes', '/map', '/profile']) {
   assert.match(bottomNav, new RegExp(`to:\\s*['"]${path}['"]`), `bottom navigation must link to ${path}`)
 }
-assert.match(topNavCss, /@media\s*\([^)]*max-width:\s*768px[^)]*\)[\s\S]*\.app-topbar__nav[\s\S]*display:\s*none/, 'desktop navigation is hidden at the mobile breakpoint')
+assert.match(topNavCss, /@media\s*\([^)]*max-width:\s*768px[^)]*\)[\s\S]*\.visitor-topbar__nav[\s\S]*display:\s*none/, 'desktop navigation is hidden at the mobile breakpoint')
 assert.match(indexCss, /padding-bottom:\s*calc\(var\(--mobile-nav-height\)\s*\+\s*var\(--safe-bottom\)\)/, 'routed pages reserve bottom navigation and safe-area space')
 
 const digitalMobileStart = digitalHumanCss.lastIndexOf('@media (max-width: 768px)')
