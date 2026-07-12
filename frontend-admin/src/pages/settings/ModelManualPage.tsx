@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect -- remote configuration is loaded on mount */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ClockCircleOutlined,
@@ -633,6 +632,7 @@ export default function ModelManualPage({ onCatalogChange, onProviderConfigsChan
   }, [onCatalogChange, onProviderConfigsChange])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-time remote configuration loading owns its request state
     void loadRemoteConfig()
   }, [loadRemoteConfig])
 

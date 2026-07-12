@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect -- effects synchronize remote knowledge data with the current selection */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import axios from 'axios'
 import {
@@ -1229,18 +1228,21 @@ export default function KnowledgeOpenApiPage() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-time remote configuration loading owns its request state
     void loadKnowledgeConfig(true)
     void loadKnowledges()
   }, [loadKnowledgeConfig, loadKnowledges])
 
   useEffect(() => {
     if (selectedKnowledgeId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- selection changes intentionally load remote documents into local request state
       void loadDocuments(selectedKnowledgeId)
     }
   }, [loadDocuments, selectedKnowledgeId])
 
   useEffect(() => {
     if (selectedKnowledgeId && selectedDocumentId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- document selection intentionally loads remote paragraphs into local request state
       void loadParagraphs(selectedKnowledgeId, selectedDocumentId)
     }
   }, [loadParagraphs, selectedDocumentId, selectedKnowledgeId])

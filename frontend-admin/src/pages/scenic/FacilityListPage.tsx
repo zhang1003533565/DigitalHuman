@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect -- initial page data is loaded from the backend on mount */
 import { useEffect, useMemo, useState } from 'react'
 import {
   Button,
@@ -60,6 +59,7 @@ export default function FacilityListPage() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial backend fetch updates the page's request state
     void loadPageData()
   }, [])
 

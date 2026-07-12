@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect -- drawer state is initialized from the selected facility when opened */
 import { useEffect, useRef, useState } from 'react'
 import dayjs, { type Dayjs } from 'dayjs'
 import {
@@ -169,6 +168,7 @@ export default function SpotDrawer({
   useEffect(() => {
     if (!open) {
       form.resetFields()
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- closing the controlled drawer must clear its upload preview state
       setCoverImage('')
       setGalleryImages([])
       return

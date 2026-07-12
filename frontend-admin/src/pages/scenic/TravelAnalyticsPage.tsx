@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect -- initial analytics data is loaded from the backend on mount */
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import {
   Button,
@@ -196,6 +195,7 @@ export default function TravelAnalyticsPage() {
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial backend fetch updates the analytics request state
     void loadRows()
   }, [loadRows])
 

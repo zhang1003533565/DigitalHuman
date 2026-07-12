@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect -- remote data is loaded when the active tab changes */
 import { useCallback, useEffect, useState } from 'react'
 import axios, { AxiosError } from 'axios'
 import {
@@ -64,6 +63,7 @@ export default function HomeConfigPage() {
   }, [activeTab])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- tab changes intentionally trigger a remote reload that updates request state
     void loadItems()
   }, [loadItems])
 

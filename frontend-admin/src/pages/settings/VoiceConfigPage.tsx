@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect -- effects synchronize the selected voice and pagination */
 import { useEffect, useMemo, useState } from 'react'
 import {
   EllipsisOutlined,
@@ -806,6 +805,7 @@ export default function VoiceConfigPage({
   useEffect(() => {
     const matched = mergedCatalog.find((item) => item.voiceId === selectedVoice)
     if (matched) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- selected voice changes synchronize the controlled preview identity
       setPlayingVoiceId(matched.voiceId)
       return
     }
@@ -833,6 +833,7 @@ export default function VoiceConfigPage({
   }, [mergedCatalog, searchKeyword])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- search changes reset controlled pagination
     setCurrentPage(1)
   }, [searchKeyword])
 

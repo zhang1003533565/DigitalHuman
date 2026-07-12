@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect -- initial scripts are loaded from the backend on mount */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Button,
@@ -73,6 +72,7 @@ export default function VoiceScriptPage() {
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial backend fetch updates the script request state
     void loadRows()
   }, [loadRows])
 

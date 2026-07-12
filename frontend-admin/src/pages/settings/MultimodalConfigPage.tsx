@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect -- effects keep Ant Design form state and pagination synchronized */
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   InfoCircleOutlined,
@@ -459,6 +458,7 @@ export default function MultimodalConfigPage({
   useEffect(() => {
     if (!selectedModelValue && BASE_MODELS[0]) {
       form.setFieldValue('multimodalModel', BASE_MODELS[0].modelCode)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Ant Design form initialization must synchronize the selected card
       setSelectedKey(BASE_MODELS[0].key)
     }
   }, [form, selectedModelValue])
@@ -475,8 +475,17 @@ export default function MultimodalConfigPage({
     })
   }, [configForm, selectedModel])
 
-  useEffect(() => { setPage(1) }, [searchText])
-  useEffect(() => { const totalPages = Math.max(1, Math.ceil(filteredModels.length / PAGE_SIZE)); if (page > totalPages) setPage(totalPages) }, [filteredModels.length, page])
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- search changes reset controlled pagination
+    setPage(1)
+  }, [searchText])
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(filteredModels.length / PAGE_SIZE))
+    if (page > totalPages) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- result shrinkage clamps controlled pagination to a valid page
+      setPage(totalPages)
+    }
+  }, [filteredModels.length, page])
 
   const handleSelectModel = (model: MultimodalModelRecord) => {
     setSelectedKey(model.key)

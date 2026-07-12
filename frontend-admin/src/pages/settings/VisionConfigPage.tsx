@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect -- effects reset preview state and synchronize pagination */
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   PauseCircleOutlined,
@@ -1154,12 +1153,14 @@ export default function VisionConfigPage({
   }, [form, selectedModel])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- search changes reset controlled pagination
     setPage(1)
   }, [searchText])
 
   useEffect(() => {
     const totalPages = Math.max(1, Math.ceil(filteredModels.length / PAGE_SIZE))
     if (page > totalPages) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- result shrinkage clamps controlled pagination to a valid page
       setPage(totalPages)
     }
   }, [filteredModels.length, page])
@@ -1180,6 +1181,7 @@ export default function VisionConfigPage({
       style: '写实',
       cameraMotion: '静止',
     })
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- selected model changes reset the controlled preview session
     setImageDataUrl('')
     setImageName('')
     setPreviewPlaying(false)

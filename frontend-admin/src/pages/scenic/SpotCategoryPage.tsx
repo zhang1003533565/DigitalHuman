@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect -- effects load remote categories and initialize pagination */
 import { useEffect, useMemo, useState } from 'react'
 import {
   Button,
@@ -53,6 +52,7 @@ export default function SpotCategoryPage() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial backend fetch updates the category request state
     void loadCategories()
   }, [])
 
@@ -65,6 +65,7 @@ export default function SpotCategoryPage() {
   }, [categories, keyword])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- filtering or a changed result count resets controlled pagination
     setCurrentPage(1)
   }, [keyword, categories.length])
 

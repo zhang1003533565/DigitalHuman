@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect -- initial structured data is loaded from the backend on mount */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Button,
@@ -108,6 +107,7 @@ export default function ScenicStructuredPage() {
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial backend fetch updates the table request state
     void loadRows()
   }, [loadRows])
 

@@ -51,3 +51,7 @@
 
 - 启动游客端、管理端、Java、AI（及所需数据服务），用浏览器完成五宽十类页面和三条 E2E；记录截图、横向滚动、遮挡、文本重叠、弹层关闭和核心触控目标结果。
 - 管理端如使用地图选点，部署环境必须同时配置 `VITE_AMAP_KEY` 与 `VITE_AMAP_SECURITY_KEY`。
+
+管理端没有使用文件级 `react-hooks/set-state-in-effect` 豁免。远程请求初始化、Ant Design Form 与受控选择同步、受控分页重置等确需在 effect 中更新状态的点，使用了紧邻具体语句且写明原因的 `eslint-disable-next-line`；其余类型和依赖问题直接修复。
+
+响应式静态证据来源：游客端为 `frontend-visitor/src/responsive.test.mjs`，管理端断点与导航结构为 `frontend-admin/src/pages/admin-upgrade.test.mjs`。

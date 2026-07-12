@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect -- effects synchronize the selected remote model and pagination */
 import { useEffect, useMemo, useState } from 'react'
 import {
   Button,
@@ -839,6 +838,7 @@ export default function EmbeddingConfigPage({
       : undefined
 
     if (matchedModel) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- remote model selection initializes the controlled editor state
       setSelectedKey(matchedModel.key)
       setDraft(toDraft(matchedModel))
       setRetrievalText(matchedModel.sampleQuery)
@@ -891,6 +891,7 @@ export default function EmbeddingConfigPage({
   }, [embeddingModels, searchKeyword])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- search changes reset controlled pagination
     setCurrentPage(1)
   }, [searchKeyword])
 

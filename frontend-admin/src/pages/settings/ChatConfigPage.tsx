@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect -- effects keep Ant Design form state and pagination synchronized */
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   InfoCircleOutlined,
@@ -1002,6 +1001,7 @@ export default function ChatConfigPage({
   useEffect(() => {
     if (!watchedChatModel && CHAT_MODELS[0]) {
       form.setFieldValue('chatModel', CHAT_MODELS[0].modelCode)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Ant Design form initialization must synchronize the selected card
       setSelectedKey(CHAT_MODELS[0].key)
       return
     }
@@ -1029,12 +1029,14 @@ export default function ChatConfigPage({
   }, [configForm, selectedRecord])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- search changes reset controlled pagination
     setPage(1)
   }, [searchText])
 
   useEffect(() => {
     const totalPages = Math.max(1, Math.ceil(filteredModels.length / PAGE_SIZE))
     if (page > totalPages) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- result shrinkage clamps controlled pagination to a valid page
       setPage(totalPages)
     }
   }, [filteredModels.length, page])
