@@ -1,11 +1,17 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/set-state-in-effect -- AMap SDK is untyped and this legacy page synchronizes imperative map state in effects. */
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import axios from 'axios'
 import { useLocation, useNavigate } from 'react-router-dom'
 import './MapPage.css'
 import { DIGITAL_HUMAN_ROUTE } from '../digitalHuman/shared'
 import { parseNavigationContext } from './navigationContext'
 import { getLiveStatus } from '../api/liveBroadcast'
+import {
+  getMobileMapLiveLabel,
+  shouldShowMobileMapClearAction,
+  toggleMobileMapDrawer,
+  type MobileMapDrawerState,
+} from '../map/mobileMapWorkbench'
 
 type ScenicSpot = {
   id: string
@@ -163,10 +169,13 @@ export function MapPage() {
   const [activeCategory, setActiveCategory] = useState('all')
   const [categoryPage, setCategoryPage] = useState(0)
   const [keyword, setKeyword] = useState('')
+  const [searchResultCount, setSearchResultCount] = useState(0)
   const [selectedFacility, setSelectedFacility] = useState<ScenicFacility | null>(null)
   const [cardPosition, setCardPosition] = useState<CardPosition | null>(null)
   const [hasAutoFitFacilities, setHasAutoFitFacilities] = useState(false)
   const [liveStatus, setLiveStatus] = useState<'loading' | 'live' | 'ready' | 'error'>('loading')
+  const [mobileDrawerState, setMobileDrawerState] = useState<MobileMapDrawerState>('collapsed')
+  const [mobileCategoryOpen, setMobileCategoryOpen] = useState(false)
   const mapContainerRef = useRef<HTMLDivElement | null>(null)
   const mapInstanceRef = useRef<any>(null)
   const geolocationRef = useRef<any>(null)
@@ -179,6 +188,13 @@ export function MapPage() {
   const initialUserPositionRef = useRef<[number, number] | null>(null)
   const hasAutoLocatedRef = useRef(false)
   const liveStatusGenerationRef = useRef(0)
+  const mobileDrawerRef = useRef<HTMLElement | null>(null)
+  const mobileDrawerTriggerRef = useRef<HTMLButtonElement | null>(null)
+
+  const closeMobileDrawer = useCallback(() => {
+    setMobileDrawerState('collapsed')
+    window.requestAnimationFrame(() => mobileDrawerTriggerRef.current?.focus())
+  }, [])
 
   const updateSelectedCardPosition = (facility: ScenicFacility | null) => {
     const map = mapInstanceRef.current
@@ -237,6 +253,46 @@ export function MapPage() {
       document.removeEventListener('visibilitychange', handleVisibility)
     }
   }, [])
+
+  useEffect(() => {
+    if (mobileDrawerState !== 'expanded') return
+    const panel = mobileDrawerRef.current
+    const focusable = Array.from(panel?.querySelectorAll<HTMLElement>(
+      'a[href]:not([tabindex="-1"]), button:not(:disabled):not([tabindex="-1"]), input:not(:disabled):not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])',
+    ) ?? [])
+    focusable[0]?.focus()
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (mobileCategoryOpen) return
+        event.preventDefault()
+        closeMobileDrawer()
+        return
+      }
+      if (event.key !== 'Tab' || focusable.length === 0) return
+      const first = focusable[0]
+      const last = focusable.at(-1) ?? first
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [closeMobileDrawer, mobileCategoryOpen, mobileDrawerState])
+
+  useEffect(() => {
+    if (!mobileCategoryOpen) return
+    const closeCategories = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileCategoryOpen(false)
+    }
+    document.addEventListener('keydown', closeCategories)
+    return () => document.removeEventListener('keydown', closeCategories)
+  }, [mobileCategoryOpen])
 
   useEffect(() => {
     selectedFacilityRef.current = selectedFacility
@@ -502,14 +558,29 @@ export function MapPage() {
     map.setZoom?.(next)
   }
 
+  function clearSearchResults() {
+    const map = mapInstanceRef.current
+    if (map && searchMarkersRef.current.length) map.remove?.(searchMarkersRef.current)
+    searchMarkersRef.current = []
+    setSearchResultCount(0)
+    setKeyword('')
+  }
+
+  const handleCategorySelect = (category: SidebarCategory) => {
+    if (category.isMore) {
+      const pageSize = MAX_SIDEBAR_BUTTONS - FIXED_SIDEBAR_BUTTONS - MORE_BUTTON_SLOTS
+      const pageCount = Math.max(1, Math.ceil(categories.length / pageSize))
+      setCategoryPage((current) => (current + 1) % pageCount)
+      return
+    }
+    setActiveCategory(category.categoryId ? String(category.categoryId) : category.key)
+  }
+
   const handleLocate = () => {
     const map = mapInstanceRef.current
     if (!map) return
 
-    if (searchMarkersRef.current.length) {
-      map.remove?.(searchMarkersRef.current)
-      searchMarkersRef.current = []
-    }
+    clearSearchResults()
 
     if (initialUserPositionRef.current) {
       map.setCenter?.(initialUserPositionRef.current)
@@ -540,6 +611,7 @@ export function MapPage() {
       map.remove?.(searchMarkersRef.current)
       searchMarkersRef.current = []
     }
+    setSearchResultCount(0)
 
     placeSearch.search(query, (status: string, result: any) => {
       if (status !== 'complete') {
@@ -572,17 +644,132 @@ export function MapPage() {
         map.add?.(searchMarkersRef.current)
         map.setFitView?.(searchMarkersRef.current, false, [72, 72, 72, 72], 16)
       }
+      setSearchResultCount(searchMarkersRef.current.length)
     })
+  }
+
+  const liveLabel = getMobileMapLiveLabel(liveStatus)
+  const showClearSearch = shouldShowMobileMapClearAction(keyword, searchResultCount)
+
+  function renderLiveCard() {
+    return (
+      <div className="side-card live-card">
+        <div className="side-card__head">
+          <h3>AI数字人直播</h3>
+          <span className="side-card__status">{liveStatus === 'live' ? '在线' : liveStatus === 'error' ? '同步失败' : '准备中'}</span>
+        </div>
+        <div className="live-card__chat">
+          <div className="live-card__msg">
+            <span className="live-card__msg-tag live-card__msg-tag--cyan">灵</span>
+            <b>直播讲解示例：</b>景区文化与游览提示
+          </div>
+          <div className="live-card__msg">
+            <span className="live-card__msg-tag live-card__msg-tag--gold">灵</span>
+            <b>直播讲解示例：</b>景点故事与参观礼仪
+          </div>
+          <div className="live-card__msg">
+            <span className="live-card__msg-tag live-card__msg-tag--cyan">灵</span>
+            <b>直播讲解示例：</b>路线与附近服务介绍
+          </div>
+        </div>
+        <div className="live-card__actions">
+          <button type="button" className="live-card__btn live-card__btn--primary" onClick={() => navigate('/live')}>
+            进入直播间
+          </button>
+          <button type="button" className="live-card__btn live-card__btn--ghost" onClick={() => navigate(DIGITAL_HUMAN_ROUTE)}>
+            语音互动
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  function renderNearbyCard() {
+    return (
+      <div className="side-card">
+        <div className="side-card__head">
+          <h3>附近服务</h3>
+          <button type="button" className="map-route-card__more">查看更多</button>
+        </div>
+        <div className="nearby__grid nearby__grid--3">
+          <div className="nearby__item">
+            <div className="nearby__icon nearby__icon--blue">P</div>
+            <span>停车场</span>
+          </div>
+          <div className="nearby__item">
+            <div className="nearby__icon nearby__icon--cyan">⌘</div>
+            <span>卫生间</span>
+          </div>
+          <div className="nearby__item">
+            <div className="nearby__icon nearby__icon--orange">✦</div>
+            <span>餐饮</span>
+          </div>
+          <div className="nearby__item">
+            <div className="nearby__icon nearby__icon--purple">◉</div>
+            <span>游客中心</span>
+          </div>
+          <div className="nearby__item">
+            <div className="nearby__icon nearby__icon--green">↺</div>
+            <span>接驳车</span>
+          </div>
+          <div className="nearby__item">
+            <div className="nearby__icon nearby__icon--red">!</div>
+            <span>医务点</span>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   void spots
 
   return (
-    <main className="page-shell">
+    <main className="page-shell page-shell--map">
 
-      <section className="page-content">
+      <section className="page-content page-content--map">
         <div className={`map-page${selectedFacility && cardPosition ? ' map-page--spot-selected' : ''}`}>
           <div className="map-page__main">
+            <div className="map-mobile-toolbar">
+              <button
+                type="button"
+                className="map-mobile-category-trigger"
+                aria-expanded={mobileCategoryOpen}
+                aria-controls="mobile-map-categories"
+                onClick={() => setMobileCategoryOpen((open) => !open)}
+              >
+                分类
+              </button>
+              <div className="map-mobile-search-slot">
+                <input
+                  value={keyword}
+                  onChange={(event) => setKeyword(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      handleSearch()
+                    }
+                  }}
+                  placeholder="搜索地点、景点或服务"
+                />
+                <button type="button" aria-label="搜索" onClick={handleSearch}>搜</button>
+              </div>
+            </div>
+            <div id="mobile-map-categories" className="map-mobile-category-panel" hidden={!mobileCategoryOpen}>
+              {sidebarCategories.map((category) => {
+                const currentKey = category.categoryId ? String(category.categoryId) : category.key
+                return (
+                  <button
+                    key={category.key}
+                    type="button"
+                    aria-pressed={activeCategory === currentKey}
+                    onClick={() => handleCategorySelect(category)}
+                  >
+                    <span aria-hidden>{category.icon}</span>
+                    <span>{category.label}</span>
+                  </button>
+                )
+              })}
+            </div>
             <div ref={mapContainerRef} className="map-page__canvas" />
             {mapError ? (
               <div className="map-route-context" role="alert">
@@ -636,15 +823,7 @@ export function MapPage() {
                     key={category.key}
                     type="button"
                     className={`map-sidebar__item${activeCategory === currentKey ? ' map-sidebar__item--active' : ''}${category.isMore ? ' map-sidebar__item--more' : ''}`}
-                    onClick={() => {
-                      if (category.isMore) {
-                        const pageSize = MAX_SIDEBAR_BUTTONS - FIXED_SIDEBAR_BUTTONS - MORE_BUTTON_SLOTS
-                        const pageCount = Math.max(1, Math.ceil(categories.length / pageSize))
-                        setCategoryPage((current) => (current + 1) % pageCount)
-                        return
-                      }
-                      setActiveCategory(currentKey)
-                    }}
+                    onClick={() => handleCategorySelect(category)}
                   >
                     <span className="map-sidebar__icon" aria-hidden>
                       {category.icon}
@@ -709,83 +888,58 @@ export function MapPage() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  const map = mapInstanceRef.current
-                  if (map && searchMarkersRef.current.length) {
-                    map.remove?.(searchMarkersRef.current)
-                    searchMarkersRef.current = []
-                  }
-                  setKeyword('')
-                }}
+                onClick={clearSearchResults}
               >
                 清空搜索
               </button>
             </div>
+
+            <div className="map-mobile-context-actions">
+              <button type="button" onClick={() => mapInstanceRef.current?.setCenter?.(LINGSHAN_CENTER)}>景区中心</button>
+              {showClearSearch ? <button type="button" onClick={clearSearchResults}>清除结果</button> : null}
+            </div>
           </div>
 
           <aside className="map-side">
-            <div className="side-card live-card">
-              <div className="side-card__head">
-                <h3>AI数字人直播</h3>
-                <span className="side-card__status">{liveStatus === 'live' ? '在线' : liveStatus === 'error' ? '同步失败' : '准备中'}</span>
-              </div>
-              <div className="live-card__chat">
-                <div className="live-card__msg">
-                  <span className="live-card__msg-tag live-card__msg-tag--cyan">灵</span>
-                  <b>直播讲解示例：</b>景区文化与游览提示
-                </div>
-                <div className="live-card__msg">
-                  <span className="live-card__msg-tag live-card__msg-tag--gold">灵</span>
-                  <b>直播讲解示例：</b>景点故事与参观礼仪
-                </div>
-                <div className="live-card__msg">
-                  <span className="live-card__msg-tag live-card__msg-tag--cyan">灵</span>
-                  <b>直播讲解示例：</b>路线与附近服务介绍
-                </div>
-              </div>
-              <div className="live-card__actions">
-                <button type="button" className="live-card__btn live-card__btn--primary" onClick={() => navigate('/live')}>
-                  进入直播间
-                </button>
-                <button type="button" className="live-card__btn live-card__btn--ghost" onClick={() => navigate(DIGITAL_HUMAN_ROUTE)}>
-                  语音互动
-                </button>
-              </div>
-            </div>
-
-            <div className="side-card">
-              <div className="side-card__head">
-                <h3>附近服务</h3>
-                <button type="button" className="map-route-card__more">查看更多</button>
-              </div>
-              <div className="nearby__grid nearby__grid--3">
-                <div className="nearby__item">
-                  <div className="nearby__icon nearby__icon--blue">P</div>
-                  <span>停车场</span>
-                </div>
-                <div className="nearby__item">
-                  <div className="nearby__icon nearby__icon--cyan">⌘</div>
-                  <span>卫生间</span>
-                </div>
-                <div className="nearby__item">
-                  <div className="nearby__icon nearby__icon--orange">✦</div>
-                  <span>餐饮</span>
-                </div>
-                <div className="nearby__item">
-                  <div className="nearby__icon nearby__icon--purple">◉</div>
-                  <span>游客中心</span>
-                </div>
-                <div className="nearby__item">
-                  <div className="nearby__icon nearby__icon--green">↺</div>
-                  <span>接驳车</span>
-                </div>
-                <div className="nearby__item">
-                  <div className="nearby__icon nearby__icon--red">!</div>
-                  <span>医务点</span>
-                </div>
-              </div>
-            </div>
+            {renderLiveCard()}
+            {renderNearbyCard()}
           </aside>
+
+          <section className={`map-mobile-drawer map-mobile-drawer--${mobileDrawerState}`} aria-label="地图服务">
+            <button
+              ref={mobileDrawerTriggerRef}
+              type="button"
+              aria-expanded={mobileDrawerState === 'expanded'}
+              onClick={() => {
+                setMobileCategoryOpen(false)
+                setMobileDrawerState((state) => toggleMobileMapDrawer(state))
+              }}
+            >
+              AI 数字人 · {liveLabel}{'\u3000'}附近服务
+            </button>
+            {mobileDrawerState === 'expanded' ? (
+              <div className="map-mobile-drawer__overlay" onMouseDown={closeMobileDrawer}>
+                <article
+                  ref={mobileDrawerRef}
+                  className="map-mobile-drawer__panel"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="mobile-map-drawer-title"
+                  onMouseDown={(event) => event.stopPropagation()}
+                >
+                  <header className="map-mobile-drawer__header">
+                    <div>
+                      <span>景区服务</span>
+                      <h2 id="mobile-map-drawer-title">边走边看，服务随行</h2>
+                    </div>
+                    <button type="button" aria-label="关闭景区服务" onClick={closeMobileDrawer}>×</button>
+                  </header>
+                  {renderLiveCard()}
+                  {renderNearbyCard()}
+                </article>
+              </div>
+            ) : null}
+          </section>
         </div>
       </section>
     </main>
