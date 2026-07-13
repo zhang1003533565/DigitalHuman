@@ -487,6 +487,10 @@
   }
 
   .hp-scroll {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+    overscroll-behavior: auto;
     padding: 0 16px 24px;
   }
 

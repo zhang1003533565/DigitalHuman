@@ -169,6 +169,13 @@
   }
 }
 @media (max-width: 768px) {
+  .tips-scroll-area {
+    flex: none;
+    min-height: auto;
+    overflow: visible;
+    overscroll-behavior: auto;
+  }
+
   .tips-category-bar {
     overflow-x: auto;
     flex-wrap: nowrap;

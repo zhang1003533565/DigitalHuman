@@ -18,6 +18,7 @@ const mapCss = read('pages/MapPage.css')
 const routeCss = read('pages/RouteRecommendPage.css')
 const loginCss = read('pages/LoginPage.css')
 const homeCss = read('pages/HomePage.css')
+const travelTipsCss = read('pages/TravelTipsPage.css')
 const profileCss = read('pages/ProfilePage.css')
 const liveBroadcastCss = read('pages/LiveBroadcastPage.css')
 
@@ -38,6 +39,11 @@ assert.match(appCss, /\.authenticated-app__content\s*>\s*\*\s*\{[^}]*height:\s*1
 assert.match(appMobile, /\.authenticated-app__content\s*\{[^}]*overflow-x:\s*hidden[^}]*overflow-y:\s*auto/s, 'mobile authenticated content owns vertical scrolling')
 assert.match(appMobile, /\.authenticated-app__content\s*>\s*\*\s*\{[^}]*height:\s*auto[^}]*min-height:\s*100%/s, 'mobile routed roots use natural document height')
 assert.match(appMobile, /padding-bottom:\s*calc\(var\(--mobile-nav-height\)\s*\+\s*var\(--safe-bottom\)\s*\+\s*16px\)/, 'mobile content reserves nav, safe area, and breathing room')
+assert.match(
+  appMobile,
+  /\.page-content\s*\{[^}]*flex:\s*none;[^}]*min-height:\s*auto;[^}]*overflow:\s*visible;[^}]*overscroll-behavior:\s*auto;/s,
+  'mobile shared page content must flow through the authenticated scroller',
+)
 
 const digitalMobileStart = digitalHumanCss.lastIndexOf('@media (max-width: 768px)')
 const digitalBeforeMobile = digitalHumanCss.slice(0, digitalMobileStart)
@@ -100,8 +106,33 @@ for (const essentialSelector of ['.auth-form', '.auth-actions', '.auth-input']) 
 assert.match(loginCss, /@media \(max-width: 768px\) and \(max-height: 680px\)/)
 assert.match(loginCss, /@media \(max-width: 768px\) and \(max-height: 520px\)/)
 const homeMobile = homeCss.slice(homeCss.lastIndexOf('@media (max-width: 768px)'))
+assert.match(
+  homeMobile,
+  /\.hp-scroll\s*\{[^}]*height:\s*auto;[^}]*min-height:\s*100%;[^}]*overflow:\s*visible;[^}]*overscroll-behavior:\s*auto;/s,
+  'mobile home content must not create a nested vertical scroller',
+)
 assert.doesNotMatch(homeMobile, /\.hp-hero\s*\{[^}]*(?:min-)?height:\s*(?:680|800)px/s, 'home hero must not force tall mobile viewport')
 assert.match(homeCss, /@media\s*\(max-width:\s*480px\)[\s\S]*\.hp-trip-planner__fields\s*\{[^}]*grid-template-columns:\s*1fr/s, 'small phones use a single-column planner')
+
+const tipsMobile = travelTipsCss.slice(travelTipsCss.lastIndexOf('@media (max-width: 768px)'))
+assert.match(
+  tipsMobile,
+  /\.tips-scroll-area\s*\{[^}]*flex:\s*none;[^}]*min-height:\s*auto;[^}]*overflow:\s*visible;[^}]*overscroll-behavior:\s*auto;/s,
+  'mobile tips content must flow through the authenticated scroller',
+)
+
+for (const [name, css] of [
+  ['shared page content', appMobile],
+  ['home page', homeMobile],
+  ['travel tips', tipsMobile],
+  ['route page', routeMobile],
+]) {
+  assert.doesNotMatch(
+    css,
+    /\.(?:page-content|hp-scroll|tips-scroll-area|route-planner|route-detail__content|route-timeline)\s*\{[^}]*(?:overflow(?:-y)?:\s*(?:auto|scroll)|overscroll-behavior:\s*contain|touch-action:\s*none)/s,
+    `${name} must not own mobile page scrolling`,
+  )
+}
 
 const profileMobile = profileCss.slice(profileCss.lastIndexOf('@media (max-width: 768px)'))
 assert.match(profileMobile, /\.profile-grid,[\s\S]*\.profile-stats\s*\{[^}]*grid-template-columns:\s*1fr/s, 'profile cards stack in one column')
