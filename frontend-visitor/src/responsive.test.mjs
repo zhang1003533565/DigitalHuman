@@ -238,12 +238,29 @@ assert.doesNotMatch(mapPage, /<aside className="map-side"[^>]*aria-hidden/, 'vis
 assert.doesNotMatch(mapPage, /style=\{\{\s*left\s*:/s, 'spot card must not directly inline positioning properties')
 assert.match(mapPage, /['"]--map-card-left['"]\s*:/, 'spot card exposes its desktop left coordinate through CSS')
 assert.match(mapPage, /['"]--map-card-top['"]\s*:/, 'spot card exposes its desktop top coordinate through CSS')
-const mapMobile = mapCss.slice(mapCss.lastIndexOf('@media (max-width: 768px)'))
-assert.match(mapMobile, /\.map-page\s*\{[^}]*display:\s*grid[^}]*height:\s*auto/s, 'mobile map and services use document flow')
-assert.match(mapMobile, /\.map-page__main\s*\{[^}]*height:\s*clamp\(480px,\s*68vh,\s*680px\)/s, 'mobile map has a stable visible height')
-assert.match(mapMobile, /\.map-side\s*\{[^}]*position:\s*relative[^}]*inset:\s*auto/s, 'mobile services no longer cover the map')
-assert.doesNotMatch(mapMobile, /\.map-side\s*\{[^}]*position:\s*fixed/s, 'mobile services must not be fixed')
-assert.match(mapMobile, /\.map-spot-card\s*\{[^}]*position:\s*fixed[^}]*top:\s*auto[^}]*right:\s*12px[^}]*bottom:\s*calc\(var\(--mobile-nav-height\)\s*\+\s*var\(--safe-bottom\)\s*\+\s*12px\)[^}]*left:\s*12px[^}]*max-height:\s*min\(45vh,\s*420px\)[^}]*overflow-y:\s*auto/s, 'selected spot card is a bounded fixed overlay above mobile navigation')
+const mapMobile = mapCss.slice(mapCss.indexOf('@media (max-width: 768px)'))
+assert.match(mapMobile, /\.page-shell--map\s*\{[^}]*height:\s*100%[^}]*overflow:\s*hidden/s, 'map shell consumes the authenticated layout remainder')
+assert.match(mapMobile, /\.page-content--map\s*\{[^}]*flex:\s*1[^}]*min-height:\s*0[^}]*overflow:\s*hidden/s, 'map content shrinks without creating page flow')
+assert.match(mapMobile, /\.map-page\s*\{[^}]*height:\s*100%[^}]*overflow:\s*hidden/s, 'mobile map stays within one authenticated viewport')
+assert.match(mapMobile, /\.map-page__main\s*\{[^}]*height:\s*100%[^}]*min-height:\s*0/s, 'mobile map canvas fills the available workbench')
+assert.match(mapMobile, /\.map-sidebar,[\s\S]*\.map-search,[\s\S]*\.map-actions,[\s\S]*\.map-side\s*\{[^}]*display:\s*none/s, 'desktop map tools and long action bar are hidden on mobile')
+assert.match(mapMobile, /\.map-mobile-search-slot input\s*\{[^}]*min-width:\s*0/s, 'mobile map search remains shrinkable on one line')
+assert.match(mapMobile, /\.map-mobile-toolbar button,[\s\S]*\.map-mobile-context-actions button,[\s\S]*\.map-mobile-drawer\s*>\s*button\s*\{[^}]*white-space:\s*nowrap/s, 'mobile map operation labels never become vertical text')
+assert.match(mapMobile, /\.map-mobile-drawer\s*\{[^}]*position:\s*fixed[^}]*bottom:\s*calc\(var\(--mobile-nav-height\)[^}]*var\(--safe-bottom\)[^}]*z-index:\s*30/s, 'collapsed service drawer clears navigation and safe area')
+assert.match(mapMobile, /\.map-mobile-drawer--expanded\s*\{[^}]*z-index:\s*50/s, 'expanded service drawer sits above selected spot details')
+assert.match(mapMobile, /\.map-mobile-drawer__panel\s*\{[^}]*max-height:\s*min\(72dvh,\s*620px\)[^}]*overflow-y:\s*auto[^}]*overscroll-behavior:\s*contain[^}]*touch-action:\s*pan-y/s, 'expanded service drawer owns bounded vertical scrolling')
+assert.match(mapMobile, /\.map-spot-card\s*\{[^}]*z-index:\s*40[^}]*bottom:\s*calc\(var\(--mobile-nav-height\)[^}]*var\(--safe-bottom\)[^}]*var\(--map-mobile-drawer-peek-height\)/s, 'selected spot card clears the collapsed service drawer')
+assert.match(mapMobile, /\.map-controls\s*\{[^}]*right:\s*var\(--map-mobile-edge\)[^}]*bottom:\s*calc\(var\(--map-mobile-drawer-peek-height\)\s*\+\s*24px\)/s, 'map controls share the drawer peek offset')
+assert.doesNotMatch(mapMobile, /(?:height|min-height):\s*calc\(100dvh[^}]*(?:mobile-nav-height|56px)/s, 'map shell must not subtract navigation twice')
+assert.match(mapCss, /@media\s*\(max-width:\s*768px\)\s*and\s*\(max-height:\s*700px\)[\s\S]*\.map-mobile-drawer__panel\s*\{[^}]*max-height:\s*68dvh/s, 'short portrait viewports reduce drawer height')
+assert.match(mapCss, /@media\s*\(max-width:\s*900px\)\s*and\s*\(max-height:\s*520px\)\s*and\s*\(orientation:\s*landscape\)[\s\S]*\.map-mobile-drawer__panel\s*\{[^}]*max-height:\s*74dvh/s, 'landscape viewports preserve map space')
+assert.match(mapCss, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.map-mobile-drawer__panel,[\s\S]*\.map-mobile-drawer__overlay\s*\{[^}]*(?:transition:\s*none[^}]*animation:\s*none|animation:\s*none[^}]*transition:\s*none)/s, 'mobile service drawer respects reduced motion')
+for (const [width, height] of [[375, 667], [390, 844], [430, 932]]) {
+  assert.ok(width >= 320)
+  const available = height - 56 - 64 - 34 - 16 - 24
+  assert.ok(available > 420, `${width}x${height} keeps a usable map viewport`)
+  assert.ok(64 + 34 + 8 >= 106, 'drawer peek clears navigation and safe area')
+}
 const routeMobile = routeCss.slice(routeCss.lastIndexOf('@media (max-width: 768px)'))
 assert.doesNotMatch(routeMobile, /\.route-shell\s*\{[^}]*overflow-y:\s*auto/s, 'mobile route page must defer vertical scrolling to the app shell')
 assert.match(routeMobile, /\.route-detail\s*\{[^}]*display:\s*flex[^}]*flex-direction:\s*column/s, 'route detail stacks map and content')
@@ -331,6 +348,7 @@ const BOUNDED_LOCAL_SCROLL_ALLOWLIST = [
   ['digital mobile history', digitalHumanCss, '.digital-mobile-history__body'],
   ['digital mobile settings', digitalHumanCss, '.digital-mobile-settings__body'],
   ['map spot card', mapCss, '.map-spot-card'],
+  ['map service drawer', mapCss, '.map-mobile-drawer__panel'],
   ['live answer history', liveBroadcastCss, '.live-interaction__answer'],
   ['visitor user menu', topNavCss, '.visitor-user-menu__dropdown'],
 ]
@@ -396,6 +414,7 @@ const MOBILE_VERTICAL_SCROLL_ALLOWLIST = new Set([
   'DigitalHumanPage.css::.digital-mobile-history__body',
   'DigitalHumanPage.css::.digital-mobile-settings__body',
   'MapPage.css::.map-spot-card',
+  'MapPage.css::.map-mobile-drawer__panel',
   'LiveBroadcastPage.css::.live-interaction__answer',
   'VisitorTopNav.css::.visitor-user-menu__dropdown',
 ])
@@ -468,7 +487,7 @@ for (const width of [320, 480]) {
 assert.deepEqual(
   readMobileVerticalScrollers(mobileScrollStyles).sort(),
   [...MOBILE_VERTICAL_SCROLL_ALLOWLIST].sort(),
-  'effective mobile vertical scrolling stays exclusive to the page owner and six bounded local regions',
+  'effective mobile vertical scrolling stays exclusive to the page owner and seven bounded local regions',
 )
 const effectiveMapSide = readEffectiveRulesAtWidth(mapCss, 768).find((rule) => rule.selector === '.map-side')?.declarations
 assert.equal(effectiveMapSide?.get('overflow'), 'visible', 'mobile map services override the desktop local scroller')

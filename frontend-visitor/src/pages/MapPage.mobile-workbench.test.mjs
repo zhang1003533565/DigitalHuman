@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 const page = readFileSync(new URL('MapPage.tsx', import.meta.url), 'utf8')
+const css = readFileSync(new URL('MapPage.css', import.meta.url), 'utf8')
+const mapMobile = css.slice(css.indexOf('@media (max-width: 768px)'))
 
 assert.match(page, /const \[mobileDrawerState, setMobileDrawerState\] = useState<MobileMapDrawerState>\('collapsed'\)/)
 assert.match(page, /const \[mobileCategoryOpen, setMobileCategoryOpen\] = useState\(false\)/)
@@ -20,5 +22,15 @@ assert.match(page, /searchGenerationGateRef\.current\.isCurrent\(searchGeneratio
 assert.match(page, /function removeSearchMarkers\(\)/)
 assert.match(page, /navigate\('\/live'\)/)
 assert.match(page, /navigate\(DIGITAL_HUMAN_ROUTE\)/)
+
+assert.match(mapMobile, /\.page-shell--map\s*\{[^}]*height:\s*100%[^}]*overflow:\s*hidden/s)
+assert.match(mapMobile, /\.page-content--map\s*\{[^}]*flex:\s*1[^}]*min-height:\s*0[^}]*overflow:\s*hidden/s)
+assert.match(mapMobile, /\.map-page\s*\{[^}]*height:\s*100%[^}]*overflow:\s*hidden/s)
+assert.match(mapMobile, /\.map-page__main\s*\{[^}]*height:\s*100%[^}]*min-height:\s*0/s)
+assert.match(mapMobile, /\.map-side\s*\{[^}]*display:\s*none/s)
+assert.match(mapMobile, /\.map-actions\s*\{[^}]*display:\s*none/s)
+assert.match(mapMobile, /\.map-mobile-drawer\s*\{[^}]*position:\s*fixed[^}]*bottom:\s*calc\(var\(--mobile-nav-height\)[^}]*var\(--safe-bottom\)/s)
+assert.match(mapMobile, /\.map-mobile-drawer__panel\s*\{[^}]*max-height:\s*min\(72dvh,\s*620px\)[^}]*overflow-y:\s*auto/s)
+assert.match(mapMobile, /\.map-spot-card\s*\{[^}]*bottom:\s*calc\(var\(--mobile-nav-height\)[^}]*var\(--map-mobile-drawer-peek-height\)/s)
 
 console.log('MapPage mobile workbench source contract passed')
