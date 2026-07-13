@@ -269,14 +269,19 @@ for (const [width, height] of [[844, 390], [932, 430]]) {
   const declarationsFor = (selector) => effectiveMap.find((rule) => rule.selector === selector)?.declarations
   assert.equal(declarationsFor('.map-mobile-toolbar')?.get('display'), 'flex', `${width}x${height} enables the mobile toolbar`)
   assert.equal(declarationsFor('.map-side')?.get('display'), 'none', `${width}x${height} hides the desktop side rail`)
+  assert.equal(declarationsFor('.map-compass')?.get('display'), 'none', `${width}x${height} removes the non-interactive compass from the short controls stack`)
+  assert.equal(declarationsFor('.map-controls')?.get('gap'), '6px', `${width}x${height} uses the compact controls gap`)
+  assert.equal(declarationsFor('.map-ctrl-btn')?.get('height'), '44px', `${width}x${height} keeps 44px control buttons`)
   assert.equal(declarationsFor('.map-page')?.get('--map-mobile-bottom-offset'), '0px', `${width}x${height} does not reserve an absent bottom nav`)
   assert.equal(declarationsFor('.map-mobile-drawer')?.get('bottom'), 'calc(var(--map-mobile-bottom-offset) + 8px)', `${width}x${height} parks the drawer at the real viewport bottom`)
   assert.equal(declarationsFor('.map-mobile-drawer__overlay')?.get('inset'), '0 0 var(--map-mobile-bottom-offset) 0', `${width}x${height} uses the same real navigation geometry for the modal overlay`)
   const effectiveApp = readEffectiveRulesAtWidth(appCss, width, height)
   assert.equal(effectiveApp.find((rule) => rule.selector === '.mobile-bottom-nav')?.declarations.get('display'), 'none', `${width}x${height} has no global bottom navigation`)
   const mapCanvasHeight = height - 64
-  const unobstructedBand = mapCanvasHeight - (12 + 44) - (8 + 64)
-  assert.ok(unobstructedBand >= 198, `${width}x${height} keeps a usable vertical map band between toolbar and drawer`)
+  const toolbarBottom = 12 + 44
+  const controlsHeight = 44 + 6 + 88
+  const controlsTop = mapCanvasHeight - (64 + 24) - controlsHeight
+  assert.ok(controlsTop > toolbarBottom, `${width}x${height} keeps the complete controls bounding box below the toolbar`)
 }
 const routeMobile = routeCss.slice(routeCss.lastIndexOf('@media (max-width: 768px)'))
 assert.doesNotMatch(routeMobile, /\.route-shell\s*\{[^}]*overflow-y:\s*auto/s, 'mobile route page must defer vertical scrolling to the app shell')

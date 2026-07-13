@@ -1212,7 +1212,7 @@
   .map-mobile-drawer__drag-handle {
     display: flex;
     width: 100%;
-    min-height: 36px;
+    min-height: var(--touch-target);
     align-items: center;
     justify-content: center;
     gap: 10px;
@@ -1280,6 +1280,14 @@
 
   .map-mobile-drawer__panel {
     max-height: 74dvh;
+  }
+
+  .map-controls {
+    gap: 6px;
+  }
+
+  .map-compass {
+    display: none;
   }
 }
 

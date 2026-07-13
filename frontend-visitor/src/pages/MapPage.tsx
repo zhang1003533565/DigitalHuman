@@ -7,11 +7,14 @@ import { DIGITAL_HUMAN_ROUTE } from '../digitalHuman/shared'
 import { parseNavigationContext } from './navigationContext'
 import { getLiveStatus } from '../api/liveBroadcast'
 import {
+  MOBILE_MAP_WORKBENCH_MEDIA_QUERY,
+  createMobileMapSearchDerivedSelection,
   createMobileMapSearchGenerationGate,
   getMobileMapLiveLabel,
   isolateMobileMapDialogBackground,
   shouldShowMobileMapClearAction,
   toggleMobileMapDrawer,
+  watchMobileMapWorkbenchViewport,
   type MobileMapDrawerState,
 } from '../map/mobileMapWorkbench'
 
@@ -191,15 +194,19 @@ export function MapPage() {
   const hasAutoLocatedRef = useRef(false)
   const liveStatusGenerationRef = useRef(0)
   const searchGenerationGateRef = useRef(createMobileMapSearchGenerationGate())
-  const searchSelectedFacilityIdRef = useRef<number | null>(null)
+  const searchDerivedSelectionRef = useRef(createMobileMapSearchDerivedSelection())
   const mobileDrawerRef = useRef<HTMLElement | null>(null)
   const mobileDrawerTriggerRef = useRef<HTMLButtonElement | null>(null)
   const mobileDrawerDragStartYRef = useRef<number | null>(null)
 
-  const closeMobileDrawer = useCallback(() => {
+  const collapseMobileDrawer = useCallback(() => {
     setMobileDrawerState('collapsed')
-    window.requestAnimationFrame(() => mobileDrawerTriggerRef.current?.focus())
   }, [])
+
+  const closeMobileDrawer = useCallback(() => {
+    collapseMobileDrawer()
+    window.requestAnimationFrame(() => mobileDrawerTriggerRef.current?.focus())
+  }, [collapseMobileDrawer])
 
   const updateSelectedCardPosition = (facility: ScenicFacility | null) => {
     const map = mapInstanceRef.current
@@ -258,6 +265,12 @@ export function MapPage() {
       document.removeEventListener('visibilitychange', handleVisibility)
     }
   }, [])
+
+  useEffect(() => {
+    if (mobileDrawerState !== 'expanded') return
+    const mediaQuery = window.matchMedia(MOBILE_MAP_WORKBENCH_MEDIA_QUERY)
+    return watchMobileMapWorkbenchViewport(mediaQuery, collapseMobileDrawer)
+  }, [collapseMobileDrawer, mobileDrawerState])
 
   useEffect(() => {
     if (mobileDrawerState !== 'expanded') return
@@ -378,7 +391,7 @@ export function MapPage() {
     const selected = facilities.find((facility) => String(facility.id) === context.spotId
       || facility.name === context.spotName)
     if (selected) {
-      searchSelectedFacilityIdRef.current = null
+      searchDerivedSelectionRef.current.clear()
       setSelectedFacility(selected)
     }
   }, [context.spotId, context.spotName, facilities])
@@ -443,7 +456,7 @@ export function MapPage() {
         map.add(scenicCenterMarkerRef.current)
 
         map.on('click', () => {
-          searchSelectedFacilityIdRef.current = null
+          searchDerivedSelectionRef.current.clear()
           setSelectedFacility(null)
           setCardPosition(null)
         })
@@ -541,7 +554,7 @@ export function MapPage() {
       })
 
       marker.on('click', () => {
-        searchSelectedFacilityIdRef.current = null
+        searchDerivedSelectionRef.current.clear()
         setSelectedFacility(facility)
       })
 
@@ -596,14 +609,16 @@ export function MapPage() {
     setSearchResultCount(0)
   }
 
+  function clearSearchDerivedSelection() {
+    if (!searchDerivedSelectionRef.current.beginSearch()) return
+    setSelectedFacility(null)
+    setCardPosition(null)
+  }
+
   function clearSearchResults() {
     searchGenerationGateRef.current.invalidate()
     removeSearchMarkers()
-    if (searchSelectedFacilityIdRef.current !== null) {
-      setSelectedFacility(null)
-      setCardPosition(null)
-    }
-    searchSelectedFacilityIdRef.current = null
+    clearSearchDerivedSelection()
     setKeyword('')
   }
 
@@ -636,13 +651,14 @@ export function MapPage() {
     const query = keyword.trim()
     if (!map || !query) return
     const searchGeneration = searchGenerationGateRef.current.begin()
+    clearSearchDerivedSelection()
     removeSearchMarkers()
 
     const matchedFacility = facilities.find((item) => item.name.includes(query) || item.categoryName.includes(query))
     if (matchedFacility) {
       map.setCenter?.([matchedFacility.longitude, matchedFacility.latitude])
       map.setZoom?.(17)
-      searchSelectedFacilityIdRef.current = matchedFacility.id
+      searchDerivedSelectionRef.current.selectLocal(matchedFacility.id)
       setSelectedFacility(matchedFacility)
       setSearchResultCount(1)
       return

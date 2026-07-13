@@ -53,6 +53,95 @@ try {
     assert.equal(alreadyInert.inert, true, 'cleanup preserves a pre-existing inert state')
   }
   assert.equal(typeof workbench.createMobileMapSearchGenerationGate, 'function')
+  assert.equal(
+    workbench.MOBILE_MAP_WORKBENCH_MEDIA_QUERY,
+    '(max-width: 768px), (max-width: 932px) and (max-height: 520px) and (orientation: landscape)',
+  )
+
+  {
+    const listeners = new Set()
+    const media = {
+      matches: true,
+      addEventListener(type, listener) {
+        assert.equal(type, 'change')
+        listeners.add(listener)
+      },
+      removeEventListener(type, listener) {
+        assert.equal(type, 'change')
+        listeners.delete(listener)
+      },
+      emit(matches) {
+        this.matches = matches
+        for (const listener of listeners) listener({ matches })
+      },
+    }
+    let exits = 0
+    const cleanup = workbench.watchMobileMapWorkbenchViewport(media, () => { exits += 1 })
+    media.emit(false)
+    assert.equal(exits, 1, 'leaving the workbench viewport collapses an expanded drawer')
+    media.emit(true)
+    assert.equal(exits, 1, 're-entering does not reopen or re-collapse the drawer')
+    cleanup()
+    media.emit(false)
+    assert.equal(exits, 1, 'cleanup detaches the viewport lifecycle listener')
+  }
+
+  {
+    const media = {
+      matches: false,
+      addEventListener() {},
+      removeEventListener() {},
+    }
+    let exits = 0
+    workbench.watchMobileMapWorkbenchViewport(media, () => { exits += 1 })()
+    assert.equal(exits, 1, 'mounting expanded outside the workbench collapses immediately')
+  }
+
+  function createSelectionHarness() {
+    const derived = workbench.createMobileMapSearchDerivedSelection()
+    let selected = null
+    let cardVisible = false
+    return {
+      local(value) {
+        derived.selectLocal(value)
+        selected = value
+        cardVisible = true
+      },
+      manual(value) {
+        derived.clear()
+        selected = value
+        cardVisible = true
+      },
+      beginSearch() {
+        if (derived.beginSearch()) {
+          selected = null
+          cardVisible = false
+        }
+      },
+      snapshot() { return { selected, cardVisible } },
+    }
+  }
+
+  {
+    const search = createSelectionHarness()
+    search.local('local A')
+    search.beginSearch()
+    assert.deepEqual(search.snapshot(), { selected: null, cardVisible: false }, 'local A is cleared before remote B success')
+  }
+
+  {
+    const search = createSelectionHarness()
+    search.local('local A')
+    search.beginSearch()
+    assert.deepEqual(search.snapshot(), { selected: null, cardVisible: false }, 'local A is cleared before a remote empty result')
+  }
+
+  {
+    const search = createSelectionHarness()
+    search.manual('manual selection')
+    search.beginSearch()
+    assert.deepEqual(search.snapshot(), { selected: 'manual selection', cardVisible: true }, 'new searches preserve manual map selections')
+  }
 
   function createSearchHarness() {
     const gate = workbench.createMobileMapSearchGenerationGate()

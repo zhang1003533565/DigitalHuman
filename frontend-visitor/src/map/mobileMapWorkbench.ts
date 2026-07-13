@@ -1,6 +1,8 @@
 export type MobileMapDrawerState = 'collapsed' | 'expanded'
 export type MobileMapLiveStatus = 'loading' | 'live' | 'ready' | 'error'
 
+export const MOBILE_MAP_WORKBENCH_MEDIA_QUERY = '(max-width: 768px), (max-width: 932px) and (max-height: 520px) and (orientation: landscape)'
+
 export function toggleMobileMapDrawer(state: MobileMapDrawerState): MobileMapDrawerState {
   return state === 'expanded' ? 'collapsed' : 'expanded'
 }
@@ -23,6 +25,41 @@ export function isolateMobileMapDialogBackground(targets: InertTarget[]) {
 
   return () => {
     targets.forEach((target, index) => { target.inert = previousStates[index] })
+  }
+}
+
+type MobileMapMediaQuery = {
+  matches: boolean
+  addEventListener: (type: 'change', listener: (event: { matches: boolean }) => void) => void
+  removeEventListener: (type: 'change', listener: (event: { matches: boolean }) => void) => void
+}
+
+export function watchMobileMapWorkbenchViewport(mediaQuery: MobileMapMediaQuery, onExit: () => void) {
+  const handleChange = (event: { matches: boolean }) => {
+    if (!event.matches) onExit()
+  }
+
+  mediaQuery.addEventListener('change', handleChange)
+  if (!mediaQuery.matches) onExit()
+
+  return () => mediaQuery.removeEventListener('change', handleChange)
+}
+
+export function createMobileMapSearchDerivedSelection() {
+  let facilityId: number | null = null
+
+  return {
+    beginSearch() {
+      const shouldClearSelection = facilityId !== null
+      facilityId = null
+      return shouldClearSelection
+    },
+    selectLocal(nextFacilityId: number) {
+      facilityId = nextFacilityId
+    },
+    clear() {
+      facilityId = null
+    },
   }
 }
 
