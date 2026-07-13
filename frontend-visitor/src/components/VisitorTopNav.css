@@ -10,8 +10,8 @@
   background: rgba(3, 14, 28, 0.96);
 }
 
-.page-shell > .visitor-topbar {
-  margin: 0;
+.page-shell:not(.home-page) > .visitor-topbar {
+  margin: -20px -24px 0;
 }
 
 .module-screen > .visitor-topbar {
@@ -239,6 +239,10 @@
 }
 
 @media (max-width: 768px) {
+  .page-shell:not(.home-page) > .visitor-topbar {
+    margin: -12px -12px 0;
+  }
+
   .visitor-topbar {
     min-height: 56px;
     padding: 8px 12px;

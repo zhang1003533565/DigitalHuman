@@ -76,8 +76,18 @@ assert.match(css, /box-shadow:[^;]*inset/s)
 assert.match(css, /animation:\s*visitorUserMenuIn/)
 assert.match(css, /\.visitor-user-menu__avatar--lg\s*\{[^}]*border-color:/s)
 assert.match(css, /\.visitor-user-menu__item\s*\{[^}]*transition:/s)
-assert.match(css, /\.page-shell > \.visitor-topbar/)
+assert.match(css, /\.page-shell:not\(\.home-page\) > \.visitor-topbar/)
 assert.match(css, /\.module-screen > \.visitor-topbar/)
+assert.match(
+  css,
+  /\.page-shell:not\(\.home-page\) > \.visitor-topbar\s*\{[^}]*margin:\s*-20px -24px 0;[^}]*\}/s,
+  'desktop page-shell navigation must span the same full width as home',
+)
+assert.match(
+  css,
+  /@media \(max-width: 768px\)[\s\S]*\.page-shell:not\(\.home-page\) > \.visitor-topbar\s*\{[^}]*margin:\s*-12px -12px 0;[^}]*\}/s,
+  'mobile page-shell navigation must span the same full width as home',
+)
 assert.match(css, /@media \(max-width: 768px\)/)
 assert.match(css, /@media \(min-width: 769px\) and \(max-width: 1100px\)/)
 assert.match(css, /\.visitor-topbar__nav\s*\{[^}]*overflow-x:\s*auto;[^}]*white-space:\s*nowrap;/s)
