@@ -2,14 +2,15 @@
   min-height: 160px;
 }
 
-.history-mobile-head,
-.history-timeline {
+.history-page .history-mobile-head,
+.history-page .history-timeline {
   display: none;
 }
 
 @media (max-width: 768px), (max-width: 932px) and (max-height: 520px) and (orientation: landscape) {
   .history-page {
     --personal-mobile-edge: 14px;
+    padding-inline: var(--personal-mobile-edge);
   }
 
   .history-page .page-content {
@@ -24,7 +25,7 @@
     display: none;
   }
 
-  .history-mobile-head {
+  .history-page .history-mobile-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -32,21 +33,21 @@
     padding: 4px 2px;
   }
 
-  .history-mobile-head span {
+  .history-page .history-mobile-head span {
     color: #8ed0ff;
     font-size: 12px;
     font-weight: 800;
     letter-spacing: 0.16em;
   }
 
-  .history-mobile-head h1 {
+  .history-page .history-mobile-head h1 {
     margin: 2px 0 0;
     color: #f8fbff;
     font-size: 24px;
   }
 
-  .history-mobile-head button,
-  .history-state button {
+  .history-page .history-mobile-head button,
+  .history-page .history-state button {
     min-height: var(--touch-target);
     padding: 8px 14px;
     border: 1px solid rgba(142, 208, 255, 0.34);
@@ -59,12 +60,12 @@
     cursor: pointer;
   }
 
-  .history-timeline {
+  .history-page .history-timeline {
     display: grid;
     gap: 12px;
   }
 
-  .history-state {
+  .history-page .history-state {
     margin: 0;
     padding: 22px 18px;
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -74,11 +75,11 @@
     text-align: center;
   }
 
-  .history-state p {
+  .history-page .history-state p {
     margin: 0 0 12px;
   }
 
-  .history-message {
+  .history-page .history-message {
     width: fit-content;
     max-width: 88%;
     padding: 14px;
@@ -87,16 +88,16 @@
     background: rgba(8, 18, 29, 0.68);
   }
 
-  .history-message--user {
+  .history-page .history-message--user {
     justify-self: end;
     background: rgba(45, 121, 176, 0.34);
   }
 
-  .history-message--assistant {
+  .history-page .history-message--assistant {
     justify-self: start;
   }
 
-  .history-message__meta {
+  .history-page .history-message__meta {
     display: flex;
     justify-content: space-between;
     gap: 18px;
@@ -104,12 +105,12 @@
     font-size: 12px;
   }
 
-  .history-message__meta span {
+  .history-page .history-message__meta span {
     color: #9fd7ff;
     font-weight: 800;
   }
 
-  .history-message__body {
+  .history-page .history-message__body {
     margin: 6px 0 0;
     color: #f3f8ff;
     font-size: 14px;
@@ -124,7 +125,7 @@
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior-y: contain;
-    padding-bottom: calc(var(--mobile-nav-height) + var(--safe-bottom) + 16px);
+    padding-bottom: 16px;
   }
 
   .authenticated-app__content > .history-page {

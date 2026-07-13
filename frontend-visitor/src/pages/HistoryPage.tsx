@@ -3,6 +3,7 @@ import axios from 'axios'
 import { useNavigate } from 'react-router-dom'
 import './HistoryPage.css'
 import { DIGITAL_HUMAN_ROUTE } from '../digitalHuman/shared'
+import { loadHistoryMessages } from './historyMessageLoader'
 
 type GuideMessage = {
   role: string
@@ -30,14 +31,21 @@ export function HistoryPage() {
     const controller = new AbortController()
     async function loadMessages() {
       setLoadState('loading')
-      try {
-        const { data } = await axios.get<GuideMessage[]>(`/api/user/guide/session/${sessionId}/messages`, { signal: controller.signal })
-        setMessages(data)
-        setLoadState('idle')
-      } catch (error: unknown) {
-        if (axios.isCancel(error)) return
+      const result = await loadHistoryMessages<GuideMessage>({
+        signal: controller.signal,
+        request: async (signal) => {
+          const { data } = await axios.get<GuideMessage[]>(`/api/user/guide/session/${sessionId}/messages`, { signal })
+          return data
+        },
+        isCanceled: axios.isCancel,
+      })
+      if (result.status === 'aborted') return
+      if (result.status === 'error') {
         setLoadState('error')
+        return
       }
+      setMessages(result.messages)
+      setLoadState('idle')
     }
 
     void loadMessages()
