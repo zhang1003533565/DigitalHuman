@@ -26,7 +26,7 @@ import {
 } from '../digitalHuman/streamingSpeech'
 import { GuideResultCards } from '../components/GuideResultCards'
 import { normalizeGuideChatResult, type GuideChatResult } from '../api/contracts'
-import { MOBILE_LIVE_QUICK_QUESTIONS, getRecentMobileLiveComments } from '../digitalHuman/mobileLive'
+import { MOBILE_LIVE_QUICK_QUESTIONS, getMobileLiveComments } from '../digitalHuman/mobileLive'
 
 type DigitalHumanConfig = {
   modelId: string
@@ -70,6 +70,7 @@ type SpeechRecognitionLike = {
   abort?: () => void
   onresult: ((event: SpeechRecognitionResultEvent) => void) | null
   onerror: (() => void) | null
+  onend: (() => void) | null
 }
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike
 
@@ -255,6 +256,7 @@ export function DigitalHumanPage() {
   const [isMobileHistoryOpen, setMobileHistoryOpen] = useState(false)
   const [isMobileSettingsOpen, setMobileSettingsOpen] = useState(false)
   const [mobileHistoryTargetId, setMobileHistoryTargetId] = useState<string | null>(null)
+  const [mobileLiveAnnouncement, setMobileLiveAnnouncement] = useState('')
   const [messages, setMessages] = useState<DigitalChatMessage[]>(() => [
     {
       id: 'welcome',
@@ -284,6 +286,18 @@ export function DigitalHumanPage() {
   const isSpeaking = runtimeState === 'speaking'
 
   const canSend = isReady && draft.trim().length > 0
+
+  const mobileRuntimeComment: DigitalChatMessage | null = ['loading', 'listening', 'thinking', 'error'].includes(runtimeState)
+    ? {
+        id: `runtime-${runtimeState}`,
+        sender: 'guide',
+        name: '灵灵状态',
+        content: status,
+        time: new Date(),
+        status: runtimeState === 'error' ? 'failed' : 'read',
+      }
+    : null
+  const mobileLiveComments = getMobileLiveComments(messages, mobileRuntimeComment)
 
   const closeMobileHistory = useCallback(() => {
     setMobileHistoryOpen(false)
@@ -993,17 +1007,38 @@ export function DigitalHumanPage() {
     recognitionRef.current?.abort?.()
     recognitionRef.current?.stop?.()
     const recognition = new SpeechRecognition()
+    let hadRecognitionError = false
+    let recognizedTranscript = ''
     recognitionRef.current = recognition
     recognition.lang = 'zh-CN'
     recognition.interimResults = false
     recognition.onresult = (event) => {
       if (recognitionGenerationRef.current === generation) {
-        setDraft(event.results[0][0].transcript)
+        recognizedTranscript = event.results[0][0].transcript
+        setDraft(recognizedTranscript)
       }
     }
     recognition.onerror = () => {
-      if (recognitionGenerationRef.current === generation) {
-        setStatus('没有识别到语音，请重试或使用文字提问。')
+      hadRecognitionError = true
+      if (recognitionGenerationRef.current !== generation || recognitionRef.current !== recognition) return
+      recognitionRef.current = null
+      recognition.onresult = null
+      recognition.onerror = null
+      recognition.onend = null
+      setRuntimeState('error')
+      setStatus('没有识别到语音，请重试或使用文字提问。')
+      setMobileLiveAnnouncement('语音识别失败，请重试或使用文字提问。')
+    }
+    recognition.onend = () => {
+      if (recognitionGenerationRef.current !== generation || recognitionRef.current !== recognition) return
+      recognitionRef.current = null
+      recognition.onresult = null
+      recognition.onerror = null
+      recognition.onend = null
+      if (!hadRecognitionError) {
+        setRuntimeState('idle')
+        setStatus(recognizedTranscript ? '语音问题已识别，可以发送。' : '语音识别已结束，请重新尝试。')
+        setMobileLiveAnnouncement(recognizedTranscript ? '语音问题已识别。' : '语音识别已结束。')
       }
     }
     try {
@@ -1013,8 +1048,12 @@ export function DigitalHumanPage() {
     } catch {
       recognitionRef.current = null
       recognitionGenerationRef.current += 1
+      recognition.onresult = null
+      recognition.onerror = null
+      recognition.onend = null
       setRuntimeState('error')
       setStatus('语音识别启动失败，请重试或使用文字提问。')
+      setMobileLiveAnnouncement('语音识别启动失败，请重试或使用文字提问。')
     }
   }
 
@@ -1034,6 +1073,7 @@ export function DigitalHumanPage() {
 
     setMessages((current) => [...current, userMessage])
     setDraft('')
+    setMobileLiveAnnouncement('已发送问题，灵灵正在回复。')
     setRuntimeState('thinking')
     speechOutcomeRef.current = { state: 'success', status: '导览回答已生成。' }
     setStatus('正在生成导览回答...')
@@ -1230,6 +1270,7 @@ export function DigitalHumanPage() {
         )
         isAnswerStreamingRef.current = false
         setRuntimeState('error')
+        setMobileLiveAnnouncement('灵灵回复失败，请稍后重试。')
         void playNextSpeechSegment(requestRunId)
         return
       }
@@ -1238,6 +1279,7 @@ export function DigitalHumanPage() {
       setRuntimeState(streamOutcome.state === 'error' ? 'error' : 'thinking')
       void triggerConfiguredAction({ text: `${question}\n${fullAnswer}` })
       isAnswerStreamingRef.current = false
+      setMobileLiveAnnouncement(streamOutcome.state === 'error' ? '灵灵回复失败，请稍后重试。' : '灵灵的回复已完成。')
       guideResult = { ...guideResult, answerText: fullAnswer }
       setMessages((current) => current.map((msg) => (
         msg.id === assistantMsgId ? { ...msg, result: guideResult } : msg
@@ -1251,6 +1293,7 @@ export function DigitalHumanPage() {
       isAnswerStreamingRef.current = false
       setStatus('导览请求失败，请确认问答服务和 TTS 服务已启动。')
       setRuntimeState('error')
+      setMobileLiveAnnouncement('灵灵回复失败，请稍后重试。')
       speechOutcomeRef.current = {
         state: 'error',
         status: '导览请求失败，请确认问答服务和 TTS 服务已启动。',
@@ -1318,10 +1361,10 @@ export function DigitalHumanPage() {
             设置
           </button>
           <span className="sr-only" aria-live="polite" aria-atomic="true">
-            {messages.at(-1)?.content}
+            {mobileLiveAnnouncement}
           </span>
           <section className="digital-mobile-comment-feed" aria-label="最近对话">
-            {getRecentMobileLiveComments(messages).map((message) => (
+            {mobileLiveComments.map((message) => (
               <article
                 key={message.id}
                 className={`digital-mobile-comment digital-mobile-comment--${message.sender}`}

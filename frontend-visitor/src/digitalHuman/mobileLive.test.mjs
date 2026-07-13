@@ -46,6 +46,20 @@ try {
   const recent = mobileLive.getRecentMobileLiveComments(messages)
   assert.deepEqual(recent.map((item) => item.id), ['4', '5', '6', '7', '8'])
   assert.deepEqual(messages, snapshot, 'deriving live comments must not mutate message state')
+
+  const transient = { id: 'runtime-thinking', metadata: { position: 9 } }
+  const merged = mobileLive.getMobileLiveComments(messages, transient)
+  assert.deepEqual(
+    merged.map((item) => item.id),
+    ['5', '6', '7', '8', 'runtime-thinking'],
+    'a transient runtime comment shares the five-item limit with persisted messages',
+  )
+  assert.deepEqual(messages, snapshot, 'merging a transient comment must not mutate message state')
+  assert.deepEqual(
+    mobileLive.getMobileLiveComments(messages, null).map((item) => item.id),
+    ['4', '5', '6', '7', '8'],
+    'an absent transient comment preserves the regular recent-message view',
+  )
   console.log('mobile digital-human live data contract passed')
 } finally {
   rmSync(outDir, { recursive: true, force: true })

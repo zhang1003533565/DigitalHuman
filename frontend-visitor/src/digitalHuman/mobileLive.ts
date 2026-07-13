@@ -9,3 +9,10 @@ export const MOBILE_LIVE_QUICK_QUESTIONS = [
 export function getRecentMobileLiveComments<T>(messages: readonly T[]) {
   return messages.slice(-MOBILE_LIVE_COMMENT_LIMIT)
 }
+
+export function getMobileLiveComments<T>(messages: readonly T[], transientComment: T | null) {
+  if (!transientComment) {
+    return getRecentMobileLiveComments(messages)
+  }
+  return [...messages.slice(-(MOBILE_LIVE_COMMENT_LIMIT - 1)), transientComment]
+}

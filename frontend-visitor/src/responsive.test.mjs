@@ -54,13 +54,15 @@ const readTopLevelBlocks = (css) => {
   return blocks
 }
 
-const mediaMatchesWidth = (prelude, width) => prelude
+const mediaMatchesViewport = (prelude, width, height) => prelude
   .replace(/^@media\s*/, '')
   .split(',')
   .some((query) => {
     const minWidth = Number(query.match(/min-width\s*:\s*(\d+(?:\.\d+)?)px/)?.[1] ?? 0)
     const maxWidth = Number(query.match(/max-width\s*:\s*(\d+(?:\.\d+)?)px/)?.[1] ?? Number.POSITIVE_INFINITY)
-    return width >= minWidth && width <= maxWidth
+    const minHeight = Number(query.match(/min-height\s*:\s*(\d+(?:\.\d+)?)px/)?.[1] ?? 0)
+    const maxHeight = Number(query.match(/max-height\s*:\s*(\d+(?:\.\d+)?)px/)?.[1] ?? Number.POSITIVE_INFINITY)
+    return width >= minWidth && width <= maxWidth && height >= minHeight && height <= maxHeight
   })
 
 const mergeDeclarations = (target, incoming) => {
@@ -74,12 +76,12 @@ const mergeDeclarations = (target, incoming) => {
   }
 }
 
-const readEffectiveRulesAtWidth = (css, width) => {
+const readEffectiveRulesAtWidth = (css, width, height = 800) => {
   const effectiveRules = new Map()
   const applyRules = (source) => {
     for (const block of readTopLevelBlocks(source)) {
       if (block.prelude.startsWith('@media')) {
-        if (mediaMatchesWidth(block.prelude, width)) applyRules(block.body)
+        if (mediaMatchesViewport(block.prelude, width, height)) applyRules(block.body)
         continue
       }
       if (block.prelude.startsWith('@')) continue
@@ -95,12 +97,12 @@ const readEffectiveRulesAtWidth = (css, width) => {
   return [...effectiveRules].map(([selector, declarations]) => ({ selector, declarations }))
 }
 
-const readCrossFileDeclarationsAtWidth = (styles, width, matchingSelectors) => {
+const readCrossFileDeclarationsAtWidth = (styles, width, matchingSelectors, height = 800) => {
   const effective = new Map()
   const applyRules = (source) => {
     for (const block of readTopLevelBlocks(source)) {
       if (block.prelude.startsWith('@media')) {
-        if (mediaMatchesWidth(block.prelude, width)) applyRules(block.body)
+        if (mediaMatchesViewport(block.prelude, width, height)) applyRules(block.body)
         continue
       }
       if (block.prelude.startsWith('@')) continue
@@ -350,6 +352,19 @@ assert.deepEqual(
   ['.tablet-rule', '.narrow-rule'],
   'all media rules that can apply within mobile widths contribute in source order',
 )
+const heightAwareFixture = '@media (max-width: 768px) { .height-aware { color: blue; } } @media (max-width: 768px) and (max-height: 700px) { .height-aware { color: red; } }'
+assert.equal(
+  readEffectiveRulesAtWidth(heightAwareFixture, 375, 667)
+    .find((rule) => rule.selector === '.height-aware')?.declarations.get('color'),
+  'red',
+  'effective media rules account for viewport height as well as width',
+)
+assert.equal(
+  readEffectiveRulesAtWidth(heightAwareFixture, 375, 800)
+    .find((rule) => rule.selector === '.height-aware')?.declarations.get('color'),
+  'blue',
+  'short-viewport media rules do not leak into taller mobile viewports',
+)
 const longhandOverride = readEffectiveRulesAtWidth(
   '.content { overflow: auto; } @media (max-width: 768px) { .content { overflow-y: visible; } }',
   768,
@@ -513,24 +528,46 @@ const readPixelValue = (value, label) => {
   assert.match(value ?? '', /^\d+(?:\.\d+)?px$/, `${label} must be a static pixel interval token`)
   return Number.parseFloat(value)
 }
-const mobileStackTokens = readEffectiveRulesAtWidth(digitalHumanCss, 375)
+const shortViewportHeight = 667
+const mobileStackRules = readEffectiveRulesAtWidth(digitalHumanCss, 375, shortViewportHeight)
+const mobileStackTokens = mobileStackRules
   .find((rule) => rule.selector === '.live2d-page')?.declarations
 const globalTokens = readRules(tokens).find((rule) => rule.selector === ':root')?.declarations
-const shortViewportHeight = 667
-const shortComposerBottom = readPixelValue(globalTokens?.get('--mobile-nav-height'), 'mobile nav height')
-  + readPixelValue(mobileStackTokens?.get('--digital-mobile-edge-gap'), 'mobile stack edge gap')
+const shortCommentMaxHeight = mobileStackRules
+  .find((rule) => rule.selector === '.digital-mobile-comment-feed')?.declarations.get('max-height')
+const shortCommentHeight = Number(shortCommentMaxHeight?.match(/,\s*(\d+(?:\.\d+)?)px\s*\)$/)?.[1])
+assert.equal(shortCommentHeight, 232, '375x667 reads the short-viewport comment cap from the effective media rule')
+const mobileNavHeight = readPixelValue(globalTokens?.get('--mobile-nav-height'), 'mobile nav height')
+const mobileEdgeGap = readPixelValue(mobileStackTokens?.get('--digital-mobile-edge-gap'), 'mobile stack edge gap')
 const shortComposerHeight = readPixelValue(mobileStackTokens?.get('--digital-mobile-composer-height'), 'composer height')
 const shortQuickHeight = readPixelValue(mobileStackTokens?.get('--digital-mobile-quick-height'), 'quick-question height')
-const shortCommentHeight = 232
 const shortStackGap = readPixelValue(mobileStackTokens?.get('--digital-mobile-stack-gap'), 'mobile stack gap')
-const composerTop = shortViewportHeight - shortComposerBottom - shortComposerHeight
-const quickBottomEdge = shortViewportHeight - (shortComposerBottom + shortComposerHeight + shortStackGap)
-const quickTop = quickBottomEdge - shortQuickHeight
-const commentBottomEdge = quickTop - shortStackGap
-const commentTop = commentBottomEdge - shortCommentHeight
-assert.ok(commentBottomEdge <= quickTop, '375x667 comment interval stays above quick questions')
-assert.ok(quickBottomEdge <= composerTop, '375x667 quick-question interval stays above the composer')
-assert.ok(commentTop >= 0, '375x667 fixed interaction stack stays inside the viewport')
+const mobileCommentClearance = readPixelValue(mobileStackTokens?.get('--digital-mobile-comment-clearance'), 'comment clearance')
+
+const calculateMobileStack = ({ layoutHeight, visualHeight, safeBottom, viewportBottomInset }) => {
+  const composerBottom = Math.max(
+    mobileNavHeight + safeBottom + mobileEdgeGap,
+    viewportBottomInset + mobileEdgeGap,
+  )
+  const composerTop = layoutHeight - composerBottom - shortComposerHeight
+  const quickBottomEdge = layoutHeight - (composerBottom + shortComposerHeight + shortStackGap)
+  const quickTop = quickBottomEdge - shortQuickHeight
+  const commentBottomEdge = quickTop - shortStackGap
+  const commentHeight = Math.min(shortCommentHeight, Math.max(0, visualHeight - mobileCommentClearance))
+  const commentTop = commentBottomEdge - commentHeight
+  return { composerTop, quickBottomEdge, quickTop, commentBottomEdge, commentTop }
+}
+
+for (const scenario of [
+  { label: 'zero safe area', layoutHeight: 667, visualHeight: 667, safeBottom: 0, viewportBottomInset: 0 },
+  { label: 'typical home indicator', layoutHeight: 667, visualHeight: 667, safeBottom: 34, viewportBottomInset: 0 },
+  { label: 'visual viewport keyboard inset', layoutHeight: 667, visualHeight: 387, safeBottom: 34, viewportBottomInset: 280 },
+]) {
+  const stack = calculateMobileStack(scenario)
+  assert.ok(stack.commentBottomEdge <= stack.quickTop, `${scenario.label}: comments stay above quick questions`)
+  assert.ok(stack.quickBottomEdge <= stack.composerTop, `${scenario.label}: quick questions stay above the composer`)
+  assert.ok(stack.commentTop >= 0, `${scenario.label}: fixed interaction stack stays inside the layout viewport`)
+}
 
 for (const stylesheet of routedPageStyles) {
   assert.match(
