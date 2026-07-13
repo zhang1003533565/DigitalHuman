@@ -25,7 +25,6 @@ assert.match(page, /viewport\?\.removeEventListener\('resize', syncMobileViewpor
 assert.match(page, /viewport\?\.removeEventListener\('scroll', syncMobileViewport\)/)
 assert.match(page, /window\.removeEventListener\('resize', syncMobileViewport\)/)
 assert.match(page, /className="sr-only"[\s\S]*aria-live="polite"/)
-assert.match(page, /MOBILE_LIVE_QUICK_QUESTIONS\.map[\s\S]*sendQuestion\(item\.question\)/)
 assert.match(page, /placeholder="问问灵灵…"/)
 assert.match(page, /startVoiceQuestion/)
 assert.match(page, /role="dialog"[\s\S]*aria-modal="true"/)
@@ -45,5 +44,11 @@ assert.match(page, /MOBILE_DIALOG_FOCUSABLE_SELECTOR[\s\S]*textarea:not\(:disabl
 assert.match(page, /querySelector<HTMLElement>\(MOBILE_DIALOG_FOCUSABLE_SELECTOR\)/)
 assert.match(page, /querySelectorAll<HTMLElement>\(MOBILE_DIALOG_FOCUSABLE_SELECTOR\)/)
 assert.match(page, /matchMedia\('\(min-width: 769px\)'\)[\s\S]*messagesEndRef\.current\?\.scrollIntoView/)
+assert.match(
+  page,
+  /type MouseEvent as ReactMouseEvent[\s\S]*function handleMobileQuickQuestion\(event: ReactMouseEvent<HTMLButtonElement>\)[\s\S]*sendQuestion\(event\.currentTarget\.dataset\.question \?\? ''\)/,
+  'quick questions must enter the existing session through an event handler outside the render-time map callback',
+)
+assert.match(page, /MOBILE_LIVE_QUICK_QUESTIONS\.map[\s\S]*data-question=\{item\.question\}[\s\S]*onClick=\{handleMobileQuickQuestion\}/)
 assert.match(page, /className="digital-human-chat"/, 'desktop chat remains rendered')
 console.log('mobile digital-human live interaction contract passed')

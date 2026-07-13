@@ -1,4 +1,4 @@
-import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
+import { type FormEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import axios from 'axios'
 import './DigitalHumanPage.css'
 import {
@@ -971,6 +971,10 @@ export function DigitalHumanPage() {
     void sendQuestion(draft)
   }
 
+  function handleMobileQuickQuestion(event: ReactMouseEvent<HTMLButtonElement>) {
+    void sendQuestion(event.currentTarget.dataset.question ?? '')
+  }
+
   function startVoiceQuestion() {
     const SpeechRecognition = (window as typeof window & {
       SpeechRecognition?: SpeechRecognitionConstructor
@@ -1348,7 +1352,8 @@ export function DigitalHumanPage() {
                 key={item.label}
                 type="button"
                 disabled={!isReady}
-                onClick={() => void sendQuestion(item.question)}
+                data-question={item.question}
+                onClick={handleMobileQuickQuestion}
               >
                 {item.label}
               </button>
