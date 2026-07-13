@@ -95,6 +95,25 @@ const readEffectiveRulesAtWidth = (css, width) => {
   return [...effectiveRules].map(([selector, declarations]) => ({ selector, declarations }))
 }
 
+const readCrossFileDeclarationsAtWidth = (styles, width, matchingSelectors) => {
+  const effective = new Map()
+  const applyRules = (source) => {
+    for (const block of readTopLevelBlocks(source)) {
+      if (block.prelude.startsWith('@media')) {
+        if (mediaMatchesWidth(block.prelude, width)) applyRules(block.body)
+        continue
+      }
+      if (block.prelude.startsWith('@')) continue
+      const selectors = block.prelude.split(',').map((value) => value.trim()).filter(Boolean)
+      if (selectors.some((selector) => matchingSelectors.has(selector))) {
+        mergeDeclarations(effective, readDeclarationEntries(block.body))
+      }
+    }
+  }
+  for (const [, css] of styles) applyRules(css)
+  return effective
+}
+
 const readMobileRepresentativeWidths = (styles) => {
   const boundaries = new Set([0, 768])
   for (const [, css] of styles) {
@@ -296,14 +315,11 @@ assert.doesNotMatch(digitalBeforeMobile, /(?:height|min-height):\s*100(?:d)?vh/,
 
 const BOUNDED_LOCAL_SCROLL_ALLOWLIST = [
   ['digital character menu', digitalHumanCss, '.digital-chat-select__menu'],
-  ['map spot card', mapMobile, '.map-spot-card'],
+  ['digital chat history', digitalHumanCss, '.digital-chat-body'],
+  ['map spot card', mapCss, '.map-spot-card'],
   ['live answer history', liveBroadcastCss, '.live-interaction__answer'],
   ['visitor user menu', topNavCss, '.visitor-user-menu__dropdown'],
 ]
-
-for (const [name, css, selector] of BOUNDED_LOCAL_SCROLL_ALLOWLIST) {
-  assert.ok(hasBoundedLocalScroll(css, selector), `${name} must remain bounded and vertically scrollable`)
-}
 
 const digitalChatBody = readRules(digitalHumanCss).find((rule) => rule.selector === '.digital-chat-body')?.declarations
 assert.equal(digitalChatBody?.get('flex'), '1 1 auto', 'digital chat history consumes bounded flex space')
@@ -365,6 +381,27 @@ const mobileScrollStyles = [
   ['VisitorTopNav.css', topNavCss],
   ...routedPageStyles.map((stylesheet) => [stylesheet, read(`pages/${stylesheet}`)]),
 ]
+const mobileRepresentativeWidths = readMobileRepresentativeWidths(mobileScrollStyles)
+for (const [name, css, selector] of BOUNDED_LOCAL_SCROLL_ALLOWLIST) {
+  for (const width of mobileRepresentativeWidths) {
+    const declarations = readEffectiveRulesAtWidth(css, width)
+      .find((rule) => rule.selector === selector)?.declarations
+    assert.ok(isVerticalScroller(declarations), `${name} must remain vertically scrollable at ${width}px`)
+    assert.ok(hasFiniteMaxHeight(declarations?.get('max-height')), `${name} must remain finitely bounded at ${width}px`)
+  }
+}
+const digitalRouteRootSelectors = new Set(['.authenticated-app__content > *', '.module-screen'])
+for (const width of mobileRepresentativeWidths) {
+  const declarations = readCrossFileDeclarationsAtWidth(
+    [['App.css', appCss], ['DigitalHumanPage.css', digitalHumanCss]],
+    width,
+    digitalRouteRootSelectors,
+  )
+  assert.equal(declarations.get('height'), 'auto', `digital route root uses natural height at ${width}px`)
+  assert.equal(declarations.get('min-height'), '100%', `digital route root fills at least the mobile content height at ${width}px`)
+  assert.equal(declarations.get('overflow'), 'visible', `digital route root does not clip content at ${width}px`)
+  assert.equal(declarations.get('overscroll-behavior'), 'auto', `digital route root delegates overscroll at ${width}px`)
+}
 const readMobileVerticalScrollers = (styles) => {
   const scrollers = new Set()
   const widths = readMobileRepresentativeWidths(styles)

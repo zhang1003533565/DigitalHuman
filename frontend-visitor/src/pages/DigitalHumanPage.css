@@ -754,6 +754,13 @@
 }
 
 @media (max-width: 768px) {
+  .module-screen {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+    overscroll-behavior: auto;
+  }
+
   .live2d-page {
     display: grid;
     grid-template-rows: minmax(220px, 42vh) auto;
