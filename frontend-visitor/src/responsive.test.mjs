@@ -206,13 +206,17 @@ for (const selector of ['.live2d-page {', '.live2d-canvas {', '.digital-human-ch
   assert.ok(digitalBeforeMobile.includes(selector), `digital-human mobile overrides must follow base selector ${selector}`)
 }
 const digitalMobile = digitalHumanCss.slice(digitalMobileStart)
-assert.match(digitalMobile, /\.live2d-page\s*\{[^}]*grid-template-rows:\s*minmax\(220px,\s*42vh\)\s+auto[^}]*overflow:\s*visible/s, 'digital-human mobile stage and chat form a natural stack')
+assert.match(digitalMobile, /\.live2d-page\s*\{[^}]*display:\s*block[^}]*overflow:\s*hidden/s, 'digital-human mobile stage becomes the single visible experience')
 assert.match(digitalMobile, /\.live2d-page\s*\{[^}]*touch-action:\s*pan-y/s, 'digital-human mobile page allows the app shell to own vertical gestures')
 assert.match(digitalMobile, /\.live2d-page--presentation\s*\{[^}]*touch-action:\s*pan-y/s, 'digital-human presentation ancestor allows vertical gestures on mobile')
-assert.match(digitalMobile, /\.live2d-canvas,[^}]*\.digital-human-stage-glow,[^}]*\.digital-human-status,[^}]*\.live2d-page--presentation::after\s*\{[^}]*grid-row:\s*1[^}]*grid-column:\s*1/s, 'digital-human stage layers stay inside the first grid row')
 assert.match(digitalMobile, /\.live2d-canvas\s*\{[^}]*touch-action:\s*none/s, 'only the interactive digital-human canvas keeps exclusive touch handling')
-assert.match(digitalMobile, /\.digital-human-chat\s*\{[^}]*grid-row:\s*2[^}]*position:\s*relative[^}]*height:\s*auto/s, 'digital-human chat remains in the second grid row')
-assert.match(digitalMobile, /\.digital-human-chat\s*\{[^}]*touch-action:\s*pan-y/s, 'digital-human mobile chat preserves vertical scrolling gestures')
+assert.match(digitalMobile, /\.digital-human-chat\s*\{[^}]*display:\s*none/s, 'mobile hides the desktop chat card')
+assert.match(digitalMobile, /\.digital-human-mobile-live\s*\{[^}]*display:\s*block/s, 'mobile shows the live comment experience')
+assert.match(digitalMobile, /\.digital-mobile-comment-feed\s*\{[^}]*overflow:\s*visible/s, 'live comments never become a nested scroller')
+assert.match(digitalMobile, /\.digital-mobile-quick-questions\s*\{[^}]*overflow-x:\s*auto[^}]*overflow-y:\s*hidden/s, 'quick questions keep horizontal-only scrolling')
+assert.match(digitalMobile, /\.digital-mobile-composer\s*\{[^}]*position:\s*fixed[^}]*bottom:\s*calc\(var\(--mobile-nav-height\)/s, 'mobile composer stays above bottom navigation')
+assert.match(digitalMobile, /\.digital-mobile-history__body,[\s\S]*\.digital-mobile-settings__body\s*\{[^}]*max-height:[^;}]+;[^}]*overflow-y:\s*auto/s, 'mobile sheets keep bounded local scrolling')
+assert.match(digitalMobile, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.digital-mobile-comment/s, 'comment motion respects reduced-motion preferences')
 assert.match(digitalBeforeMobile, /\.digital-chat-body\s*\{[^}]*touch-action:\s*pan-y/s, 'digital-human message history preserves local vertical scrolling')
 assert.match(digitalBeforeMobile, /\.digital-chat-select__menu\s*\{[^}]*touch-action:\s*pan-y/s, 'digital-human character menu preserves local vertical scrolling')
 assert.match(digitalMobile, /\.digital-chat-select\s*\{[^}]*flex:\s*0\s+1\s+auto[^}]*min-width:\s*max-content/s, 'mobile character selector sizes to its complete current value while remaining shrinkable')
@@ -315,7 +319,8 @@ assert.doesNotMatch(digitalBeforeMobile, /(?:height|min-height):\s*100(?:d)?vh/,
 
 const BOUNDED_LOCAL_SCROLL_ALLOWLIST = [
   ['digital character menu', digitalHumanCss, '.digital-chat-select__menu'],
-  ['digital chat history', digitalHumanCss, '.digital-chat-body'],
+  ['digital mobile history', digitalHumanCss, '.digital-mobile-history__body'],
+  ['digital mobile settings', digitalHumanCss, '.digital-mobile-settings__body'],
   ['map spot card', mapCss, '.map-spot-card'],
   ['live answer history', liveBroadcastCss, '.live-interaction__answer'],
   ['visitor user menu', topNavCss, '.visitor-user-menu__dropdown'],
@@ -325,11 +330,6 @@ const digitalChatBody = readRules(digitalHumanCss).find((rule) => rule.selector 
 assert.equal(digitalChatBody?.get('flex'), '1 1 auto', 'digital chat history consumes bounded flex space')
 assert.equal(digitalChatBody?.get('min-height'), '0', 'digital chat history may shrink inside its flex panel')
 assert.equal(digitalChatBody?.get('overflow-y'), 'auto', 'digital chat history remains locally scrollable')
-const effectiveDigitalChatBody = readEffectiveRulesAtWidth(digitalHumanCss, 768)
-  .find((rule) => rule.selector === '.digital-chat-body')?.declarations
-assert.ok(isVerticalScroller(effectiveDigitalChatBody), 'mobile digital chat history remains locally scrollable')
-assert.ok(hasFiniteMaxHeight(effectiveDigitalChatBody?.get('max-height')), 'mobile digital chat history has a finite boundary')
-
 assert.deepEqual(
   readEffectiveRulesAtWidth('.desktop { overflow-y: auto; } @media (max-width: 768px) { .desktop { overflow: visible; } .mobile-page { overflow-y: auto; } }', 768)
     .filter((rule) => isVerticalScroller(rule.declarations))
@@ -371,7 +371,8 @@ for (const invalidBoundary of ['auto', 'max-content', 'fit-content', '50%']) {
 const MOBILE_VERTICAL_SCROLL_ALLOWLIST = new Set([
   'App.css::.authenticated-app__content',
   'DigitalHumanPage.css::.digital-chat-select__menu',
-  'DigitalHumanPage.css::.digital-chat-body',
+  'DigitalHumanPage.css::.digital-mobile-history__body',
+  'DigitalHumanPage.css::.digital-mobile-settings__body',
   'MapPage.css::.map-spot-card',
   'LiveBroadcastPage.css::.live-interaction__answer',
   'VisitorTopNav.css::.visitor-user-menu__dropdown',
@@ -445,7 +446,7 @@ for (const width of [320, 480]) {
 assert.deepEqual(
   readMobileVerticalScrollers(mobileScrollStyles).sort(),
   [...MOBILE_VERTICAL_SCROLL_ALLOWLIST].sort(),
-  'effective mobile vertical scrolling stays exclusive to the page owner and five bounded local regions',
+  'effective mobile vertical scrolling stays exclusive to the page owner and six bounded local regions',
 )
 const effectiveMapSide = readEffectiveRulesAtWidth(mapCss, 768).find((rule) => rule.selector === '.map-side')?.declarations
 assert.equal(effectiveMapSide?.get('overflow'), 'visible', 'mobile map services override the desktop local scroller')
@@ -460,6 +461,15 @@ for (const [name, css, width, selector] of [
     readComputedOverflow(declarations),
     { overflowX: 'auto', overflowY: 'hidden' },
     `${name} keeps horizontal scrolling without becoming a vertical scroller`,
+  )
+}
+for (const width of mobileRepresentativeWidths) {
+  const declarations = readEffectiveRulesAtWidth(digitalHumanCss, width)
+    .find((rule) => rule.selector === '.digital-mobile-quick-questions')?.declarations
+  assert.deepEqual(
+    readComputedOverflow(declarations),
+    { overflowX: 'auto', overflowY: 'hidden' },
+    `digital quick questions keep horizontal-only scrolling at ${width}px`,
   )
 }
 for (const [name, css, selector] of [

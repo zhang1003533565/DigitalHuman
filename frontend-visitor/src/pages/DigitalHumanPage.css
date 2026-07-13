@@ -145,6 +145,11 @@
   box-shadow: 0 0 12px rgba(62, 230, 164, 0.72);
 }
 
+.digital-human-mobile-live,
+.digital-mobile-sheet {
+  display: none;
+}
+
 .digital-human-chat {
   position: absolute;
   top: calc(76px + clamp(18px, 2.2vw, 30px));
@@ -762,24 +767,15 @@
   }
 
   .live2d-page {
-    display: grid;
-    grid-template-rows: minmax(220px, 42vh) auto;
+    display: block;
     height: auto;
-    min-height: 100%;
-    overflow: visible;
+    min-height: max(620px, calc(100dvh - 56px - var(--mobile-nav-height) - var(--safe-bottom)));
+    overflow: hidden;
     touch-action: pan-y;
   }
 
   .live2d-page--presentation {
     touch-action: pan-y;
-  }
-
-  .live2d-canvas,
-  .digital-human-stage-glow,
-  .digital-human-status,
-  .live2d-page--presentation::after {
-    grid-row: 1;
-    grid-column: 1;
   }
 
   .live2d-canvas {
@@ -789,25 +785,296 @@
   }
 
   .digital-human-status {
-    right: 18px;
-    bottom: 16px;
-    left: 18px;
+    top: 12px;
+    right: auto;
+    bottom: auto;
+    left: 12px;
+    width: fit-content;
+    max-width: calc(100% - 112px);
+    min-height: 36px;
+    padding: 8px 12px;
   }
 
   .digital-human-chat {
-    grid-row: 2;
-    position: relative;
-    inset: auto;
-    width: auto;
-    height: auto;
-    min-height: 420px;
-    margin: 0 10px 16px;
-    touch-action: pan-y;
+    display: none;
   }
 
   .digital-chat-body {
-    max-height: clamp(220px, 42vh, 520px);
+    max-height: none;
+    overflow: visible;
+  }
+
+  .digital-human-mobile-live {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    display: block;
+    pointer-events: none;
+  }
+
+  .digital-mobile-settings-trigger {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+    padding: 0 12px;
+    color: #fff;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    border: 1px solid rgba(125, 204, 255, 0.3);
+    border-radius: 999px;
+    background: rgba(3, 14, 31, 0.7);
+    cursor: pointer;
+    pointer-events: auto;
+  }
+
+  .digital-mobile-comment-feed {
+    position: absolute;
+    right: 14px;
+    bottom: 154px;
+    left: 14px;
+    display: flex;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 210px;
+    padding: 0;
+    overflow: visible;
+    color: #fff;
+    text-align: left;
+    border: 0;
+    background: transparent;
+    pointer-events: auto;
+  }
+
+  .digital-mobile-comment {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 6px;
+    max-width: min(88%, 340px);
+    padding: 7px 10px;
+    border-radius: 12px;
+    background: rgba(3, 12, 28, 0.58);
+    backdrop-filter: blur(10px);
+    animation: digital-mobile-comment-in 180ms ease-out both;
+  }
+
+  .digital-mobile-comment--guide strong {
+    color: #7dccff;
+  }
+
+  .digital-mobile-comment:nth-last-of-type(4) {
+    opacity: 0.46;
+  }
+
+  .digital-mobile-comment:nth-last-of-type(3) {
+    opacity: 0.62;
+  }
+
+  .digital-mobile-comment:nth-last-of-type(2) {
+    opacity: 0.8;
+  }
+
+  .digital-mobile-comment > span {
+    display: -webkit-box;
+    overflow: hidden;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+
+  .digital-mobile-comment > button {
+    grid-column: 2;
+  }
+
+  .digital-mobile-comment-feed button,
+  .digital-mobile-quick-questions button {
+    min-height: var(--touch-target);
+    padding: 8px 12px;
+    color: #eaf6ff;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    border: 1px solid rgba(125, 204, 255, 0.28);
+    border-radius: 999px;
+    background: rgba(5, 24, 51, 0.82);
+    cursor: pointer;
+  }
+
+  .digital-mobile-comment-feed__open {
+    align-self: flex-start;
+  }
+
+  .digital-mobile-quick-questions {
+    position: absolute;
+    right: 12px;
+    bottom: 92px;
+    left: 12px;
+    display: flex;
+    gap: 8px;
+    padding-bottom: 2px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    pointer-events: auto;
+  }
+
+  .digital-mobile-quick-questions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .digital-mobile-quick-questions button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .digital-mobile-composer {
+    position: fixed;
+    right: 10px;
+    bottom: calc(var(--mobile-nav-height) + var(--safe-bottom) + 8px);
+    left: 10px;
+    z-index: 900;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px 52px;
+    gap: 6px;
+    padding: 7px;
+    border: 1px solid rgba(125, 204, 255, 0.28);
+    border-radius: 24px;
+    background: rgba(3, 14, 31, 0.88);
+    backdrop-filter: blur(18px);
+    pointer-events: auto;
+  }
+
+  .digital-mobile-composer textarea,
+  .digital-mobile-composer button {
+    min-height: var(--touch-target);
+    color: #f3f9ff;
+    font: inherit;
+    border: 0;
+    border-radius: 18px;
+  }
+
+  .digital-mobile-composer textarea {
+    min-width: 0;
+    max-height: 96px;
+    padding: 11px 12px;
+    resize: none;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .digital-mobile-composer button {
+    padding: 0 8px;
+    font-size: 12px;
+    font-weight: 800;
+    background: rgba(44, 132, 255, 0.78);
+    cursor: pointer;
+  }
+
+  .digital-mobile-composer button:disabled,
+  .digital-mobile-quick-questions button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  .digital-mobile-sheet {
+    position: fixed;
+    inset: 56px 0 calc(var(--mobile-nav-height) + var(--safe-bottom)) 0;
+    z-index: 920;
+    display: grid;
+    align-items: end;
+    background: rgba(0, 5, 14, 0.48);
+  }
+
+  .digital-mobile-sheet__panel {
+    width: 100%;
+    max-height: 72dvh;
+    overflow: hidden;
+    color: #f4faff;
+    border: 1px solid rgba(125, 204, 255, 0.24);
+    border-radius: 24px 24px 0 0;
+    background: rgba(4, 18, 39, 0.98);
+    box-shadow: 0 -24px 70px rgba(0, 0, 0, 0.46);
+  }
+
+  .digital-mobile-sheet__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 68px;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(125, 204, 255, 0.16);
+  }
+
+  .digital-mobile-sheet__header h2 {
+    margin: 0;
+    font-size: 18px;
+  }
+
+  .digital-mobile-sheet__header span {
+    color: rgba(218, 235, 255, 0.66);
+    font-size: 12px;
+  }
+
+  .digital-mobile-sheet__header button,
+  .digital-mobile-settings__body button {
+    min-height: var(--touch-target);
+    padding: 8px 14px;
+    color: #eef8ff;
+    font: inherit;
+    font-weight: 700;
+    border: 1px solid rgba(125, 204, 255, 0.28);
+    border-radius: 12px;
+    background: rgba(34, 100, 181, 0.34);
+    cursor: pointer;
+  }
+
+  .digital-mobile-history__body,
+  .digital-mobile-settings__body {
+    max-height: calc(72dvh - 68px);
+    padding: 16px;
+    overflow-x: hidden;
     overflow-y: auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+  }
+
+  .digital-mobile-history__body {
+    display: grid;
+    gap: 14px;
+  }
+
+  .digital-mobile-settings__body {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+    gap: 14px;
+  }
+
+  .digital-mobile-settings__body fieldset {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    min-width: 0;
+    margin: 0;
+    padding: 12px;
+    border: 1px solid rgba(125, 204, 255, 0.18);
+    border-radius: 16px;
+  }
+
+  .digital-mobile-settings__body legend {
+    padding: 0 6px;
+    color: rgba(222, 239, 255, 0.78);
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .digital-mobile-settings__body button[aria-pressed='true'] {
+    color: #fff;
+    background: rgba(43, 133, 255, 0.68);
   }
 
   .digital-chat-select {
@@ -838,5 +1105,24 @@
 
   .guide-result-card__actions button {
     min-height: var(--touch-target);
+  }
+}
+
+@keyframes digital-mobile-comment-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .digital-mobile-comment,
+  .digital-mobile-sheet__panel {
+    animation: none;
+    transition: none;
   }
 }
