@@ -414,7 +414,6 @@ const effectiveMapSide = readEffectiveRulesAtWidth(mapCss, 768).find((rule) => r
 assert.equal(effectiveMapSide?.get('overflow'), 'visible', 'mobile map services override the desktop local scroller')
 assert.equal(isVerticalScroller(effectiveMapSide), false, 'mobile map services do not remain a nested vertical scroller')
 for (const [name, css, width, selector] of [
-  ['digital chat actions', digitalHumanCss, 768, '.digital-chat-actions'],
   ['home inspiration rail', homeCss, 480, '.hp-inspiration'],
   ['home route rail', homeCss, 480, '.hp-route-grid'],
   ['tips category bar', travelTipsCss, 768, '.tips-category-bar'],
@@ -437,6 +436,18 @@ for (const [name, css, selector] of [
     `${name} remains non-scrolling on mobile`,
   )
 }
+const effectiveDigitalChatActions = readEffectiveRulesAtWidth(digitalHumanCss, 768)
+  .find((rule) => rule.selector === '.digital-chat-actions')?.declarations
+assert.equal(effectiveDigitalChatActions?.get('flex-wrap'), 'wrap', 'mobile digital chat actions wrap on narrow screens')
+assert.deepEqual(
+  readComputedOverflow(effectiveDigitalChatActions),
+  { overflowX: 'visible', overflowY: 'visible' },
+  'mobile digital chat actions do not clip absolute menus',
+)
+const digitalCharacterMenu = readRules(digitalHumanCss)
+  .find((rule) => rule.selector === '.digital-chat-select__menu')?.declarations
+assert.equal(digitalCharacterMenu?.get('position'), 'absolute', 'digital character menus expand outside the wrapping action row')
+assert.ok(hasBoundedLocalScroll(digitalHumanCss, '.digital-chat-select__menu'), 'digital character menus remain bounded local scrollers')
 
 for (const stylesheet of routedPageStyles) {
   assert.match(

@@ -819,7 +819,8 @@
   }
 
   .digital-chat-actions {
-    overflow-y: hidden;
+    flex-wrap: wrap;
+    overflow: visible;
   }
 
   .digital-chat-actions > .digital-chat-select > button,
