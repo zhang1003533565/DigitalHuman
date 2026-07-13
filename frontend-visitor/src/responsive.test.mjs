@@ -6,6 +6,61 @@ import { fileURLToPath } from 'node:url'
 const sourceRoot = dirname(fileURLToPath(import.meta.url))
 const read = (path) => readFileSync(join(sourceRoot, path), 'utf8')
 
+const findClosingBrace = (css, openingBrace) => {
+  let depth = 1
+  for (let index = openingBrace + 1; index < css.length; index += 1) {
+    if (css[index] === '{') depth += 1
+    if (css[index] === '}') depth -= 1
+    if (depth === 0) return index
+  }
+  throw new Error(`unclosed CSS block at offset ${openingBrace}`)
+}
+
+const readDeclarations = (body) => {
+  const declarations = new Map()
+  for (const match of body.matchAll(/([\w-]+)\s*:\s*([^;{}]+)\s*;/g)) {
+    declarations.set(match[1], match[2].trim())
+  }
+  return declarations
+}
+
+const readRules = (css) => {
+  const rules = []
+  for (const match of css.replaceAll(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const declarations = readDeclarations(match[2])
+    for (const selector of match[1].split(',').map((value) => value.trim())) {
+      if (selector && !selector.startsWith('@')) rules.push({ selector, declarations })
+    }
+  }
+  return rules
+}
+
+const readMobileMediaCss = (css) => {
+  const blocks = []
+  const mediaPattern = /@media\s*([^{}]+)\{/g
+  for (const match of css.matchAll(mediaPattern)) {
+    const widths = [...match[1].matchAll(/max-width\s*:\s*(\d+)px/g)].map((width) => Number(width[1]))
+    if (!widths.some((width) => width <= 768)) continue
+    const openingBrace = match.index + match[0].length - 1
+    blocks.push(css.slice(openingBrace + 1, findClosingBrace(css, openingBrace)))
+  }
+  return blocks.join('\n')
+}
+
+const isVerticalScroller = (declarations) => {
+  const overflowY = declarations.get('overflow-y')?.replace(/\s*!important\s*$/, '')
+  if (overflowY === 'auto' || overflowY === 'scroll') return true
+  const overflow = declarations.get('overflow')?.replace(/\s*!important\s*$/, '').split(/\s+/)
+  const shorthandY = overflow?.[1] ?? overflow?.[0]
+  return shorthandY === 'auto' || shorthandY === 'scroll'
+}
+
+const hasBoundedLocalScroll = (css, selector) => readRules(css).some((rule) => {
+  if (rule.selector !== selector || rule.declarations.get('overflow-y') !== 'auto') return false
+  const maxHeight = rule.declarations.get('max-height')
+  return Boolean(maxHeight && !/^(?:auto|none|initial|inherit|unset|revert)(?:\s*!important)?$/.test(maxHeight))
+})
+
 const tokens = read('styles/tokens.css')
 const app = read('App.tsx')
 const main = read('main.tsx')
@@ -166,18 +221,64 @@ const BOUNDED_LOCAL_SCROLL_ALLOWLIST = [
 ]
 
 for (const [name, css, selector] of BOUNDED_LOCAL_SCROLL_ALLOWLIST) {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  assert.match(
-    css,
-    new RegExp(`${escaped}\\s*\\{[^}]*(?:max-height|height):[^;}]+;[^}]*overflow-y:\\s*auto`, 's'),
-    `${name} must remain bounded and vertically scrollable`,
-  )
+  assert.ok(hasBoundedLocalScroll(css, selector), `${name} must remain bounded and vertically scrollable`)
 }
 
-assert.match(
-  digitalHumanCss,
-  /\.digital-chat-body\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s,
-  'digital chat history stays bounded by its flex panel and locally scrollable',
+const digitalChatBody = readRules(digitalHumanCss).find((rule) => rule.selector === '.digital-chat-body')?.declarations
+assert.equal(digitalChatBody?.get('flex'), '1 1 auto', 'digital chat history consumes bounded flex space')
+assert.equal(digitalChatBody?.get('min-height'), '0', 'digital chat history may shrink inside its flex panel')
+assert.equal(digitalChatBody?.get('overflow-y'), 'auto', 'digital chat history remains locally scrollable')
+assert.ok(
+  hasBoundedLocalScroll(readMobileMediaCss(digitalHumanCss), '.digital-chat-body'),
+  'mobile digital chat history must have a finite local-scroll boundary',
+)
+
+assert.deepEqual(
+  readRules(readMobileMediaCss('.desktop { overflow-y: auto; } @media (max-width: 768px) { .mobile-page { overflow-y: auto; } }'))
+    .filter((rule) => isVerticalScroller(rule.declarations))
+    .map((rule) => rule.selector),
+  ['.mobile-page'],
+  'mobile scroll scanning ignores desktop declarations and detects new mobile scrollers',
+)
+assert.ok(
+  hasBoundedLocalScroll('.bounded { overflow-y: auto; max-height: 240px; }', '.bounded'),
+  'bounded local scroll validation is declaration-order independent',
+)
+assert.equal(
+  hasBoundedLocalScroll('.unbounded { overflow-y: auto; height: auto; }', '.unbounded'),
+  false,
+  'height auto must not satisfy a bounded local scroll contract',
+)
+
+const MOBILE_VERTICAL_SCROLL_ALLOWLIST = new Set([
+  'App.css::.authenticated-app__content',
+  'MapPage.css::.map-spot-card',
+  'DigitalHumanPage.css::.digital-chat-body',
+])
+const mobileScrollStyles = [
+  ['App.css', appCss],
+  ['VisitorTopNav.css', topNavCss],
+  ...routedPageStyles.map((stylesheet) => [stylesheet, read(`pages/${stylesheet}`)]),
+]
+const readMobileVerticalScrollers = (styles) => styles.flatMap(([stylesheet, css]) => (
+  readRules(readMobileMediaCss(css))
+    .filter((rule) => isVerticalScroller(rule.declarations))
+    .map((rule) => `${stylesheet}::${rule.selector}`)
+))
+const findUnexpectedMobileScrollers = (styles) => (
+  readMobileVerticalScrollers(styles).filter((entry) => !MOBILE_VERTICAL_SCROLL_ALLOWLIST.has(entry))
+)
+assert.deepEqual(
+  findUnexpectedMobileScrollers([
+    ['Fixture.css', '.desktop { overflow-y: auto; } @media (max-width: 480px) { .new-page-scroll { overflow: hidden scroll; } }'],
+  ]),
+  ['Fixture.css::.new-page-scroll'],
+  'a new mobile page-level vertical scroller must be rejected unless explicitly allowlisted',
+)
+assert.deepEqual(
+  readMobileVerticalScrollers(mobileScrollStyles).sort(),
+  [...MOBILE_VERTICAL_SCROLL_ALLOWLIST].sort(),
+  'mobile vertical scrolling stays exclusive to the page owner and bounded local allowlist',
 )
 
 for (const stylesheet of routedPageStyles) {

@@ -798,6 +798,11 @@
     touch-action: pan-y;
   }
 
+  .digital-chat-body {
+    max-height: clamp(220px, 42vh, 520px);
+    overflow-y: auto;
+  }
+
   .digital-chat-select {
     flex: 0 1 auto;
     width: max-content;
