@@ -7,6 +7,7 @@ import { DIGITAL_HUMAN_ROUTE } from '../digitalHuman/shared'
 import { parseNavigationContext } from './navigationContext'
 import { getLiveStatus } from '../api/liveBroadcast'
 import {
+  createMobileMapSearchGenerationGate,
   getMobileMapLiveLabel,
   shouldShowMobileMapClearAction,
   toggleMobileMapDrawer,
@@ -188,6 +189,7 @@ export function MapPage() {
   const initialUserPositionRef = useRef<[number, number] | null>(null)
   const hasAutoLocatedRef = useRef(false)
   const liveStatusGenerationRef = useRef(0)
+  const searchGenerationGateRef = useRef(createMobileMapSearchGenerationGate())
   const mobileDrawerRef = useRef<HTMLElement | null>(null)
   const mobileDrawerTriggerRef = useRef<HTMLButtonElement | null>(null)
 
@@ -392,6 +394,7 @@ export function MapPage() {
 
   useEffect(() => {
     let cancelled = false
+    const searchGenerationGate = searchGenerationGateRef.current
 
     loadAMap()
       .then((AMap) => {
@@ -482,6 +485,7 @@ export function MapPage() {
       scenicCenterMarkerRef.current = null
       facilityMarkersRef.current = []
       searchMarkersRef.current = []
+      searchGenerationGate.invalidate()
     }
   }, [])
 
@@ -558,11 +562,16 @@ export function MapPage() {
     map.setZoom?.(next)
   }
 
-  function clearSearchResults() {
+  function removeSearchMarkers() {
     const map = mapInstanceRef.current
     if (map && searchMarkersRef.current.length) map.remove?.(searchMarkersRef.current)
     searchMarkersRef.current = []
     setSearchResultCount(0)
+  }
+
+  function clearSearchResults() {
+    searchGenerationGateRef.current.invalidate()
+    removeSearchMarkers()
     setKeyword('')
   }
 
@@ -578,9 +587,8 @@ export function MapPage() {
 
   const handleLocate = () => {
     const map = mapInstanceRef.current
-    if (!map) return
-
     clearSearchResults()
+    if (!map) return
 
     if (initialUserPositionRef.current) {
       map.setCenter?.(initialUserPositionRef.current)
@@ -595,6 +603,8 @@ export function MapPage() {
     const map = mapInstanceRef.current
     const query = keyword.trim()
     if (!map || !query) return
+    const searchGeneration = searchGenerationGateRef.current.begin()
+    removeSearchMarkers()
 
     const matchedFacility = facilities.find((item) => item.name.includes(query) || item.categoryName.includes(query))
     if (matchedFacility) {
@@ -607,13 +617,8 @@ export function MapPage() {
     const placeSearch = placeSearchRef.current
     if (!placeSearch) return
 
-    if (searchMarkersRef.current.length) {
-      map.remove?.(searchMarkersRef.current)
-      searchMarkersRef.current = []
-    }
-    setSearchResultCount(0)
-
     placeSearch.search(query, (status: string, result: any) => {
+      if (!searchGenerationGateRef.current.isCurrent(searchGeneration)) return
       if (status !== 'complete') {
         console.warn('高德搜索失败', result)
         return

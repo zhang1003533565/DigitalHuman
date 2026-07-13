@@ -14,3 +14,20 @@ export function getMobileMapLiveLabel(status: MobileMapLiveStatus) {
 export function shouldShowMobileMapClearAction(keyword: string, resultCount: number) {
   return keyword.trim().length > 0 || resultCount > 0
 }
+
+export function createMobileMapSearchGenerationGate() {
+  let generation = 0
+
+  return {
+    begin() {
+      generation += 1
+      return generation
+    },
+    invalidate() {
+      generation += 1
+    },
+    isCurrent(candidate: number) {
+      return candidate === generation
+    },
+  }
+}

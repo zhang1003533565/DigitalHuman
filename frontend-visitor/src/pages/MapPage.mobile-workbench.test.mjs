@@ -14,6 +14,10 @@ assert.match(page, /role="dialog"[\s\S]*aria-modal="true"[\s\S]*aria-labelledby=
 assert.match(page, /event\.key === 'Escape'/)
 assert.match(page, /mobileDrawerTriggerRef\.current\?\.focus\(\)/)
 assert.match(page, /function clearSearchResults\(\)/)
+assert.match(page, /createMobileMapSearchGenerationGate\(\)/)
+assert.match(page, /const searchGeneration = searchGenerationGateRef\.current\.begin\(\)/)
+assert.match(page, /searchGenerationGateRef\.current\.isCurrent\(searchGeneration\)/)
+assert.match(page, /function removeSearchMarkers\(\)/)
 assert.match(page, /navigate\('\/live'\)/)
 assert.match(page, /navigate\(DIGITAL_HUMAN_ROUTE\)/)
 

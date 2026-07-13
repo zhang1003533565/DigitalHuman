@@ -36,6 +36,57 @@ try {
   assert.equal(workbench.shouldShowMobileMapClearAction('', 0), false)
   assert.equal(workbench.shouldShowMobileMapClearAction('灵山', 0), true)
   assert.equal(workbench.shouldShowMobileMapClearAction('', 2), true)
+  assert.equal(typeof workbench.createMobileMapSearchGenerationGate, 'function')
+
+  function createSearchHarness() {
+    const gate = workbench.createMobileMapSearchGenerationGate()
+    const markers = []
+
+    return {
+      markers,
+      startRemote(label) {
+        const generation = gate.begin()
+        markers.length = 0
+        return () => {
+          if (gate.isCurrent(generation)) markers.push(label)
+        }
+      },
+      clear() {
+        gate.invalidate()
+        markers.length = 0
+      },
+      selectLocal(label) {
+        gate.begin()
+        markers.length = 0
+        markers.push(label)
+      },
+    }
+  }
+
+  {
+    const search = createSearchHarness()
+    const resolvePending = search.startRemote('pending')
+    search.clear()
+    resolvePending()
+    assert.deepEqual(search.markers, [], 'clear must invalidate a pending remote callback')
+  }
+
+  {
+    const search = createSearchHarness()
+    const resolveA = search.startRemote('A')
+    const resolveB = search.startRemote('B')
+    resolveB()
+    resolveA()
+    assert.deepEqual(search.markers, ['B'], 'an out-of-order A callback must not overwrite B')
+  }
+
+  {
+    const search = createSearchHarness()
+    const resolvePending = search.startRemote('pending')
+    search.selectLocal('local facility')
+    resolvePending()
+    assert.deepEqual(search.markers, ['local facility'], 'a local match must invalidate pending remote results')
+  }
 
   console.log('mobile map workbench state contract passed')
 } finally {
