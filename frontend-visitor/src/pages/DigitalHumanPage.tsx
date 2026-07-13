@@ -120,6 +120,14 @@ const HIGHEST_TRIGGER_PRIORITY = 1
 const LOWEST_TRIGGER_PRIORITY = 10
 const IDLE_TRIGGER_DELAY_MS = 12000
 const SPEECH_PREFETCH_LIMIT = 2
+const MOBILE_DIALOG_FOCUSABLE_SELECTOR = [
+  'a[href]:not([tabindex="-1"])',
+  'button:not(:disabled):not([tabindex="-1"])',
+  'input:not(:disabled):not([tabindex="-1"])',
+  'select:not(:disabled):not([tabindex="-1"])',
+  'textarea:not(:disabled):not([tabindex="-1"])',
+  '[tabindex]:not([tabindex="-1"]):not([disabled])',
+].join(', ')
 
 const DEFAULT_CONFIG: DigitalHumanConfig = {
   modelId: 'hiyori_pro_zh',
@@ -227,7 +235,7 @@ export function DigitalHumanPage() {
     status: '导览回答已生成。',
   })
   const backendModelIdRef = useRef<string | null>(null)
-  const historyTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const mobileHistoryReturnFocusRef = useRef<HTMLElement | null>(null)
   const settingsTriggerRef = useRef<HTMLButtonElement | null>(null)
   const historyPanelRef = useRef<HTMLElement | null>(null)
   const settingsPanelRef = useRef<HTMLElement | null>(null)
@@ -278,7 +286,7 @@ export function DigitalHumanPage() {
 
   const closeMobileHistory = useCallback(() => {
     setMobileHistoryOpen(false)
-    window.requestAnimationFrame(() => historyTriggerRef.current?.focus())
+    window.requestAnimationFrame(() => mobileHistoryReturnFocusRef.current?.focus())
   }, [])
 
   const closeMobileSettings = useCallback(() => {
@@ -286,7 +294,8 @@ export function DigitalHumanPage() {
     window.requestAnimationFrame(() => settingsTriggerRef.current?.focus())
   }, [])
 
-  function openMobileHistory(messageId?: string) {
+  function openMobileHistory(messageId: string | undefined, trigger: HTMLElement) {
+    mobileHistoryReturnFocusRef.current = trigger
     setMobileHistoryTargetId(messageId ?? null)
     setMobileHistoryOpen(true)
   }
@@ -383,7 +392,7 @@ export function DigitalHumanPage() {
   useEffect(() => {
     if (!isMobileHistoryOpen && !isMobileSettingsOpen) return
     const panel = isMobileHistoryOpen ? historyPanelRef.current : settingsPanelRef.current
-    panel?.querySelector<HTMLElement>('button, input, textarea, [tabindex]:not([tabindex="-1"])')?.focus()
+    panel?.querySelector<HTMLElement>(MOBILE_DIALOG_FOCUSABLE_SELECTOR)?.focus()
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -392,9 +401,7 @@ export function DigitalHumanPage() {
         return
       }
       if (event.key === 'Tab' && panel) {
-        const focusable = [...panel.querySelectorAll<HTMLElement>(
-          'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
-        )]
+        const focusable = [...panel.querySelectorAll<HTMLElement>(MOBILE_DIALOG_FOCUSABLE_SELECTOR)]
         const first = focusable[0]
         const last = focusable[focusable.length - 1]
         if (event.shiftKey && document.activeElement === first) {
@@ -1289,15 +1296,19 @@ export function DigitalHumanPage() {
                 <strong>{message.sender === 'guide' ? '灵灵' : '我'}</strong>
                 <span>{message.content}</span>
                 {message.result ? (
-                  <button type="button" onClick={() => openMobileHistory(message.id)}>查看推荐</button>
+                  <button
+                    type="button"
+                    onClick={(event) => openMobileHistory(message.id, event.currentTarget)}
+                  >
+                    查看推荐
+                  </button>
                 ) : null}
               </article>
             ))}
             <button
-              ref={historyTriggerRef}
               className="digital-mobile-comment-feed__open"
               type="button"
-              onClick={() => openMobileHistory()}
+              onClick={(event) => openMobileHistory(undefined, event.currentTarget)}
             >
               查看全部
             </button>
