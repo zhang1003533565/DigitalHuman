@@ -321,22 +321,24 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
               </div>
             </div>
             <form className="auth-form" onSubmit={handleSubmit}>
-              <label className="auth-input">
-                <span className="sr-only">用户名</span>
-                <span className="auth-input__icon"><UserLineIcon /></span>
-                <input
-                  value={username}
-                  onChange={(event) => {
-                    setUsername(event.target.value)
-                    setFieldErrors((current) => ({ ...current, username: undefined, form: undefined }))
-                  }}
-                  placeholder="请输入用户名"
-                />
-              </label>
-              {fieldErrors.username ? <p className="field-message">{fieldErrors.username}</p> : null}
+              <div className="auth-field">
+                <label className="auth-input">
+                  <span className="sr-only">用户名</span>
+                  <span className="auth-input__icon"><UserLineIcon /></span>
+                  <input
+                    value={username}
+                    onChange={(event) => {
+                      setUsername(event.target.value)
+                      setFieldErrors((current) => ({ ...current, username: undefined, form: undefined }))
+                    }}
+                    placeholder="请输入用户名"
+                  />
+                </label>
+                {fieldErrors.username ? <p className="field-message">{fieldErrors.username}</p> : null}
+              </div>
 
               {mode === 'register' ? (
-                <>
+                <div className="auth-field">
                   <label className="auth-input">
                     <span className="sr-only">昵称</span>
                     <span className="auth-input__icon"><UserLineIcon /></span>
@@ -350,36 +352,38 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
                     />
                   </label>
                   {fieldErrors.displayName ? <p className="field-message">{fieldErrors.displayName}</p> : null}
-                </>
+                </div>
               ) : null}
 
-              <label className="auth-input">
-                <span className="sr-only">密码</span>
-                <span className="auth-input__icon"><LockLineIcon /></span>
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(event) => {
-                    setPassword(event.target.value)
-                    setFieldErrors((current) => ({ ...current, password: undefined, confirmPassword: undefined, form: undefined }))
-                  }}
-                  placeholder="请输入密码"
-                />
-                <span
-                  className="auth-input__suffix auth-input__suffix--clickable"
-                  role="button"
-                  tabIndex={0}
-                  aria-label={showPassword ? '隐藏密码' : '显示密码'}
-                  onClick={() => setShowPassword((current) => !current)}
-                  onKeyDown={(event) => handleSuffixKeyDown(event, () => setShowPassword((current) => !current))}
-                >
-                  {showPassword ? <EyeLineIcon /> : <EyeOffLineIcon />}
-                </span>
-              </label>
-              {fieldErrors.password ? <p className="field-message">{fieldErrors.password}</p> : null}
+              <div className="auth-field">
+                <label className="auth-input">
+                  <span className="sr-only">密码</span>
+                  <span className="auth-input__icon"><LockLineIcon /></span>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(event) => {
+                      setPassword(event.target.value)
+                      setFieldErrors((current) => ({ ...current, password: undefined, confirmPassword: undefined, form: undefined }))
+                    }}
+                    placeholder="请输入密码"
+                  />
+                  <span
+                    className="auth-input__suffix auth-input__suffix--clickable"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={showPassword ? '隐藏密码' : '显示密码'}
+                    onClick={() => setShowPassword((current) => !current)}
+                    onKeyDown={(event) => handleSuffixKeyDown(event, () => setShowPassword((current) => !current))}
+                  >
+                    {showPassword ? <EyeLineIcon /> : <EyeOffLineIcon />}
+                  </span>
+                </label>
+                {fieldErrors.password ? <p className="field-message">{fieldErrors.password}</p> : null}
+              </div>
 
               {mode === 'register' ? (
-                <>
+                <div className="auth-field">
                   <label className="auth-input">
                     <span className="sr-only">确认密码</span>
                     <span className="auth-input__icon"><LockLineIcon /></span>
@@ -404,7 +408,7 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
                     </span>
                   </label>
                   {fieldErrors.confirmPassword ? <p className="field-message">{fieldErrors.confirmPassword}</p> : null}
-                </>
+                </div>
               ) : null}
 
               {mode === 'login' ? (

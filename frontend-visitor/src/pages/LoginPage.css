@@ -559,6 +559,11 @@
   gap: 18px;
 }
 
+.auth-field {
+  display: grid;
+  gap: 8px;
+}
+
 .auth-mode-switch {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1240,7 +1245,7 @@
 
   .auth-form input {
     min-height: 44px;
-    padding: 11px 48px;
+    padding: 7px 48px 15px;
   }
 
   .auth-input__icon {
@@ -1255,6 +1260,32 @@
   .inline-message {
     margin: 0;
     line-height: 1.15;
+  }
+
+  .auth-field {
+    position: relative;
+    min-height: 44px;
+  }
+
+  .auth-field > .field-message {
+    position: absolute;
+    right: 48px;
+    bottom: 2px;
+    z-index: 2;
+    max-width: calc(100% - 104px);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    pointer-events: none;
+  }
+
+  .inline-message {
+    display: -webkit-box;
+    max-height: 2.3em;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
 
   .auth-actions--inline {
@@ -1295,25 +1326,14 @@
 
   .auth-stage:focus-within .auth-copy--tourism,
   .auth-stage:focus-within .login-dh-bubble,
-  .auth-stage:focus-within .login-dh-outfit-btn {
+  .auth-stage:focus-within .login-dh-outfit-btn,
+  .auth-stage:focus-within .auth-card-top {
     display: none;
   }
 
   .auth-stage:focus-within .auth-card--tourism {
     align-self: center;
     padding: 10px;
-  }
-
-  .auth-stage:focus-within .auth-card-top {
-    margin-bottom: 6px;
-  }
-
-  .auth-stage:focus-within .panel-label {
-    font-size: 20px;
-  }
-
-  .auth-stage:focus-within .auth-card-title-line::after {
-    margin-top: 5px;
   }
 
   .auth-stage:focus-within .auth-form {
@@ -1349,15 +1369,7 @@
   }
 
   .auth-card-top {
-    margin-bottom: 6px;
-  }
-
-  .panel-label {
-    font-size: 20px;
-  }
-
-  .auth-card-title-line::after {
-    margin-top: 5px;
+    display: none;
   }
 
   .auth-form {
