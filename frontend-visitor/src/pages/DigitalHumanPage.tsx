@@ -213,6 +213,7 @@ function DigitalChatMessageArticle({ message, onSuggestion }: DigitalChatMessage
 }
 
 export function DigitalHumanPage() {
+  const livePageRef = useRef<HTMLElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const chatActionsRef = useRef<HTMLDivElement | null>(null)
@@ -375,6 +376,34 @@ export function DigitalHumanPage() {
       messagesEndRef.current?.scrollIntoView({ block: 'end' })
     }
   }, [messages.length, isSpeaking])
+
+  useEffect(() => {
+    const viewport = window.visualViewport
+
+    function syncMobileViewport() {
+      const viewportHeight = viewport?.height ?? window.innerHeight
+      const viewportOffsetTop = viewport?.offsetTop ?? 0
+      const viewportBottomInset = Math.max(0, window.innerHeight - viewportHeight - viewportOffsetTop)
+      const page = livePageRef.current
+
+      if (!page) return
+
+      page.style.setProperty('--digital-mobile-viewport-height', `${viewportHeight}px`)
+      page.style.setProperty('--digital-mobile-viewport-offset-top', `${viewportOffsetTop}px`)
+      page.style.setProperty('--digital-mobile-viewport-bottom-inset', `${viewportBottomInset}px`)
+    }
+
+    syncMobileViewport()
+    viewport?.addEventListener('resize', syncMobileViewport)
+    viewport?.addEventListener('scroll', syncMobileViewport)
+    window.addEventListener('resize', syncMobileViewport)
+
+    return () => {
+      viewport?.removeEventListener('resize', syncMobileViewport)
+      viewport?.removeEventListener('scroll', syncMobileViewport)
+      window.removeEventListener('resize', syncMobileViewport)
+    }
+  }, [])
 
   useEffect(() => {
     if (!openDropdown) return
@@ -1266,7 +1295,7 @@ export function DigitalHumanPage() {
   return (
     <main className="module-screen">
 
-      <section className="live2d-page live2d-page--presentation">
+      <section ref={livePageRef} className="live2d-page live2d-page--presentation">
         <canvas ref={canvasRef} className="live2d-canvas" />
         <div className="digital-human-stage-glow" aria-hidden />
         <div className="digital-human-status" data-runtime-state={runtimeState} aria-live="polite">
