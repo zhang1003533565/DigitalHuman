@@ -42,6 +42,8 @@ const USER_NAV_ITEMS = [
 ]
 
 const USER_MENU_ID = 'visitor-user-menu'
+const VIEWPORT_INSET = 12
+const MIN_MENU_VIEWPORT_HEIGHT = 88
 
 function getInitials(name: string): string {
   return name ? name.charAt(0).toUpperCase() : 'U'
@@ -63,7 +65,9 @@ export function VisitorTopNav({ onLogout }: VisitorTopNavProps) {
     if (hoverTimer.current) clearTimeout(hoverTimer.current)
     if (avatarRef.current) {
       const rect = avatarRef.current.getBoundingClientRect()
-      const menuTop = rect.bottom + 10
+      const preferredTop = rect.bottom + 10
+      const availableBelow = window.innerHeight - preferredTop - VIEWPORT_INSET
+      const menuTop = availableBelow >= MIN_MENU_VIEWPORT_HEIGHT ? preferredTop : VIEWPORT_INSET
       setDropdownStyle({
         position: 'fixed',
         top: menuTop,

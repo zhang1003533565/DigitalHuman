@@ -63,6 +63,14 @@ assert.match(
 )
 assert.match(css, /\.visitor-user-menu__dropdown\s*\{[^}]*overflow-y:\s*auto;/s)
 assert.match(css, /\.visitor-user-menu__dropdown\s*\{[^}]*overscroll-behavior:\s*contain;/s)
+assert.match(source, /const availableBelow = window\.innerHeight - preferredTop - VIEWPORT_INSET/)
+assert.match(source, /const VIEWPORT_INSET = 12/)
+assert.match(source, /const MIN_MENU_VIEWPORT_HEIGHT = 88/)
+assert.match(source, /const preferredTop = rect\.bottom \+ 10/)
+assert.match(
+  source,
+  /const menuTop =\s*availableBelow >= MIN_MENU_VIEWPORT_HEIGHT \? preferredTop : VIEWPORT_INSET/,
+)
 assert.match(source, /'--visitor-user-menu-top': `\$\{menuTop\}px`/)
 assert.equal((userItemsBlock.match(/aria-hidden="true"/g) ?? []).length, expectedUserItems.length)
 
