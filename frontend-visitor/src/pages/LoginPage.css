@@ -561,7 +561,7 @@
 
 .auth-field {
   display: grid;
-  gap: 8px;
+  gap: 18px;
 }
 
 .auth-mode-switch {
