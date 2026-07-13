@@ -26,7 +26,12 @@ import {
 } from '../digitalHuman/streamingSpeech'
 import { GuideResultCards } from '../components/GuideResultCards'
 import { normalizeGuideChatResult, type GuideChatResult } from '../api/contracts'
-import { MOBILE_LIVE_QUICK_QUESTIONS, getMobileLiveComments } from '../digitalHuman/mobileLive'
+import {
+  MOBILE_LIVE_QUICK_QUESTIONS,
+  getMobileLiveComments,
+  shouldHideMobileLiveCommentOnShortViewport,
+} from '../digitalHuman/mobileLive'
+import { invalidateSpeechRecognition } from '../digitalHuman/speechRecognitionLifecycle'
 
 type DigitalHumanConfig = {
   modelId: string
@@ -653,10 +658,7 @@ export function DigitalHumanPage() {
     return () => {
       isMountedRef.current = false
       loadIdRef.current += 1
-      recognitionGenerationRef.current += 1
-      recognitionRef.current?.abort?.()
-      recognitionRef.current?.stop?.()
-      recognitionRef.current = null
+      invalidateSpeechRecognition(recognitionRef, recognitionGenerationRef)
       if (modelRef.current) {
         stopSpeech(modelRef.current)
       }
@@ -1002,10 +1004,8 @@ export function DigitalHumanPage() {
       return
     }
 
-    recognitionGenerationRef.current += 1
+    invalidateSpeechRecognition(recognitionRef, recognitionGenerationRef)
     const generation = recognitionGenerationRef.current
-    recognitionRef.current?.abort?.()
-    recognitionRef.current?.stop?.()
     const recognition = new SpeechRecognition()
     let hadRecognitionError = false
     let recognizedTranscript = ''
@@ -1019,22 +1019,16 @@ export function DigitalHumanPage() {
       }
     }
     recognition.onerror = () => {
-      hadRecognitionError = true
       if (recognitionGenerationRef.current !== generation || recognitionRef.current !== recognition) return
-      recognitionRef.current = null
-      recognition.onresult = null
-      recognition.onerror = null
-      recognition.onend = null
+      hadRecognitionError = true
+      invalidateSpeechRecognition(recognitionRef, recognitionGenerationRef, false)
       setRuntimeState('error')
       setStatus('没有识别到语音，请重试或使用文字提问。')
       setMobileLiveAnnouncement('语音识别失败，请重试或使用文字提问。')
     }
     recognition.onend = () => {
       if (recognitionGenerationRef.current !== generation || recognitionRef.current !== recognition) return
-      recognitionRef.current = null
-      recognition.onresult = null
-      recognition.onerror = null
-      recognition.onend = null
+      invalidateSpeechRecognition(recognitionRef, recognitionGenerationRef, false)
       if (!hadRecognitionError) {
         setRuntimeState('idle')
         setStatus(recognizedTranscript ? '语音问题已识别，可以发送。' : '语音识别已结束，请重新尝试。')
@@ -1046,11 +1040,7 @@ export function DigitalHumanPage() {
       setRuntimeState('listening')
       setStatus('正在聆听您的问题…')
     } catch {
-      recognitionRef.current = null
-      recognitionGenerationRef.current += 1
-      recognition.onresult = null
-      recognition.onerror = null
-      recognition.onend = null
+      invalidateSpeechRecognition(recognitionRef, recognitionGenerationRef, false)
       setRuntimeState('error')
       setStatus('语音识别启动失败，请重试或使用文字提问。')
       setMobileLiveAnnouncement('语音识别启动失败，请重试或使用文字提问。')
@@ -1058,6 +1048,7 @@ export function DigitalHumanPage() {
   }
 
   async function sendQuestion(questionInput: string) {
+    invalidateSpeechRecognition(recognitionRef, recognitionGenerationRef)
     const question = questionInput.trim()
     if (!question) return
     markInteraction()
@@ -1364,10 +1355,11 @@ export function DigitalHumanPage() {
             {mobileLiveAnnouncement}
           </span>
           <section className="digital-mobile-comment-feed" aria-label="最近对话">
-            {mobileLiveComments.map((message) => (
+            {mobileLiveComments.map((message, index) => (
               <article
                 key={message.id}
                 className={`digital-mobile-comment digital-mobile-comment--${message.sender}`}
+                data-mobile-hidden-on-short={shouldHideMobileLiveCommentOnShortViewport(mobileLiveComments.length, index)}
               >
                 <strong>{message.sender === 'guide' ? '灵灵' : '我'}</strong>
                 <span>{message.content}</span>

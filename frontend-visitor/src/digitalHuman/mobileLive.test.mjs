@@ -60,6 +60,16 @@ try {
     ['4', '5', '6', '7', '8'],
     'an absent transient comment preserves the regular recent-message view',
   )
+  assert.deepEqual(
+    Array.from({ length: 5 }, (_, index) => mobileLive.shouldHideMobileLiveCommentOnShortViewport(5, index)),
+    [true, true, false, false, false],
+    'short viewports hide only comments older than the latest three',
+  )
+  assert.deepEqual(
+    Array.from({ length: 2 }, (_, index) => mobileLive.shouldHideMobileLiveCommentOnShortViewport(2, index)),
+    [false, false],
+    'an initial two-comment feed remains visible on short viewports',
+  )
   console.log('mobile digital-human live data contract passed')
 } finally {
   rmSync(outDir, { recursive: true, force: true })

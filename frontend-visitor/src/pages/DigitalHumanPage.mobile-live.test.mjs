@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = dirname(fileURLToPath(import.meta.url))
 const page = readFileSync(join(root, 'DigitalHumanPage.tsx'), 'utf8')
+const styles = readFileSync(join(root, 'DigitalHumanPage.css'), 'utf8')
 
 assert.match(page, /getMobileLiveComments\(messages, mobileRuntimeComment\)/)
 assert.match(page, /className="digital-human-mobile-live"/)
@@ -28,6 +29,11 @@ assert.match(page, /className="sr-only"[\s\S]*aria-live="polite"/)
 assert.match(page, /onend:\s*\(\(\) => void\) \| null/)
 assert.match(page, /recognition\.onend = \(\) =>/)
 assert.match(page, /recognitionRef\.current !== recognition/)
+assert.match(
+  page,
+  /async function sendQuestion\(questionInput: string\) \{\s*invalidateSpeechRecognition\(recognitionRef, recognitionGenerationRef\)/,
+  'every send path must invalidate an active speech recognition before changing question state',
+)
 assert.match(page, /recognition\.onerror = \(\) => \{[\s\S]*hadRecognitionError = true[\s\S]*setRuntimeState\('error'\)/)
 assert.match(page, /if \(!hadRecognitionError\)[\s\S]*setRuntimeState\('idle'\)/)
 assert.match(page, /getMobileLiveComments\(messages, mobileRuntimeComment\)/)
@@ -61,4 +67,7 @@ assert.match(
 )
 assert.match(page, /MOBILE_LIVE_QUICK_QUESTIONS\.map[\s\S]*data-question=\{item\.question\}[\s\S]*onClick=\{handleMobileQuickQuestion\}/)
 assert.match(page, /className="digital-human-chat"/, 'desktop chat remains rendered')
+assert.match(page, /data-mobile-hidden-on-short=\{shouldHideMobileLiveCommentOnShortViewport\(mobileLiveComments\.length, index\)\}/)
+assert.match(styles, /\.digital-mobile-comment\[data-mobile-hidden-on-short='true'\]/)
+assert.doesNotMatch(styles, /\.digital-mobile-comment:nth-of-type\(-n\+2\)/)
 console.log('mobile digital-human live interaction contract passed')

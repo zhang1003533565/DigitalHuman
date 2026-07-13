@@ -16,3 +16,7 @@ export function getMobileLiveComments<T>(messages: readonly T[], transientCommen
   }
   return [...messages.slice(-(MOBILE_LIVE_COMMENT_LIMIT - 1)), transientComment]
 }
+
+export function shouldHideMobileLiveCommentOnShortViewport(commentCount: number, commentIndex: number) {
+  return commentCount > 3 && commentIndex < commentCount - 3
+}

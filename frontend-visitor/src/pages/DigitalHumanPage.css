@@ -1147,7 +1147,7 @@
     );
   }
 
-  .digital-mobile-comment:nth-of-type(-n+2) {
+  .digital-mobile-comment[data-mobile-hidden-on-short='true'] {
     display: none;
   }
 
