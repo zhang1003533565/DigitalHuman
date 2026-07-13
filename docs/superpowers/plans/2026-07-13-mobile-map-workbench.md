@@ -428,6 +428,8 @@ Expected: FAIL，旧 CSS 仍使用内容流和五项操作栏。
   z-index: 30;
 }
 
+.map-mobile-drawer--expanded { z-index: 50; }
+
 .map-mobile-drawer__panel {
   max-height: min(72dvh, 620px);
   overflow-y: auto;
@@ -436,11 +438,12 @@ Expected: FAIL，旧 CSS 仍使用内容流和五项操作栏。
 }
 
 .map-spot-card {
+  z-index: 40;
   bottom: calc(var(--mobile-nav-height) + var(--safe-bottom) + var(--map-mobile-drawer-peek-height) + 20px);
 }
 ```
 
-抽屉遮罩占据导航以上可视区域；收起摘要不创建内部滚动。展开面板复用 `.live-card__*` 和 `.nearby__*` 视觉，但不得依赖桌面 `.map-side` 尺寸。
+抽屉遮罩占据导航以上可视区域；收起摘要不创建内部滚动。景点卡位于收起摘要之上，展开模态抽屉再提升到景点卡之上。展开面板复用 `.live-card__*` 和 `.nearby__*` 视觉，但不得依赖桌面 `.map-side` 尺寸。
 
 - [ ] **Step 5: 增加短屏、横屏和 reduced-motion 规则**
 
