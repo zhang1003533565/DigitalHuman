@@ -26,6 +26,7 @@ import {
 } from '../digitalHuman/streamingSpeech'
 import { GuideResultCards } from '../components/GuideResultCards'
 import { normalizeGuideChatResult, type GuideChatResult } from '../api/contracts'
+import { MOBILE_LIVE_QUICK_QUESTIONS, getRecentMobileLiveComments } from '../digitalHuman/mobileLive'
 
 type DigitalHumanConfig = {
   modelId: string
@@ -59,6 +60,18 @@ type SpeechQueueItem = {
   promise?: Promise<string | null>
   failed?: boolean
 }
+
+type SpeechRecognitionResultEvent = Event & { results: { 0: { 0: { transcript: string } } } }
+type SpeechRecognitionLike = {
+  lang: string
+  interimResults: boolean
+  start: () => void
+  stop?: () => void
+  abort?: () => void
+  onresult: ((event: SpeechRecognitionResultEvent) => void) | null
+  onerror: (() => void) | null
+}
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike
 
 type DigitalChatDropdownKey = 'factory' | 'voice' | 'model'
 
@@ -165,6 +178,32 @@ function selectWeightedRule(rules: RuntimeTriggerRule[]) {
   return rules[rules.length - 1] ?? null
 }
 
+type DigitalChatMessageArticleProps = {
+  message: DigitalChatMessage
+  onSuggestion: (suggestion: string) => void
+}
+
+function DigitalChatMessageArticle({ message, onSuggestion }: DigitalChatMessageArticleProps) {
+  const isOwn = message.sender === 'me'
+  return (
+    <article className={isOwn ? 'digital-chat-message digital-chat-message--own' : 'digital-chat-message'}>
+      {!isOwn ? <span className="digital-chat-message__avatar" aria-hidden>灵</span> : null}
+      <div className="digital-chat-message__bubble">
+        <div className="digital-chat-message__content">{message.content}</div>
+        {message.result ? (
+          <GuideResultCards
+            result={message.result}
+            messageId={message.messageId}
+            onSuggestion={onSuggestion}
+          />
+        ) : null}
+      </div>
+      <time className="digital-chat-message__time">{formatChatTime(message.time)}</time>
+      {isOwn ? <span className="digital-chat-message__avatar digital-chat-message__avatar--own" aria-hidden>我</span> : null}
+    </article>
+  )
+}
+
 export function DigitalHumanPage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
@@ -188,6 +227,12 @@ export function DigitalHumanPage() {
     status: '导览回答已生成。',
   })
   const backendModelIdRef = useRef<string | null>(null)
+  const historyTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const settingsTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const historyPanelRef = useRef<HTMLElement | null>(null)
+  const settingsPanelRef = useRef<HTMLElement | null>(null)
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
+  const recognitionGenerationRef = useRef(0)
   const [config, setConfig] = useState<DigitalHumanConfig>(DEFAULT_CONFIG)
   const [selectedModelId, setSelectedModelId] = useState(() => getStoredSelectedModelId() ?? DEFAULT_CONFIG.modelId)
   const [runtimeModels, setRuntimeModels] = useState<RuntimeDigitalHumanModel[]>([])
@@ -198,6 +243,9 @@ export function DigitalHumanPage() {
   const [draft, setDraft] = useState('')
   const [selectedFactoryId, setSelectedFactoryId] = useState(FACTORY_OPTIONS[0].id)
   const [openDropdown, setOpenDropdown] = useState<DigitalChatDropdownKey | null>(null)
+  const [isMobileHistoryOpen, setMobileHistoryOpen] = useState(false)
+  const [isMobileSettingsOpen, setMobileSettingsOpen] = useState(false)
+  const [mobileHistoryTargetId, setMobileHistoryTargetId] = useState<string | null>(null)
   const [messages, setMessages] = useState<DigitalChatMessage[]>(() => [
     {
       id: 'welcome',
@@ -227,6 +275,21 @@ export function DigitalHumanPage() {
   const isSpeaking = runtimeState === 'speaking'
 
   const canSend = isReady && draft.trim().length > 0
+
+  const closeMobileHistory = useCallback(() => {
+    setMobileHistoryOpen(false)
+    window.requestAnimationFrame(() => historyTriggerRef.current?.focus())
+  }, [])
+
+  const closeMobileSettings = useCallback(() => {
+    setMobileSettingsOpen(false)
+    window.requestAnimationFrame(() => settingsTriggerRef.current?.focus())
+  }, [])
+
+  function openMobileHistory(messageId?: string) {
+    setMobileHistoryTargetId(messageId ?? null)
+    setMobileHistoryOpen(true)
+  }
 
   useEffect(() => {
     selectedModelIdRef.current = selectedModel.id
@@ -299,7 +362,9 @@ export function DigitalHumanPage() {
   }, [])
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ block: 'end' })
+    if (window.matchMedia('(min-width: 769px)').matches) {
+      messagesEndRef.current?.scrollIntoView({ block: 'end' })
+    }
   }, [messages.length, isSpeaking])
 
   useEffect(() => {
@@ -314,6 +379,44 @@ export function DigitalHumanPage() {
     document.addEventListener('pointerdown', handleDocumentPointerDown)
     return () => document.removeEventListener('pointerdown', handleDocumentPointerDown)
   }, [openDropdown])
+
+  useEffect(() => {
+    if (!isMobileHistoryOpen && !isMobileSettingsOpen) return
+    const panel = isMobileHistoryOpen ? historyPanelRef.current : settingsPanelRef.current
+    panel?.querySelector<HTMLElement>('button, input, textarea, [tabindex]:not([tabindex="-1"])')?.focus()
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (isMobileHistoryOpen) closeMobileHistory()
+        if (isMobileSettingsOpen) closeMobileSettings()
+        return
+      }
+      if (event.key === 'Tab' && panel) {
+        const focusable = [...panel.querySelectorAll<HTMLElement>(
+          'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+        )]
+        const first = focusable[0]
+        const last = focusable[focusable.length - 1]
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault()
+          last?.focus()
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault()
+          first?.focus()
+        }
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [closeMobileHistory, closeMobileSettings, isMobileHistoryOpen, isMobileSettingsOpen])
+
+  useEffect(() => {
+    if (!isMobileHistoryOpen || !mobileHistoryTargetId) return
+    window.requestAnimationFrame(() => {
+      document.getElementById(`mobile-history-${mobileHistoryTargetId}`)?.scrollIntoView({ block: 'center' })
+    })
+  }, [isMobileHistoryOpen, mobileHistoryTargetId])
 
   const playConfiguredMotion = useCallback((action?: Pick<ActionMatchResponse, 'matched' | 'actionName' | 'groupName' | 'actionIndex'>) => {
     const model = modelRef.current
@@ -500,6 +603,10 @@ export function DigitalHumanPage() {
     return () => {
       isMountedRef.current = false
       loadIdRef.current += 1
+      recognitionGenerationRef.current += 1
+      recognitionRef.current?.abort?.()
+      recognitionRef.current?.stop?.()
+      recognitionRef.current = null
       if (modelRef.current) {
         stopSpeech(modelRef.current)
       }
@@ -828,6 +935,49 @@ export function DigitalHumanPage() {
     void sendQuestion(draft)
   }
 
+  function startVoiceQuestion() {
+    const SpeechRecognition = (window as typeof window & {
+      SpeechRecognition?: SpeechRecognitionConstructor
+      webkitSpeechRecognition?: SpeechRecognitionConstructor
+    }).SpeechRecognition ?? (window as typeof window & {
+      webkitSpeechRecognition?: SpeechRecognitionConstructor
+    }).webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      setRuntimeState('error')
+      setStatus('当前浏览器未提供语音识别，请使用文字提问。')
+      return
+    }
+
+    recognitionGenerationRef.current += 1
+    const generation = recognitionGenerationRef.current
+    recognitionRef.current?.abort?.()
+    recognitionRef.current?.stop?.()
+    const recognition = new SpeechRecognition()
+    recognitionRef.current = recognition
+    recognition.lang = 'zh-CN'
+    recognition.interimResults = false
+    recognition.onresult = (event) => {
+      if (recognitionGenerationRef.current === generation) {
+        setDraft(event.results[0][0].transcript)
+      }
+    }
+    recognition.onerror = () => {
+      if (recognitionGenerationRef.current === generation) {
+        setStatus('没有识别到语音，请重试或使用文字提问。')
+      }
+    }
+    try {
+      recognition.start()
+      setRuntimeState('listening')
+      setStatus('正在聆听您的问题…')
+    } catch {
+      recognitionRef.current = null
+      recognitionGenerationRef.current += 1
+      setRuntimeState('error')
+      setStatus('语音识别启动失败，请重试或使用文字提问。')
+    }
+  }
+
   async function sendQuestion(questionInput: string) {
     const question = questionInput.trim()
     if (!question) return
@@ -1117,6 +1267,184 @@ export function DigitalHumanPage() {
           <span>{status}</span>
         </div>
 
+        <section className="digital-human-mobile-live" aria-label="灵山数字人直播导览">
+          <button
+            ref={settingsTriggerRef}
+            className="digital-mobile-settings-trigger"
+            type="button"
+            onClick={() => setMobileSettingsOpen(true)}
+            aria-label="打开数字人设置"
+          >
+            设置
+          </button>
+          <span className="sr-only" aria-live="polite" aria-atomic="true">
+            {messages.at(-1)?.content}
+          </span>
+          <section className="digital-mobile-comment-feed" aria-label="最近对话">
+            {getRecentMobileLiveComments(messages).map((message) => (
+              <article
+                key={message.id}
+                className={`digital-mobile-comment digital-mobile-comment--${message.sender}`}
+              >
+                <strong>{message.sender === 'guide' ? '灵灵' : '我'}</strong>
+                <span>{message.content}</span>
+                {message.result ? (
+                  <button type="button" onClick={() => openMobileHistory(message.id)}>查看推荐</button>
+                ) : null}
+              </article>
+            ))}
+            <button
+              ref={historyTriggerRef}
+              className="digital-mobile-comment-feed__open"
+              type="button"
+              onClick={() => openMobileHistory()}
+            >
+              查看全部
+            </button>
+          </section>
+          <div className="digital-mobile-quick-questions" aria-label="快捷提问">
+            {MOBILE_LIVE_QUICK_QUESTIONS.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                disabled={!isReady}
+                onClick={() => void sendQuestion(item.question)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <form className="digital-mobile-composer" onSubmit={handleSend}>
+            <textarea
+              value={draft}
+              placeholder="问问灵灵…"
+              rows={1}
+              disabled={!isReady}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault()
+                  void handleSend()
+                }
+              }}
+            />
+            <button
+              type="button"
+              onClick={startVoiceQuestion}
+              disabled={!isReady || isSpeaking}
+              aria-label="语音提问"
+            >
+              语音
+            </button>
+            <button type="submit" disabled={!canSend}>发送</button>
+          </form>
+        </section>
+
+        {isMobileHistoryOpen ? (
+          <div
+            className="digital-mobile-sheet"
+            onMouseDown={(event) => {
+              if (event.currentTarget === event.target) closeMobileHistory()
+            }}
+          >
+            <section
+              ref={historyPanelRef}
+              className="digital-mobile-sheet__panel digital-mobile-history"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="mobile-history-title"
+            >
+              <header className="digital-mobile-sheet__header">
+                <div>
+                  <h2 id="mobile-history-title">完整对话</h2>
+                  <span>{messages.length} 条消息</span>
+                </div>
+                <button type="button" onClick={closeMobileHistory} aria-label="关闭完整对话">关闭</button>
+              </header>
+              <div className="digital-mobile-history__body">
+                {messages.map((message) => (
+                  <div id={`mobile-history-${message.id}`} key={message.id}>
+                    <DigitalChatMessageArticle
+                      message={message}
+                      onSuggestion={(suggestion) => {
+                        setDraft(suggestion)
+                        closeMobileHistory()
+                        void sendQuestion(suggestion)
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+        ) : null}
+
+        {isMobileSettingsOpen ? (
+          <div
+            className="digital-mobile-sheet"
+            onMouseDown={(event) => {
+              if (event.currentTarget === event.target) closeMobileSettings()
+            }}
+          >
+            <section
+              ref={settingsPanelRef}
+              className="digital-mobile-sheet__panel digital-mobile-settings"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="mobile-settings-title"
+            >
+              <header className="digital-mobile-sheet__header">
+                <h2 id="mobile-settings-title">数字人设置</h2>
+                <button type="button" onClick={closeMobileSettings} aria-label="关闭数字人设置">关闭</button>
+              </header>
+              <div className="digital-mobile-settings__body">
+                <fieldset>
+                  <legend>服务来源</legend>
+                  {FACTORY_OPTIONS.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      aria-pressed={item.id === selectedFactory.id}
+                      disabled={isSpeaking}
+                      onClick={() => handleSelectFactory(item.id)}
+                    >
+                      {item.name}
+                    </button>
+                  ))}
+                </fieldset>
+                <fieldset>
+                  <legend>播报音色</legend>
+                  {VOICE_OPTIONS.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      aria-pressed={item.id === selectedVoice.id}
+                      disabled={isSpeaking}
+                      onClick={() => handleSelectVoice(item.id)}
+                    >
+                      {item.name}
+                    </button>
+                  ))}
+                </fieldset>
+                <fieldset>
+                  <legend>数字人模型</legend>
+                  {MODEL_OPTIONS.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      aria-pressed={item.id === selectedModel.id}
+                      disabled={isSpeaking}
+                      onClick={() => handleSelectModel(item.id)}
+                    >
+                      {item.name}
+                    </button>
+                  ))}
+                </fieldset>
+              </div>
+            </section>
+          </div>
+        ) : null}
+
         <aside className="digital-human-chat" aria-label="灵山景区智能导览助手">
           <header className="digital-chat-header">
             <div className="digital-chat-profile">
@@ -1219,28 +1547,16 @@ export function DigitalHumanPage() {
           </header>
 
           <main className="digital-chat-body" aria-live="polite">
-            {messages.map((message) => {
-              const isOwn = message.sender === 'me'
-              return (
-                <article
-                  key={message.id}
-                  className={isOwn ? 'digital-chat-message digital-chat-message--own' : 'digital-chat-message'}
-                >
-                  {!isOwn ? <span className="digital-chat-message__avatar" aria-hidden>灵</span> : null}
-                  <div className="digital-chat-message__bubble">
-                    <div className="digital-chat-message__content">{message.content}</div>
-                    {message.result ? (
-                      <GuideResultCards result={message.result} messageId={message.messageId} onSuggestion={(suggestion) => {
-                        setDraft(suggestion)
-                        void sendQuestion(suggestion)
-                      }} />
-                    ) : null}
-                  </div>
-                  <time className="digital-chat-message__time">{formatChatTime(message.time)}</time>
-                  {isOwn ? <span className="digital-chat-message__avatar digital-chat-message__avatar--own" aria-hidden>我</span> : null}
-                </article>
-              )
-            })}
+            {messages.map((message) => (
+              <DigitalChatMessageArticle
+                key={message.id}
+                message={message}
+                onSuggestion={(suggestion) => {
+                  setDraft(suggestion)
+                  void sendQuestion(suggestion)
+                }}
+              />
+            ))}
             <div ref={messagesEndRef} />
           </main>
 
