@@ -1079,7 +1079,7 @@
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (max-height: 520px) and (pointer: coarse) {
   .auth-stage,
   .auth-form {
     grid-template-columns: 1fr;
@@ -1333,7 +1333,7 @@
   }
 }
 
-@media (max-width: 768px) and (max-height: 520px) {
+@media (max-width: 768px) and (max-height: 520px), (max-height: 520px) and (pointer: coarse) {
   .auth-copy--tourism,
   .login-dh-embed {
     display: none;
