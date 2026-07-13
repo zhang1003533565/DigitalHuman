@@ -158,6 +158,28 @@ assert.match(liveMobile, /\.live-broadcast-page__body\s*\{[^}]*grid-template-col
 assert.doesNotMatch(liveMobile, /padding-bottom:\s*calc\(var\(--mobile-nav-height\)/, 'live broadcast relies on the shared mobile content safe area')
 assert.doesNotMatch(digitalBeforeMobile, /(?:height|min-height):\s*100(?:d)?vh/, 'digital-human desktop layout must size against authenticated content, not the full viewport')
 
+const BOUNDED_LOCAL_SCROLL_ALLOWLIST = [
+  ['digital character menu', digitalHumanCss, '.digital-chat-select__menu'],
+  ['map spot card', mapMobile, '.map-spot-card'],
+  ['live answer history', liveBroadcastCss, '.live-interaction__answer'],
+  ['visitor user menu', topNavCss, '.visitor-user-menu__dropdown'],
+]
+
+for (const [name, css, selector] of BOUNDED_LOCAL_SCROLL_ALLOWLIST) {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  assert.match(
+    css,
+    new RegExp(`${escaped}\\s*\\{[^}]*(?:max-height|height):[^;}]+;[^}]*overflow-y:\\s*auto`, 's'),
+    `${name} must remain bounded and vertically scrollable`,
+  )
+}
+
+assert.match(
+  digitalHumanCss,
+  /\.digital-chat-body\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s,
+  'digital chat history stays bounded by its flex panel and locally scrollable',
+)
+
 for (const stylesheet of routedPageStyles) {
   assert.match(
     read(`pages/${stylesheet}`),
