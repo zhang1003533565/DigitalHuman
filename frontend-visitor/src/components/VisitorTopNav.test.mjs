@@ -4,8 +4,10 @@ import { fileURLToPath } from 'node:url'
 
 const componentUrl = new URL('./VisitorTopNav.tsx', import.meta.url)
 const cssUrl = new URL('./VisitorTopNav.css', import.meta.url)
+const appUrl = new URL('../App.tsx', import.meta.url)
 const source = readFileSync(fileURLToPath(componentUrl), 'utf8')
 const css = readFileSync(fileURLToPath(cssUrl), 'utf8')
+const appSource = readFileSync(fileURLToPath(appUrl), 'utf8')
 
 const routedPages = [
   '../pages/HomePage.tsx',
@@ -18,6 +20,7 @@ const routedPages = [
   '../pages/ProfilePage.tsx',
   '../pages/SpotRecommendPage.tsx',
   '../pages/RouteRecommendListPage.tsx',
+  '../pages/LiveBroadcastPage.tsx',
 ]
 
 const expectedItems = [
@@ -95,11 +98,16 @@ assert.match(css, /\.visitor-user-menu\s*\{[^}]*position:\s*relative;/s)
 assert.doesNotMatch(css, /\.visitor-user-menu\s*\{[^}]*position:\s*absolute;/s)
 assert.doesNotMatch(css, /--home/)
 
+assert.equal((appSource.match(/<VisitorTopNav onLogout=\{onLogout\} \/>/g) ?? []).length, 1)
+assert.match(
+  appSource,
+  /<VisitorTopNav onLogout=\{onLogout\} \/>[\s\S]*authenticated-app__content[\s\S]*<Outlet \/>/,
+)
+
 for (const relativePath of routedPages) {
   const pageUrl = new URL(relativePath, import.meta.url)
   const page = readFileSync(fileURLToPath(pageUrl), 'utf8')
-  assert.match(page, /import \{ VisitorTopNav \} from '\.\.\/components\/VisitorTopNav'/, relativePath)
-  assert.match(page, /<VisitorTopNav onLogout=\{onLogout\} \/>/, relativePath)
+  assert.doesNotMatch(page, /VisitorTopNav/, `${relativePath} must rely on the authenticated shell`)
   const removedPageConfiguration = new RegExp(
     [['App', 'TopNav'].join(''), ['HOME', 'NAV', 'ITEMS'].join('_'), ['variant', '="home"'].join('')].join('|'),
   )

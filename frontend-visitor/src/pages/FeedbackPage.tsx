@@ -1,12 +1,7 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
 import './FeedbackPage.css'
-import { VisitorTopNav } from '../components/VisitorTopNav'
 import { parseNavigationContext } from './navigationContext'
-
-type Props = {
-  onLogout: () => void
-}
 
 type FeedbackRecord = {
   sessionId: string
@@ -23,7 +18,7 @@ type FeedbackRecord = {
   adminNote?: string
 }
 
-export function FeedbackPage({ onLogout }: Props) {
+export function FeedbackPage() {
   const [records, setRecords] = useState<FeedbackRecord[]>([])
   const [comment, setComment] = useState('')
   const [submitState, setSubmitState] = useState('')
@@ -74,7 +69,6 @@ export function FeedbackPage({ onLogout }: Props) {
 
   return (
     <main className="page-shell feedback-page">
-      <VisitorTopNav onLogout={onLogout} />
       <section className="page-content">
         <header className="page-heading">
           <p className="surface-tag">Feedback</p>

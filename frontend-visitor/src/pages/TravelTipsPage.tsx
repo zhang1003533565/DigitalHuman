@@ -1,11 +1,6 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
 import './TravelTipsPage.css'
-import { VisitorTopNav } from '../components/VisitorTopNav'
-
-type Props = {
-  onLogout: () => void
-}
 
 type TravelTip = {
   id: string
@@ -39,7 +34,7 @@ const CATEGORY_ICONS: Record<string, string> = {
 
 const ALL_CATEGORIES = ['all', 'transport', 'ticket', 'time', 'items', 'safety', 'food', 'notice']
 
-export function TravelTipsPage({ onLogout }: Props) {
+export function TravelTipsPage() {
   const [tips, setTips] = useState<TravelTip[]>([])
   const [activeCategory, setActiveCategory] = useState('all')
   const [error, setError] = useState('')
@@ -65,7 +60,6 @@ export function TravelTipsPage({ onLogout }: Props) {
 
   return (
     <main className="page-shell travel-tips-page">
-      <VisitorTopNav onLogout={onLogout} />
       <section className="page-content">
         <header className="page-heading">
           <p className="surface-tag">Travel Tips</p>

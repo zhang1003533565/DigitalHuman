@@ -24,13 +24,8 @@ import {
   sanitizeAnswerText,
   sanitizeSpeechText,
 } from '../digitalHuman/streamingSpeech'
-import { VisitorTopNav } from '../components/VisitorTopNav'
 import { GuideResultCards } from '../components/GuideResultCards'
 import { normalizeGuideChatResult, type GuideChatResult } from '../api/contracts'
-
-type DigitalHumanPageProps = {
-  onLogout: () => void
-}
 
 type DigitalHumanConfig = {
   modelId: string
@@ -170,7 +165,7 @@ function selectWeightedRule(rules: RuntimeTriggerRule[]) {
   return rules[rules.length - 1] ?? null
 }
 
-export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
+export function DigitalHumanPage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const chatActionsRef = useRef<HTMLDivElement | null>(null)
@@ -1113,7 +1108,6 @@ export function DigitalHumanPage({ onLogout }: DigitalHumanPageProps) {
 
   return (
     <main className="module-screen">
-      <VisitorTopNav onLogout={onLogout} />
 
       <section className="live2d-page live2d-page--presentation">
         <canvas ref={canvasRef} className="live2d-canvas" />

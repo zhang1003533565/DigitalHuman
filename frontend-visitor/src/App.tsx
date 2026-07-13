@@ -21,9 +21,10 @@ import { TravelTipsPage } from './pages/TravelTipsPage'
 import { SpotRecommendPage } from './pages/SpotRecommendPage'
 import { RouteRecommendListPage } from './pages/RouteRecommendListPage'
 import { MobileBottomNav } from './components/MobileBottomNav'
+import { VisitorTopNav } from './components/VisitorTopNav'
 import { LiveBroadcastPage } from './pages/LiveBroadcastPage'
 
-function ProtectedRoute({ user }: { user: SessionUser | null }) {
+function ProtectedRoute({ user, onLogout }: { user: SessionUser | null; onLogout: () => void }) {
   const location = useLocation()
 
   if (!user) {
@@ -33,7 +34,10 @@ function ProtectedRoute({ user }: { user: SessionUser | null }) {
 
   return (
     <div className="authenticated-app">
-      <Outlet />
+      <VisitorTopNav onLogout={onLogout} />
+      <div className="authenticated-app__content">
+        <Outlet />
+      </div>
       <MobileBottomNav />
     </div>
   )
@@ -61,24 +65,24 @@ function App() {
         path="/login"
         element={<LoginPage user={user} onLogin={handleLogin} />}
       />
-      <Route element={<ProtectedRoute user={user} />}>
+      <Route element={<ProtectedRoute user={user} onLogout={handleLogout} />}>
         <Route
           path="/home"
-          element={<HomePage user={user as SessionUser} onLogout={handleLogout} />}
+          element={<HomePage user={user as SessionUser} />}
         />
         <Route
           path={DIGITAL_HUMAN_ROUTE}
-          element={<DigitalHumanPage onLogout={handleLogout} />}
+          element={<DigitalHumanPage />}
         />
-        <Route path="/live" element={<LiveBroadcastPage onLogout={handleLogout} />} />
-        <Route path="/routes" element={<RouteRecommendPage onLogout={handleLogout} />} />
-        <Route path="/map" element={<MapPage onLogout={handleLogout} />} />
-        <Route path="/spot-recommend" element={<SpotRecommendPage onLogout={handleLogout} />} />
-        <Route path="/route-recommend" element={<RouteRecommendListPage onLogout={handleLogout} />} />
-        <Route path="/feedback" element={<FeedbackPage onLogout={handleLogout} />} />
-        <Route path="/history" element={<HistoryPage onLogout={handleLogout} />} />
-        <Route path="/profile" element={<ProfilePage onLogout={handleLogout} />} />
-        <Route path="/tips" element={<TravelTipsPage onLogout={handleLogout} />} />
+        <Route path="/live" element={<LiveBroadcastPage />} />
+        <Route path="/routes" element={<RouteRecommendPage />} />
+        <Route path="/map" element={<MapPage />} />
+        <Route path="/spot-recommend" element={<SpotRecommendPage />} />
+        <Route path="/route-recommend" element={<RouteRecommendListPage />} />
+        <Route path="/feedback" element={<FeedbackPage />} />
+        <Route path="/history" element={<HistoryPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/tips" element={<TravelTipsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

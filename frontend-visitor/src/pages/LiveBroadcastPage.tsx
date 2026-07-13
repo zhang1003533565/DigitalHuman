@@ -3,7 +3,6 @@ import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getLiveStatus, type LiveStatusSnapshot } from '../api/liveBroadcast'
 import { getStoredUser } from '../auth/session'
-import { VisitorTopNav } from '../components/VisitorTopNav'
 import {
   createTtsPayload,
   loadLive2dScripts,
@@ -26,7 +25,6 @@ import {
 import './LiveBroadcastPage.css'
 
 type LivePhase = 'syncing' | 'broadcasting' | 'asking' | 'answering' | 'resuming' | 'unavailable' | 'error'
-type LiveBroadcastPageProps = { onLogout: () => void }
 type SpeechRecognitionResultEvent = Event & { results: { 0: { 0: { transcript: string } } } }
 type SpeechRecognitionLike = {
   lang: string
@@ -42,7 +40,7 @@ type SpeechRecognitionConstructor = new () => SpeechRecognitionLike
 const LIVE_GUIDE_SESSION_KEY = 'digitalhuman.visitor.liveGuideSessionId'
 const LIVE_STATUS_POLL_INTERVAL_MS = 30_000
 
-export function LiveBroadcastPage({ onLogout }: LiveBroadcastPageProps) {
+export function LiveBroadcastPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const modelRef = useRef<Live2DModel | null>(null)
   const pixiRef = useRef<PixiApplication | null>(null)
@@ -371,7 +369,6 @@ export function LiveBroadcastPage({ onLogout }: LiveBroadcastPageProps) {
   const isInteractionBusy = ['syncing', 'asking', 'answering', 'resuming'].includes(phase)
 
   return <div className="live-broadcast-page">
-    <VisitorTopNav onLogout={onLogout} />
     <main className="live-broadcast-page__body">
       <section className="live-stage" aria-label="数字人直播舞台">
         <canvas ref={canvasRef} className="live-stage__canvas" />

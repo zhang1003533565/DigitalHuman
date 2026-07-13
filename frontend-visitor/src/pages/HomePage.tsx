@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './HomePage.css'
 import { type SessionUser } from '../auth/session'
-import { VisitorTopNav } from '../components/VisitorTopNav'
 import { AsyncState } from '../components/AsyncState'
 import { TripPlanner } from '../components/TripPlanner'
 
@@ -26,7 +25,6 @@ interface HomeData {
 
 type HomePageProps = {
   user: SessionUser
-  onLogout: () => void
 }
 
 const EMPTY_HOME_DATA: HomeData = {
@@ -45,7 +43,7 @@ function normalizeHomeData(data: Partial<HomeData>): HomeData {
   }
 }
 
-export function HomePage({ user, onLogout }: HomePageProps) {
+export function HomePage({ user }: HomePageProps) {
   const navigate = useNavigate()
   const [homeData, setHomeData] = useState<HomeData>(EMPTY_HOME_DATA)
   const [isLoading, setIsLoading] = useState(true)
@@ -68,7 +66,6 @@ export function HomePage({ user, onLogout }: HomePageProps) {
 
   return (
     <main className="page-shell home-page">
-      <VisitorTopNav onLogout={onLogout} />
 
       <div className="hp-scroll">
         <section className="hp-hero" aria-labelledby="home-hero-title">

@@ -3,14 +3,9 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import axios from 'axios'
 import { useLocation, useNavigate } from 'react-router-dom'
 import './MapPage.css'
-import { VisitorTopNav } from '../components/VisitorTopNav'
 import { DIGITAL_HUMAN_ROUTE } from '../digitalHuman/shared'
 import { parseNavigationContext } from './navigationContext'
 import { getLiveStatus } from '../api/liveBroadcast'
-
-type Props = {
-  onLogout: () => void
-}
 
 type ScenicSpot = {
   id: string
@@ -155,7 +150,7 @@ function buildFallbackCategories(facilities: ScenicFacility[]): ScenicCategory[]
   return Array.from(categoryMap.values())
 }
 
-export function MapPage({ onLogout }: Props) {
+export function MapPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const context = useMemo(() => parseNavigationContext(location.search), [location.search])
@@ -584,7 +579,6 @@ export function MapPage({ onLogout }: Props) {
 
   return (
     <main className="page-shell">
-      <VisitorTopNav onLogout={onLogout} />
 
       <section className="page-content">
         <div className={`map-page${selectedFacility && cardPosition ? ' map-page--spot-selected' : ''}`}>

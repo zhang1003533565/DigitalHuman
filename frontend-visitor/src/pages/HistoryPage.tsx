@@ -2,12 +2,7 @@ import { useEffect, useState } from 'react'
 import axios from 'axios'
 import { useNavigate } from 'react-router-dom'
 import './HistoryPage.css'
-import { VisitorTopNav } from '../components/VisitorTopNav'
 import { DIGITAL_HUMAN_ROUTE } from '../digitalHuman/shared'
-
-type Props = {
-  onLogout: () => void
-}
 
 type GuideMessage = {
   role: string
@@ -17,7 +12,7 @@ type GuideMessage = {
 
 const GUIDE_SESSION_KEY = 'digitalhuman.visitor.guideSessionId'
 
-export function HistoryPage({ onLogout }: Props) {
+export function HistoryPage() {
   const navigate = useNavigate()
   const [messages, setMessages] = useState<GuideMessage[]>([])
   const [sessionId] = useState(() => window.sessionStorage.getItem(GUIDE_SESSION_KEY) ?? '')
@@ -37,7 +32,6 @@ export function HistoryPage({ onLogout }: Props) {
 
   return (
     <main className="page-shell history-page">
-      <VisitorTopNav onLogout={onLogout} />
       <section className="page-content">
         <header className="page-heading">
           <p className="surface-tag">History</p>

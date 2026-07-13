@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { VisitorTopNav } from '../components/VisitorTopNav'
 import './RouteRecommendListPage.css'
 
 interface RouteItem {
@@ -10,7 +9,7 @@ interface RouteItem {
   description: string
 }
 
-export function RouteRecommendListPage({ onLogout }: { onLogout: () => void }) {
+export function RouteRecommendListPage() {
   const navigate = useNavigate()
   const [routes, setRoutes] = useState<RouteItem[]>([])
 
@@ -23,7 +22,6 @@ export function RouteRecommendListPage({ onLogout }: { onLogout: () => void }) {
 
   return (
     <main className="page-shell">
-      <VisitorTopNav onLogout={onLogout} />
       <section className="page-content">
         <div className="route-list-page">
           <div className="route-list-page__header">

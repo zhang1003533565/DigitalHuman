@@ -1,10 +1,5 @@
 import { getStoredUser } from '../auth/session'
-import { VisitorTopNav } from '../components/VisitorTopNav'
 import './ProfilePage.css'
-
-type ProfilePageProps = {
-  onLogout: () => void
-}
 
 const MOCK_STATS = [
   { label: '注册时间', value: '2025-03-15' },
@@ -18,12 +13,11 @@ function getInitials(name: string): string {
   return name.charAt(0).toUpperCase()
 }
 
-export function ProfilePage({ onLogout }: ProfilePageProps) {
+export function ProfilePage() {
   const user = getStoredUser()
 
   return (
     <main className="page-shell">
-      <VisitorTopNav onLogout={onLogout} />
       <section className="page-content">
         <section className="profile-grid">
           <aside className="profile-card">
