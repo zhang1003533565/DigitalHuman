@@ -818,6 +818,10 @@
     text-overflow: clip;
   }
 
+  .digital-chat-actions {
+    overflow-y: hidden;
+  }
+
   .digital-chat-actions > .digital-chat-select > button,
   .digital-chat-voice,
   .digital-chat-send {

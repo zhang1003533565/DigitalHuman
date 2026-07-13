@@ -115,8 +115,18 @@ const readMobileRepresentativeWidths = (styles) => {
   return [...representatives].sort((left, right) => left - right)
 }
 
+const readComputedOverflow = (declarations) => {
+  let overflowX = declarations.get('overflow-x')?.replace(/\s*!important\s*$/, '') ?? 'visible'
+  let overflowY = declarations.get('overflow-y')?.replace(/\s*!important\s*$/, '') ?? 'visible'
+  const xIsVisibleOrClip = overflowX === 'visible' || overflowX === 'clip'
+  const yIsVisibleOrClip = overflowY === 'visible' || overflowY === 'clip'
+  if (xIsVisibleOrClip && !yIsVisibleOrClip) overflowX = overflowX === 'visible' ? 'auto' : 'hidden'
+  if (yIsVisibleOrClip && !xIsVisibleOrClip) overflowY = overflowY === 'visible' ? 'auto' : 'hidden'
+  return { overflowX, overflowY }
+}
+
 const isVerticalScroller = (declarations) => {
-  const overflowY = declarations.get('overflow-y')?.replace(/\s*!important\s*$/, '')
+  const { overflowY } = readComputedOverflow(declarations)
   return overflowY === 'auto' || overflowY === 'scroll'
 }
 
@@ -323,7 +333,13 @@ const longhandOverride = readEffectiveRulesAtWidth(
   768,
 ).find((rule) => rule.selector === '.content')?.declarations
 assert.equal(longhandOverride?.get('overflow-y'), 'visible', 'overflow-y overrides the vertical component of an earlier shorthand')
-assert.equal(isVerticalScroller(longhandOverride), false, 'effective overflow-y does not fall back to a stale shorthand value')
+assert.equal(isVerticalScroller(longhandOverride), true, 'computed overflow-y becomes auto when overflow-x is non-visible')
+const fullyVisibleOverflow = readEffectiveRulesAtWidth('.content { overflow: visible; }', 768)
+  .find((rule) => rule.selector === '.content')?.declarations
+assert.equal(isVerticalScroller(fullyVisibleOverflow), false, 'overflow visible on both axes closes the scroll container')
+const twoValueOverflow = readEffectiveRulesAtWidth('.content { overflow: auto visible; }', 768)
+  .find((rule) => rule.selector === '.content')?.declarations
+assert.equal(isVerticalScroller(twoValueOverflow), true, 'overflow auto visible computes its vertical axis to auto')
 assert.ok(
   hasBoundedLocalScroll('.bounded { overflow-y: auto; max-height: 240px; }', '.bounded'),
   'bounded local scroll validation is declaration-order independent',
@@ -397,6 +413,30 @@ assert.deepEqual(
 const effectiveMapSide = readEffectiveRulesAtWidth(mapCss, 768).find((rule) => rule.selector === '.map-side')?.declarations
 assert.equal(effectiveMapSide?.get('overflow'), 'visible', 'mobile map services override the desktop local scroller')
 assert.equal(isVerticalScroller(effectiveMapSide), false, 'mobile map services do not remain a nested vertical scroller')
+for (const [name, css, width, selector] of [
+  ['digital chat actions', digitalHumanCss, 768, '.digital-chat-actions'],
+  ['home inspiration rail', homeCss, 480, '.hp-inspiration'],
+  ['home route rail', homeCss, 480, '.hp-route-grid'],
+  ['tips category bar', travelTipsCss, 768, '.tips-category-bar'],
+]) {
+  const declarations = readEffectiveRulesAtWidth(css, width).find((rule) => rule.selector === selector)?.declarations
+  assert.deepEqual(
+    readComputedOverflow(declarations),
+    { overflowX: 'auto', overflowY: 'hidden' },
+    `${name} keeps horizontal scrolling without becoming a vertical scroller`,
+  )
+}
+for (const [name, css, selector] of [
+  ['home page root', homeCss, '.home-page'],
+  ['hidden mobile top navigation', topNavCss, '.visitor-topbar__nav'],
+]) {
+  const declarations = readEffectiveRulesAtWidth(css, 768).find((rule) => rule.selector === selector)?.declarations
+  assert.deepEqual(
+    readComputedOverflow(declarations),
+    { overflowX: 'visible', overflowY: 'visible' },
+    `${name} remains non-scrolling on mobile`,
+  )
+}
 
 for (const stylesheet of routedPageStyles) {
   assert.match(

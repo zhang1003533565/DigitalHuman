@@ -260,6 +260,7 @@
 
   .visitor-topbar__nav {
     display: none;
+    overflow: visible;
   }
 
   .visitor-user-menu__avatar {

@@ -178,6 +178,7 @@
 
   .tips-category-bar {
     overflow-x: auto;
+    overflow-y: hidden;
     flex-wrap: nowrap;
   }
 

@@ -476,7 +476,7 @@
 
 @media (max-width: 768px) {
   .home-page {
-    overflow-x: hidden;
+    overflow: visible;
   }
 
   .hp-button,
@@ -581,6 +581,7 @@
   .hp-route-grid {
     display: flex;
     overflow-x: auto;
+    overflow-y: hidden;
     scroll-snap-type: x mandatory;
     scrollbar-width: thin;
   }
