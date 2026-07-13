@@ -33,9 +33,25 @@ try {
   assert.equal(workbench.toggleMobileMapDrawer('expanded'), 'collapsed')
   assert.equal(workbench.getMobileMapLiveLabel('live'), '在线')
   assert.equal(workbench.getMobileMapLiveLabel('error'), '同步失败')
-  assert.equal(workbench.shouldShowMobileMapClearAction('', 0), false)
-  assert.equal(workbench.shouldShowMobileMapClearAction('灵山', 0), true)
-  assert.equal(workbench.shouldShowMobileMapClearAction('', 2), true)
+  assert.equal(workbench.shouldShowMobileMapClearAction(0), false)
+  assert.equal(workbench.shouldShowMobileMapClearAction(2), true)
+  assert.equal(workbench.shouldShowMobileMapClearAction(0), false, 'an unsubmitted keyword is not a result')
+  assert.equal(workbench.shouldShowMobileMapClearAction.length, 1, 'clear visibility only consumes committed result state')
+  assert.equal(typeof workbench.isolateMobileMapDialogBackground, 'function')
+
+  {
+    const mapMain = { inert: false }
+    const desktopSidebar = { inert: false }
+    const alreadyInert = { inert: true }
+    const restore = workbench.isolateMobileMapDialogBackground([mapMain, desktopSidebar, alreadyInert])
+    assert.equal(mapMain.inert, true)
+    assert.equal(desktopSidebar.inert, true)
+    assert.equal(alreadyInert.inert, true)
+    restore()
+    assert.equal(mapMain.inert, false, 'cleanup restores interactive background regions')
+    assert.equal(desktopSidebar.inert, false, 'cleanup restores every newly isolated region')
+    assert.equal(alreadyInert.inert, true, 'cleanup preserves a pre-existing inert state')
+  }
   assert.equal(typeof workbench.createMobileMapSearchGenerationGate, 'function')
 
   function createSearchHarness() {

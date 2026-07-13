@@ -9,6 +9,7 @@ import { getLiveStatus } from '../api/liveBroadcast'
 import {
   createMobileMapSearchGenerationGate,
   getMobileMapLiveLabel,
+  isolateMobileMapDialogBackground,
   shouldShowMobileMapClearAction,
   toggleMobileMapDrawer,
   type MobileMapDrawerState,
@@ -190,8 +191,10 @@ export function MapPage() {
   const hasAutoLocatedRef = useRef(false)
   const liveStatusGenerationRef = useRef(0)
   const searchGenerationGateRef = useRef(createMobileMapSearchGenerationGate())
+  const searchSelectedFacilityIdRef = useRef<number | null>(null)
   const mobileDrawerRef = useRef<HTMLElement | null>(null)
   const mobileDrawerTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const mobileDrawerDragStartYRef = useRef<number | null>(null)
 
   const closeMobileDrawer = useCallback(() => {
     setMobileDrawerState('collapsed')
@@ -259,9 +262,16 @@ export function MapPage() {
   useEffect(() => {
     if (mobileDrawerState !== 'expanded') return
     const panel = mobileDrawerRef.current
-    const focusable = Array.from(panel?.querySelectorAll<HTMLElement>(
+    if (!panel) return
+    const backgroundSelectors = ['.visitor-topbar', '.map-page__main', '.map-side', '.mobile-bottom-nav']
+    const backgroundRegions = backgroundSelectors.flatMap((selector) => (
+      Array.from(document.querySelectorAll<HTMLElement>(selector))
+    ))
+    const restoreBackground = isolateMobileMapDialogBackground(backgroundRegions)
+    const getFocusable = () => Array.from(panel.querySelectorAll<HTMLElement>(
       'a[href]:not([tabindex="-1"]), button:not(:disabled):not([tabindex="-1"]), input:not(:disabled):not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])',
-    ) ?? [])
+    ))
+    const focusable = getFocusable()
     focusable[0]?.focus()
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -272,8 +282,9 @@ export function MapPage() {
         return
       }
       if (event.key !== 'Tab' || focusable.length === 0) return
-      const first = focusable[0]
-      const last = focusable.at(-1) ?? first
+      const currentFocusable = getFocusable()
+      const first = currentFocusable[0]
+      const last = currentFocusable.at(-1) ?? first
       if (event.shiftKey && document.activeElement === first) {
         event.preventDefault()
         last.focus()
@@ -283,8 +294,19 @@ export function MapPage() {
       }
     }
 
+    const handleFocusIn = (event: FocusEvent) => {
+      if (panel.contains(event.target as Node)) return
+      event.preventDefault()
+      getFocusable()[0]?.focus()
+    }
+
     document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
+    document.addEventListener('focusin', handleFocusIn)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('focusin', handleFocusIn)
+      restoreBackground()
+    }
   }, [closeMobileDrawer, mobileCategoryOpen, mobileDrawerState])
 
   useEffect(() => {
@@ -355,7 +377,10 @@ export function MapPage() {
   useEffect(() => {
     const selected = facilities.find((facility) => String(facility.id) === context.spotId
       || facility.name === context.spotName)
-    if (selected) setSelectedFacility(selected)
+    if (selected) {
+      searchSelectedFacilityIdRef.current = null
+      setSelectedFacility(selected)
+    }
   }, [context.spotId, context.spotName, facilities])
 
   useEffect(() => {
@@ -418,6 +443,7 @@ export function MapPage() {
         map.add(scenicCenterMarkerRef.current)
 
         map.on('click', () => {
+          searchSelectedFacilityIdRef.current = null
           setSelectedFacility(null)
           setCardPosition(null)
         })
@@ -515,6 +541,7 @@ export function MapPage() {
       })
 
       marker.on('click', () => {
+        searchSelectedFacilityIdRef.current = null
         setSelectedFacility(facility)
       })
 
@@ -572,6 +599,11 @@ export function MapPage() {
   function clearSearchResults() {
     searchGenerationGateRef.current.invalidate()
     removeSearchMarkers()
+    if (searchSelectedFacilityIdRef.current !== null) {
+      setSelectedFacility(null)
+      setCardPosition(null)
+    }
+    searchSelectedFacilityIdRef.current = null
     setKeyword('')
   }
 
@@ -610,7 +642,9 @@ export function MapPage() {
     if (matchedFacility) {
       map.setCenter?.([matchedFacility.longitude, matchedFacility.latitude])
       map.setZoom?.(17)
+      searchSelectedFacilityIdRef.current = matchedFacility.id
       setSelectedFacility(matchedFacility)
+      setSearchResultCount(1)
       return
     }
 
@@ -654,7 +688,7 @@ export function MapPage() {
   }
 
   const liveLabel = getMobileMapLiveLabel(liveStatus)
-  const showClearSearch = shouldShowMobileMapClearAction(keyword, searchResultCount)
+  const showClearSearch = shouldShowMobileMapClearAction(searchResultCount)
 
   function renderLiveCard() {
     return (
@@ -920,7 +954,9 @@ export function MapPage() {
                 setMobileDrawerState((state) => toggleMobileMapDrawer(state))
               }}
             >
-              AI 数字人 · {liveLabel}{'\u3000'}附近服务
+              <span className="map-mobile-drawer__peek-handle" aria-hidden />
+              <span>AI 数字人 · {liveLabel}{'\u3000'}附近服务</span>
+              <span className="map-mobile-drawer__action-label">展开</span>
             </button>
             {mobileDrawerState === 'expanded' ? (
               <div className="map-mobile-drawer__overlay" onMouseDown={closeMobileDrawer}>
@@ -930,8 +966,27 @@ export function MapPage() {
                   role="dialog"
                   aria-modal="true"
                   aria-labelledby="mobile-map-drawer-title"
+                  tabIndex={-1}
                   onMouseDown={(event) => event.stopPropagation()}
                 >
+                  <button
+                    type="button"
+                    className="map-mobile-drawer__drag-handle"
+                    aria-label="向下拖动或收起景区服务"
+                    onClick={closeMobileDrawer}
+                    onPointerDown={(event) => {
+                      mobileDrawerDragStartYRef.current = event.clientY
+                      event.currentTarget.setPointerCapture?.(event.pointerId)
+                    }}
+                    onPointerUp={(event) => {
+                      const startY = mobileDrawerDragStartYRef.current
+                      mobileDrawerDragStartYRef.current = null
+                      if (startY !== null && event.clientY - startY >= 48) closeMobileDrawer()
+                    }}
+                  >
+                    <span className="map-mobile-drawer__drag-bar" aria-hidden />
+                    <span>收起</span>
+                  </button>
                   <header className="map-mobile-drawer__header">
                     <div>
                       <span>景区服务</span>

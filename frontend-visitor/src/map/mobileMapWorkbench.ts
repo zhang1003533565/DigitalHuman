@@ -11,8 +11,19 @@ export function getMobileMapLiveLabel(status: MobileMapLiveStatus) {
   return '准备中'
 }
 
-export function shouldShowMobileMapClearAction(keyword: string, resultCount: number) {
-  return keyword.trim().length > 0 || resultCount > 0
+export function shouldShowMobileMapClearAction(resultCount: number) {
+  return resultCount > 0
+}
+
+type InertTarget = { inert: boolean }
+
+export function isolateMobileMapDialogBackground(targets: InertTarget[]) {
+  const previousStates = targets.map((target) => target.inert)
+  targets.forEach((target) => { target.inert = true })
+
+  return () => {
+    targets.forEach((target, index) => { target.inert = previousStates[index] })
+  }
 }
 
 export function createMobileMapSearchGenerationGate() {

@@ -956,14 +956,15 @@
   }
 }
 
-@media (max-width: 768px) {
-  .page-shell--map {
+@media (max-width: 768px), (max-width: 932px) and (max-height: 520px) and (orientation: landscape) {
+  .authenticated-app__content > .page-shell--map {
     height: 100%;
     min-height: 0;
     overflow: hidden;
+    padding: 0;
   }
 
-  .page-content--map {
+  .page-shell--map > .page-content--map {
     flex: 1 1 auto;
     min-height: 0;
     overflow: hidden;
@@ -973,6 +974,7 @@
   .map-page {
     --map-mobile-drawer-peek-height: 64px;
     --map-mobile-edge: 12px;
+    --map-mobile-bottom-offset: calc(var(--mobile-nav-height) + var(--safe-bottom));
     position: relative;
     display: block;
     width: 100%;
@@ -1130,7 +1132,7 @@
     top: auto;
     right: 12px;
     z-index: 40;
-    bottom: calc(var(--mobile-nav-height) + var(--safe-bottom) + var(--map-mobile-drawer-peek-height) + 20px);
+    bottom: calc(var(--map-mobile-bottom-offset) + var(--map-mobile-drawer-peek-height) + 20px);
     left: 12px;
     width: auto;
     max-height: min(45vh, 420px);
@@ -1140,13 +1142,13 @@
   .map-mobile-drawer {
     position: fixed;
     right: 12px;
-    bottom: calc(var(--mobile-nav-height) + var(--safe-bottom) + 8px);
+    bottom: calc(var(--map-mobile-bottom-offset) + 8px);
     left: 12px;
     z-index: 30;
   }
 
   .map-mobile-drawer--expanded {
-    z-index: 50;
+    z-index: 1100;
   }
 
   .map-mobile-drawer--expanded > button {
@@ -1160,11 +1162,30 @@
     border-radius: 16px;
     color: #f8fbff;
     font-weight: 700;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+  }
+
+  .map-mobile-drawer__peek-handle,
+  .map-mobile-drawer__drag-bar {
+    display: block;
+    width: 34px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(159, 215, 255, 0.72);
+  }
+
+  .map-mobile-drawer__action-label {
+    color: #75e8ff;
+    font-size: 13px;
   }
 
   .map-mobile-drawer__overlay {
     position: fixed;
-    inset: 0 0 calc(var(--mobile-nav-height) + var(--safe-bottom)) 0;
+    inset: 0 0 var(--map-mobile-bottom-offset) 0;
     z-index: -1;
     display: flex;
     align-items: flex-end;
@@ -1186,6 +1207,20 @@
     border: var(--tech-border);
     box-shadow: var(--tech-glow-strong);
     transition: transform 0.18s ease;
+  }
+
+  .map-mobile-drawer__drag-handle {
+    display: flex;
+    width: 100%;
+    min-height: 36px;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 0 8px 8px;
+    border: 0;
+    color: #9fd7ff;
+    background: transparent;
+    touch-action: none;
   }
 
   .map-mobile-drawer__header {
@@ -1238,7 +1273,11 @@
   }
 }
 
-@media (max-width: 900px) and (max-height: 520px) and (orientation: landscape) {
+@media (min-width: 769px) and (max-width: 932px) and (max-height: 520px) and (orientation: landscape) {
+  .map-page {
+    --map-mobile-bottom-offset: 0px;
+  }
+
   .map-mobile-drawer__panel {
     max-height: 74dvh;
   }
