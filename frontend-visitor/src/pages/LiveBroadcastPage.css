@@ -17,7 +17,6 @@
 .live-interaction button { min-height: 44px; padding: 0 16px; border: 0; border-radius: 12px; color: white; background: #0369a1; }
 .live-interaction button:last-child { background: #475569; }
 @media (max-width: 768px) {
-  .live-broadcast-page { padding-bottom: calc(var(--mobile-nav-height) + var(--safe-bottom) + 16px); }
   .live-broadcast-page__body { grid-template-columns: 1fr; padding: 12px; }
   .live-stage { min-height: min(62vh, 540px); }
   .live-stage__subtitle { right: 12px; bottom: 12px; left: 12px; }

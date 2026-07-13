@@ -32,8 +32,11 @@ for (const path of ['/home', '/modules/digital-human', '/routes', '/map', '/prof
 }
 assert.match(topNavCss, /@media\s*\([^)]*max-width:\s*768px[^)]*\)[\s\S]*\.visitor-topbar__nav[\s\S]*display:\s*none/, 'desktop navigation is hidden at the mobile breakpoint')
 const appMobile = appCss.slice(appCss.lastIndexOf('@media (max-width: 768px)'))
-assert.match(appMobile, /\.authenticated-app\s*\{[^}]*overflow-y:\s*auto/s, 'mobile app owns vertical scrolling')
-assert.match(appMobile, /\.authenticated-app\s*\{[^}]*overflow-x:\s*hidden/s, 'mobile app prevents page-level horizontal scrolling')
+assert.match(appCss, /\.authenticated-app\s*\{[^}]*display:\s*flex[^}]*flex-direction:\s*column[^}]*overflow:\s*hidden/s, 'authenticated shell stacks navigation and content without viewport overflow')
+assert.match(appCss, /\.authenticated-app__content\s*\{[^}]*flex:\s*1 1 auto[^}]*min-height:\s*0[^}]*overflow:\s*hidden/s, 'authenticated content consumes the remaining viewport height')
+assert.match(appCss, /\.authenticated-app__content\s*>\s*\*\s*\{[^}]*height:\s*100%/s, 'desktop routed roots fill the authenticated content area')
+assert.match(appMobile, /\.authenticated-app__content\s*\{[^}]*overflow-x:\s*hidden[^}]*overflow-y:\s*auto/s, 'mobile authenticated content owns vertical scrolling')
+assert.match(appMobile, /\.authenticated-app__content\s*>\s*\*\s*\{[^}]*height:\s*auto[^}]*min-height:\s*100%/s, 'mobile routed roots use natural document height')
 assert.match(appMobile, /padding-bottom:\s*calc\(var\(--mobile-nav-height\)\s*\+\s*var\(--safe-bottom\)\s*\+\s*16px\)/, 'mobile content reserves nav, safe area, and breathing room')
 
 const digitalMobileStart = digitalHumanCss.lastIndexOf('@media (max-width: 768px)')
@@ -99,7 +102,8 @@ const routedPageStyles = [
 
 const liveMobile = liveBroadcastCss.slice(liveBroadcastCss.lastIndexOf('@media (max-width: 768px)'))
 assert.match(liveMobile, /\.live-broadcast-page__body\s*\{[^}]*grid-template-columns:\s*1fr/s, 'live broadcast stage and interaction stack naturally')
-assert.match(liveMobile, /padding-bottom:\s*calc\(var\(--mobile-nav-height\) \+ var\(--safe-bottom\) \+ 16px\)/, 'live broadcast reserves navigation safe area')
+assert.doesNotMatch(liveMobile, /padding-bottom:\s*calc\(var\(--mobile-nav-height\)/, 'live broadcast relies on the shared mobile content safe area')
+assert.doesNotMatch(digitalBeforeMobile, /(?:height|min-height):\s*100(?:d)?vh/, 'digital-human desktop layout must size against authenticated content, not the full viewport')
 
 for (const stylesheet of routedPageStyles) {
   assert.match(

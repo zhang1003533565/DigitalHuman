@@ -5,9 +5,11 @@ import { fileURLToPath } from 'node:url'
 const componentUrl = new URL('./VisitorTopNav.tsx', import.meta.url)
 const cssUrl = new URL('./VisitorTopNav.css', import.meta.url)
 const appUrl = new URL('../App.tsx', import.meta.url)
+const appCssUrl = new URL('../App.css', import.meta.url)
 const source = readFileSync(fileURLToPath(componentUrl), 'utf8')
 const css = readFileSync(fileURLToPath(cssUrl), 'utf8')
 const appSource = readFileSync(fileURLToPath(appUrl), 'utf8')
+const appCss = readFileSync(fileURLToPath(appCssUrl), 'utf8')
 
 const routedPages = [
   '../pages/HomePage.tsx',
@@ -79,18 +81,18 @@ assert.match(css, /box-shadow:[^;]*inset/s)
 assert.match(css, /animation:\s*visitorUserMenuIn/)
 assert.match(css, /\.visitor-user-menu__avatar--lg\s*\{[^}]*border-color:/s)
 assert.match(css, /\.visitor-user-menu__item\s*\{[^}]*transition:/s)
-assert.match(css, /\.page-shell:not\(\.home-page\) > \.visitor-topbar/)
-assert.match(css, /\.module-screen > \.visitor-topbar/)
 assert.match(
-  css,
-  /\.page-shell:not\(\.home-page\) > \.visitor-topbar\s*\{[^}]*margin:\s*-20px -24px 0;[^}]*\}/s,
-  'desktop page-shell navigation must span the same full width as home',
+  appCss,
+  /\.authenticated-app\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*overflow:\s*hidden;/s,
+  'authenticated shell must stack the shared navigation and routed content',
 )
 assert.match(
-  css,
-  /@media \(max-width: 768px\)[\s\S]*\.page-shell:not\(\.home-page\) > \.visitor-topbar\s*\{[^}]*margin:\s*-12px -12px 0;[^}]*\}/s,
-  'mobile page-shell navigation must span the same full width as home',
+  appCss,
+  /\.authenticated-app__content\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s,
+  'routed content must consume only the height below the shared navigation',
 )
+assert.doesNotMatch(css, /\.page-shell:not\(\.home-page\) > \.visitor-topbar/, 'navigation must not depend on page padding compensation')
+assert.doesNotMatch(css, /\.module-screen > \.visitor-topbar/, 'navigation must not be positioned by routed page roots')
 assert.match(css, /@media \(max-width: 768px\)/)
 assert.match(css, /@media \(min-width: 769px\) and \(max-width: 1100px\)/)
 assert.match(css, /\.visitor-topbar__nav\s*\{[^}]*overflow-x:\s*auto;[^}]*white-space:\s*nowrap;/s)
