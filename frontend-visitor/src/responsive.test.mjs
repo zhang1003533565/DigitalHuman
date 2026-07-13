@@ -248,11 +248,13 @@ assert.match(mapMobile, /\.map-mobile-search-slot input\s*\{[^}]*min-width:\s*0/
 assert.match(mapMobile, /\.map-mobile-toolbar button,[\s\S]*\.map-mobile-context-actions button,[\s\S]*\.map-mobile-drawer\s*>\s*button\s*\{[^}]*white-space:\s*nowrap/s, 'mobile map operation labels never become vertical text')
 assert.match(mapMobile, /\.map-mobile-drawer\s*\{[^}]*position:\s*fixed[^}]*bottom:\s*calc\(var\(--mobile-nav-height\)[^}]*var\(--safe-bottom\)[^}]*z-index:\s*30/s, 'collapsed service drawer clears navigation and safe area')
 assert.match(mapMobile, /\.map-mobile-drawer--expanded\s*\{[^}]*z-index:\s*50/s, 'expanded service drawer sits above selected spot details')
+assert.match(mapMobile, /\.map-mobile-drawer--expanded\s*>\s*button\s*\{[^}]*display:\s*none/s, 'expanded service drawer removes the collapsed summary from the panel bottom edge')
 assert.match(mapMobile, /\.map-mobile-drawer__panel\s*\{[^}]*max-height:\s*min\(72dvh,\s*620px\)[^}]*overflow-y:\s*auto[^}]*overscroll-behavior:\s*contain[^}]*touch-action:\s*pan-y/s, 'expanded service drawer owns bounded vertical scrolling')
 assert.match(mapMobile, /\.map-spot-card\s*\{[^}]*z-index:\s*40[^}]*bottom:\s*calc\(var\(--mobile-nav-height\)[^}]*var\(--safe-bottom\)[^}]*var\(--map-mobile-drawer-peek-height\)/s, 'selected spot card clears the collapsed service drawer')
 assert.match(mapMobile, /\.map-controls\s*\{[^}]*right:\s*var\(--map-mobile-edge\)[^}]*bottom:\s*calc\(var\(--map-mobile-drawer-peek-height\)\s*\+\s*24px\)/s, 'map controls share the drawer peek offset')
 assert.doesNotMatch(mapMobile, /(?:height|min-height):\s*calc\(100dvh[^}]*(?:mobile-nav-height|56px)/s, 'map shell must not subtract navigation twice')
 assert.match(mapCss, /@media\s*\(max-width:\s*768px\)\s*and\s*\(max-height:\s*700px\)[\s\S]*\.map-mobile-drawer__panel\s*\{[^}]*max-height:\s*68dvh/s, 'short portrait viewports reduce drawer height')
+assert.match(mapCss, /@media\s*\(max-width:\s*768px\)\s*and\s*\(max-height:\s*700px\)[\s\S]*\.map-mobile-drawer__panel\s+\.live-card__msg:nth-child\(-n\s*\+\s*2\)\s*\{[^}]*display:\s*none/s, 'short portrait compaction only hides messages inside the service drawer')
 assert.match(mapCss, /@media\s*\(max-width:\s*900px\)\s*and\s*\(max-height:\s*520px\)\s*and\s*\(orientation:\s*landscape\)[\s\S]*\.map-mobile-drawer__panel\s*\{[^}]*max-height:\s*74dvh/s, 'landscape viewports preserve map space')
 assert.match(mapCss, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.map-mobile-drawer__panel,[\s\S]*\.map-mobile-drawer__overlay\s*\{[^}]*(?:transition:\s*none[^}]*animation:\s*none|animation:\s*none[^}]*transition:\s*none)/s, 'mobile service drawer respects reduced motion')
 for (const [width, height] of [[375, 667], [390, 844], [430, 932]]) {

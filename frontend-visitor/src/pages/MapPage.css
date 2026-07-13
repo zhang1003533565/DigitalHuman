@@ -995,12 +995,7 @@
     display: none;
   }
 
-  .map-actions {
-    display: none;
-  }
-
   .map-side {
-    display: none;
     overflow: visible;
   }
 
@@ -1154,6 +1149,10 @@
     z-index: 50;
   }
 
+  .map-mobile-drawer--expanded > button {
+    display: none;
+  }
+
   .map-mobile-drawer > button {
     width: 100%;
     height: var(--map-mobile-drawer-peek-height);
@@ -1234,7 +1233,7 @@
     max-height: 68dvh;
   }
 
-  .live-card__msg:nth-child(-n + 2) {
+  .map-mobile-drawer__panel .live-card__msg:nth-child(-n + 2) {
     display: none;
   }
 }
