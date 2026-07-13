@@ -12,9 +12,33 @@ const VISITOR_NAV_ITEMS = [
   { to: DIGITAL_HUMAN_ROUTE, label: 'AI 导览', activeFor: [DIGITAL_HUMAN_ROUTE] },
   { to: '/routes', label: '路线推荐', activeFor: ['/routes', '/route-recommend'] },
   { to: '/map', label: '景点地图', activeFor: ['/map', '/spot-recommend'] },
-  { to: '/tips', label: '游览贴士', activeFor: ['/tips'] },
-  { to: '/feedback', label: '反馈记录', activeFor: ['/feedback'] },
-  { to: '/history', label: '会话历史', activeFor: ['/history'] },
+]
+
+const USER_NAV_ITEMS = [
+  { to: '/tips', label: '游览贴士', icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 16v-4" />
+        <path d="M12 8h.01" />
+      </svg>
+    ),
+  },
+  { to: '/feedback', label: '反馈记录', icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
+        <path d="M8 9h8" />
+        <path d="M8 13h5" />
+      </svg>
+    ),
+  },
+  { to: '/history', label: '会话历史', icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+        <path d="M3 3v5h5" />
+        <path d="M12 7v5l3 2" />
+      </svg>
+    ),
+  },
 ]
 
 const USER_MENU_ID = 'visitor-user-menu'
@@ -169,7 +193,6 @@ export function VisitorTopNav({ onLogout }: VisitorTopNavProps) {
                   <span className="visitor-user-menu__role">{user?.role === 'ADMIN' ? '管理员' : '游客'}</span>
                 </div>
               </div>
-              <div className="visitor-user-menu__divider" />
               <button
                 ref={profileActionRef}
                 className="visitor-user-menu__item"
@@ -185,6 +208,25 @@ export function VisitorTopNav({ onLogout }: VisitorTopNavProps) {
                 </svg>
                 个人资料
               </button>
+              {USER_NAV_ITEMS.map((item) => {
+                const active = item.to === location.pathname
+                return (
+                  <button
+                    key={item.to}
+                    className={`visitor-user-menu__item${active ? ' visitor-user-menu__item--active' : ''}`}
+                    type="button"
+                    aria-current={item.to === location.pathname ? 'page' : undefined}
+                    onClick={() => {
+                      setDropdownOpen(false)
+                      navigate(item.to)
+                    }}
+                  >
+                    {item.icon}
+                    {item.label}
+                  </button>
+                )
+              })}
+              <div className="visitor-user-menu__divider" />
               <button
                 className="visitor-user-menu__item visitor-user-menu__item--danger"
                 type="button"

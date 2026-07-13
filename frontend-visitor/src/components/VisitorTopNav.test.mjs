@@ -32,6 +32,9 @@ const expectedItems = [
   ['/modules/digital-human', 'AI 导览'],
   ['/routes', '路线推荐'],
   ['/map', '景点地图'],
+]
+
+const expectedUserItems = [
   ['/tips', '游览贴士'],
   ['/feedback', '反馈记录'],
   ['/history', '会话历史'],
@@ -43,6 +46,22 @@ const actualItems = [...navItemsBlock.matchAll(/\{ to: (?:'([^']+)'|DIGITAL_HUMA
   ([, literalPath, label]) => [literalPath || '/modules/digital-human', label],
 )
 assert.deepEqual(actualItems, expectedItems)
+
+const userItemsBlock = source.match(/const USER_NAV_ITEMS = \[(.*?)\n\]/s)?.[1]
+assert.ok(userItemsBlock, 'USER_NAV_ITEMS must be a source-level fixed array')
+const actualUserItems = [...userItemsBlock.matchAll(/\{ to: '([^']+)', label: '([^']+)'/g)].map(
+  ([, path, label]) => [path, label],
+)
+assert.deepEqual(actualUserItems, expectedUserItems)
+assert.match(source, /USER_NAV_ITEMS\.map/)
+assert.match(source, /setDropdownOpen\(false\)[\s\S]*navigate\(item\.to\)/)
+assert.match(source, /aria-current=\{item\.to === location\.pathname \? 'page' : undefined\}/)
+assert.match(source, /visitor-user-menu__item--active/)
+
+const profileIndex = source.indexOf('个人资料')
+const userNavigationIndex = source.indexOf('USER_NAV_ITEMS.map')
+const logoutIndex = source.indexOf('退出登录')
+assert.ok(profileIndex < userNavigationIndex && userNavigationIndex < logoutIndex)
 
 assert.match(source, /export function VisitorTopNav/)
 assert.match(source, /type VisitorTopNavProps = \{ onLogout: \(\) => void \}/)
@@ -83,6 +102,7 @@ assert.match(css, /box-shadow:[^;]*inset/s)
 assert.match(css, /animation:\s*visitorUserMenuIn/)
 assert.match(css, /\.visitor-user-menu__avatar--lg\s*\{[^}]*border-color:/s)
 assert.match(css, /\.visitor-user-menu__item\s*\{[^}]*transition:/s)
+assert.match(css, /\.visitor-user-menu__item\s*\{[^}]*min-height:\s*44px;/s)
 assert.match(
   appCss,
   /\.authenticated-app\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*overflow:\s*hidden;/s,

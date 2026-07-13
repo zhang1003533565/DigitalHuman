@@ -175,6 +175,7 @@
 .visitor-user-menu__item {
   display: flex;
   width: 100%;
+  min-height: 44px;
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
@@ -192,6 +193,16 @@
 .visitor-user-menu__item:hover {
   color: #f8fbff;
   background: rgba(255, 255, 255, 0.07);
+}
+
+.visitor-user-menu__item--active {
+  color: #f1c76f;
+  background: rgba(226, 173, 75, 0.12);
+}
+
+.visitor-user-menu__item--active:hover {
+  color: #f7d58d;
+  background: rgba(226, 173, 75, 0.18);
 }
 
 .visitor-user-menu__item--danger {
