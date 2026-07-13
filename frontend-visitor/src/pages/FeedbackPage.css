@@ -242,6 +242,10 @@
     overflow-wrap: anywhere;
   }
 
+  .feedback-record__body[hidden] {
+    display: none;
+  }
+
   .feedback-record__body div {
     display: grid;
     gap: 3px;

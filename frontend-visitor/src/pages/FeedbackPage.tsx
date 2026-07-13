@@ -1,9 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import axios from 'axios'
 import './FeedbackPage.css'
 import { parseNavigationContext } from './navigationContext'
+import {
+  applyFeedbackSubmitFailure,
+  applyFeedbackSubmitSuccess,
+  formatFeedbackTime,
+  shouldCommitFeedbackLoad,
+  toggleExpandedRecordKey,
+} from './feedbackPageState'
 
 type FeedbackRecord = {
+  id: number
   sessionId: string
   question: string
   answer: string
@@ -18,13 +26,6 @@ type FeedbackRecord = {
   adminNote?: string
 }
 
-const formatFeedbackTime = (createdAt: string) => new Date(createdAt).toLocaleString('zh-CN', {
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-})
-
 export function FeedbackPage() {
   const [records, setRecords] = useState<FeedbackRecord[]>([])
   const [comment, setComment] = useState('')
@@ -33,16 +34,12 @@ export function FeedbackPage() {
   const [reloadKey, setReloadKey] = useState(0)
   const [isComposerOpen, setIsComposerOpen] = useState(false)
   const [expandedRecordKeys, setExpandedRecordKeys] = useState<Set<string>>(new Set())
+  const loadGenerationRef = useRef(0)
   const context = parseNavigationContext(window.location.search)
   const sessionId = context.sessionId || window.sessionStorage.getItem('digitalhuman.visitor.guideSessionId') || ''
 
   function toggleRecord(recordKey: string) {
-    setExpandedRecordKeys((current) => {
-      const next = new Set(current)
-      if (next.has(recordKey)) next.delete(recordKey)
-      else next.add(recordKey)
-      return next
-    })
+    setExpandedRecordKeys((current) => toggleExpandedRecordKey(current, recordKey))
   }
 
   async function submitGeneralFeedback() {
@@ -60,31 +57,42 @@ export function FeedbackPage() {
         rating: 5,
         comment: value,
       })
-      setComment('')
-      setSubmitState('感谢反馈，已提交。')
-      setIsComposerOpen(false)
-      setReloadKey((value) => value + 1)
+      const next = applyFeedbackSubmitSuccess({ comment, submitState, isComposerOpen, reloadKey })
+      setComment(next.comment)
+      setSubmitState(next.submitState)
+      setIsComposerOpen(next.isComposerOpen)
+      setReloadKey((value) => applyFeedbackSubmitSuccess({ ...next, reloadKey: value }).reloadKey)
     } catch {
-      setSubmitState('提交失败，请稍后重试。')
+      const next = applyFeedbackSubmitFailure({ comment, submitState, isComposerOpen, reloadKey })
+      setSubmitState(next.submitState)
     }
   }
 
   useEffect(() => {
+    const requestGeneration = loadGenerationRef.current + 1
+    loadGenerationRef.current = requestGeneration
     if (!sessionId) {
       return
     }
+    const controller = new AbortController()
     async function loadFeedback() {
       setLoadState('loading')
       try {
-        const response = await axios.get<FeedbackRecord[]>('/api/user/guide/feedback', { params: { sessionId } })
+        const response = await axios.get<FeedbackRecord[]>('/api/user/guide/feedback', {
+          params: { sessionId },
+          signal: controller.signal,
+        })
+        if (!shouldCommitFeedbackLoad(loadGenerationRef.current, requestGeneration, controller.signal.aborted)) return
         setRecords(response.data)
         setLoadState('idle')
       } catch {
+        if (!shouldCommitFeedbackLoad(loadGenerationRef.current, requestGeneration, controller.signal.aborted)) return
         setLoadState('error')
       }
     }
 
     void loadFeedback()
+    return () => controller.abort()
   }, [sessionId, reloadKey])
 
   return (
@@ -114,7 +122,7 @@ export function FeedbackPage() {
             </article>
           ) : (
             records.map((record) => (
-              <article key={`${record.sessionId}-${record.createdAt}`} className="feature-card">
+              <article key={record.id} className="feature-card">
                 <p className="card-kicker">{record.helpful ? '有帮助' : '待优化'}</p>
                 <h2>{record.question}</h2>
                 <p>{record.answer || '暂无回答摘要'}</p>
@@ -175,10 +183,10 @@ export function FeedbackPage() {
               <p className="feedback-state">{sessionId ? '当前会话还没有提交反馈。' : '开始一次数字人对话后即可查看反馈记录。'}</p>
             ) : null}
             {loadState === 'idle' ? records.map((record) => {
-              const recordKey = `${record.sessionId}-${record.createdAt}`
-              const bodyId = `feedback-record-${recordKey}`
+              const recordKey = String(record.id)
+              const bodyId = `feedback-record-${record.id}`
               return (
-                <article key={recordKey} className="feedback-record">
+                <article key={record.id} className="feedback-record">
                   <button
                     type="button"
                     className="feedback-record__summary"
@@ -196,14 +204,12 @@ export function FeedbackPage() {
                       <time dateTime={record.createdAt}>{formatFeedbackTime(record.createdAt)}</time>
                     </span>
                   </button>
-                  {expandedRecordKeys.has(recordKey) ? (
-                    <div id={bodyId} className="feedback-record__body">
-                      <div><span>数字人回答</span><p>{record.answer || '暂无回答摘要'}</p></div>
-                      <div><span>我的意见</span><p>{record.comment || '未填写补充意见'}</p></div>
-                      <div><span>处理状态</span><p>{record.status}</p></div>
-                      {record.adminNote ? <div><span>管理员备注</span><p>{record.adminNote}</p></div> : null}
-                    </div>
-                  ) : null}
+                  <div id={bodyId} className="feedback-record__body" hidden={!expandedRecordKeys.has(recordKey)}>
+                    <div><span>数字人回答</span><p>{record.answer || '暂无回答摘要'}</p></div>
+                    <div><span>我的意见</span><p>{record.comment || '未填写补充意见'}</p></div>
+                    <div><span>处理状态</span><p>{record.status}</p></div>
+                    {record.adminNote ? <div><span>管理员备注</span><p>{record.adminNote}</p></div> : null}
+                  </div>
                 </article>
               )
             }) : null}
