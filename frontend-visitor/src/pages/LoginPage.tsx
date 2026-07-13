@@ -66,6 +66,7 @@ type LoginPageProps = {
 export function LoginPage({ user, onLogin }: LoginPageProps) {
   const navigate = useNavigate()
   const assistantRef = useRef<LoginDigitalHumanAssistantHandle | null>(null)
+  const authScreenRef = useRef<HTMLElement | null>(null)
   const [searchParams] = useSearchParams()
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [username, setUsername] = useState('')
@@ -92,6 +93,32 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
       navigate(redirectTarget, { replace: true })
     }
   }, [navigate, redirectTarget, user])
+
+  useEffect(() => {
+    const viewport = window.visualViewport
+
+    function syncViewport() {
+      const viewportHeight = viewport?.height ?? window.innerHeight
+      const viewportOffsetTop = viewport?.offsetTop ?? 0
+      const screen = authScreenRef.current
+
+      if (!screen) return
+
+      screen.style.setProperty('--login-viewport-height', `${viewportHeight}px`)
+      screen.style.setProperty('--login-viewport-offset-top', `${viewportOffsetTop}px`)
+    }
+
+    syncViewport()
+    viewport?.addEventListener('resize', syncViewport)
+    viewport?.addEventListener('scroll', syncViewport)
+    window.addEventListener('resize', syncViewport)
+
+    return () => {
+      viewport?.removeEventListener('resize', syncViewport)
+      viewport?.removeEventListener('scroll', syncViewport)
+      window.removeEventListener('resize', syncViewport)
+    }
+  }, [])
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -237,6 +264,7 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
 
   return (
     <main
+      ref={authScreenRef}
       className={`auth-screen auth-screen--tourism ${isDaytime ? 'auth-screen--daytime' : 'auth-screen--nighttime'}`}
       style={{
         backgroundImage: isDaytime
