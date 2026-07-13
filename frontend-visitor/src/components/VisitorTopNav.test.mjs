@@ -6,10 +6,12 @@ const componentUrl = new URL('./VisitorTopNav.tsx', import.meta.url)
 const cssUrl = new URL('./VisitorTopNav.css', import.meta.url)
 const appUrl = new URL('../App.tsx', import.meta.url)
 const appCssUrl = new URL('../App.css', import.meta.url)
+const homeCssUrl = new URL('../pages/HomePage.css', import.meta.url)
 const source = readFileSync(fileURLToPath(componentUrl), 'utf8')
 const css = readFileSync(fileURLToPath(cssUrl), 'utf8')
 const appSource = readFileSync(fileURLToPath(appUrl), 'utf8')
 const appCss = readFileSync(fileURLToPath(appCssUrl), 'utf8')
+const homeCss = readFileSync(fileURLToPath(homeCssUrl), 'utf8')
 
 const routedPages = [
   '../pages/HomePage.tsx',
@@ -93,6 +95,7 @@ assert.match(
 )
 assert.doesNotMatch(css, /\.page-shell:not\(\.home-page\) > \.visitor-topbar/, 'navigation must not depend on page padding compensation')
 assert.doesNotMatch(css, /\.module-screen > \.visitor-topbar/, 'navigation must not be positioned by routed page roots')
+assert.doesNotMatch(homeCss, /\.visitor-topbar/, 'routed page styles must not control the global navigation')
 assert.match(css, /@media \(max-width: 768px\)/)
 assert.match(css, /@media \(min-width: 769px\) and \(max-width: 1100px\)/)
 assert.match(css, /\.visitor-topbar__nav\s*\{[^}]*overflow-x:\s*auto;[^}]*white-space:\s*nowrap;/s)

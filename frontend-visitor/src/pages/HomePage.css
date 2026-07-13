@@ -7,10 +7,6 @@
   background: #06111f;
 }
 
-.home-page .visitor-topbar {
-  flex: 0 0 auto;
-}
-
 .hp-scroll {
   height: 100%;
   min-height: 0;
