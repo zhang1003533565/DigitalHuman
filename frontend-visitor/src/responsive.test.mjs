@@ -54,31 +54,32 @@ const readTopLevelBlocks = (css) => {
   return blocks
 }
 
-const mediaAppliesWithinMobile = (prelude) => prelude
+const mediaMatchesWidth = (prelude, width) => prelude
   .replace(/^@media\s*/, '')
   .split(',')
   .some((query) => {
-    const minWidth = Number(query.match(/min-width\s*:\s*(\d+)px/)?.[1] ?? 0)
-    const maxWidth = Number(query.match(/max-width\s*:\s*(\d+)px/)?.[1] ?? 768)
-    return minWidth <= Math.min(maxWidth, 768)
+    const minWidth = Number(query.match(/min-width\s*:\s*(\d+(?:\.\d+)?)px/)?.[1] ?? 0)
+    const maxWidth = Number(query.match(/max-width\s*:\s*(\d+(?:\.\d+)?)px/)?.[1] ?? Number.POSITIVE_INFINITY)
+    return width >= minWidth && width <= maxWidth
   })
 
 const mergeDeclarations = (target, incoming) => {
   for (const [property, value] of incoming) {
     if (property === 'overflow') {
-      target.delete('overflow-x')
-      target.delete('overflow-y')
+      const shorthand = value.replace(/\s*!important\s*$/, '').split(/\s+/)
+      target.set('overflow-x', shorthand[0])
+      target.set('overflow-y', shorthand[1] ?? shorthand[0])
     }
     target.set(property, value)
   }
 }
 
-const readEffectiveMobileRules = (css) => {
+const readEffectiveRulesAtWidth = (css, width) => {
   const effectiveRules = new Map()
   const applyRules = (source) => {
     for (const block of readTopLevelBlocks(source)) {
       if (block.prelude.startsWith('@media')) {
-        if (mediaAppliesWithinMobile(block.prelude)) applyRules(block.body)
+        if (mediaMatchesWidth(block.prelude, width)) applyRules(block.body)
         continue
       }
       if (block.prelude.startsWith('@')) continue
@@ -94,12 +95,29 @@ const readEffectiveMobileRules = (css) => {
   return [...effectiveRules].map(([selector, declarations]) => ({ selector, declarations }))
 }
 
+const readMobileRepresentativeWidths = (styles) => {
+  const boundaries = new Set([0, 768])
+  for (const [, css] of styles) {
+    for (const media of css.matchAll(/@media\s*([^{}]+)\{/g)) {
+      for (const width of media[1].matchAll(/(?:min|max)-width\s*:\s*(\d+(?:\.\d+)?)px/g)) {
+        const value = Number(width[1])
+        if (value >= 0 && value <= 768) boundaries.add(value)
+      }
+    }
+  }
+  const sortedBoundaries = [...boundaries].sort((left, right) => left - right)
+  const representatives = new Set(sortedBoundaries)
+  for (let index = 1; index < sortedBoundaries.length; index += 1) {
+    const lower = sortedBoundaries[index - 1]
+    const upper = sortedBoundaries[index]
+    if (upper > lower) representatives.add((lower + upper) / 2)
+  }
+  return [...representatives].sort((left, right) => left - right)
+}
+
 const isVerticalScroller = (declarations) => {
   const overflowY = declarations.get('overflow-y')?.replace(/\s*!important\s*$/, '')
-  if (overflowY === 'auto' || overflowY === 'scroll') return true
-  const overflow = declarations.get('overflow')?.replace(/\s*!important\s*$/, '').split(/\s+/)
-  const shorthandY = overflow?.[1] ?? overflow?.[0]
-  return shorthandY === 'auto' || shorthandY === 'scroll'
+  return overflowY === 'auto' || overflowY === 'scroll'
 }
 
 const hasFiniteMaxHeight = (value) => Boolean(
@@ -281,25 +299,31 @@ const digitalChatBody = readRules(digitalHumanCss).find((rule) => rule.selector 
 assert.equal(digitalChatBody?.get('flex'), '1 1 auto', 'digital chat history consumes bounded flex space')
 assert.equal(digitalChatBody?.get('min-height'), '0', 'digital chat history may shrink inside its flex panel')
 assert.equal(digitalChatBody?.get('overflow-y'), 'auto', 'digital chat history remains locally scrollable')
-const effectiveDigitalChatBody = readEffectiveMobileRules(digitalHumanCss)
+const effectiveDigitalChatBody = readEffectiveRulesAtWidth(digitalHumanCss, 768)
   .find((rule) => rule.selector === '.digital-chat-body')?.declarations
 assert.ok(isVerticalScroller(effectiveDigitalChatBody), 'mobile digital chat history remains locally scrollable')
 assert.ok(hasFiniteMaxHeight(effectiveDigitalChatBody?.get('max-height')), 'mobile digital chat history has a finite boundary')
 
 assert.deepEqual(
-  readEffectiveMobileRules('.desktop { overflow-y: auto; } @media (max-width: 768px) { .desktop { overflow: visible; } .mobile-page { overflow-y: auto; } }')
+  readEffectiveRulesAtWidth('.desktop { overflow-y: auto; } @media (max-width: 768px) { .desktop { overflow: visible; } .mobile-page { overflow-y: auto; } }', 768)
     .filter((rule) => isVerticalScroller(rule.declarations))
     .map((rule) => rule.selector),
   ['.mobile-page'],
   'a mobile visible override removes a base scroller while new mobile scrollers remain detectable',
 )
 assert.deepEqual(
-  readEffectiveMobileRules('@media (max-width: 960px) { .tablet-rule { overflow-y: auto; } } @media (max-width: 480px) { .narrow-rule { overflow-y: scroll; } }')
+  readEffectiveRulesAtWidth('@media (max-width: 960px) { .tablet-rule { overflow-y: auto; } } @media (max-width: 480px) { .narrow-rule { overflow-y: scroll; } }', 480)
     .filter((rule) => isVerticalScroller(rule.declarations))
     .map((rule) => rule.selector),
   ['.tablet-rule', '.narrow-rule'],
   'all media rules that can apply within mobile widths contribute in source order',
 )
+const longhandOverride = readEffectiveRulesAtWidth(
+  '.content { overflow: auto; } @media (max-width: 768px) { .content { overflow-y: visible; } }',
+  768,
+).find((rule) => rule.selector === '.content')?.declarations
+assert.equal(longhandOverride?.get('overflow-y'), 'visible', 'overflow-y overrides the vertical component of an earlier shorthand')
+assert.equal(isVerticalScroller(longhandOverride), false, 'effective overflow-y does not fall back to a stale shorthand value')
 assert.ok(
   hasBoundedLocalScroll('.bounded { overflow-y: auto; max-height: 240px; }', '.bounded'),
   'bounded local scroll validation is declaration-order independent',
@@ -325,11 +349,18 @@ const mobileScrollStyles = [
   ['VisitorTopNav.css', topNavCss],
   ...routedPageStyles.map((stylesheet) => [stylesheet, read(`pages/${stylesheet}`)]),
 ]
-const readMobileVerticalScrollers = (styles) => styles.flatMap(([stylesheet, css]) => (
-  readEffectiveMobileRules(css)
-    .filter((rule) => isVerticalScroller(rule.declarations))
-    .map((rule) => `${stylesheet}::${rule.selector}`)
-))
+const readMobileVerticalScrollers = (styles) => {
+  const scrollers = new Set()
+  const widths = readMobileRepresentativeWidths(styles)
+  for (const [stylesheet, css] of styles) {
+    for (const width of widths) {
+      for (const rule of readEffectiveRulesAtWidth(css, width)) {
+        if (isVerticalScroller(rule.declarations)) scrollers.add(`${stylesheet}::${rule.selector}`)
+      }
+    }
+  }
+  return [...scrollers]
+}
 const findUnexpectedMobileScrollers = (styles) => (
   readMobileVerticalScrollers(styles).filter((entry) => !MOBILE_VERTICAL_SCROLL_ALLOWLIST.has(entry))
 )
@@ -340,12 +371,30 @@ assert.deepEqual(
   ['Fixture.css::.sixth-local-scroll'],
   'a sixth base vertical scroller remains effective on mobile and must be rejected',
 )
+const rangeOverrideFixture = '.range-scroll { overflow-y: auto; } @media (max-width: 480px) { .range-scroll { overflow: visible; } }'
+assert.deepEqual(
+  readMobileRepresentativeWidths([['Fixture.css', rangeOverrideFixture]]),
+  [0, 240, 480, 624, 768],
+  'mobile cascade checks every breakpoint and the interval on each side',
+)
+assert.deepEqual(
+  findUnexpectedMobileScrollers([
+    ['Fixture.css', rangeOverrideFixture],
+  ]),
+  ['Fixture.css::.range-scroll'],
+  'a narrow mobile override must not hide a scroller that remains active from 481px through 768px',
+)
+for (const width of [320, 480]) {
+  const rangeScroll = readEffectiveRulesAtWidth(rangeOverrideFixture, width)
+    .find((rule) => rule.selector === '.range-scroll')?.declarations
+  assert.equal(isVerticalScroller(rangeScroll), false, `the narrow override removes the scroller at ${width}px`)
+}
 assert.deepEqual(
   readMobileVerticalScrollers(mobileScrollStyles).sort(),
   [...MOBILE_VERTICAL_SCROLL_ALLOWLIST].sort(),
   'effective mobile vertical scrolling stays exclusive to the page owner and five bounded local regions',
 )
-const effectiveMapSide = readEffectiveMobileRules(mapCss).find((rule) => rule.selector === '.map-side')?.declarations
+const effectiveMapSide = readEffectiveRulesAtWidth(mapCss, 768).find((rule) => rule.selector === '.map-side')?.declarations
 assert.equal(effectiveMapSide?.get('overflow'), 'visible', 'mobile map services override the desktop local scroller')
 assert.equal(isVerticalScroller(effectiveMapSide), false, 'mobile map services do not remain a nested vertical scroller')
 
