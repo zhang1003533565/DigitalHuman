@@ -57,11 +57,24 @@ assert.match(source, /USER_NAV_ITEMS\.map/)
 assert.match(source, /setDropdownOpen\(false\)[\s\S]*navigate\(item\.to\)/)
 assert.match(source, /aria-current=\{item\.to === location\.pathname \? 'page' : undefined\}/)
 assert.match(source, /visitor-user-menu__item--active/)
+assert.match(
+  css,
+  /\.visitor-user-menu__dropdown\s*\{[^}]*max-height:\s*calc\(100dvh - var\(--visitor-user-menu-top\) - 12px\);/s,
+)
+assert.match(css, /\.visitor-user-menu__dropdown\s*\{[^}]*overflow-y:\s*auto;/s)
+assert.match(css, /\.visitor-user-menu__dropdown\s*\{[^}]*overscroll-behavior:\s*contain;/s)
+assert.match(source, /'--visitor-user-menu-top': `\$\{menuTop\}px`/)
+assert.equal((userItemsBlock.match(/aria-hidden="true"/g) ?? []).length, expectedUserItems.length)
 
 const profileIndex = source.indexOf('个人资料')
 const userNavigationIndex = source.indexOf('USER_NAV_ITEMS.map')
+const userNavigationDividerIndex = source.indexOf('<div className="visitor-user-menu__divider" />', userNavigationIndex)
 const logoutIndex = source.indexOf('退出登录')
-assert.ok(profileIndex < userNavigationIndex && userNavigationIndex < logoutIndex)
+assert.ok(
+  profileIndex < userNavigationIndex &&
+    userNavigationIndex < userNavigationDividerIndex &&
+    userNavigationDividerIndex < logoutIndex,
+)
 
 assert.match(source, /export function VisitorTopNav/)
 assert.match(source, /type VisitorTopNavProps = \{ onLogout: \(\) => void \}/)

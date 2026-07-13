@@ -104,6 +104,9 @@
 .visitor-user-menu__dropdown {
   z-index: 9999;
   min-width: 220px;
+  max-height: calc(100dvh - var(--visitor-user-menu-top) - 12px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 8px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 14px;

@@ -16,7 +16,7 @@ const VISITOR_NAV_ITEMS = [
 
 const USER_NAV_ITEMS = [
   { to: '/tips', label: '游览贴士', icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="10" />
         <path d="M12 16v-4" />
         <path d="M12 8h.01" />
@@ -24,7 +24,7 @@ const USER_NAV_ITEMS = [
     ),
   },
   { to: '/feedback', label: '反馈记录', icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
         <path d="M8 9h8" />
         <path d="M8 13h5" />
@@ -32,7 +32,7 @@ const USER_NAV_ITEMS = [
     ),
   },
   { to: '/history', label: '会话历史', icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
         <path d="M3 3v5h5" />
         <path d="M12 7v5l3 2" />
@@ -63,11 +63,13 @@ export function VisitorTopNav({ onLogout }: VisitorTopNavProps) {
     if (hoverTimer.current) clearTimeout(hoverTimer.current)
     if (avatarRef.current) {
       const rect = avatarRef.current.getBoundingClientRect()
+      const menuTop = rect.bottom + 10
       setDropdownStyle({
         position: 'fixed',
-        top: rect.bottom + 10,
+        top: menuTop,
         right: window.innerWidth - rect.right,
-      })
+        '--visitor-user-menu-top': `${menuTop}px`,
+      } as React.CSSProperties)
     }
     setDropdownOpen(true)
   }, [])
