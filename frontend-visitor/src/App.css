@@ -265,6 +265,8 @@
 
   .feature-grid {
     grid-template-columns: 1fr;
+    overflow: visible;
+    overscroll-behavior: auto;
   }
 
   button,

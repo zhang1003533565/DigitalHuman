@@ -408,10 +408,16 @@
     overflow: visible;
   }
 
+  .route-list,
+  .route-timeline,
+  .route-facilities {
+    overflow: visible;
+    overscroll-behavior: auto;
+  }
+
   .route-timeline {
     display: flex;
     flex-direction: column;
-    overflow: visible;
   }
 
   .route-node {
