@@ -1289,7 +1289,7 @@
   }
 
   .auth-stage:focus-within {
-    grid-template-rows: 0 minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
     gap: 0;
   }
 
