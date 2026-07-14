@@ -10,6 +10,7 @@
   SearchOutlined,
   SettingOutlined,
   UserOutlined,
+  LogoutOutlined,
   MenuOutlined,
   VideoCameraOutlined,
 } from '@ant-design/icons'
@@ -98,18 +99,19 @@ export default function AdminSidebar({ activeKey, displayName, role, onLogout, o
     </>
   }
   return (
-    <Sider width={248} className="admin-sider">
+    <Sider width={208} className="admin-sider">
       <div className="admin-brand">
-        <strong>数字人管理后台</strong>
-        <span>{displayName}</span>
+        <span className="admin-brand__mark">云</span>
+        <span><strong>景区数字人管理后台</strong><small>SCENIC AI OPS</small></span>
       </div>
+      <div className="admin-sider__status"><i />服务集群运行正常</div>
       <div className="admin-sider__nav">
         {navigation}
       </div>
       <div className="admin-sider__footer">
         <div className="admin-sider__account">
-          <span className="admin-sider__role">{role}</span>
-          <Button icon={<UserOutlined />} className="admin-sider__logout" onClick={onLogout}>
+          <span className="admin-sider__role">{displayName} · {role}</span>
+          <Button icon={<LogoutOutlined />} className="admin-sider__logout" onClick={onLogout}>
             退出登录
           </Button>
         </div>

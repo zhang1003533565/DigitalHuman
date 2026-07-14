@@ -24,6 +24,7 @@ import {
 import AdminLayout from './pages/AdminLayout'
 import type { LoginResult } from './types/admin'
 import './App.css'
+import './admin-cockpit.css'
 
 const SESSION_STORAGE_KEY = 'digitalhuman.admin.user'
 

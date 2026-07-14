@@ -9,10 +9,22 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class AdminGuideControllerTests {
+
+    @Test
+    void getSessionSummariesDelegatesToService() {
+        GuideService service = mock(GuideService.class);
+        when(service.getSessionSummaries()).thenReturn(java.util.List.of());
+        AdminGuideController controller = new AdminGuideController(service);
+
+        assertTrue(controller.getSessionSummaries().isEmpty());
+        verify(service).getSessionSummaries();
+    }
 
     @Test
     void patchFeedbackDelegatesValidatedFieldsToService() {

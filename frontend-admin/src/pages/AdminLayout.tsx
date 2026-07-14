@@ -1,5 +1,6 @@
 import { Component, useEffect, useMemo, useState, type ErrorInfo, type ReactNode } from 'react'
 import axios from 'axios'
+import { DownloadOutlined, EnvironmentOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
 import {
   Layout,
   Button,
@@ -22,6 +23,9 @@ import {
 import type { TableColumnsType } from 'antd'
 import { useLocation, useNavigate } from 'react-router-dom'
 import AdminSidebar from '../components/AdminSidebar'
+import AdminTopbar from '../components/AdminTopbar'
+import AdminPageFrame from '../components/AdminPageFrame'
+import { getAdminPageMeta, type AdminPageKey } from '../adminPageMeta'
 import { useDeferredMount } from '../hooks/useDeferredMount'
 import ChatConfigPage from './settings/ChatConfigPage'
 import EmbeddingConfigPage from './settings/EmbeddingConfigPage'
@@ -43,6 +47,7 @@ import KnowledgeOpenApiPage from './KnowledgeOpenApiPage'
 import OperationsDashboardPage from './OperationsDashboardPage'
 import FeedbackManagementPage from './FeedbackManagementPage'
 import LiveBroadcastManagementPage from './LiveBroadcastManagementPage'
+import QaRecordsPage from './QaRecordsPage'
 import type { LoginResult } from '../types/admin'
 
 const { Content } = Layout
@@ -87,29 +92,9 @@ class AdminPanelErrorBoundary extends Component<
   }
 }
 
-type MenuKey =
-  | 'dashboard'
-  | 'home-config'
-  | 'spots'
-  | 'spot-category'
-  | 'facility-list'
-  | 'routes'
-  | 'travel-tips'
-  | 'avatar'
-  | 'model-emotion'
-  | 'settings'
-  | 'travel-analytics'
-  | 'scenic-structured'
-  | 'voice-scripts'
-  | 'feedback'
-  | 'live-broadcast'
-  | 'qa'
-  | 'ai-models'
-  | 'knowledge'
-
 const ADMIN_HOME_PATH = '/admin/dashboard'
 
-const menuPathByKey: Record<MenuKey, string> = {
+const menuPathByKey: Record<AdminPageKey, string> = {
   dashboard: ADMIN_HOME_PATH,
   'home-config': '/admin/home-config',
   spots: '/admin/spots',
@@ -130,11 +115,11 @@ const menuPathByKey: Record<MenuKey, string> = {
   knowledge: '/admin/knowledge',
 }
 
-const menuKeyByPath = new Map<string, MenuKey>(
-  Object.entries(menuPathByKey).map(([key, path]) => [path, key as MenuKey]),
+const menuKeyByPath = new Map<string, AdminPageKey>(
+  Object.entries(menuPathByKey).map(([key, path]) => [path, key as AdminPageKey]),
 )
 
-function getMenuKeyFromPath(pathname: string): MenuKey {
+function getMenuKeyFromPath(pathname: string): AdminPageKey {
   const normalizedPath = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname
   if (normalizedPath === '/admin/settings') {
     return 'settings'
@@ -142,7 +127,7 @@ function getMenuKeyFromPath(pathname: string): MenuKey {
   return menuKeyByPath.get(normalizedPath) ?? 'dashboard'
 }
 
-function getPathForMenuKey(key: MenuKey) {
+function getPathForMenuKey(key: AdminPageKey) {
   return menuPathByKey[key] ?? ADMIN_HOME_PATH
 }
 
@@ -285,40 +270,69 @@ const MODEL_OPTIONS_BY_CATEGORY_FIELD: Record<ModelCategory, keyof AdminModelCat
 }
 
 const spotColumns: TableColumnsType<SpotRow> = [
-  { title: '景点名称', dataIndex: 'name' },
+  { title: '景点名称', dataIndex: 'name', render: (value: string) => <Space><span className="spot-list-icon"><EnvironmentOutlined /></span><strong>{value}</strong></Space> },
   { title: '所属园区', dataIndex: 'area' },
   { title: '开放时间', dataIndex: 'openHours' },
   {
     title: '标签',
     dataIndex: 'tags',
-    render: (tags: string[]) => tags.map((tag) => <Tag key={tag}>{tag}</Tag>),
+    render: (tags: string[]) => tags.map((tag) => <Tag color="cyan" key={tag}>{tag}</Tag>),
   },
+  { title: '展示状态', width: 110, render: () => <Tag color="success">正常开放</Tag> },
 ]
 
 function SpotsPanel() {
   const [data, setData] = useState<SpotRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [keyword, setKeyword] = useState('')
+  const [area, setArea] = useState('all')
 
   useEffect(() => {
-    async function loadSpots() {
-      const response = await axios.get('/api/admin/scenic/spots')
-      setData(
-        response.data.map((item: { id: string; name: string; area: string; openHours: string; tags: string[] }) => ({
+    let active = true
+    void axios.get('/api/admin/scenic/spots').then((response) => {
+      if (active) setData(response.data.map((item: { id: string; name: string; area: string; openHours: string; tags: string[] }) => ({
           key: item.id,
           name: item.name,
           area: item.area,
           openHours: item.openHours,
           tags: item.tags,
-        })),
-      )
-    }
-
-    void loadSpots()
+        })))
+    }).catch(() => { if (active) message.error('景点数据加载失败') })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
   }, [])
 
+  const areas = useMemo(() => Array.from(new Set(data.map((item) => item.area))), [data])
+  const filtered = useMemo(() => data.filter((item) => {
+    const term = keyword.trim().toLowerCase()
+    return (area === 'all' || item.area === area) && (!term || item.name.toLowerCase().includes(term) || item.tags.some((tag) => tag.toLowerCase().includes(term)))
+  }), [area, data, keyword])
+
+  const exportRows = () => {
+    const rows = [['景点名称', '所属园区', '开放时间', '标签'], ...filtered.map((item) => [item.name, item.area, item.openHours, item.tags.join('/')])]
+    const blob = new Blob([`\uFEFF${rows.map((row) => row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(',')).join('\n')}`], { type: 'text/csv;charset=utf-8' })
+    const href = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = href; anchor.download = '景点数据.csv'; anchor.click(); URL.revokeObjectURL(href)
+  }
+
   return (
-    <Card title="景点管理">
-      <Table columns={spotColumns} dataSource={data} pagination={false} />
-    </Card>
+    <div className="spot-management-page">
+      <section className="spot-overview-strip">
+        <article><EnvironmentOutlined /><span>景点总数<strong>{data.length}</strong></span></article>
+        <article><EnvironmentOutlined /><span>正常开放<strong>{data.length}</strong></span></article>
+        <article><EnvironmentOutlined /><span>覆盖园区<strong>{areas.length}</strong></span></article>
+        <article><EnvironmentOutlined /><span>数据完整度<strong>{data.length ? '100%' : '0%'}</strong></span></article>
+      </section>
+      <Card className="spot-management-card" title="景点数据" extra={<Space><Button icon={<ReloadOutlined />} onClick={() => window.location.reload()}>刷新</Button><Button type="primary" icon={<DownloadOutlined />} onClick={exportRows}>导出数据</Button></Space>}>
+        <div className="spot-management-toolbar">
+          <Input allowClear prefix={<SearchOutlined />} value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索景点名称或标签" />
+          <Select value={area} onChange={setArea} options={[{ value: 'all', label: '全部园区' }, ...areas.map((value) => ({ value, label: value }))]} />
+          <span>显示 {filtered.length} / {data.length} 条</span>
+        </div>
+        <Table loading={loading} columns={spotColumns} dataSource={filtered} pagination={{ pageSize: 8, showSizeChanger: false }} scroll={{ x: 840 }} />
+      </Card>
+    </div>
   )
 }
 
@@ -985,17 +999,7 @@ function SettingsPanel() {
   )
 }
 
-function QaPanel() {
-  return (
-    <Card title="问答记录查询">
-      <Typography.Paragraph>
-        本地问答 Trace 已移除。游客问答记录仍保存在会话消息中，后续可按第三方知识 API 返回格式重新接入查询视图。
-      </Typography.Paragraph>
-    </Card>
-  )
-}
-
-function renderPanel(activeKey: MenuKey) {
+function renderPanel(activeKey: AdminPageKey) {
   switch (activeKey) {
     case 'home-config':
       return <HomeConfigPage />
@@ -1026,7 +1030,7 @@ function renderPanel(activeKey: MenuKey) {
     case 'live-broadcast':
       return <LiveBroadcastManagementPage />
     case 'qa':
-      return <QaPanel />
+      return <QaRecordsPage />
     case 'ai-models':
       return <AiModelManagementPage />
     case 'knowledge':
@@ -1041,6 +1045,7 @@ export function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: (
   const location = useLocation()
   const navigate = useNavigate()
   const activeKey = getMenuKeyFromPath(location.pathname)
+  const page = getAdminPageMeta(activeKey)
   const isObserverLiveRoute = user.role === 'OBSERVER' && activeKey === 'live-broadcast'
 
   useEffect(() => {
@@ -1056,12 +1061,13 @@ export function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: (
         displayName={user.displayName}
         role={user.role}
         onLogout={onLogout}
-        onSelect={(key) => navigate(getPathForMenuKey(key as MenuKey))}
+        onSelect={(key) => navigate(getPathForMenuKey(key as AdminPageKey))}
       />
       <Layout>
+        <AdminTopbar page={page} displayName={user.displayName} />
         <Content className="admin-content">
           <AdminPanelErrorBoundary resetKey={activeKey}>
-            {isObserverLiveRoute ? (
+            <AdminPageFrame page={page} compact={activeKey === 'dashboard'}>{isObserverLiveRoute ? (
               <Card title="无权访问数字人直播管理">
                 <Typography.Paragraph type="secondary">
                   观察员账号仅可查看已授权的后台信息，直播文案维护与发布仅限管理员。
@@ -1070,7 +1076,7 @@ export function AdminLayout({ user, onLogout }: { user: LoginResult; onLogout: (
                   返回运营看板
                 </Button>
               </Card>
-            ) : renderPanel(activeKey)}
+            ) : renderPanel(activeKey)}</AdminPageFrame>
           </AdminPanelErrorBoundary>
         </Content>
       </Layout>

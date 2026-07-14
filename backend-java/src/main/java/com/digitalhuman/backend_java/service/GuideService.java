@@ -5,6 +5,7 @@ import com.digitalhuman.backend_java.dto.FeedbackRequest;
 import com.digitalhuman.backend_java.dto.GuideChatRequest;
 import com.digitalhuman.backend_java.dto.GuideChatResponse;
 import com.digitalhuman.backend_java.dto.GuideMessageDto;
+import com.digitalhuman.backend_java.dto.GuideSessionSummaryDto;
 import com.digitalhuman.backend_java.dto.GuideSourceDto;
 import com.digitalhuman.backend_java.dto.ScenicRouteDto;
 import com.digitalhuman.backend_java.dto.ScenicRouteDto.CoordinateDto;
@@ -465,6 +466,33 @@ public class GuideService {
                         message.getRole(),
                         message.getContent(),
                         toEpochMillis(message.getCreatedAt())))
+                .toList();
+    }
+
+    public List<GuideSessionSummaryDto> getSessionSummaries() {
+        Map<String, List<GuideMessage>> messagesBySession = messageRepository.findAll().stream()
+                .collect(java.util.stream.Collectors.groupingBy(GuideMessage::getSessionId));
+        return sessionRepository.findAllByOrderByUpdatedAtDesc().stream()
+                .map(session -> {
+                    List<GuideMessage> messages = messagesBySession.getOrDefault(session.getSessionId(), List.of()).stream()
+                            .sorted(java.util.Comparator.comparing(GuideMessage::getCreatedAt))
+                            .toList();
+                    String latestQuestion = messages.stream()
+                            .filter(message -> "user".equalsIgnoreCase(message.getRole()))
+                            .reduce((first, second) -> second)
+                            .map(GuideMessage::getContent)
+                            .orElse("");
+                    String latestAnswer = messages.stream()
+                            .filter(message -> "assistant".equalsIgnoreCase(message.getRole()))
+                            .reduce((first, second) -> second)
+                            .map(GuideMessage::getContent)
+                            .orElse("");
+                    long knowledgeHits = messages.stream()
+                            .filter(message -> "assistant".equalsIgnoreCase(message.getRole()) && message.isKnowledgeHit())
+                            .count();
+                    return new GuideSessionSummaryDto(session.getSessionId(), messages.size(), knowledgeHits,
+                            latestQuestion, latestAnswer, session.getCreatedAt(), session.getUpdatedAt());
+                })
                 .toList();
     }
 

@@ -4,6 +4,9 @@ import {
   ArrowUpOutlined,
   EditOutlined,
   PlusOutlined,
+  ClockCircleOutlined,
+  PlayCircleOutlined,
+  UserOutlined,
 } from '@ant-design/icons'
 import {
   Button,
@@ -19,10 +22,12 @@ import {
   Statistic,
   Switch,
   Table,
+  Tag,
   Typography,
   message,
 } from 'antd'
 import type { TableColumnsType } from 'antd'
+import livePresenter from '../assets/digital-human-live.png'
 import {
   createLiveItem,
   deleteLiveItem,
@@ -248,35 +253,45 @@ export default function LiveBroadcastManagementPage() {
     },
   ]
 
-  return (
-    <Space className="live-broadcast-management-page" direction="vertical" size="large">
-      <Card title="当前发布版本">
-        {summary ? (
-          <Row gutter={[16, 16]}>
-            <Col xs={12} md={6}><Statistic title="版本" value={summary.versionId} prefix="#" /></Col>
-            <Col xs={12} md={6}><Statistic title="文案数" value={summary.itemCount} suffix="条" /></Col>
-            <Col xs={12} md={6}><Statistic title="总时长" value={formatDuration(summary.totalDurationMs)} /></Col>
-            <Col xs={12} md={6}><Statistic title="发布时间" value={new Date(summary.publishedAt).toLocaleString()} /></Col>
-          </Row>
-        ) : <Typography.Text type="secondary">尚未发布直播文案</Typography.Text>}
-      </Card>
+  const activeItem = items.find((item) => item.enabled) ?? items[0]
 
-      <Card
-        title="数字人直播文案"
-        extra={(
-          <Space wrap>
-            <Button icon={<PlusOutlined />} disabled={mutationPending || publishing} onClick={openCreate}>新增文案</Button>
-            <Popconfirm disabled={mutationPending || publishing || loading} title="确认立即发布当前已启用的草稿？" onConfirm={() => void publish()}>
-              <Button type="primary" loading={publishing} disabled={mutationPending || publishing || loading}>立即发布</Button>
-            </Popconfirm>
-          </Space>
-        )}
-      >
-        <Typography.Paragraph type="secondary">
-          编辑、启用和排序只保存为草稿，点击“立即发布”后才会更新游客端直播内容。
-        </Typography.Paragraph>
-        <Table rowKey="id" loading={loading || mutationPending} dataSource={items} columns={columns} pagination={false} scroll={{ x: 900 }} />
-      </Card>
+  return (
+    <div className="live-broadcast-management-page">
+      <section className="live-status-strip">
+        <article><PlayCircleOutlined /><span>直播状态<strong>{summary ? '持续直播中' : '等待首次发布'}</strong></span></article>
+        <article><span>当前版本<strong>{summary ? `#${summary.versionId}` : '--'}</strong></span></article>
+        <article><span>启用文案<strong>{items.filter((item) => item.enabled).length} 条</strong></span></article>
+        <article><ClockCircleOutlined /><span>轮播总时长<strong>{summary ? formatDuration(summary.totalDurationMs) : '0 秒'}</strong></span></article>
+      </section>
+
+      <div className="live-workbench">
+        <Card
+          className="live-script-card"
+          title="直播文案队列"
+          extra={(
+            <Space wrap>
+              <Button icon={<PlusOutlined />} disabled={mutationPending || publishing} onClick={openCreate}>新增文案</Button>
+              <Popconfirm disabled={mutationPending || publishing || loading} title="确认立即发布当前已启用的草稿？" onConfirm={() => void publish()}>
+                <Button type="primary" loading={publishing} disabled={mutationPending || publishing || loading}>发布新版本</Button>
+              </Popconfirm>
+            </Space>
+          )}
+        >
+          <Typography.Paragraph type="secondary">文案按顺序持续轮播，游客进入不会打断或重新开始直播进度。</Typography.Paragraph>
+          <Table rowKey="id" loading={loading || mutationPending} dataSource={items} columns={columns} pagination={false} scroll={{ x: 900 }} />
+        </Card>
+
+        <section className="live-preview-panel">
+          <header><strong>直播预览</strong><Tag color={summary ? 'success' : 'default'}>{summary ? '直播中' : '未发布'}</Tag></header>
+          <div className="live-preview-stage" style={{ backgroundImage: `linear-gradient(180deg, transparent 46%, rgba(3,15,24,.88)), url(${livePresenter})` }}>
+            <span className="live-preview-badge"><i />LIVE</span>
+            <div><strong>{activeItem?.title || '景区欢迎词'}</strong><p>{activeItem?.content || '发布直播文案后，数字人会按照设定顺序持续轮播。'}</p></div>
+          </div>
+          <footer><span><PlayCircleOutlined /> 当前文案 {activeItem ? formatDuration(activeItem.durationMs) : '--'}</span><span><UserOutlined /> 持续服务</span></footer>
+        </section>
+      </div>
+
+      {summary ? <Card size="small" title="当前发布版本"><Row gutter={[16, 8]}><Col span={6}><Statistic title="版本" value={summary.versionId} prefix="#" /></Col><Col span={6}><Statistic title="文案数" value={summary.itemCount} suffix="条" /></Col><Col span={6}><Statistic title="总时长" value={formatDuration(summary.totalDurationMs)} /></Col><Col span={6}><Statistic title="发布时间" value={new Date(summary.publishedAt).toLocaleString()} /></Col></Row></Card> : null}
 
       <Modal
         title={editingItem ? '编辑直播文案' : '新增直播文案'}
@@ -303,6 +318,6 @@ export default function LiveBroadcastManagementPage() {
           <Form.Item name="enabled" label="启用" valuePropName="checked"><Switch /></Form.Item>
         </Form>
       </Modal>
-    </Space>
+    </div>
   )
 }

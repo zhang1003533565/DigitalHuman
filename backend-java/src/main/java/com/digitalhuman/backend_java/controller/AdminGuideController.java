@@ -5,6 +5,7 @@ import com.digitalhuman.backend_java.dto.FeedbackUpdateRequest;
 import com.digitalhuman.backend_java.dto.GuideChatRequest;
 import com.digitalhuman.backend_java.dto.GuideChatResponse;
 import com.digitalhuman.backend_java.dto.GuideMessageDto;
+import com.digitalhuman.backend_java.dto.GuideSessionSummaryDto;
 import com.digitalhuman.backend_java.service.GuideService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -30,6 +31,11 @@ public class AdminGuideController {
     @GetMapping("/session/{id}/messages")
     public List<GuideMessageDto> getSessionMessages(@PathVariable("id") String sessionId) {
         return guideService.getSessionMessages(sessionId);
+    }
+
+    @GetMapping("/sessions")
+    public List<GuideSessionSummaryDto> getSessionSummaries() {
+        return guideService.getSessionSummaries();
     }
 
     @PostMapping("/chat-test")

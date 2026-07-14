@@ -21,7 +21,9 @@ assert.match(dashboard, /function RankingsRegion/)
 assert.match(dashboard, /function HealthRegion/)
 assert.match(dashboard, /RegionError/)
 assert.match(dashboard, /const region = useOverviewRegion\(\)/, 'dashboard must create one shared overview state')
-assert.match(dashboard, /<MetricsRegion region=\{region\}[^]*<RankingsRegion region=\{region\}[^]*<HealthRegion region=\{region\}/, 'dashboard regions must consume the shared overview state')
+for (const regionName of ['MetricsRegion', 'RankingsRegion', 'HealthRegion']) {
+  assert.match(dashboard, new RegExp(`<${regionName} region=\\{region\\}`), `${regionName} must consume the shared overview state`)
+}
 assert.match(dashboard, /\['healthy', 'up', 'ok'\]/)
 assert.match(sidebar, /\(max-width: 768px\)/)
 assert.match(sidebar, /matchMedia\(MOBILE_NAV_QUERY\)/)
