@@ -15,67 +15,42 @@ function getInitials(name: string): string {
 
 export function ProfilePage() {
   const user = getStoredUser()
+  const displayName = user?.displayName || user?.username || '未登录用户'
+  const username = user?.username || '未设置'
+  const roleLabel = user?.role === 'ADMIN' ? '管理员' : '游客'
 
   return (
-    <main className="page-shell">
+    <main className="page-shell profile-page">
       <section className="page-content">
         <section className="profile-grid">
-          <aside className="profile-card">
-            <div className="profile-card__avatar">
-              {getInitials(user?.displayName || user?.username || '')}
+          <aside className="profile-identity">
+            <div className="profile-identity__avatar">{getInitials(displayName)}</div>
+            <div className="profile-identity__meta">
+              <h1>{displayName}</h1>
+              <span>@{username}</span>
             </div>
-            <div className="profile-card__meta">
-              <h2 className="profile-card__name">{user?.displayName || user?.username}</h2>
-              <span className="profile-card__username">@{user?.username}</span>
-              <span className="profile-card__role">
-                {user?.role === 'ADMIN' ? '管理员' : '游客'}
-              </span>
-            </div>
+            <span className="profile-identity__role">{roleLabel}</span>
           </aside>
 
           <section className="profile-main">
-            <div className="profile-stats">
+            <section className="profile-stats" aria-label="游客数据">
               {MOCK_STATS.map((stat) => (
                 <article key={stat.label} className="profile-stat-card">
-                  <span className="profile-stat-card__value">{stat.value}</span>
+                  <strong className="profile-stat-card__value">{stat.value}</strong>
                   <span className="profile-stat-card__label">{stat.label}</span>
                 </article>
               ))}
-            </div>
+            </section>
 
-            <div className="profile-section">
-              <h3 className="profile-section__title">个人资料</h3>
-              <div className="profile-form">
-                <label className="profile-form__field">
-                  <span>用户名</span>
-                  <input
-                    className="profile-form__input"
-                    type="text"
-                    value={user?.username || ''}
-                    disabled
-                  />
-                </label>
-                <label className="profile-form__field">
-                  <span>显示名称</span>
-                  <input
-                    className="profile-form__input"
-                    type="text"
-                    value={user?.displayName || ''}
-                    disabled
-                  />
-                </label>
-                <label className="profile-form__field">
-                  <span>角色</span>
-                  <input
-                    className="profile-form__input"
-                    type="text"
-                    value={user?.role === 'ADMIN' ? '管理员' : '游客'}
-                    disabled
-                  />
-                </label>
-                <p className="profile-form__hint">资料修改功能即将上线，敬请期待</p>
-              </div>
-            </div>
+            <section className="profile-details">
+              <h2>个人资料</h2>
+              <dl>
+                <div><dt>用户名</dt><dd>{username}</dd></div>
+                <div><dt>显示名称</dt><dd>{user?.displayName || '未设置'}</dd></div>
+                <div><dt>角色</dt><dd>{roleLabel}</dd></div>
+              </dl>
+              <p>资料修改功能即将上线，敬请期待</p>
+            </section>
           </section>
         </section>
       </section>

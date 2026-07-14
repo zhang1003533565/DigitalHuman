@@ -342,8 +342,9 @@ for (const [name, css] of [
 }
 
 const profileMobile = profileCss.slice(profileCss.lastIndexOf('@media (max-width: 768px)'))
-assert.match(profileMobile, /\.profile-grid,[\s\S]*\.profile-stats\s*\{[^}]*grid-template-columns:\s*1fr/s, 'profile cards stack in one column')
-assert.match(profileMobile, /\.profile-card__meta\s*\{[^}]*(?:min-width:\s*0|overflow-wrap:\s*anywhere)/s, 'profile identity supports long text')
+assert.match(profileMobile, /\.profile-grid\s*\{[^}]*grid-template-columns:\s*1fr/s, 'profile identity and main content stack in one column')
+assert.match(profileMobile, /\.profile-stats\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s, 'profile statistics use a compact two-column grid')
+assert.match(profileMobile, /\.profile-identity__meta\s*\{[^}]*(?:min-width:\s*0|overflow-wrap:\s*anywhere|align-items:\s*flex-start)/s, 'profile identity supports long text')
 
 const routedPageStyles = [
   'DigitalHumanPage.css',
