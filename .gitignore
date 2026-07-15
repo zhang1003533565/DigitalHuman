@@ -21,3 +21,6 @@ backend-java/.m2/
 
 # Isolated Codex implementation worktrees
 .worktrees/
+
+# Local brainstorming companion sessions
+.superpowers/brainstorm/
