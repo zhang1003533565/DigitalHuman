@@ -206,7 +206,7 @@ const MODEL_MANUAL_STYLES = `
     border-radius: 999px;
     background: #FFFFFF;
     color: ${TEXT_SECONDARY};
-    font-size: 12px;
+    font-size: 13px;
     cursor: pointer;
     transition: all 0.2s ease;
   }
@@ -267,7 +267,7 @@ const MODEL_MANUAL_STYLES = `
     border-color: #B7E3FF;
     background: #E6F7FF;
     color: ${PRIMARY_COLOR};
-    font-size: 11px;
+    font-size: 13px;
     line-height: 16px;
   }
 
@@ -280,7 +280,7 @@ const MODEL_MANUAL_STYLES = `
   .model-manual-model__description {
     margin: 2px 0 0 12px;
     color: ${TEXT_SECONDARY};
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1.3;
   }
 
@@ -311,12 +311,12 @@ const MODEL_MANUAL_STYLES = `
     justify-content: space-between;
     margin-top: 6px;
     color: ${TEXT_SECONDARY};
-    font-size: 12px;
+    font-size: 13px;
   }
 
   .model-manual-link {
     color: ${PRIMARY_COLOR};
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 500;
   }
 
@@ -338,7 +338,7 @@ const MODEL_MANUAL_STYLES = `
 
   .model-manual-form .ant-form-item-label > label {
     color: ${TEXT_MAIN};
-    font-size: 12px;
+    font-size: 13px;
   }
 
   .model-manual-form .ant-form-item-control {
@@ -349,7 +349,7 @@ const MODEL_MANUAL_STYLES = `
   .model-manual-help {
     min-height: 0;
     color: ${TEXT_MUTED};
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1.25;
   }
 
@@ -369,7 +369,7 @@ const MODEL_MANUAL_STYLES = `
     border-radius: 6px;
     background: #F7F8FA;
     color: ${TEXT_SECONDARY};
-    font-size: 12px;
+    font-size: 13px;
   }
 
   .model-manual-status__left {
@@ -426,7 +426,7 @@ const MODEL_MANUAL_STYLES = `
     border-radius: 5px;
     background: #F7F8FA;
     color: ${TEXT_SECONDARY};
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1.25;
   }
 
@@ -447,7 +447,7 @@ const MODEL_MANUAL_STYLES = `
 
   .model-manual-table .ant-table {
     color: ${TEXT_MAIN};
-    font-size: 12px;
+    font-size: 15px;
   }
 
   .model-manual-table .ant-table-thead > tr > th {
@@ -455,7 +455,7 @@ const MODEL_MANUAL_STYLES = `
     padding: 6px 10px;
     background: #F7F8FA;
     color: ${TEXT_MAIN};
-    font-size: 12px;
+    font-size: 15px;
     font-weight: 600;
   }
 
@@ -483,7 +483,7 @@ const MODEL_MANUAL_STYLES = `
     border-radius: 50%;
     background: #E8F3FF;
     color: ${PRIMARY_COLOR};
-    font-size: 9px;
+    font-size: 13px;
     font-weight: 700;
   }
 
@@ -493,7 +493,7 @@ const MODEL_MANUAL_STYLES = `
     justify-content: space-between;
     margin-top: 8px;
     color: ${TEXT_SECONDARY};
-    font-size: 12px;
+    font-size: 13px;
   }
 
   .model-manual-table-footer .ant-pagination {

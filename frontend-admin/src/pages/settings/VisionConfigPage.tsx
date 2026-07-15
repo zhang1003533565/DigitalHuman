@@ -1533,7 +1533,7 @@ export default function VisionConfigPage({
                         <div className="vision-settings-upload__desc">支持 JPG / PNG，大小不超过 10MB</div>
                       </Upload.Dragger>
                     )}
-                    {imageName ? <div className="vision-settings-help" style={{ fontSize: 11, color: TEXT_MUTED, marginTop: 4 }}>已选择：{imageName}</div> : null}
+                    {imageName ? <div className="vision-settings-help" style={{ fontSize: 13, color: TEXT_MUTED, marginTop: 4 }}>已选择：{imageName}</div> : null}
                   </div>
                 </div>
 

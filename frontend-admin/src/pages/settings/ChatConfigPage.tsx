@@ -461,7 +461,7 @@ const CHAT_PAGE_STYLES = `
     border-radius: 999px;
     background: rgba(22, 93, 255, 0.10);
     color: ${PRIMARY_COLOR};
-    font-size: 12px;
+    font-size: 13px;
     line-height: 16px;
     font-weight: 500;
   }
@@ -471,7 +471,7 @@ const CHAT_PAGE_STYLES = `
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1.2;
     color: ${TEXT_MUTED};
   }
@@ -488,7 +488,7 @@ const CHAT_PAGE_STYLES = `
     border-radius: 2px;
     background: #F2F3F5;
     color: ${TEXT_SECONDARY};
-    font-size: 12px;
+    font-size: 13px;
     line-height: 16px;
   }
 
@@ -573,7 +573,7 @@ const CHAT_PAGE_STYLES = `
     align-items: center;
     gap: 5px;
     margin-bottom: 3px;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 500;
     color: ${TEXT_MAIN};
   }
@@ -600,7 +600,7 @@ const CHAT_PAGE_STYLES = `
     top: 50%;
     transform: translateY(-50%);
     color: ${TEXT_MUTED};
-    font-size: 12px;
+    font-size: 13px;
     pointer-events: none;
   }
 
@@ -613,7 +613,7 @@ const CHAT_PAGE_STYLES = `
     border-radius: 6px;
     background: #FFFFFF;
     color: ${TEXT_SECONDARY};
-    font-size: 12px;
+    font-size: 13px;
     flex-wrap: wrap;
   }
 
@@ -659,7 +659,7 @@ const CHAT_PAGE_STYLES = `
   }
 
   .chat-config-param__label {
-    font-size: 11px;
+    font-size: 13px;
     color: ${TEXT_SECONDARY};
     font-weight: 500;
   }
@@ -707,7 +707,7 @@ const CHAT_PAGE_STYLES = `
     border-color: #E5E6EB;
     background: #F2F3F5;
     color: ${TEXT_SECONDARY};
-    font-size: 12px;
+    font-size: 13px;
     box-shadow: none;
   }
 
@@ -768,7 +768,7 @@ const CHAT_PAGE_STYLES = `
     align-items: center;
     gap: 6px;
     margin-bottom: 4px;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
   }
 
@@ -778,7 +778,7 @@ const CHAT_PAGE_STYLES = `
     border-radius: 50%;
     display: inline-grid;
     place-items: center;
-    font-size: 12px;
+    font-size: 13px;
     color: #FFFFFF;
     flex: none;
   }
@@ -854,7 +854,7 @@ const CHAT_PAGE_STYLES = `
     align-items: flex-start;
     gap: 6px;
     color: ${TEXT_MUTED};
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1.25;
   }
 

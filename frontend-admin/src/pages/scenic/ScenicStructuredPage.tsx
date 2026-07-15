@@ -116,7 +116,7 @@ export default function ScenicStructuredPage() {
       title: (
         <div>
           <div style={{ fontWeight: 700 }}>{LABELS[field] ?? field}</div>
-          <div style={{ fontSize: 12, color: '#8c8c8c' }}>{field}</div>
+          <div style={{ fontSize: 13, color: '#8c8c8c' }}>{field}</div>
         </div>
       ),
       dataIndex: field,

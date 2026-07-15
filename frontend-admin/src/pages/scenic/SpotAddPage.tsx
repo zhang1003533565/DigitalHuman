@@ -559,7 +559,7 @@ const styles = `
   z-index: 10;
 }
 .spot-drawer__map-hint {
-  font-size: 12px;
+  font-size: 13px;
   color: #999;
   margin: 8px 0 0;
 }
@@ -593,7 +593,7 @@ const styles = `
   justify-content: center;
 }
 .spot-drawer__cover-hint {
-  font-size: 12px;
+  font-size: 13px;
   color: #999;
   margin: 8px 0 0;
 }

@@ -70,7 +70,10 @@ export function AdminThemeProvider({ children }: PropsWithChildren) {
             borderRadius: 6,
             colorPrimary: effectiveTheme === 'dark' ? '#19c4d2' : '#1677d2',
             colorInfo: effectiveTheme === 'dark' ? '#19c4d2' : '#1677d2',
+            controlHeight: 38,
             fontFamily: "Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif",
+            fontSize: 15,
+            fontSizeSM: 15,
           },
         }}
       >

@@ -870,7 +870,7 @@ function SettingsPanel() {
                   return (
                     <Space direction="vertical" size={2}>
                       <Tag color="blue">{meta?.displayName || value}</Tag>
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>{value}</Typography.Text>
+                      <Typography.Text type="secondary" style={{ fontSize: 13 }}>{value}</Typography.Text>
                     </Space>
                   )
                 },

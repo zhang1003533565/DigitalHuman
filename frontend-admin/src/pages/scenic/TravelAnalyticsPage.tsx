@@ -249,7 +249,7 @@ export default function TravelAnalyticsPage() {
         title: (
           <div style={{ position: 'relative', paddingRight: 10 }}>
             <div style={{ fontWeight: 700 }}>{LABELS[field] ?? field}</div>
-            <div style={{ fontSize: 12, color: '#8c8c8c' }}>{field}</div>
+            <div style={{ fontSize: 13, color: '#8c8c8c' }}>{field}</div>
             <span
               role="separator"
               style={{

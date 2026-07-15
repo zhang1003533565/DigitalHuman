@@ -1000,7 +1000,7 @@ export default function VoiceConfigPage({
                 <div className="voice-settings-form-label">
                   <span>音色名称</span>
                   <span className="voice-settings-form-label__required">*</span>
-                  <span style={{ marginLeft: 'auto', color: '#86909C', fontSize: 12 }}>10/50</span>
+                  <span style={{ marginLeft: 'auto', color: '#86909C', fontSize: 13 }}>10/50</span>
                 </div>
                 <Input
                   value={currentVoice.voiceName}

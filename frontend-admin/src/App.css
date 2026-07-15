@@ -1695,7 +1695,7 @@
   padding: 10px 12px;
   border: 1px solid #dfe4ec;
   vertical-align: middle;
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.65;
   text-align: left;
 }
@@ -1731,7 +1731,7 @@
   border-radius: 4px;
   background: #fff2e8;
   color: #ad4e00;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -1740,7 +1740,7 @@
   border-radius: 3px;
   background: #e9edf3;
   color: #303b4d;
-  font-size: 12px;
+  font-size: 15px;
 }
 
 .mkb-document-rich blockquote {
