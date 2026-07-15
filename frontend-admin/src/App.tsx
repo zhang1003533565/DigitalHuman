@@ -22,6 +22,7 @@ import {
   UserOutlined,
 } from '@ant-design/icons'
 import AdminLayout from './pages/AdminLayout'
+import AdminThemeSwitch from './components/AdminThemeSwitch'
 import type { LoginResult } from './types/admin'
 import './App.css'
 import './admin-cockpit.css'
@@ -190,11 +191,14 @@ function LoginView({
       </section>
 
       <section className="login-workspace">
-        <button className="language-switch" type="button">
-          <GlobalOutlined />
-          简体中文
-          <DownOutlined />
-        </button>
+        <div className="login-top-actions">
+          <AdminThemeSwitch />
+          <button className="language-switch" type="button">
+            <GlobalOutlined />
+            简体中文
+            <DownOutlined />
+          </button>
+        </div>
 
         <form className="login-form" onSubmit={onSubmit}>
           <div className="login-form__logo">

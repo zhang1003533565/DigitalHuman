@@ -1714,6 +1714,7 @@ export default function KnowledgeOpenApiPage() {
 
       <Drawer
         title="知识库连接配置"
+        rootClassName="mkb-config-drawer-root"
         width={520}
         open={configOpen}
         onClose={() => setConfigOpen(false)}

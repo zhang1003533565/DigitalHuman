@@ -17,6 +17,8 @@
 import { Button, Drawer, Layout, Menu } from 'antd'
 import { useEffect, useState } from 'react'
 import type { MenuProps } from 'antd'
+import { useAdminTheme } from '../theme/AdminThemeProvider'
+import AdminThemeSwitch from './AdminThemeSwitch'
 
 type AdminSidebarProps = {
   activeKey: string
@@ -84,8 +86,9 @@ function getMenuItems(role: string): NonNullable<MenuProps['items']> {
 export default function AdminSidebar({ activeKey, displayName, role, onLogout, onSelect }: AdminSidebarProps) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const mobile = useMobileNavigation()
+  const { effectiveTheme } = useAdminTheme()
   const navigation = (
-    <Menu theme="dark" mode="inline" selectedKeys={[activeKey]} defaultOpenKeys={['spots', 'avatar-group']} items={getMenuItems(role)}
+    <Menu theme={effectiveTheme === 'dark' ? 'dark' : 'light'} mode="inline" selectedKeys={[activeKey]} defaultOpenKeys={['spots', 'avatar-group']} items={getMenuItems(role)}
       onClick={({ key }) => { if (!PARENT_MENU_KEYS.has(key)) { onSelect(key); setDrawerOpen(false) } }} />
   )
   if (mobile) {
@@ -93,6 +96,7 @@ export default function AdminSidebar({ activeKey, displayName, role, onLogout, o
       <Button className="admin-mobile-menu" type="primary" icon={<MenuOutlined />} onClick={() => setDrawerOpen(true)}>菜单</Button>
       <Drawer className="admin-nav-drawer" placement="left" width={280} open={drawerOpen} onClose={() => setDrawerOpen(false)} title="数字人管理后台">
         {navigation}
+        <AdminThemeSwitch block />
         <Button block icon={<SettingOutlined />} onClick={() => { onSelect('settings'); setDrawerOpen(false) }}>设置</Button>
         <Button block icon={<UserOutlined />} onClick={onLogout}>退出登录</Button>
       </Drawer>
