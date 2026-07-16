@@ -1059,7 +1059,7 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
             className="mkb-upload-callout"
             type="info"
             showIcon
-            message="普通文档上传"
+            title="普通文档上传"
             description="先选择文件，再在下一步配置分段规则并生成预览。这里保留 MaxKB 的两步导入方式，但不提供目录上传。"
           />
 
@@ -1116,7 +1116,7 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
               className="mkb-upload-callout"
               type="info"
               showIcon
-              message="第二步：规则与预览"
+              title="第二步：规则与预览"
               description="这里创建的是 autoApply=false 的预览任务，只有在右侧确认后才会真正导入知识库。"
             />
 
@@ -1198,7 +1198,7 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
                     options={llmOptions}
                     onChange={setLlmModelId}
                   />
-                  {llmError ? <Alert type="error" showIcon message={llmError} /> : null}
+                  {llmError ? <Alert type="error" showIcon title={llmError} /> : null}
                   <Checkbox checked={qualityOptimize} onChange={(event) => setQualityOptimize(event.target.checked)}>
                     高质量优化
                   </Checkbox>
@@ -1228,7 +1228,7 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
                     options={imageOptions}
                     onChange={setVisionModelId}
                   />
-                  {imageError ? <Alert type="error" showIcon message={imageError} /> : null}
+                  {imageError ? <Alert type="error" showIcon title={imageError} /> : null}
                   <Select
                     showSearch
                     placeholder="选择 LLM 模型"
@@ -1237,7 +1237,7 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
                     options={llmOptions}
                     onChange={setLlmModelId}
                   />
-                  {llmError ? <Alert type="error" showIcon message={llmError} /> : null}
+                  {llmError ? <Alert type="error" showIcon title={llmError} /> : null}
                   <Checkbox checked={qualityOptimize} onChange={(event) => setQualityOptimize(event.target.checked)}>
                     高质量优化
                   </Checkbox>
@@ -1279,7 +1279,7 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
                     </article>
                   </div>
                   {currentTask.messageText ? (
-                    <Alert type={currentTask.status === 'FAILED' ? 'error' : 'info'} showIcon message={currentTask.messageText} />
+                    <Alert type={currentTask.status === 'FAILED' ? 'error' : 'info'} showIcon title={currentTask.messageText} />
                   ) : null}
                   <Space wrap>
                     <Button icon={<ReloadOutlined />} loading={creatingPreview} onClick={() => void createPreviewTask()}>
@@ -1316,7 +1316,7 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
                   <Spin />
                 </div>
               ) : previewError ? (
-                <Alert type="error" showIcon message={previewError} />
+                <Alert type="error" showIcon title={previewError} />
               ) : previewDocuments.length === 0 ? (
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={previewEmptyText(currentTask)} />
               ) : (
