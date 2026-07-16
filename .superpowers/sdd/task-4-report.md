@@ -59,4 +59,5 @@ Build note:
 
 ## Commit
 
-- Pending
+- Implementation: `83e5849 fix: 避免文档在未确认预览时直接入库`
+- Report alignment: current HEAD docs commit for this report
