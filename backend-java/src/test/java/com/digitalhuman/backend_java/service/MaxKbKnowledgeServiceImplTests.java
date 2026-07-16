@@ -113,6 +113,16 @@ class MaxKbKnowledgeServiceImplTests {
     }
 
     @Test
+    void listModelsShouldUseNormalizedWorkspacePathAndForwardModelType() {
+        service.listModels(1L, "LLM");
+
+        assertEquals("GET", capturedRequest.method());
+        assertEquals("/openapi/knowledge/v1/workspaces/ws-1/models", capturedRequest.url().encodedPath());
+        assertEquals("LLM", capturedRequest.url().queryParameter("model_type"));
+        assertEquals("Bearer mkb_secret_key", capturedRequest.header("Authorization"));
+    }
+
+    @Test
     void uploadDocumentsShouldForwardAsyncImportOptionsAndIdempotencyKey() throws Exception {
         MockMultipartFile file = new MockMultipartFile(
                 "file",

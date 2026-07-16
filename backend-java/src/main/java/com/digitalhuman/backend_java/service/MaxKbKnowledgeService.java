@@ -32,6 +32,8 @@ public interface MaxKbKnowledgeService {
 
     Object docs(Long accountId);
 
+    Object listModels(Long accountId, String modelType);
+
     Object listKnowledges(Long accountId, Map<String, String> queryParams);
 
     Object getKnowledge(Long accountId, String knowledgeId);

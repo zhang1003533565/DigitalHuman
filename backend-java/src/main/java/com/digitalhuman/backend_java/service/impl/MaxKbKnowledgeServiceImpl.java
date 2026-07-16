@@ -171,6 +171,20 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
     }
 
     @Override
+    public Object listModels(Long accountId, String modelType) {
+        MaxKbAccount account = getAccount(accountId, true);
+        String normalizedType = trim(modelType).toUpperCase();
+        if (!List.of("LLM", "IMAGE").contains(normalizedType)) {
+            throw status(HttpStatus.BAD_REQUEST, "模型类型只能是 LLM 或 IMAGE");
+        }
+        return getObject(
+                account,
+                "/workspaces/" + account.getWorkspaceId() + "/models",
+                Map.of("model_type", normalizedType)
+        );
+    }
+
+    @Override
     public Object listKnowledges(Long accountId, Map<String, String> queryParams) {
         MaxKbAccount account = getAccount(accountId, true);
         return getObject(account, "/workspaces/" + account.getWorkspaceId() + "/knowledges", queryParams);

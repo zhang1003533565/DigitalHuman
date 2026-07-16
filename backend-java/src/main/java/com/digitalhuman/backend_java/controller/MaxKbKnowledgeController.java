@@ -105,6 +105,16 @@ public class MaxKbKnowledgeController {
         return ApiResult.success(maxKbKnowledgeService.docs(accountId));
     }
 
+    @GetMapping("/accounts/{accountId}/models")
+    public ApiResult<Object> listModels(
+            @PathVariable Long accountId,
+            @RequestParam(name = "model_type") String modelType,
+            HttpServletRequest request
+    ) {
+        requireAdmin(request);
+        return ApiResult.success(maxKbKnowledgeService.listModels(accountId, modelType));
+    }
+
     @GetMapping("/accounts/{accountId}/knowledges")
     public ApiResult<Object> listKnowledges(
             @PathVariable Long accountId,
