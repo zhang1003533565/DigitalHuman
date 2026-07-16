@@ -39,11 +39,6 @@ public class AdminKnowledgeController {
         return maxKbService.saveConfig(payload);
     }
 
-    @PostMapping("/open-api/sync-keys")
-    public JsonNode syncOpenApiKeys(@RequestBody Map<String, Object> payload) {
-        return maxKbService.syncOpenApiKeys(payload);
-    }
-
     @GetMapping("/knowledges")
     public JsonNode listKnowledges(@RequestParam Map<String, String> query) {
         return maxKbService.listKnowledges(query);

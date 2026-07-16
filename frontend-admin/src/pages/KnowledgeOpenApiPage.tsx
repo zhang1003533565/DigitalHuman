@@ -2005,10 +2005,10 @@ export default function KnowledgeOpenApiPage() {
           </label>
 
           <label>
-            <span>MaxKB 管理端地址</span>
+            <span>MaxKB OpenAPI 服务地址</span>
             <Input
               value={accountForm.baseUrl}
-              placeholder="http://localhost:3000"
+              placeholder="http://localhost:3000/openapi/knowledge/v1/workspaces/default"
               onChange={(event) => updateAccountField('baseUrl', event.target.value)}
             />
           </label>

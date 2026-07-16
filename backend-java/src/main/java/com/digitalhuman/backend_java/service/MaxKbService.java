@@ -4,7 +4,6 @@ import com.digitalhuman.backend_java.model.MaxKbOpenApiConfig;
 import com.digitalhuman.backend_java.repository.MaxKbOpenApiConfigRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import okhttp3.HttpUrl;
 import okhttp3.MediaType;
@@ -106,40 +105,6 @@ public class MaxKbService {
         return currentConfig();
     }
 
-    public JsonNode syncOpenApiKeys(Map<String, Object> payload) {
-        String adminBaseUrl = firstNonBlank(text(payload, "adminBaseUrl"), maxKbBaseUrl, "http://localhost:3000");
-        String workspace = firstNonBlank(text(payload, "workspaceId"), workspaceId, "default");
-        String adminToken = normalize(text(payload, "adminToken"));
-        if (adminToken.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请填写 MaxKB 管理端 Token");
-        }
-
-        HttpUrl url = HttpUrl.parse(trimTrailingSlash(adminBaseUrl) + "/admin/api/system/openapi/keys");
-        if (url == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MaxKB 管理端地址不合法");
-        }
-        Request request = new Request.Builder()
-                .url(url.newBuilder().addQueryParameter("workspace_id", workspace).build())
-                .header("Authorization", adminToken.startsWith("Bearer ") ? adminToken : "Bearer " + adminToken)
-                .get()
-                .build();
-        JsonNode root = executeJson(request);
-        ArrayNode keys = objectMapper.createArrayNode();
-        JsonNode data = root.path("data");
-        if (data.isArray()) {
-            data.forEach(keys::add);
-        } else if (root.isArray()) {
-            root.forEach(keys::add);
-        }
-
-        ObjectNode response = objectMapper.createObjectNode();
-        response.put("adminBaseUrl", trimTrailingSlash(adminBaseUrl));
-        response.put("workspaceId", workspace);
-        response.put("accessUrl", buildAccessUrl(adminBaseUrl, workspace));
-        response.set("keys", keys);
-        return response;
-    }
-
     public JsonNode listKnowledges(Map<String, String> query) {
         return get(workspacePath("/knowledges"), query);
     }
@@ -167,21 +132,7 @@ public class MaxKbService {
                         + "/documents/" + documentId
                         + "/paragraphs/" + paragraphId
                         + "/problem");
-        try {
-            return get(openApiPath, Map.of());
-        } catch (ResponseStatusException exception) {
-            if (!shouldTryManagementFallback(exception)) {
-                throw exception;
-            }
-            RuntimeConfig config = effectiveConfig();
-            return getManagement(
-                    config,
-                    "/admin/api/workspace/" + config.workspaceId()
-                            + "/knowledge/" + knowledgeId
-                            + "/document/" + documentId
-                            + "/paragraph/" + paragraphId
-                            + "/problem");
-        }
+        return get(openApiPath, Map.of());
     }
 
     public JsonNode updateParagraph(String knowledgeId, String documentId, String paragraphId, Map<String, Object> payload) {
@@ -190,21 +141,7 @@ public class MaxKbService {
                 "/knowledges/" + knowledgeId
                         + "/documents/" + documentId
                         + "/paragraphs/" + paragraphId);
-        try {
-            return putJson(openApiPath, normalizedPayload);
-        } catch (ResponseStatusException exception) {
-            if (!shouldTryManagementFallback(exception)) {
-                throw exception;
-            }
-            RuntimeConfig config = effectiveConfig();
-            return putManagementJson(
-                    config,
-                    "/admin/api/workspace/" + config.workspaceId()
-                            + "/knowledge/" + knowledgeId
-                            + "/document/" + documentId
-                            + "/paragraph/" + paragraphId,
-                    normalizedPayload);
-        }
+        return putJson(openApiPath, normalizedPayload);
     }
 
     public JsonNode hitTest(Map<String, Object> payload) {
@@ -307,34 +244,6 @@ public class MaxKbService {
         }
     }
 
-    private JsonNode getManagement(RuntimeConfig config, String path) {
-        Request request = managementRequest(config, path).get().build();
-        return executeJson(request);
-    }
-
-    private JsonNode putManagementJson(RuntimeConfig config, String path, Map<String, Object> payload) {
-        ensureConfigured(config);
-        try {
-            Request request = managementRequest(config, path)
-                    .put(RequestBody.create(objectMapper.writeValueAsString(payload), JSON))
-                    .build();
-            return executeJson(request);
-        } catch (IOException exception) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "构造 MaxKB 请求失败", exception);
-        }
-    }
-
-    private Request.Builder managementRequest(RuntimeConfig config, String path) {
-        ensureConfigured(config);
-        HttpUrl url = HttpUrl.parse(trimTrailingSlash(config.adminBaseUrl()) + path);
-        if (url == null) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "MaxKB 管理端 URL 配置不合法");
-        }
-        return new Request.Builder()
-                .url(url)
-                .header("Authorization", "Bearer " + config.apiKey());
-    }
-
     private Request.Builder baseRequest(String path) {
         return baseRequest(path, Map.of());
     }
@@ -388,13 +297,6 @@ public class MaxKbService {
         } catch (Exception ignored) {
             return HttpStatus.BAD_GATEWAY;
         }
-    }
-
-    private boolean shouldTryManagementFallback(ResponseStatusException exception) {
-        HttpStatusCode statusCode = exception.getStatusCode();
-        return statusCode.isSameCodeAs(HttpStatus.NOT_FOUND)
-                || statusCode.isSameCodeAs(HttpStatus.METHOD_NOT_ALLOWED)
-                || statusCode.isSameCodeAs(HttpStatus.BAD_REQUEST);
     }
 
     private Map<String, Object> normalizeParagraphPayload(Map<String, Object> payload) {
