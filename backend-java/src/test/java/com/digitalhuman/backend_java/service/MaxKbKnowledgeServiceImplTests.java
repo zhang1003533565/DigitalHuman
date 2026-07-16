@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -25,8 +26,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -36,6 +39,7 @@ class MaxKbKnowledgeServiceImplTests {
     private MaxKbKnowledgeServiceImpl service;
     private Request capturedRequest;
     private MaxKbAccount capturedSavedAccount;
+    private Call call;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -55,7 +59,7 @@ class MaxKbKnowledgeServiceImplTests {
         });
         service = new MaxKbKnowledgeServiceImpl(repository, new ObjectMapper(), 5);
         OkHttpClient httpClient = mock(OkHttpClient.class);
-        Call call = mock(Call.class);
+        call = mock(Call.class);
         when(httpClient.newCall(org.mockito.ArgumentMatchers.any(Request.class))).thenAnswer(invocation -> {
             capturedRequest = invocation.getArgument(0);
             return call;
@@ -184,6 +188,21 @@ class MaxKbKnowledgeServiceImplTests {
         assertEquals("/openapi/knowledge/v1/workspaces/ws-1/knowledges/kb-1/documents/upload-tasks/task-1", capturedRequest.url().encodedPath());
     }
 
+    @Test
+    void htmlSuccessResponseShouldReportUnsupportedOpenApiEndpoint() throws Exception {
+        doAnswer(invocation -> htmlResponse()).when(call).execute();
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.listUploadTasks(1L, "kb-1", Map.of("page", "1"))
+        );
+
+        assertEquals(502, error.getStatusCode().value());
+        assertTrue(error.getReason().contains("MaxKB 返回了 HTML 页面"));
+        assertTrue(error.getReason().contains("异步文档导入 OpenAPI"));
+        assertTrue(error.getReason().contains("/documents/upload-tasks"));
+    }
+
     private Response successfulResponse() {
         return new Response.Builder()
                 .request(capturedRequest)
@@ -193,6 +212,19 @@ class MaxKbKnowledgeServiceImplTests {
                 .body(ResponseBody.create(
                         "{\"code\":200,\"data\":{\"records\":[]}}",
                         MediaType.get("application/json")
+                ))
+                .build();
+    }
+
+    private Response htmlResponse() {
+        return new Response.Builder()
+                .request(capturedRequest)
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body(ResponseBody.create(
+                        "<!doctype html><html><body>MaxKB</body></html>",
+                        MediaType.get("text/html; charset=utf-8")
                 ))
                 .build();
     }

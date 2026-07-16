@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ChangeEvent } from 'react'
 import axios from 'axios'
 import {
   Alert,
   Button,
+  Checkbox,
   Drawer,
   Empty,
   Input,
   Modal,
   Popconfirm,
+  Progress,
   Select,
   Space,
   Table,
@@ -49,22 +52,29 @@ import {
   UnorderedListOutlined,
 } from '@ant-design/icons'
 import {
+  applyKnowledgeUploadTask,
+  cancelKnowledgeUploadTask,
   createKnowledgeAccount,
   deleteKnowledgeAccount,
+  deleteKnowledgeUploadTask,
   extractRecords,
   extractTotal,
   getDocumentParagraphs,
   getDocumentParagraphProblems,
   getKnowledgeAssetUrl,
   getKnowledgeDocuments,
+  getKnowledgeUploadTask,
   getKnowledges,
   listKnowledgeAccountEnvironments,
   listKnowledgeAccounts,
+  listKnowledgeUploadTasks,
+  previewKnowledgeUploadTask,
   syncKnowledgeOpenApiKeys,
   testKnowledgeAccount,
   updateKnowledgeAccount,
   updateKnowledgeAccountStatus,
   updateDocumentParagraph,
+  uploadKnowledgeDocuments,
   type MaxKbAccount,
   type MaxKbAccountPayload,
   type MaxKbEnvironmentOption,
@@ -79,6 +89,22 @@ type DocumentRow = MaxKbRecord & { key: string; idText: string; nameText: string
 type ParagraphRow = MaxKbRecord & { key: string; idText: string; nameText: string; contentText: string }
 type NoticeState = { type: 'success' | 'info' | 'warning' | 'error'; text: string } | null
 type AccountFormState = MaxKbAccountPayload & { id?: number }
+type UploadSplitStrategy = '' | 'llm_text' | 'llm_vision'
+type UploadTaskRow = MaxKbRecord & { key: string; idText: string; statusText: string; progressValue: number }
+type UploadPreviewRow = MaxKbRecord & { key: string; idText: string; nameText: string; contentText: string }
+type UploadFormState = {
+  files: File[]
+  limit: string
+  patterns: string
+  withFilter: boolean
+  splitStrategy: UploadSplitStrategy
+  modelId: string
+  visionModelId: string
+  llmModelId: string
+  qualityOptimize: boolean
+  autoApply: boolean
+  idempotencyKey: string
+}
 
 const EMPTY_ACCOUNT_FORM: AccountFormState = {
   accountName: '',
@@ -88,6 +114,20 @@ const EMPTY_ACCOUNT_FORM: AccountFormState = {
   apiKey: '',
   remark: '',
   status: 1,
+}
+
+const EMPTY_UPLOAD_FORM: UploadFormState = {
+  files: [],
+  limit: '4096',
+  patterns: '',
+  withFilter: false,
+  splitStrategy: '',
+  modelId: '',
+  visionModelId: '',
+  llmModelId: '',
+  qualityOptimize: false,
+  autoApply: false,
+  idempotencyKey: '',
 }
 
 const EMPTY_IMAGE_SRC = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
@@ -862,12 +902,68 @@ function enabledOf(record: DocumentRow) {
   return !['0', 'false', 'disabled', 'disable', '停用', '禁用'].includes(String(rawValue).trim().toLowerCase())
 }
 
+function uploadTaskStatusOf(record: MaxKbRecord) {
+  const raw = textOf(record, ['status', 'state'], 'UNKNOWN').toUpperCase()
+  const labels: Record<string, { text: string; color: string }> = {
+    QUEUED: { text: '排队中', color: 'default' },
+    PROCESSING: { text: '处理中', color: 'processing' },
+    PREVIEW_READY: { text: '可预览', color: 'success' },
+    APPLYING: { text: '入库中', color: 'processing' },
+    COMPLETED: { text: '已入库', color: 'success' },
+    FAILED: { text: '失败', color: 'error' },
+    CANCELLED: { text: '已终止', color: 'warning' },
+  }
+  return labels[raw] ?? { text: raw, color: 'default' }
+}
+
+function uploadTaskProgressOf(record: MaxKbRecord) {
+  const raw = Number(record.progress ?? 0)
+  if (!Number.isFinite(raw)) {
+    return 0
+  }
+  if (raw <= 1 && raw > 0) {
+    return Math.round(raw * 100)
+  }
+  return Math.max(0, Math.min(100, Math.round(raw)))
+}
+
+function isUploadTaskTerminal(record: MaxKbRecord) {
+  return ['PREVIEW_READY', 'COMPLETED', 'FAILED', 'CANCELLED'].includes(textOf(record, ['status', 'state'], '').toUpperCase())
+}
+
+function canPreviewUploadTask(record: MaxKbRecord) {
+  return ['PREVIEW_READY', 'APPLYING', 'COMPLETED'].includes(textOf(record, ['status', 'state'], '').toUpperCase())
+}
+
 function makeRows(records: MaxKbRecord[], type: 'knowledge' | 'document' | 'paragraph') {
   return records.map((record, index) => {
     const idText = textOf(record, ['id', 'knowledge_id', 'document_id', 'paragraph_id'], String(index + 1))
     const nameText = textOf(record, ['name', 'document_name', 'knowledge_name', 'title'], idText)
     const contentText = textOf(record, ['content', 'content_text', 'text', 'paragraph_content', 'raw_content', 'html', 'markdown', 'md', 'desc', 'description'], '')
     return { ...record, key: `${type}-${idText}-${index}`, idText, nameText, contentText }
+  })
+}
+
+function makeUploadTaskRows(records: MaxKbRecord[]) {
+  return records.map((record, index) => {
+    const idText = textOf(record, ['task_id', 'id'], String(index + 1))
+    const status = uploadTaskStatusOf(record)
+    return {
+      ...record,
+      key: `upload-task-${idText}-${index}`,
+      idText,
+      statusText: status.text,
+      progressValue: uploadTaskProgressOf(record),
+    }
+  })
+}
+
+function makeUploadPreviewRows(records: MaxKbRecord[]) {
+  return records.map((record, index) => {
+    const idText = textOf(record, ['id', 'paragraph_id', 'document_id'], String(index + 1))
+    const nameText = textOf(record, ['name', 'title', 'document_name'], `预览分段 ${index + 1}`)
+    const contentText = textOf(record, ['content', 'text', 'paragraph_content', 'raw_content', 'html', 'markdown', 'md'], '')
+    return { ...record, key: `upload-preview-${idText}-${index}`, idText, nameText, contentText }
   })
 }
 
@@ -927,6 +1023,15 @@ export default function KnowledgeOpenApiPage() {
   const [newProblemText, setNewProblemText] = useState('')
   const [loadingParagraphProblems, setLoadingParagraphProblems] = useState(false)
   const [savingParagraph, setSavingParagraph] = useState(false)
+  const [uploadOpen, setUploadOpen] = useState(false)
+  const [uploadForm, setUploadForm] = useState<UploadFormState>(EMPTY_UPLOAD_FORM)
+  const [uploadingDocuments, setUploadingDocuments] = useState(false)
+  const [loadingUploadTasks, setLoadingUploadTasks] = useState(false)
+  const [uploadTasks, setUploadTasks] = useState<UploadTaskRow[]>([])
+  const [previewingTaskId, setPreviewingTaskId] = useState('')
+  const [uploadPreviewRows, setUploadPreviewRows] = useState<UploadPreviewRow[]>([])
+  const [loadingUploadPreview, setLoadingUploadPreview] = useState(false)
+  const [mutatingUploadTaskId, setMutatingUploadTaskId] = useState('')
   const documentsRequestSeq = useRef(0)
   const editContentInputRef = useRef<TextAreaRef>(null)
   const selectedAccountIdRef = useRef<number | undefined>(undefined)
@@ -1066,6 +1171,10 @@ export default function KnowledgeOpenApiPage() {
 
   function updateAccountField<K extends keyof AccountFormState>(key: K, value: AccountFormState[K]) {
     setAccountForm((current) => ({ ...current, [key]: value }))
+  }
+
+  function updateUploadField<K extends keyof UploadFormState>(key: K, value: UploadFormState[K]) {
+    setUploadForm((current) => ({ ...current, [key]: value }))
   }
 
   function openConfigDrawer() {
@@ -1215,6 +1324,171 @@ export default function KnowledgeOpenApiPage() {
       message.error(`连接测试失败：${extractErrorMessage(error)}`)
     } finally {
       setTestingAccountId(undefined)
+    }
+  }
+
+  const loadUploadTasks = useCallback(async (silent = false) => {
+    if (!selectedAccountId || !selectedKnowledgeId) {
+      setUploadTasks([])
+      return
+    }
+    if (!silent) {
+      setLoadingUploadTasks(true)
+    }
+    try {
+      const payload = await listKnowledgeUploadTasks(selectedAccountId, selectedKnowledgeId, { page: 1, page_size: 20 })
+      setUploadTasks(makeUploadTaskRows(extractRecords(payload)))
+    } catch (error) {
+      if (!silent) {
+        message.error(`上传任务加载失败：${extractErrorMessage(error)}`)
+      }
+    } finally {
+      if (!silent) {
+        setLoadingUploadTasks(false)
+      }
+    }
+  }, [selectedAccountId, selectedKnowledgeId])
+
+  function openUploadDrawer() {
+    if (!selectedAccountId || !selectedKnowledgeId) {
+      message.warning('请先选择一个 MaxKB 连接和知识库')
+      return
+    }
+    setUploadOpen(true)
+    setUploadPreviewRows([])
+    setPreviewingTaskId('')
+    void loadUploadTasks()
+  }
+
+  function closeUploadDrawer() {
+    if (uploadingDocuments) {
+      return
+    }
+    setUploadOpen(false)
+  }
+
+  function onUploadFilesChange(event: ChangeEvent<HTMLInputElement>) {
+    updateUploadField('files', Array.from(event.target.files ?? []))
+  }
+
+  function resetUploadForm() {
+    setUploadForm(EMPTY_UPLOAD_FORM)
+  }
+
+  async function submitUpload() {
+    if (!selectedAccountId || !selectedKnowledgeId) {
+      message.warning('请先选择知识库')
+      return
+    }
+    if (uploadForm.files.length === 0) {
+      message.warning('请选择要上传的文档')
+      return
+    }
+    if (uploadForm.splitStrategy === 'llm_text' && !uploadForm.modelId.trim()) {
+      message.warning('LLM 文本分段需要填写 model_id')
+      return
+    }
+    if (uploadForm.splitStrategy === 'llm_vision' && (!uploadForm.visionModelId.trim() || !uploadForm.llmModelId.trim())) {
+      message.warning('图文分段需要填写 vision_model_id 和 llm_model_id')
+      return
+    }
+    const limit = Number(uploadForm.limit)
+    if (!Number.isFinite(limit) || limit <= 0) {
+      message.warning('分段长度必须是正整数')
+      return
+    }
+
+    setUploadingDocuments(true)
+    try {
+      const payload = await uploadKnowledgeDocuments(selectedAccountId, selectedKnowledgeId, {
+        files: uploadForm.files,
+        limit,
+        patterns: uploadForm.patterns.split('\n').map((item) => item.trim()).filter(Boolean),
+        withFilter: uploadForm.withFilter,
+        splitStrategy: uploadForm.splitStrategy || undefined,
+        modelId: uploadForm.splitStrategy === 'llm_text' ? uploadForm.modelId.trim() : undefined,
+        visionModelId: uploadForm.splitStrategy === 'llm_vision' ? uploadForm.visionModelId.trim() : undefined,
+        llmModelId: uploadForm.splitStrategy === 'llm_vision' ? uploadForm.llmModelId.trim() : undefined,
+        qualityOptimize: uploadForm.splitStrategy ? uploadForm.qualityOptimize : undefined,
+        autoApply: uploadForm.autoApply,
+        idempotencyKey: uploadForm.idempotencyKey.trim() || undefined,
+      })
+      const taskId = textOf(payload as MaxKbRecord, ['task_id', 'id'], '')
+      message.success(taskId ? `上传任务已创建：${taskId}` : '上传任务已创建')
+      setUploadForm((current) => ({ ...current, files: [], idempotencyKey: '' }))
+      void loadUploadTasks()
+    } catch (error) {
+      message.error(`上传文档失败：${extractErrorMessage(error)}`)
+    } finally {
+      setUploadingDocuments(false)
+    }
+  }
+
+  async function refreshUploadTask(taskId: string) {
+    if (!selectedAccountId || !selectedKnowledgeId || !taskId) {
+      return
+    }
+    try {
+      const payload = await getKnowledgeUploadTask(selectedAccountId, selectedKnowledgeId, taskId)
+      setUploadTasks((items) => {
+        const nextRow = makeUploadTaskRows([payload as MaxKbRecord])[0]
+        return items.some((item) => item.idText === taskId)
+          ? items.map((item) => (item.idText === taskId ? nextRow : item))
+          : [nextRow, ...items]
+      })
+    } catch (error) {
+      message.error(`任务刷新失败：${extractErrorMessage(error)}`)
+    }
+  }
+
+  async function loadUploadTaskPreview(taskId: string, silent = false) {
+    if (!selectedAccountId || !selectedKnowledgeId || !taskId) {
+      return
+    }
+    setPreviewingTaskId(taskId)
+    setLoadingUploadPreview(true)
+    try {
+      const payload = await previewKnowledgeUploadTask(selectedAccountId, selectedKnowledgeId, taskId, { page: 1, page_size: 20 })
+      setUploadPreviewRows(makeUploadPreviewRows(extractRecords(payload)))
+      if (!silent) {
+        message.success('预览分段已加载')
+      }
+    } catch (error) {
+      setUploadPreviewRows([])
+      if (!silent) {
+        message.error(`预览加载失败：${extractErrorMessage(error)}`)
+      }
+    } finally {
+      setLoadingUploadPreview(false)
+    }
+  }
+
+  async function mutateUploadTask(taskId: string, action: 'apply' | 'cancel' | 'delete') {
+    if (!selectedAccountId || !selectedKnowledgeId || !taskId) {
+      return
+    }
+    setMutatingUploadTaskId(`${action}:${taskId}`)
+    try {
+      if (action === 'apply') {
+        await applyKnowledgeUploadTask(selectedAccountId, selectedKnowledgeId, taskId)
+        message.success('已提交确认入库')
+        void loadDocuments(selectedKnowledgeId)
+      } else if (action === 'cancel') {
+        await cancelKnowledgeUploadTask(selectedAccountId, selectedKnowledgeId, taskId)
+        message.success('任务已终止')
+      } else {
+        await deleteKnowledgeUploadTask(selectedAccountId, selectedKnowledgeId, taskId)
+        message.success('任务记录已删除')
+        if (previewingTaskId === taskId) {
+          setPreviewingTaskId('')
+          setUploadPreviewRows([])
+        }
+      }
+      void loadUploadTasks()
+    } catch (error) {
+      message.error(`任务操作失败：${extractErrorMessage(error)}`)
+    } finally {
+      setMutatingUploadTaskId('')
     }
   }
 
@@ -1413,7 +1687,6 @@ export default function KnowledgeOpenApiPage() {
 
   useEffect(() => {
     if (selectedKnowledgeId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- selection changes intentionally load remote documents into local request state
       void loadDocuments(selectedKnowledgeId)
     }
   }, [loadDocuments, selectedKnowledgeId])
@@ -1424,6 +1697,20 @@ export default function KnowledgeOpenApiPage() {
       void loadParagraphs(selectedKnowledgeId, selectedDocumentId)
     }
   }, [loadParagraphs, selectedDocumentId, selectedKnowledgeId])
+
+  useEffect(() => {
+    if (!uploadOpen || !selectedAccountId || !selectedKnowledgeId) {
+      return undefined
+    }
+    const hasRunningTask = uploadTasks.some((task) => !isUploadTaskTerminal(task))
+    if (!hasRunningTask) {
+      return undefined
+    }
+    const timer = window.setInterval(() => {
+      void loadUploadTasks(true)
+    }, 2000)
+    return () => window.clearInterval(timer)
+  }, [loadUploadTasks, selectedAccountId, selectedKnowledgeId, uploadOpen, uploadTasks])
 
   function openKnowledge(record: KnowledgeRow) {
     setSelectedKnowledgeId(record.idText)
@@ -1547,6 +1834,103 @@ export default function KnowledgeOpenApiPage() {
         </Space>
       ),
     },
+  ], [])
+
+  const uploadTaskColumns: TableColumnsType<UploadTaskRow> = [
+    {
+      title: '任务 ID',
+      dataIndex: 'idText',
+      width: 210,
+      ellipsis: true,
+      render: (value) => <Text copyable>{String(value ?? '-')}</Text>,
+    },
+    {
+      title: '状态',
+      width: 105,
+      render: (_, record) => {
+        const status = uploadTaskStatusOf(record)
+        return <Tag color={status.color}>{status.text}</Tag>
+      },
+    },
+    {
+      title: '进度',
+      width: 160,
+      render: (_, record) => <Progress size="small" percent={record.progressValue} />,
+    },
+    {
+      title: '批次',
+      width: 130,
+      render: (_, record) => {
+        const metrics = record.metrics as Record<string, unknown> | undefined
+        return `${metrics?.processed ?? 0}/${metrics?.total ?? 0}`
+      },
+    },
+    {
+      title: '消息',
+      ellipsis: true,
+      render: (_, record) => shortText(record.message ?? record.error ?? '-', 80),
+    },
+    {
+      title: '操作',
+      fixed: 'right',
+      width: 250,
+      render: (_, record) => (
+        <Space size={4}>
+          <Button size="small" type="link" onClick={() => void refreshUploadTask(record.idText)}>
+            刷新
+          </Button>
+          <Button
+            size="small"
+            type="link"
+            disabled={!canPreviewUploadTask(record)}
+            loading={loadingUploadPreview && previewingTaskId === record.idText}
+            onClick={() => void loadUploadTaskPreview(record.idText)}
+          >
+            预览
+          </Button>
+          <Button
+            size="small"
+            type="link"
+            disabled={textOf(record, ['status'], '').toUpperCase() !== 'PREVIEW_READY'}
+            loading={mutatingUploadTaskId === `apply:${record.idText}`}
+            onClick={() => void mutateUploadTask(record.idText, 'apply')}
+          >
+            确认入库
+          </Button>
+          <Button
+            size="small"
+            type="link"
+            disabled={isUploadTaskTerminal(record)}
+            loading={mutatingUploadTaskId === `cancel:${record.idText}`}
+            onClick={() => void mutateUploadTask(record.idText, 'cancel')}
+          >
+            终止
+          </Button>
+          <Popconfirm
+            title="删除上传任务记录"
+            description="运行中的任务会先被终止，已入库任务只删除记录。"
+            okText="删除"
+            cancelText="取消"
+            onConfirm={() => void mutateUploadTask(record.idText, 'delete')}
+          >
+            <Button
+              size="small"
+              danger
+              type="link"
+              loading={mutatingUploadTaskId === `delete:${record.idText}`}
+            >
+              删除
+            </Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ]
+
+  const uploadPreviewColumns: TableColumnsType<UploadPreviewRow> = useMemo(() => [
+    { title: '序号', width: 80, render: (_, _record, index) => index + 1 },
+    { title: '标题', dataIndex: 'nameText', width: 180, ellipsis: true },
+    { title: '内容', dataIndex: 'contentText', render: (value) => shortText(value, 180) },
   ], [])
 
   return (
@@ -1681,7 +2065,7 @@ export default function KnowledgeOpenApiPage() {
             <header className="mkb-document-title">
               <h1>{selectedKnowledge?.nameText ?? '文档'}</h1>
               <div className="mkb-toolbar">
-                <Button size="small" type="primary" icon={<CloudUploadOutlined />} onClick={notifyReadOnlyAction}>上传文档</Button>
+                <Button size="small" type="primary" icon={<CloudUploadOutlined />} onClick={openUploadDrawer}>上传文档</Button>
                 <Button size="small" disabled icon={<BranchesOutlined />}>向量化</Button>
                 <Button size="small" disabled>分词索引</Button>
                 <Button size="small" disabled>生成问题</Button>
@@ -1918,6 +2302,191 @@ export default function KnowledgeOpenApiPage() {
           </aside>
         </div>
       </Modal>
+
+      <Drawer
+        title={`上传文档到 ${selectedKnowledge?.nameText ?? '知识库'}`}
+        width={920}
+        open={uploadOpen}
+        onClose={closeUploadDrawer}
+        extra={
+          <Space>
+            <Button size="small" icon={<ReloadOutlined />} loading={loadingUploadTasks} onClick={() => void loadUploadTasks()}>
+              刷新任务
+            </Button>
+            <Button size="small" onClick={resetUploadForm} disabled={uploadingDocuments}>
+              重置
+            </Button>
+          </Space>
+        }
+      >
+        <div className="mkb-config-drawer">
+          <Alert
+            showIcon
+            type="info"
+            message="MaxKB OpenAPI 异步导入"
+            description="上传后会先生成预览任务。未开启自动入库时，任务到达“可预览”后需要手动确认入库。模型 ID 请填写 MaxKB 模型管理中的模型 ID。"
+          />
+
+          <div style={{ display: 'grid', gap: 14 }}>
+            <label>
+              <span>选择文件</span>
+              <Input
+                type="file"
+                multiple
+                onChange={onUploadFilesChange}
+              />
+            </label>
+            {uploadForm.files.length > 0 ? (
+              <div>
+                <Text type="secondary">
+                  已选择 {uploadForm.files.length} 个文件：
+                  {uploadForm.files.map((file) => file.name).join('、')}
+                </Text>
+              </div>
+            ) : null}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <label>
+                <span>分段长度 limit</span>
+                <Input
+                  value={uploadForm.limit}
+                  placeholder="4096"
+                  onChange={(event) => updateUploadField('limit', event.target.value)}
+                />
+              </label>
+              <label>
+                <span>幂等键 Idempotency-Key</span>
+                <Input
+                  value={uploadForm.idempotencyKey}
+                  placeholder="例如：order-20260711-001"
+                  onChange={(event) => updateUploadField('idempotencyKey', event.target.value)}
+                />
+              </label>
+            </div>
+
+            <label>
+              <span>高级分段标识 patterns</span>
+              <Input.TextArea
+                value={uploadForm.patterns}
+                placeholder="每行一个标识，可留空"
+                autoSize={{ minRows: 2, maxRows: 4 }}
+                onChange={(event) => updateUploadField('patterns', event.target.value)}
+              />
+            </label>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <label>
+                <span>分段方式 split_strategy</span>
+                <Select<UploadSplitStrategy>
+                  value={uploadForm.splitStrategy}
+                  options={[
+                    { value: '', label: '默认分段（不指定模型）' },
+                    { value: 'llm_text', label: 'LLM 文本分段：model_id' },
+                    { value: 'llm_vision', label: '图文分段：vision_model_id + llm_model_id' },
+                  ]}
+                  onChange={(value) => updateUploadField('splitStrategy', value)}
+                />
+              </label>
+              <div style={{ display: 'flex', alignItems: 'end', gap: 16, flexWrap: 'wrap' }}>
+                <Checkbox
+                  checked={uploadForm.withFilter}
+                  onChange={(event) => updateUploadField('withFilter', event.target.checked)}
+                >
+                  清洗文本 with_filter
+                </Checkbox>
+                <Checkbox
+                  checked={uploadForm.qualityOptimize}
+                  disabled={!uploadForm.splitStrategy}
+                  onChange={(event) => updateUploadField('qualityOptimize', event.target.checked)}
+                >
+                  高质量优化 quality_optimize
+                </Checkbox>
+                <Checkbox
+                  checked={uploadForm.autoApply}
+                  onChange={(event) => updateUploadField('autoApply', event.target.checked)}
+                >
+                  自动入库 auto_apply
+                </Checkbox>
+              </div>
+            </div>
+
+            {uploadForm.splitStrategy === 'llm_text' ? (
+              <label>
+                <span>文本分段模型 model_id</span>
+                <Input
+                  value={uploadForm.modelId}
+                  placeholder="填写 MaxKB LLM 模型 ID"
+                  onChange={(event) => updateUploadField('modelId', event.target.value)}
+                />
+              </label>
+            ) : null}
+
+            {uploadForm.splitStrategy === 'llm_vision' ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <label>
+                  <span>图文理解模型 vision_model_id</span>
+                  <Input
+                    value={uploadForm.visionModelId}
+                    placeholder="填写 MaxKB IMAGE 模型 ID"
+                    onChange={(event) => updateUploadField('visionModelId', event.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>文本切分模型 llm_model_id</span>
+                  <Input
+                    value={uploadForm.llmModelId}
+                    placeholder="填写 MaxKB LLM 模型 ID"
+                    onChange={(event) => updateUploadField('llmModelId', event.target.value)}
+                  />
+                </label>
+              </div>
+            ) : null}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <Button onClick={closeUploadDrawer} disabled={uploadingDocuments}>关闭</Button>
+              <Button type="primary" icon={<CloudUploadOutlined />} loading={uploadingDocuments} onClick={() => void submitUpload()}>
+                上传并创建任务
+              </Button>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 18 }}>
+            <Text strong>上传任务</Text>
+            <Text type="secondary">任务保留约 2 小时</Text>
+          </div>
+          <Table<UploadTaskRow>
+            rowKey="key"
+            size="small"
+            loading={loadingUploadTasks}
+            dataSource={uploadTasks}
+            columns={uploadTaskColumns}
+            pagination={{ pageSize: 5, size: 'small' }}
+            scroll={{ x: 1080 }}
+            locale={{ emptyText: '暂无上传任务' }}
+          />
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 18 }}>
+            <Text strong>{previewingTaskId ? `任务预览：${previewingTaskId}` : '任务预览'}</Text>
+            {previewingTaskId ? (
+              <Button size="small" onClick={() => {
+                setPreviewingTaskId('')
+                setUploadPreviewRows([])
+              }}>
+                清空预览
+              </Button>
+            ) : null}
+          </div>
+          <Table<UploadPreviewRow>
+            rowKey="key"
+            size="small"
+            loading={loadingUploadPreview}
+            dataSource={uploadPreviewRows}
+            columns={uploadPreviewColumns}
+            pagination={{ pageSize: 5, size: 'small' }}
+            locale={{ emptyText: previewingTaskId ? '暂无预览分段' : '选择一个可预览任务' }}
+          />
+        </div>
+      </Drawer>
 
       <Drawer
         title="知识库连接配置"

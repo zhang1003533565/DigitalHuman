@@ -466,6 +466,9 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
             if (body.isBlank()) {
                 return Map.of();
             }
+            if (!isJsonResponse(response.header("Content-Type"), body)) {
+                throw status(HttpStatus.BAD_GATEWAY, failurePrefix + ": " + nonJsonResponseMessage(request, response, body));
+            }
             Object parsed = objectMapper.readValue(body, Object.class);
             return validateMaxKbResponse(parsed);
         } catch (ResponseStatusException error) {
@@ -484,6 +487,37 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
             }
         }
         return response;
+    }
+
+    private boolean isJsonResponse(String contentType, String body) {
+        if (StringUtils.hasText(contentType)) {
+            String normalizedContentType = contentType.toLowerCase();
+            if (normalizedContentType.contains("application/json") || normalizedContentType.contains("+json")) {
+                return true;
+            }
+            if (normalizedContentType.contains("text/html")) {
+                return false;
+            }
+        }
+        String trimmedBody = body.trim();
+        return trimmedBody.startsWith("{") || trimmedBody.startsWith("[");
+    }
+
+    private String nonJsonResponseMessage(Request request, Response response, String body) {
+        String target = request.method() + " " + request.url().encodedPath();
+        if (request.url().encodedQuery() != null) {
+            target += "?" + request.url().encodedQuery();
+        }
+        String contentType = response.header("Content-Type");
+        String responseType = StringUtils.hasText(contentType) ? contentType : "未知 Content-Type";
+        String trimmedBody = body.trim();
+        if (trimmedBody.startsWith("<")) {
+            String routeHint = request.url().encodedPath().contains("/documents/upload")
+                    ? "请确认该 MaxKB 服务已部署异步文档导入 OpenAPI，并且连接地址未被代理到前端页面。"
+                    : "请确认该 MaxKB 服务地址指向 OpenAPI 后端，而不是前端页面。";
+            return "MaxKB 返回了 HTML 页面，不是 OpenAPI JSON；" + routeHint + " 请求: " + target + "；响应类型: " + responseType;
+        }
+        return "MaxKB 返回了非 JSON 响应；请求: " + target + "；响应类型: " + responseType + "；响应片段: " + abbreviate(trimmedBody, 200);
     }
 
     private MaxKbAccount getAccount(Long accountId, boolean requireEnabled) {
@@ -679,6 +713,13 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
         } catch (Exception ignored) {
         }
         return body;
+    }
+
+    private String abbreviate(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, Math.max(0, maxLength)) + "...";
     }
 
     private Object firstPresent(Map<?, ?> map, String... keys) {
