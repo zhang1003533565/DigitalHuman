@@ -464,6 +464,10 @@ body.admin-page {
 .mkb-knowledge-page,
 .mkb-knowledge-main { border-color: var(--cockpit-line) !important; color: #dceaf2 !important; background: #071b29 !important; }
 .mkb-knowledge-sidebar { border-right-color: var(--cockpit-line) !important; background: #081e2d !important; }
+.mkb-upload-footer { border-top-color: var(--cockpit-line) !important; background: #071b29; }
+.mkb-upload-strategy-card.is-active { border-color: var(--cockpit-blue) !important; box-shadow: 0 0 0 1px rgba(47, 123, 245, 0.24); }
+.mkb-upload-dragger-icon,
+.mkb-upload-file-card__icon { color: var(--cockpit-blue); }
 .mkb-sidebar-title,
 .mkb-view h1,
 .mkb-document-title h1,
@@ -793,6 +797,10 @@ html[data-admin-theme='light'] .cockpit-health .service-health-list > div > span
 html[data-admin-theme='light'] .mkb-knowledge-page,
 html[data-admin-theme='light'] .mkb-knowledge-main { color: #294456 !important; border-color: var(--cockpit-line) !important; background: #fff !important; }
 html[data-admin-theme='light'] .mkb-knowledge-sidebar { border-right-color: var(--cockpit-line) !important; background: #f5f8fa !important; }
+html[data-admin-theme='light'] .mkb-upload-footer { border-top-color: var(--cockpit-line) !important; background: #fff; }
+html[data-admin-theme='light'] .mkb-upload-strategy-card.is-active { border-color: var(--cockpit-blue) !important; box-shadow: 0 0 0 1px rgba(22, 119, 210, 0.16); }
+html[data-admin-theme='light'] .mkb-upload-dragger-icon,
+html[data-admin-theme='light'] .mkb-upload-file-card__icon { color: var(--cockpit-blue); }
 html[data-admin-theme='light'] .mkb-sidebar-title,
 html[data-admin-theme='light'] .mkb-view h1,
 html[data-admin-theme='light'] .mkb-document-title h1,

@@ -938,7 +938,7 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
       key: 'history',
       label: '任务历史',
       children: historyLoading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
+        <div className="mkb-upload-history-loading">
           <Spin />
         </div>
       ) : historyItems.length === 0 ? (
@@ -1004,7 +1004,7 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
                     </Space>
                   }
                   description={
-                    <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                    <Space direction="vertical" size={4} className="mkb-upload-history-meta">
                       <Text type="secondary">{item.stageText || '-'}</Text>
                       <Progress percent={item.progressPercent} size="small" />
                     </Space>
@@ -1019,18 +1019,19 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
   ]
 
   return (
-    <div style={{ display: 'grid', gap: 20 }}>
-      <div style={{ display: 'grid', gap: 8 }}>
-        <Title level={4} style={{ margin: 0 }}>
+    <div className="mkb-upload-workbench">
+      <div className="mkb-upload-header">
+        <Title level={4} className="mkb-upload-title">
           导入到 {knowledgeName}
         </Title>
         <Text type="secondary">按 MaxKB 的两步流程先选文件，再生成预览并确认导入。</Text>
       </div>
 
-      <Steps current={currentStepIndex} items={STEP_ITEMS} />
+      <Steps className="mkb-upload-steps" current={currentStepIndex} items={STEP_ITEMS} />
 
       {step === 'success' ? (
         <Result
+          className="mkb-upload-success"
           status="success"
           title="导入任务已提交"
           subTitle={currentTask?.taskId ? `任务 ${currentTask.taskId} 已进入入库流程。` : '任务已进入入库流程。'}
@@ -1053,8 +1054,9 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
       ) : null}
 
       {step === 'files' ? (
-        <div style={{ display: 'grid', gap: 16 }}>
+        <div className="mkb-upload-panel mkb-upload-panel--files">
           <Alert
+            className="mkb-upload-callout"
             type="info"
             showIcon
             message="普通文档上传"
@@ -1062,16 +1064,16 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
           />
 
           <Upload.Dragger
+            className="mkb-upload-dragger"
             key={draggerKey}
             multiple
             beforeUpload={() => false}
             showUploadList={false}
             accept={accept}
             onChange={handleDraggerChange}
-            style={{ padding: 24 }}
           >
-            <div style={{ display: 'grid', gap: 12, justifyItems: 'center' }}>
-              <FileTextOutlined style={{ fontSize: 28, color: '#1677ff' }} />
+            <div className="mkb-upload-dragger-body">
+              <FileTextOutlined className="mkb-upload-dragger-icon" />
               <Text strong>拖拽文件到这里，或点击选择文件</Text>
               <Text type="secondary">支持常见办公与文本格式，单个文件不超过 100MB，最多 50 个。</Text>
               <Button type="primary">选择文件</Button>
@@ -1079,13 +1081,13 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
           </Upload.Dragger>
 
           {selectedFiles.length > 0 ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
+            <div className="mkb-upload-file-grid">
               {selectedFiles.map((file) => (
-                <Card key={file.name} size="small" styles={{ body: { padding: 12 } }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <FileTextOutlined style={{ fontSize: 18, color: '#1677ff' }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <Text strong ellipsis={{ tooltip: file.name }} style={{ display: 'block' }}>
+                <Card key={file.name} size="small" className="mkb-upload-file-card">
+                  <div className="mkb-upload-file-card__body">
+                    <FileTextOutlined className="mkb-upload-file-card__icon" />
+                    <div className="mkb-upload-file-card__meta">
+                      <Text strong ellipsis={{ tooltip: file.name }} className="mkb-upload-file-card__name">
                         {file.name}
                       </Text>
                       <Text type="secondary">{formatBytes(file.size)}</Text>
@@ -1108,30 +1110,27 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
       ) : null}
 
       {step === 'rules' ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, 420px) minmax(0, 1fr)', gap: 20 }}>
-          <div style={{ display: 'grid', gap: 16, alignContent: 'start' }}>
+        <div className="mkb-upload-rules">
+          <div className="mkb-upload-rule-list">
             <Alert
+              className="mkb-upload-callout"
               type="info"
               showIcon
               message="第二步：规则与预览"
               description="这里创建的是 autoApply=false 的预览任务，只有在右侧确认后才会真正导入知识库。"
             />
 
-            <div style={{ display: 'grid', gap: 12 }}>
+            <div className="mkb-upload-strategy-grid">
               {STRATEGY_CARDS.map((item) => {
                 const active = splitMode === item.value
                 return (
                   <Card
                     key={item.value}
+                    className={active ? 'mkb-upload-strategy-card is-active' : 'mkb-upload-strategy-card'}
                     hoverable
                     onClick={() => setSplitMode(item.value)}
-                    style={{
-                      borderColor: active ? '#1677ff' : undefined,
-                      boxShadow: active ? '0 0 0 1px rgba(22,119,255,0.14)' : undefined,
-                    }}
-                    styles={{ body: { padding: 14 } }}
                   >
-                    <div style={{ display: 'grid', gap: 6 }}>
+                    <div className="mkb-upload-strategy-card__body">
                       <Space size={8}>
                         <Text strong>{item.title}</Text>
                         {active ? <Tag color="processing">当前策略</Tag> : null}
@@ -1144,9 +1143,9 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
             </div>
 
             {splitMode === 'advanced' ? (
-              <Card size="small" title="高级分段设置">
-                <div style={{ display: 'grid', gap: 12 }}>
-                  <div style={{ display: 'grid', gap: 6 }}>
+              <Card size="small" title="高级分段设置" className="mkb-upload-card">
+                <div className="mkb-upload-form-grid">
+                  <div className="mkb-upload-form-field">
                     <Text>分段长度</Text>
                     <Slider
                       min={50}
@@ -1159,11 +1158,11 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
                       max={100000}
                       precision={0}
                       value={advancedLimit}
-                      style={{ width: '100%' }}
+                      className="mkb-upload-input-full"
                       onChange={(value) => setAdvancedLimit(value ?? 0)}
                     />
                   </div>
-                  <div style={{ display: 'grid', gap: 6 }}>
+                  <div className="mkb-upload-form-field">
                     <Text>分段标记</Text>
                     <Input.TextArea
                       value={patternsText}
@@ -1183,13 +1182,14 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
               <Card
                 size="small"
                 title="模型分段"
+                className="mkb-upload-card"
                 extra={
                   <Button size="small" icon={<ReloadOutlined />} loading={llmLoading} onClick={() => void loadLlmModels()}>
                     重试 LLM
                   </Button>
                 }
               >
-                <div style={{ display: 'grid', gap: 12 }}>
+                <div className="mkb-upload-form-grid">
                   <Select
                     showSearch
                     placeholder="选择 LLM 模型"
@@ -1207,9 +1207,9 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
             ) : null}
 
             {splitMode === 'llm_vision' ? (
-              <Card size="small" title="视觉模型分段">
-                <div style={{ display: 'grid', gap: 12 }}>
-                  <Space style={{ justifyContent: 'space-between' }} wrap>
+              <Card size="small" title="视觉模型分段" className="mkb-upload-card">
+                <div className="mkb-upload-form-grid">
+                  <Space className="mkb-upload-inline-space" wrap>
                     <Text type="secondary">视觉与文本模型支持分别重试。</Text>
                     <Space>
                       <Button size="small" icon={<ReloadOutlined />} loading={imageLoading} onClick={() => void loadImageModels()}>
@@ -1246,10 +1246,11 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
             ) : null}
           </div>
 
-          <div style={{ display: 'grid', gap: 16, alignContent: 'start' }}>
+          <div className="mkb-upload-preview">
             <Card
               size="small"
               title="当前任务"
+              className="mkb-upload-card"
               extra={currentTask ? (
                 <Space size={8}>
                   <Tag color={currentStatus.color}>{currentStatus.text}</Tag>
@@ -1258,22 +1259,22 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
               ) : null}
             >
               {currentTask ? (
-                <div style={{ display: 'grid', gap: 12 }}>
+                <div className="mkb-upload-task-summary">
                   <Progress percent={currentTask.progressPercent} />
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 12 }}>
-                    <Card size="small" styles={{ body: { padding: 12 } }}>
+                  <div className="mkb-upload-task-metrics">
+                    <Card size="small" className="mkb-upload-task-metric">
                       <Text type="secondary">阶段</Text>
                       <div><Text strong>{currentTask.stageText || '-'}</Text></div>
                     </Card>
-                    <Card size="small" styles={{ body: { padding: 12 } }}>
+                    <Card size="small" className="mkb-upload-task-metric">
                       <Text type="secondary">已处理</Text>
                       <div><Text strong>{currentTask.processedCount}</Text></div>
                     </Card>
-                    <Card size="small" styles={{ body: { padding: 12 } }}>
+                    <Card size="small" className="mkb-upload-task-metric">
                       <Text type="secondary">总数</Text>
                       <div><Text strong>{currentTask.totalCount}</Text></div>
                     </Card>
-                    <Card size="small" styles={{ body: { padding: 12 } }}>
+                    <Card size="small" className="mkb-upload-task-metric">
                       <Text type="secondary">剩余</Text>
                       <div><Text strong>{currentTask.remainingCount}</Text></div>
                     </Card>
@@ -1307,9 +1308,9 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
               )}
             </Card>
 
-            <Card size="small" title="预览内容">
+            <Card size="small" title="预览内容" className="mkb-upload-card">
               {previewLoading ? (
-                <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
+                <div className="mkb-upload-preview-loading">
                   <Spin />
                 </div>
               ) : previewError ? (
@@ -1317,14 +1318,14 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
               ) : previewDocuments.length === 0 ? (
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={previewEmptyText(currentTask)} />
               ) : (
-                <div style={{ display: 'grid', gap: 12 }}>
+                <div className="mkb-upload-preview-documents">
                   {previewDocuments.map((document) => (
-                    <Card key={document.key} size="small" title={document.name}>
-                      <div style={{ display: 'grid', gap: 10 }}>
+                    <Card key={document.key} size="small" title={document.name} className="mkb-upload-preview-card">
+                      <div className="mkb-upload-preview-card__body">
                         {document.paragraphs.map((paragraph) => (
-                          <div key={paragraph.key} style={{ display: 'grid', gap: 4 }}>
+                          <div key={paragraph.key} className="mkb-upload-preview-paragraph">
                             <Text strong>{paragraph.title}</Text>
-                            <Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>
+                            <Paragraph className="mkb-upload-preview-paragraph__content">
                               {paragraph.content || '该分段没有可展示的内容。'}
                             </Paragraph>
                           </div>
@@ -1351,7 +1352,7 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
         </div>
       ) : null}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+      <div className="mkb-upload-footer">
         <Button
           onClick={() => {
             clearPollTimer()
