@@ -1461,6 +1461,14 @@
   width: 100%;
 }
 
+.mkb-upload-patterns-select {
+  width: 100%;
+}
+
+.mkb-upload-patterns-select .ant-select-selector {
+  align-items: flex-start;
+}
+
 .mkb-upload-inline-space {
   justify-content: space-between;
 }

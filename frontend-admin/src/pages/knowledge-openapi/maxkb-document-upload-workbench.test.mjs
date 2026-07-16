@@ -43,6 +43,8 @@ test('workbench follows MaxKB two-step upload flow', () => {
   assert.match(source, /Collapse/)
   assert.match(source, /确认导入/)
   assert.match(source, /autoApply:\s*false/)
+  assert.match(source, /mode="tags"/)
+  assert.match(source, /previewDisabled/)
   assert.match(source, /className="mkb-upload-panel-section mkb-upload-task-panel"/)
   assert.match(source, /className="mkb-upload-panel-section mkb-upload-preview-panel"/)
   assert.doesNotMatch(source, /className="mkb-upload-task-panel"[\s\S]*?<Card/)
@@ -132,8 +134,11 @@ test('helpers validate files and normalize preview polling payloads', async () =
       task_id: 'task-1',
       status: 'PROCESSING',
       progress: 0.48,
-      processed: 12,
-      total: 25,
+      metrics: {
+        processed: 12,
+        total: 25,
+        remaining: 13,
+      },
     },
   })
 
@@ -142,6 +147,7 @@ test('helpers validate files and normalize preview polling payloads', async () =
   assert.equal(payload.progressPercent, 48)
   assert.equal(payload.processedCount, 12)
   assert.equal(payload.totalCount, 25)
+  assert.equal(payload.remainingCount, 13)
   assert.equal(__TESTING__.shouldPollStatus('PROCESSING'), true)
   assert.equal(__TESTING__.shouldPollStatus('PARSING'), true)
   assert.equal(__TESTING__.shouldPollStatus('PREVIEW_READY'), false)
@@ -174,7 +180,7 @@ test('helpers create strategy-specific upload payloads and grouped model options
     files: [new File(['doc'], 'chapter.pdf', { type: 'application/pdf' })],
     splitMode: 'llm_vision',
     limit: 2048,
-    patternsText: '##\n###',
+    patterns: ['##', '###'],
     withFilter: true,
     llmModelId: 'llm-a',
     visionModelId: 'img-a',
@@ -191,7 +197,7 @@ test('helpers create strategy-specific upload payloads and grouped model options
     files: [new File(['doc'], 'chapter.pdf', { type: 'application/pdf' })],
     splitMode: 'advanced',
     limit: 2048,
-    patternsText: '##\n###',
+    patterns: ['##', '###', '##', '  '],
     withFilter: true,
     llmModelId: '',
     visionModelId: '',
@@ -200,4 +206,25 @@ test('helpers create strategy-specific upload payloads and grouped model options
   assert.deepEqual(advancedPayload.patterns, ['##', '###'])
   assert.equal(advancedPayload.withFilter, true)
   assert.equal(advancedPayload.limit, 2048)
+})
+
+test('helpers disable preview exactly when the guarded submit path would reject', async () => {
+  const { __TESTING__ } = await loadTestingHelpers()
+
+  const baseArgs = {
+    selectedFilesCount: 1,
+    splitMode: 'smart',
+    advancedLimit: 4096,
+    llmModelId: 'llm-a',
+    visionModelId: 'img-a',
+    creatingPreview: false,
+  }
+
+  assert.equal(__TESTING__.isPreviewDisabled(baseArgs), false)
+  assert.equal(__TESTING__.isPreviewDisabled({ ...baseArgs, selectedFilesCount: 0 }), true)
+  assert.equal(__TESTING__.isPreviewDisabled({ ...baseArgs, splitMode: 'advanced', advancedLimit: 49 }), true)
+  assert.equal(__TESTING__.isPreviewDisabled({ ...baseArgs, splitMode: 'llm_text', llmModelId: '' }), true)
+  assert.equal(__TESTING__.isPreviewDisabled({ ...baseArgs, splitMode: 'llm_vision', llmModelId: '' }), true)
+  assert.equal(__TESTING__.isPreviewDisabled({ ...baseArgs, splitMode: 'llm_vision', visionModelId: '' }), true)
+  assert.equal(__TESTING__.isPreviewDisabled({ ...baseArgs, creatingPreview: true }), true)
 })

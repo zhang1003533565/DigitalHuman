@@ -6,7 +6,6 @@ import {
   Checkbox,
   Collapse,
   Empty,
-  Input,
   InputNumber,
   List,
   Progress,
@@ -127,11 +126,19 @@ type BuildUploadPayloadArgs = {
   files: File[]
   splitMode: TestingSplitMode
   limit: number
-  patternsText: string
+  patterns: string[]
   withFilter: boolean
   llmModelId: string
   visionModelId: string
   qualityOptimize: boolean
+}
+type IsPreviewDisabledArgs = {
+  selectedFilesCount: number
+  splitMode: TestingSplitMode
+  advancedLimit: number
+  llmModelId: string
+  visionModelId: string
+  creatingPreview: boolean
 }
 type CanConfirmPreviewArgs = {
   status: string
@@ -247,9 +254,12 @@ function isRequestGenerationCurrent(capturedGeneration: number, currentGeneratio
 
 function normalizeTaskPayload(payload: unknown): TestingNormalizedTask {
   const record = normalizeObjectPayload(payload)
+  const metrics = record.metrics && typeof record.metrics === 'object' && !Array.isArray(record.metrics)
+    ? record.metrics as Record<string, unknown>
+    : {}
   const status = helperTextOf(record, ['status', 'state'], 'UNKNOWN').toUpperCase()
-  const processedCount = helperNumberOf(record, ['processed', 'processed_count', 'success_count', 'finished'], 0)
-  const totalCount = helperNumberOf(record, ['total', 'total_count', 'count', 'document_count'], 0)
+  const processedCount = helperNumberOf(metrics, ['processed'], helperNumberOf(record, ['processed', 'processed_count', 'success_count', 'finished'], 0))
+  const totalCount = helperNumberOf(metrics, ['total'], helperNumberOf(record, ['total', 'total_count', 'count', 'document_count'], 0))
   const remainingFallback = totalCount > processedCount ? totalCount - processedCount : 0
 
   return {
@@ -258,10 +268,18 @@ function normalizeTaskPayload(payload: unknown): TestingNormalizedTask {
     progressPercent: progressPercentOf(helperNumberOf(record, ['progress', 'progress_percent'], 0)),
     processedCount,
     totalCount,
-    remainingCount: helperNumberOf(record, ['remaining', 'remaining_count'], remainingFallback),
+    remainingCount: helperNumberOf(metrics, ['remaining'], helperNumberOf(record, ['remaining', 'remaining_count'], remainingFallback)),
     stageText: helperTextOf(record, ['stage', 'current_stage', 'step', 'current_step'], status),
     messageText: helperTextOf(record, ['message', 'error_message', 'fail_reason'], ''),
   }
+}
+
+function normalizePatterns(patterns: string[]) {
+  const normalized = patterns
+    .map((item) => item.trim())
+    .filter(Boolean)
+
+  return Array.from(new Set(normalized))
 }
 
 function validateIncomingFiles({ currentFiles, incomingFiles }: ValidateIncomingFilesArgs) {
@@ -305,21 +323,18 @@ function buildUploadPayload({
   files,
   splitMode,
   limit,
-  patternsText,
+  patterns,
   withFilter,
   llmModelId,
   visionModelId,
   qualityOptimize,
 }: BuildUploadPayloadArgs): MaxKbUploadDocumentsPayload {
-  const patterns = patternsText
-    .split('\n')
-    .map((item) => item.trim())
-    .filter(Boolean)
+  const normalizedPatterns = normalizePatterns(patterns)
 
   return {
     files,
     autoApply: false,
-    ...(splitMode === 'advanced' ? { limit, patterns, withFilter } : {}),
+    ...(splitMode === 'advanced' ? { limit, patterns: normalizedPatterns, withFilter } : {}),
     ...(splitMode === 'llm_text' ? {
       splitStrategy: 'llm_text',
       modelId: llmModelId,
@@ -352,6 +367,29 @@ function groupModelOptions(models: TestingModel[]): TestingModelGroup[] {
   }))
 }
 
+function isPreviewDisabled({
+  selectedFilesCount,
+  splitMode,
+  advancedLimit,
+  llmModelId,
+  visionModelId,
+  creatingPreview,
+}: IsPreviewDisabledArgs) {
+  if (creatingPreview || selectedFilesCount === 0) {
+    return true
+  }
+  if (splitMode === 'advanced' && !isAdvancedLimitValid(advancedLimit)) {
+    return true
+  }
+  if (splitMode === 'llm_text' && !llmModelId) {
+    return true
+  }
+  if (splitMode === 'llm_vision' && (!llmModelId || !visionModelId)) {
+    return true
+  }
+  return false
+}
+
 const __TESTING__ = {
   MAX_FILE_COUNT,
   MAX_FILE_SIZE,
@@ -367,6 +405,7 @@ const __TESTING__ = {
   isRequestGenerationCurrent,
   buildUploadPayload,
   groupModelOptions,
+  isPreviewDisabled,
 }
 void __TESTING__
 /* TESTING_HELPERS_END */
@@ -469,7 +508,7 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
   const [draggerKey, setDraggerKey] = useState(0)
   const [splitMode, setSplitMode] = useState<SplitMode>('smart')
   const [advancedLimit, setAdvancedLimit] = useState(4096)
-  const [patternsText, setPatternsText] = useState('')
+  const [patterns, setPatterns] = useState<string[]>([])
   const [withFilter, setWithFilter] = useState(true)
   const [qualityOptimize, setQualityOptimize] = useState(true)
   const [llmModelId, setLlmModelId] = useState('')
@@ -529,6 +568,14 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
     previewError,
     previewRecordCount: previewDocuments.length,
   }) : false
+  const previewDisabled = isPreviewDisabled({
+    selectedFilesCount: selectedFiles.length,
+    splitMode,
+    advancedLimit,
+    llmModelId,
+    visionModelId,
+    creatingPreview,
+  })
 
   function clearPollTimer() {
     pollGenerationRef.current += 1
@@ -771,7 +818,7 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
         files: selectedFiles,
         splitMode,
         limit: advancedLimit,
-        patternsText,
+        patterns,
         withFilter,
         llmModelId,
         visionModelId,
@@ -1164,11 +1211,13 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
                   </div>
                   <div className="mkb-upload-form-field">
                     <Text>分段标记</Text>
-                    <Input.TextArea
-                      value={patternsText}
-                      placeholder="每行一个分段标记，例如 ## 或 ###"
-                      autoSize={{ minRows: 3, maxRows: 6 }}
-                      onChange={(event) => setPatternsText(event.target.value)}
+                    <Select
+                      mode="tags"
+                      value={patterns}
+                      placeholder="输入分段标记后回车，例如 ##、###"
+                      tokenSeparators={[',']}
+                      className="mkb-upload-patterns-select"
+                      onChange={(values) => setPatterns(normalizePatterns(values))}
                     />
                   </div>
                   <Checkbox checked={withFilter} onChange={(event) => setWithFilter(event.target.checked)}>
@@ -1377,7 +1426,7 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
             </Button>
           ) : null}
           {step === 'rules' ? (
-            <Button type="primary" loading={creatingPreview} onClick={() => void createPreviewTask()}>
+            <Button type="primary" disabled={previewDisabled} loading={creatingPreview} onClick={() => void createPreviewTask()}>
               创建预览
             </Button>
           ) : null}
