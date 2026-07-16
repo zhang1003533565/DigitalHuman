@@ -9,6 +9,8 @@
 - 已为 `MaxKbDocumentUploadWorkbench.tsx` 补充 `mkb-upload-*` 语义化类名，并将关键布局内联样式迁移到 `App.css`。
 - 已在 `App.css` 完成桌面双栏、文件网格、滚动区、固定可达 footer 与移动端单栏布局。
 - 已在 `admin-cockpit.css` 仅补充必要的明暗主题颜色，复用现有 `--cockpit-*` 变量。
+- 已追加修复桌面端上传工作台高度链，确保主内容区 `min-height: 0`、内部滚动区与 footer 可同时可达。
+- 已追加修复移动端知识库侧栏占宽问题：`768px` 下收起知识库内侧栏、释放主内容宽度，并让 Steps 与工作台保持单列滚动。
 - 未新增依赖。
 
 ## 验证
