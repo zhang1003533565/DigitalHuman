@@ -1247,37 +1247,36 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
           </div>
 
           <div className="mkb-upload-preview">
-            <Card
-              size="small"
-              title="当前任务"
-              className="mkb-upload-card"
-              extra={currentTask ? (
-                <Space size={8}>
-                  <Tag color={currentStatus.color}>{currentStatus.text}</Tag>
-                  {shouldPollStatus(currentTask.status) ? <LoadingOutlined /> : null}
-                </Space>
-              ) : null}
-            >
+            <section className="mkb-upload-panel-section mkb-upload-task-panel">
+              <header className="mkb-upload-panel-section__header">
+                <Text strong>当前任务</Text>
+                {currentTask ? (
+                  <Space size={8}>
+                    <Tag color={currentStatus.color}>{currentStatus.text}</Tag>
+                    {shouldPollStatus(currentTask.status) ? <LoadingOutlined /> : null}
+                  </Space>
+                ) : null}
+              </header>
               {currentTask ? (
                 <div className="mkb-upload-task-summary">
                   <Progress percent={currentTask.progressPercent} />
                   <div className="mkb-upload-task-metrics">
-                    <Card size="small" className="mkb-upload-task-metric">
+                    <article className="mkb-upload-task-metric">
                       <Text type="secondary">阶段</Text>
                       <div><Text strong>{currentTask.stageText || '-'}</Text></div>
-                    </Card>
-                    <Card size="small" className="mkb-upload-task-metric">
+                    </article>
+                    <article className="mkb-upload-task-metric">
                       <Text type="secondary">已处理</Text>
                       <div><Text strong>{currentTask.processedCount}</Text></div>
-                    </Card>
-                    <Card size="small" className="mkb-upload-task-metric">
+                    </article>
+                    <article className="mkb-upload-task-metric">
                       <Text type="secondary">总数</Text>
                       <div><Text strong>{currentTask.totalCount}</Text></div>
-                    </Card>
-                    <Card size="small" className="mkb-upload-task-metric">
+                    </article>
+                    <article className="mkb-upload-task-metric">
                       <Text type="secondary">剩余</Text>
                       <div><Text strong>{currentTask.remainingCount}</Text></div>
-                    </Card>
+                    </article>
                   </div>
                   {currentTask.messageText ? (
                     <Alert type={currentTask.status === 'FAILED' ? 'error' : 'info'} showIcon message={currentTask.messageText} />
@@ -1306,9 +1305,12 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
               ) : (
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未创建预览任务" />
               )}
-            </Card>
+            </section>
 
-            <Card size="small" title="预览内容" className="mkb-upload-card">
+            <section className="mkb-upload-panel-section mkb-upload-preview-panel">
+              <header className="mkb-upload-panel-section__header">
+                <Text strong>预览内容</Text>
+              </header>
               {previewLoading ? (
                 <div className="mkb-upload-preview-loading">
                   <Spin />
@@ -1320,7 +1322,10 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
               ) : (
                 <div className="mkb-upload-preview-documents">
                   {previewDocuments.map((document) => (
-                    <Card key={document.key} size="small" title={document.name} className="mkb-upload-preview-card">
+                    <article key={document.key} className="mkb-upload-preview-card">
+                      <header className="mkb-upload-preview-card__header">
+                        <Text strong>{document.name}</Text>
+                      </header>
                       <div className="mkb-upload-preview-card__body">
                         {document.paragraphs.map((paragraph) => (
                           <div key={paragraph.key} className="mkb-upload-preview-paragraph">
@@ -1331,11 +1336,11 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
                           </div>
                         ))}
                       </div>
-                    </Card>
+                    </article>
                   ))}
                 </div>
               )}
-            </Card>
+            </section>
 
             <Collapse
               activeKey={historyOpen ? ['history'] : []}

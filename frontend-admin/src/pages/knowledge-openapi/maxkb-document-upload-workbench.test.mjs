@@ -43,6 +43,10 @@ test('workbench follows MaxKB two-step upload flow', () => {
   assert.match(source, /Collapse/)
   assert.match(source, /确认导入/)
   assert.match(source, /autoApply:\s*false/)
+  assert.match(source, /className="mkb-upload-panel-section mkb-upload-task-panel"/)
+  assert.match(source, /className="mkb-upload-panel-section mkb-upload-preview-panel"/)
+  assert.doesNotMatch(source, /className="mkb-upload-task-panel"[\s\S]*?<Card/)
+  assert.doesNotMatch(source, /className="mkb-upload-preview-panel"[\s\S]*?<Card/)
 })
 
 test('workbench validates ordinary document limits', () => {

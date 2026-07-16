@@ -12,6 +12,7 @@
 - 已追加修复桌面端上传工作台高度链，确保主内容区 `min-height: 0`、内部滚动区与 footer 可同时可达。
 - 已追加修复移动端知识库侧栏占宽问题：`768px` 下收起知识库内侧栏、释放主内容宽度，并让 Steps 与工作台保持单列滚动。
 - 已追加修复 `AdminPageFrame` 与 `.mkb-knowledge-page` 的高度契约：页框对知识库页改为 `auto + minmax(0, 1fr)`，知识库页不再依赖 `calc(100vh - 56px)` 与 `680px` 最小高度。
+- 已追加移除 Step2 右侧的 card-inside-card 结构：当前任务与预览内容改为无框 section，指标与预览文档改为 article/div，保留原有任务行为。
 - 未新增依赖。
 
 ## 验证
