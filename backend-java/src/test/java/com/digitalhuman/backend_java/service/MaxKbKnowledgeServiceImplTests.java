@@ -1,5 +1,6 @@
 package com.digitalhuman.backend_java.service;
 
+import com.digitalhuman.backend_java.dto.MaxKbKnowledgeDto;
 import com.digitalhuman.backend_java.model.MaxKbAccount;
 import com.digitalhuman.backend_java.repository.MaxKbAccountRepository;
 import com.digitalhuman.backend_java.service.impl.MaxKbKnowledgeServiceImpl;
@@ -25,13 +26,16 @@ import org.springframework.web.multipart.MultipartFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class MaxKbKnowledgeServiceImplTests {
 
+    private MaxKbAccountRepository repository;
     private MaxKbKnowledgeServiceImpl service;
     private Request capturedRequest;
+    private MaxKbAccount capturedSavedAccount;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -43,8 +47,12 @@ class MaxKbKnowledgeServiceImplTests {
         account.setWorkspaceId("ws-1");
         account.setStatus(1);
 
-        MaxKbAccountRepository repository = mock(MaxKbAccountRepository.class);
+        repository = mock(MaxKbAccountRepository.class);
         when(repository.findById(1L)).thenReturn(Optional.of(account));
+        when(repository.save(any(MaxKbAccount.class))).thenAnswer(invocation -> {
+            capturedSavedAccount = invocation.getArgument(0);
+            return capturedSavedAccount;
+        });
         service = new MaxKbKnowledgeServiceImpl(repository, new ObjectMapper(), 5);
         OkHttpClient httpClient = mock(OkHttpClient.class);
         Call call = mock(Call.class);
@@ -64,6 +72,40 @@ class MaxKbKnowledgeServiceImplTests {
         assertEquals("Bearer mkb_secret_key", capturedRequest.header("Authorization"));
         assertTrue(capturedRequest.url().query().contains("page=1"));
         assertTrue(capturedRequest.url().query().contains("task_type=1"));
+    }
+
+    @Test
+    void copiedOpenApiWorkspaceUrlShouldBeAcceptedAsAccountAddress() {
+        MaxKbKnowledgeDto.AccountCreateRequest request = new MaxKbKnowledgeDto.AccountCreateRequest();
+        request.setAccountName("复制地址");
+        request.setBaseUrl("http://116.62.22.253:8080/openapi/knowledge/v1/workspaces/default");
+        request.setApiKey("mkb_secret_key");
+        request.setWorkspaceId("default");
+        request.setEnvironment("local");
+        request.setStatus(1);
+
+        service.createAccount(request);
+
+        assertEquals("http://116.62.22.253:8080", capturedSavedAccount.getBaseUrl());
+        assertEquals("default", capturedSavedAccount.getWorkspaceId());
+    }
+
+    @Test
+    void copiedOpenApiWorkspaceUrlShouldNotDuplicateOpenApiPrefix() {
+        MaxKbAccount copiedUrlAccount = new MaxKbAccount();
+        copiedUrlAccount.setId(2L);
+        copiedUrlAccount.setAccountName("复制地址");
+        copiedUrlAccount.setBaseUrl("http://116.62.22.253:8080/openapi/knowledge/v1/workspaces/default");
+        copiedUrlAccount.setApiKey("mkb_secret_key");
+        copiedUrlAccount.setWorkspaceId("default");
+        copiedUrlAccount.setStatus(1);
+        when(repository.findById(2L)).thenReturn(Optional.of(copiedUrlAccount));
+
+        service.listKnowledges(2L, Map.of("page", "1"));
+
+        assertEquals("116.62.22.253", capturedRequest.url().host());
+        assertEquals(8080, capturedRequest.url().port());
+        assertEquals("/openapi/knowledge/v1/workspaces/default/knowledges", capturedRequest.url().encodedPath());
     }
 
     @Test

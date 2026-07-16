@@ -119,12 +119,13 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
 
     @Override
     public MaxKbKnowledgeDto.AccountVo createAccount(MaxKbKnowledgeDto.AccountCreateRequest request) {
+        MaxKbEndpoint endpoint = normalizeEndpoint(request.getBaseUrl(), request.getWorkspaceId());
         MaxKbAccount account = new MaxKbAccount();
         account.setAccountName(trim(request.getAccountName()));
-        account.setBaseUrl(trimTrailingSlash(request.getBaseUrl()));
+        account.setBaseUrl(endpoint.baseUrl());
         account.setEnvironment(normalizeEnvironment(request.getEnvironment()));
         account.setApiKey(trim(request.getApiKey()));
-        account.setWorkspaceId(trim(request.getWorkspaceId()));
+        account.setWorkspaceId(endpoint.workspaceId());
         account.setRemark(trimToNull(request.getRemark()));
         account.setStatus(normalizeStatus(request.getStatus()));
         return toVo(maxKbAccountRepository.save(account));
@@ -132,14 +133,15 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
 
     @Override
     public MaxKbKnowledgeDto.AccountVo updateAccount(Long accountId, MaxKbKnowledgeDto.AccountUpdateRequest request) {
+        MaxKbEndpoint endpoint = normalizeEndpoint(request.getBaseUrl(), request.getWorkspaceId());
         MaxKbAccount account = getAccount(accountId, false);
         account.setAccountName(trim(request.getAccountName()));
-        account.setBaseUrl(trimTrailingSlash(request.getBaseUrl()));
+        account.setBaseUrl(endpoint.baseUrl());
         account.setEnvironment(normalizeEnvironment(request.getEnvironment()));
         if (StringUtils.hasText(request.getApiKey())) {
             account.setApiKey(trim(request.getApiKey()));
         }
-        account.setWorkspaceId(trim(request.getWorkspaceId()));
+        account.setWorkspaceId(endpoint.workspaceId());
         account.setRemark(trimToNull(request.getRemark()));
         account.setStatus(normalizeStatus(request.getStatus()));
         return toVo(maxKbAccountRepository.save(account));
@@ -326,7 +328,7 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
         List<String> candidatePaths = buildAssetPathCandidates(assetPath);
         String lastErrorMessage = null;
         for (String candidatePath : candidatePaths) {
-            HttpUrl url = HttpUrl.parse(trimTrailingSlash(account.getBaseUrl()) + candidatePath);
+            HttpUrl url = HttpUrl.parse(normalizeServiceRootUrl(account.getBaseUrl()) + candidatePath);
             if (url == null) {
                 lastErrorMessage = "图片地址不合法";
                 continue;
@@ -402,7 +404,7 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
     }
 
     private Request.Builder baseRequest(MaxKbAccount account, String path, Map<String, String> queryParams) {
-        HttpUrl baseUrl = HttpUrl.parse(trimTrailingSlash(account.getBaseUrl()) + OPEN_API_PREFIX + path);
+        HttpUrl baseUrl = HttpUrl.parse(normalizeServiceRootUrl(account.getBaseUrl()) + OPEN_API_PREFIX + path);
         if (baseUrl == null) {
             throw status(HttpStatus.BAD_REQUEST, "MaxKB 服务地址不合法");
         }
@@ -417,6 +419,42 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
         return new Request.Builder()
                 .url(urlBuilder.build())
                 .header("Authorization", "Bearer " + account.getApiKey().trim());
+    }
+
+    private MaxKbEndpoint normalizeEndpoint(String rawBaseUrl, String rawWorkspaceId) {
+        String baseUrl = normalizeServiceRootUrl(rawBaseUrl);
+        String workspaceId = firstNonBlank(extractWorkspaceId(rawBaseUrl), rawWorkspaceId);
+        return new MaxKbEndpoint(baseUrl, trim(workspaceId));
+    }
+
+    private String normalizeServiceRootUrl(String rawBaseUrl) {
+        String value = trimTrailingSlash(rawBaseUrl);
+        int openApiIndex = value.indexOf(OPEN_API_PREFIX);
+        if (openApiIndex >= 0) {
+            value = value.substring(0, openApiIndex);
+        }
+        return trimTrailingSlash(value);
+    }
+
+    private String extractWorkspaceId(String rawBaseUrl) {
+        String value = trim(rawBaseUrl);
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        try {
+            URI uri = URI.create(value);
+            String path = uri.getPath();
+            String marker = OPEN_API_PREFIX + "/workspaces/";
+            int index = path.indexOf(marker);
+            if (index < 0) {
+                return "";
+            }
+            String workspace = path.substring(index + marker.length());
+            int slashIndex = workspace.indexOf('/');
+            return slashIndex >= 0 ? workspace.substring(0, slashIndex) : workspace;
+        } catch (IllegalArgumentException ignored) {
+            return "";
+        }
     }
 
     private Object executeObject(Request request, String failurePrefix) {
@@ -528,7 +566,7 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
         String value = path.trim();
         if (value.startsWith("http://") || value.startsWith("https://")) {
             URI source = URI.create(value);
-            URI base = URI.create(trimTrailingSlash(account.getBaseUrl()));
+            URI base = URI.create(normalizeServiceRootUrl(account.getBaseUrl()));
             if (!source.getScheme().equalsIgnoreCase(base.getScheme())
                     || !source.getHost().equalsIgnoreCase(base.getHost())
                     || source.getPort() != base.getPort()) {
@@ -653,6 +691,15 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
         return null;
     }
 
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (StringUtils.hasText(value)) {
+                return value.trim();
+            }
+        }
+        return "";
+    }
+
     private String maskSecret(String value) {
         if (!StringUtils.hasText(value)) {
             return "";
@@ -687,5 +734,8 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
 
     private ResponseStatusException status(HttpStatus status, String reason, Throwable cause) {
         return new ResponseStatusException(status, reason, cause);
+    }
+
+    private record MaxKbEndpoint(String baseUrl, String workspaceId) {
     }
 }
