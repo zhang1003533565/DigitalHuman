@@ -10,23 +10,24 @@ import {
   InputNumber,
   List,
   Progress,
+  Result,
   Select,
   Space,
   Spin,
+  Steps,
   Tag,
   Typography,
   Upload,
   message,
 } from 'antd'
-import type { CollapseProps, UploadFile, UploadProps } from 'antd'
+import type { UploadProps } from 'antd'
 import {
-  CheckCircleOutlined,
+  CheckCircleFilled,
   DeleteOutlined,
   EyeOutlined,
   FileTextOutlined,
-  InboxOutlined,
+  LoadingOutlined,
   ReloadOutlined,
-  RobotOutlined,
   StopOutlined,
 } from '@ant-design/icons'
 import {
@@ -46,11 +47,62 @@ import {
 
 const { Paragraph, Text, Title } = Typography
 
-/* TESTING_HELPERS_START */
 type UploadStep = 'files' | 'rules' | 'success'
 type SplitMode = 'smart' | 'advanced' | 'llm_text' | 'llm_vision'
-type TaskStatus = 'QUEUED' | 'PROCESSING' | 'PREVIEW_READY' | 'APPLYING' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | 'UNKNOWN'
-type MaxKbUploadModelLike = {
+type Props = {
+  accountId: number
+  knowledgeId: string
+  knowledgeName: string
+  onCancel: () => void
+  onImported: () => void
+}
+type NormalizedTask = {
+  taskId: string
+  status: string
+  progressPercent: number
+  processedCount: number
+  totalCount: number
+  remainingCount: number
+  stageText: string
+  messageText: string
+  createdAtText: string
+  raw: MaxKbRecord
+}
+type PreviewParagraph = {
+  key: string
+  title: string
+  content: string
+}
+type PreviewDocument = {
+  key: string
+  name: string
+  paragraphs: PreviewParagraph[]
+}
+
+/* TESTING_HELPERS_START */
+const MAX_FILE_COUNT = 50
+const MAX_FILE_SIZE = 100 * 1024 * 1024
+const SUPPORTED_EXTENSIONS = new Set([
+  'txt',
+  'md',
+  'markdown',
+  'pdf',
+  'doc',
+  'docx',
+  'xls',
+  'xlsx',
+  'csv',
+  'html',
+  'htm',
+  'log',
+  'json',
+  'ppt',
+  'pptx',
+  'zip',
+])
+
+type TestingSplitMode = 'smart' | 'advanced' | 'llm_text' | 'llm_vision'
+type TestingModel = {
   id: string
   name: string
   model_name?: string
@@ -58,9 +110,27 @@ type MaxKbUploadModelLike = {
   provider?: string
   scope?: 'workspace' | 'shared'
 }
-type BuildUploadPayloadInput = {
+type TestingModelGroup = {
+  label: string
+  options: Array<{ value: string; label: string }>
+}
+type TestingNormalizedTask = {
+  taskId: string
+  status: string
+  progressPercent: number
+  processedCount: number
+  totalCount: number
+  remainingCount: number
+  stageText: string
+  messageText: string
+}
+type ValidateIncomingFilesArgs = {
+  currentFiles: File[]
+  incomingFiles: File[]
+}
+type BuildUploadPayloadArgs = {
   files: File[]
-  splitMode: SplitMode
+  splitMode: TestingSplitMode
   limit: number
   patternsText: string
   withFilter: boolean
@@ -68,116 +138,172 @@ type BuildUploadPayloadInput = {
   visionModelId: string
   qualityOptimize: boolean
 }
-type ValidateIncomingFilesInput = {
-  currentFiles: File[]
-  incomingFiles: File[]
-}
-type ValidateIncomingFilesResult = {
-  acceptedFiles: File[]
-  errors: string[]
-}
-type NormalizedTaskPayload = {
-  record: Record<string, unknown>
-  taskId: string
-  status: TaskStatus
-  progressPercent: number
-  processedCount: number
-  totalCount: number
-  remainingCount: number
-  messageText: string
-}
 
-const MAX_FILE_COUNT = 50
-const MAX_FILE_SIZE = 100 * 1024 * 1024
-const SUPPORTED_EXTENSIONS = new Set(['txt', 'md', 'log', 'docx', 'pdf', 'html', 'zip', 'xlsx', 'xls', 'csv'])
-const POLLABLE_TASK_STATUSES = new Set<TaskStatus>(['QUEUED', 'PROCESSING', 'APPLYING'])
-
-function fileKey(file: File) {
-  return `${file.name}::${file.size}::${file.lastModified}`
-}
-
-function getFileExtension(name: string) {
-  const index = name.lastIndexOf('.')
-  return index >= 0 ? name.slice(index + 1).toLowerCase() : ''
-}
-
-function toTaskStatus(value: unknown): TaskStatus {
-  const normalized = String(value ?? '').trim().toUpperCase()
-  if (normalized === 'QUEUED' || normalized === 'PROCESSING' || normalized === 'PREVIEW_READY' || normalized === 'APPLYING'
-    || normalized === 'COMPLETED' || normalized === 'FAILED' || normalized === 'CANCELLED') {
-    return normalized
+function helperTextOf(record: Record<string, unknown>, keys: string[], fallback = '') {
+  for (const key of keys) {
+    const value = record[key]
+    if (value == null) {
+      continue
+    }
+    const text = String(value).trim()
+    if (text) {
+      return text
+    }
   }
-  return 'UNKNOWN'
+  return fallback
 }
 
-function toNumber(value: unknown) {
-  const numeric = Number(value)
-  return Number.isFinite(numeric) ? numeric : 0
-}
-
-function toProgressPercent(record: Record<string, unknown>) {
-  const raw = toNumber(record.progress ?? 0)
-  if (raw > 0 && raw <= 1) {
-    return Math.round(raw * 100)
+function helperNumberOf(record: Record<string, unknown>, keys: string[], fallback = 0) {
+  for (const key of keys) {
+    const value = record[key]
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value
+    }
+    if (typeof value === 'string' && value.trim()) {
+      const parsed = Number(value)
+      if (Number.isFinite(parsed)) {
+        return parsed
+      }
+    }
   }
-  return Math.max(0, Math.min(100, Math.round(raw)))
+  return fallback
 }
 
-function normalizeTaskRecord(payload: unknown): Record<string, unknown> {
-  if (!payload || typeof payload !== 'object') {
+function normalizeObjectPayload(payload: unknown): Record<string, unknown> {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     return {}
   }
+
   const record = payload as Record<string, unknown>
-  if ('task_id' in record || 'status' in record || 'state' in record) {
+  const hasTaskFields = ['task_id', 'id', 'status', 'state', 'progress'].some((key) => key in record)
+  if (hasTaskFields) {
     return record
   }
-  for (const key of ['data', 'task', 'record', 'detail', 'item', 'result']) {
-    const nested = normalizeTaskRecord(record[key])
-    if (Object.keys(nested).length > 0 && ('task_id' in nested || 'status' in nested || 'state' in nested || 'id' in nested)) {
-      return nested
+
+  for (const key of ['data', 'task', 'result', 'item']) {
+    const nested = record[key]
+    if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+      const normalized = normalizeObjectPayload(nested)
+      if (Object.keys(normalized).length > 0) {
+        return normalized
+      }
     }
   }
   return record
 }
 
-function validateIncomingFiles({ currentFiles, incomingFiles }: ValidateIncomingFilesInput): ValidateIncomingFilesResult {
+function progressPercentOf(rawValue: number) {
+  if (!Number.isFinite(rawValue)) {
+    return 0
+  }
+  if (rawValue > 0 && rawValue <= 1) {
+    return Math.round(rawValue * 100)
+  }
+  return Math.max(0, Math.min(100, Math.round(rawValue)))
+}
+
+function shouldPollStatus(status: string) {
+  return ['QUEUED', 'PROCESSING', 'APPLYING'].includes(status.toUpperCase())
+}
+
+function isTerminalStatus(status: string) {
+  return ['PREVIEW_READY', 'COMPLETED', 'FAILED', 'CANCELLED'].includes(status.toUpperCase())
+}
+
+function normalizeTaskPayload(payload: unknown): TestingNormalizedTask {
+  const record = normalizeObjectPayload(payload)
+  const status = helperTextOf(record, ['status', 'state'], 'UNKNOWN').toUpperCase()
+  const processedCount = helperNumberOf(record, ['processed', 'processed_count', 'success_count', 'finished'], 0)
+  const totalCount = helperNumberOf(record, ['total', 'total_count', 'count', 'document_count'], 0)
+  const remainingFallback = totalCount > processedCount ? totalCount - processedCount : 0
+
+  return {
+    taskId: helperTextOf(record, ['task_id', 'id'], ''),
+    status,
+    progressPercent: progressPercentOf(helperNumberOf(record, ['progress', 'progress_percent'], 0)),
+    processedCount,
+    totalCount,
+    remainingCount: helperNumberOf(record, ['remaining', 'remaining_count'], remainingFallback),
+    stageText: helperTextOf(record, ['stage', 'current_stage', 'step', 'current_step'], status),
+    messageText: helperTextOf(record, ['message', 'error_message', 'fail_reason'], ''),
+  }
+}
+
+function validateIncomingFiles({ currentFiles, incomingFiles }: ValidateIncomingFilesArgs) {
   const acceptedFiles = [...currentFiles]
-  const knownKeys = new Set(currentFiles.map(fileKey))
+  const seenNames = new Set(currentFiles.map((file) => file.name.trim().toLowerCase()))
   const errors: string[] = []
 
-  for (const file of incomingFiles) {
+  incomingFiles.forEach((file) => {
+    const normalizedName = file.name.trim().toLowerCase()
+    const extension = file.name.includes('.') ? file.name.split('.').pop()?.trim().toLowerCase() ?? '' : ''
+
     if (!file.size) {
       errors.push(`${file.name} 文件不能为空`)
-      continue
+      return
+    }
+    if (!SUPPORTED_EXTENSIONS.has(extension)) {
+      errors.push(`${file.name} 文件类型不受支持`)
+      return
     }
     if (file.size > MAX_FILE_SIZE) {
-      errors.push(`${file.name} 超过 100MB 限制`)
-      continue
+      errors.push(`${file.name} 超过 100MB 大小限制`)
+      return
     }
-    if (!SUPPORTED_EXTENSIONS.has(getFileExtension(file.name))) {
-      errors.push(`${file.name} 文件类型不受支持`)
-      continue
-    }
-    if (knownKeys.has(fileKey(file))) {
+    if (seenNames.has(normalizedName)) {
       errors.push(`${file.name} 已存在，无需重复选择`)
-      continue
+      return
     }
     if (acceptedFiles.length >= MAX_FILE_COUNT) {
-      errors.push(`${file.name} 超出最多 50 个文件限制`)
-      continue
+      errors.push(`${file.name} 超出最多可选 ${MAX_FILE_COUNT} 个文件`)
+      return
     }
+
+    seenNames.add(normalizedName)
     acceptedFiles.push(file)
-    knownKeys.add(fileKey(file))
-  }
+  })
 
   return { acceptedFiles, errors }
 }
 
-function groupModelOptions(models: MaxKbUploadModelLike[]) {
-  const groups = models.reduce<Record<string, MaxKbUploadModelLike[]>>((result, model) => {
+function buildUploadPayload({
+  files,
+  splitMode,
+  limit,
+  patternsText,
+  withFilter,
+  llmModelId,
+  visionModelId,
+  qualityOptimize,
+}: BuildUploadPayloadArgs): MaxKbUploadDocumentsPayload {
+  const patterns = patternsText
+    .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean)
+
+  return {
+    files,
+    autoApply: false,
+    ...(splitMode === 'advanced' ? { limit, patterns, withFilter } : {}),
+    ...(splitMode === 'llm_text' ? {
+      splitStrategy: 'llm_text',
+      modelId: llmModelId,
+      qualityOptimize,
+    } : {}),
+    ...(splitMode === 'llm_vision' ? {
+      splitStrategy: 'llm_vision',
+      visionModelId,
+      llmModelId,
+      qualityOptimize,
+    } : {}),
+  }
+}
+
+function groupModelOptions(models: TestingModel[]): TestingModelGroup[] {
+  const groups = models.reduce<Record<string, TestingModel[]>>((result, model) => {
     const scopeLabel = model.scope === 'shared' ? '共享' : '工作空间'
-    const providerLabel = model.provider || '其他'
-    const label = `${scopeLabel} / ${providerLabel}`
+    const provider = model.provider || '其他'
+    const label = `${scopeLabel} / ${provider}`
     result[label] = [...(result[label] || []), model]
     return result
   }, {})
@@ -191,173 +317,159 @@ function groupModelOptions(models: MaxKbUploadModelLike[]) {
   }))
 }
 
-function buildUploadPayload(input: BuildUploadPayloadInput): MaxKbUploadDocumentsPayload {
-  const patterns = input.patternsText
-    .split('\n')
-    .map((item) => item.trim())
-    .filter(Boolean)
-
-  return {
-    files: input.files,
-    autoApply: false,
-    ...(input.splitMode === 'advanced' ? {
-      limit: input.limit,
-      patterns,
-      withFilter: input.withFilter,
-    } : {}),
-    ...(input.splitMode === 'llm_text' ? {
-      splitStrategy: 'llm_text',
-      modelId: input.llmModelId,
-      qualityOptimize: input.qualityOptimize,
-    } : {}),
-    ...(input.splitMode === 'llm_vision' ? {
-      splitStrategy: 'llm_vision',
-      visionModelId: input.visionModelId,
-      llmModelId: input.llmModelId,
-      qualityOptimize: input.qualityOptimize,
-    } : {}),
-  }
-}
-
-function normalizeTaskPayload(payload: unknown): NormalizedTaskPayload {
-  const record = normalizeTaskRecord(payload)
-  const status = toTaskStatus(record.status ?? record.state)
-  const totalCount = toNumber(record.total ?? record.total_count ?? record.totalCount)
-  const processedCount = toNumber(record.processed ?? record.processed_count ?? record.processedCount)
-  const remainingCount = toNumber(record.remaining ?? record.remaining_count ?? record.remainingCount) || Math.max(totalCount - processedCount, 0)
-
-  return {
-    record,
-    taskId: String(record.task_id ?? record.id ?? ''),
-    status,
-    progressPercent: toProgressPercent(record),
-    processedCount,
-    totalCount,
-    remainingCount,
-    messageText: String(record.message ?? record.error_message ?? record.error ?? ''),
-  }
-}
-
-function shouldPollStatus(status: TaskStatus) {
-  return POLLABLE_TASK_STATUSES.has(status)
-}
-
 const __TESTING__ = {
+  MAX_FILE_COUNT,
+  MAX_FILE_SIZE,
+  SUPPORTED_EXTENSIONS,
   validateIncomingFiles,
   normalizeTaskPayload,
   shouldPollStatus,
-  groupModelOptions,
+  isTerminalStatus,
   buildUploadPayload,
+  groupModelOptions,
 }
-
 void __TESTING__
 /* TESTING_HELPERS_END */
 
-type Props = {
-  accountId: number
-  knowledgeId: string
-  knowledgeName: string
-  onCancel: () => void
-  onImported: () => void
-}
-
-type HistoryItem = NormalizedTaskPayload & {
-  key: string
-  createdAt: string
-}
-
-type PreviewItem = MaxKbRecord & {
-  key: string
-  titleText: string
-  contentText: string
-}
-
-const MODE_OPTIONS: Array<{ value: SplitMode; title: string; description: string }> = [
-  { value: 'smart', title: '智能分段', description: '使用 MaxKB 默认智能策略，无需额外模型。' },
-  { value: 'advanced', title: '高级分段', description: '自定义长度、规则与过滤开关。' },
-  { value: 'llm_text', title: '模型分段', description: '使用文本 LLM 做更细的语义分段。' },
-  { value: 'llm_vision', title: '视觉模型分段', description: '组合文本和视觉模型处理复杂文档。' },
+const STEP_ITEMS = [
+  { title: '选择文件' },
+  { title: '预览规则' },
+  { title: '完成导入' },
 ]
 
-const STATUS_META: Record<TaskStatus, { label: string; color: string }> = {
-  QUEUED: { label: '排队中', color: 'default' },
-  PROCESSING: { label: '处理中', color: 'processing' },
-  PREVIEW_READY: { label: '可预览', color: 'success' },
-  APPLYING: { label: '入库中', color: 'processing' },
-  COMPLETED: { label: '已完成', color: 'success' },
-  FAILED: { label: '失败', color: 'error' },
-  CANCELLED: { label: '已取消', color: 'warning' },
-  UNKNOWN: { label: '未知', color: 'default' },
+const STRATEGY_CARDS: Array<{ value: SplitMode; title: string; description: string }> = [
+  { value: 'smart', title: '智能分段', description: '保留 MaxKB 默认分段策略，最快拿到预览。' },
+  { value: 'advanced', title: '高级分段', description: '手工指定分段长度、标记规则和清洗选项。' },
+  { value: 'llm_text', title: '模型分段', description: '使用 LLM 模型执行文本分段并可开启质量优化。' },
+  { value: 'llm_vision', title: '视觉模型分段', description: '使用 IMAGE + LLM 组合处理图文混排文档。' },
+]
+
+function textOf(record: MaxKbRecord, keys: string[], fallback = '') {
+  return helperTextOf(record, keys, fallback)
 }
 
-function formatFileSize(size: number) {
-  if (size >= 1024 * 1024) {
-    return `${(size / (1024 * 1024)).toFixed(size >= 10 * 1024 * 1024 ? 0 : 1)} MB`
+function formatBytes(size: number) {
+  if (!Number.isFinite(size) || size <= 0) {
+    return '0 B'
   }
-  if (size >= 1024) {
-    return `${Math.round(size / 1024)} KB`
+  if (size < 1024) {
+    return `${size} B`
   }
-  return `${size} B`
+  if (size < 1024 * 1024) {
+    return `${(size / 1024).toFixed(1)} KB`
+  }
+  return `${(size / 1024 / 1024).toFixed(1)} MB`
 }
 
-function previewItemsFromPayload(payload: unknown): PreviewItem[] {
-  return extractRecords(payload).map((record, index) => ({
-    ...record,
-    key: `preview-${record.id ?? record.paragraph_id ?? index}`,
-    titleText: String(record.name ?? record.title ?? record.document_name ?? `预览片段 ${index + 1}`),
-    contentText: String(record.content ?? record.text ?? record.paragraph_content ?? record.raw_content ?? ''),
-  }))
+function taskStatusMeta(status: string) {
+  const labels: Record<string, { text: string; color: string }> = {
+    QUEUED: { text: '排队中', color: 'default' },
+    PROCESSING: { text: '处理中', color: 'processing' },
+    PREVIEW_READY: { text: '可预览', color: 'success' },
+    APPLYING: { text: '入库中', color: 'processing' },
+    COMPLETED: { text: '已完成', color: 'success' },
+    FAILED: { text: '失败', color: 'error' },
+    CANCELLED: { text: '已取消', color: 'warning' },
+    UNKNOWN: { text: '未知', color: 'default' },
+  }
+  return labels[status] ?? { text: status || '未知', color: 'default' }
 }
 
-function historyItemsFromPayload(payload: unknown): HistoryItem[] {
-  return extractRecords(payload).map((record, index) => {
-    const normalized = normalizeTaskPayload(record)
-    return {
-      ...normalized,
-      key: `${normalized.taskId || 'task'}-${index}`,
-      createdAt: String(record.create_time ?? record.created_at ?? record.createTime ?? ''),
-    }
+function normalizeTask(payload: unknown): NormalizedTask {
+  const normalized = normalizeTaskPayload(payload)
+  const record = normalizeObjectPayload(payload) as MaxKbRecord
+  return {
+    ...normalized,
+    createdAtText: textOf(record, ['create_time', 'created_at', 'createdAt'], ''),
+    raw: record,
+  }
+}
+
+function normalizePreviewDocuments(records: MaxKbRecord[]): PreviewDocument[] {
+  const groups = new Map<string, PreviewDocument>()
+
+  records.forEach((record, index) => {
+    const documentId = textOf(record, ['document_id', 'doc_id', 'id'], String(index + 1))
+    const documentName = textOf(record, ['document_name', 'name', 'title'], `文档 ${index + 1}`)
+    const paragraphId = textOf(record, ['paragraph_id', 'id'], `${documentId}-${index + 1}`)
+    const paragraphTitle = textOf(record, ['title', 'name'], `分段 ${index + 1}`)
+    const paragraphContent = textOf(record, ['content', 'text', 'paragraph_content', 'raw_content', 'markdown', 'md', 'html'], '')
+    const key = `${documentId}:${documentName}`
+    const current = groups.get(key) ?? { key, name: documentName, paragraphs: [] }
+    current.paragraphs.push({
+      key: paragraphId,
+      title: paragraphTitle,
+      content: paragraphContent,
+    })
+    groups.set(key, current)
   })
+
+  return Array.from(groups.values())
 }
 
-function modeNeedsTextModel(mode: SplitMode) {
-  return mode === 'llm_text' || mode === 'llm_vision'
+function previewEmptyText(currentTask: NormalizedTask | null) {
+  if (!currentTask) {
+    return '创建预览任务后会在这里显示分段结果'
+  }
+  if (currentTask.status === 'PREVIEW_READY') {
+    return '当前任务暂无可展示的预览内容'
+  }
+  return '预览仍在生成中'
 }
 
-function modeNeedsVisionModel(mode: SplitMode) {
-  return mode === 'llm_vision'
+export default function MaxKbDocumentUploadWorkbench(props: Props) {
+  const contextKey = `${props.accountId}:${props.knowledgeId}`
+  return <WorkbenchSession key={contextKey} {...props} />
 }
 
-function WorkbenchInner({ accountId, knowledgeId, knowledgeName, onCancel, onImported }: Props) {
+function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onImported }: Props) {
   const [step, setStep] = useState<UploadStep>('files')
-  const [files, setFiles] = useState<File[]>([])
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [draggerKey, setDraggerKey] = useState(0)
   const [splitMode, setSplitMode] = useState<SplitMode>('smart')
-  const [limit, setLimit] = useState(4096)
-  const [patternsText, setPatternsText] = useState('##\n###')
-  const [withFilter, setWithFilter] = useState(false)
+  const [advancedLimit, setAdvancedLimit] = useState(4096)
+  const [patternsText, setPatternsText] = useState('')
+  const [withFilter, setWithFilter] = useState(true)
   const [qualityOptimize, setQualityOptimize] = useState(true)
   const [llmModelId, setLlmModelId] = useState('')
   const [visionModelId, setVisionModelId] = useState('')
+
   const [llmModels, setLlmModels] = useState<MaxKbUploadModel[]>([])
   const [imageModels, setImageModels] = useState<MaxKbUploadModel[]>([])
+  const [llmLoading, setLlmLoading] = useState(false)
+  const [imageLoading, setImageLoading] = useState(false)
   const [llmError, setLlmError] = useState('')
   const [imageError, setImageError] = useState('')
-  const [loadingLlmModels, setLoadingLlmModels] = useState(false)
-  const [loadingImageModels, setLoadingImageModels] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
+
+  const [creatingPreview, setCreatingPreview] = useState(false)
+  const [applyingTask, setApplyingTask] = useState(false)
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewError, setPreviewError] = useState('')
+  const [currentTask, setCurrentTask] = useState<NormalizedTask | null>(null)
+  const [previewDocuments, setPreviewDocuments] = useState<PreviewDocument[]>([])
+  const [historyOpen, setHistoryOpen] = useState(false)
   const [historyLoading, setHistoryLoading] = useState(false)
-  const [historyLoaded, setHistoryLoaded] = useState(false)
-  const [historyOpenKeys, setHistoryOpenKeys] = useState<string[]>([])
-  const [currentTask, setCurrentTask] = useState<NormalizedTaskPayload | null>(null)
-  const [previewItems, setPreviewItems] = useState<PreviewItem[]>([])
-  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([])
+  const [historyItems, setHistoryItems] = useState<NormalizedTask[]>([])
+  const [mutatingTaskId, setMutatingTaskId] = useState('')
+
   const pollTimerRef = useRef<number | null>(null)
-  const requestVersionRef = useRef(0)
+  const aliveRef = useRef(true)
+
+  useEffect(() => {
+    return () => {
+      aliveRef.current = false
+      if (pollTimerRef.current != null) {
+        window.clearTimeout(pollTimerRef.current)
+        pollTimerRef.current = null
+      }
+    }
+  }, [])
 
   const llmOptions = useMemo(() => groupModelOptions(llmModels), [llmModels])
   const imageOptions = useMemo(() => groupModelOptions(imageModels), [imageModels])
-  const currentMode = MODE_OPTIONS.find((item) => item.value === splitMode) ?? MODE_OPTIONS[0]
+  const accept = useMemo(() => Array.from(SUPPORTED_EXTENSIONS).map((item) => `.${item}`).join(','), [])
+  const currentStatus = taskStatusMeta(currentTask?.status ?? 'UNKNOWN')
+  const currentStepIndex = step === 'files' ? 0 : step === 'rules' ? 1 : 2
 
   function clearPollTimer() {
     if (pollTimerRef.current != null) {
@@ -366,181 +478,98 @@ function WorkbenchInner({ accountId, knowledgeId, knowledgeName, onCancel, onImp
     }
   }
 
-  useEffect(() => () => clearPollTimer(), [])
-
-  useEffect(() => {
-    if (step !== 'rules') {
-      return
-    }
-    const requestVersion = ++requestVersionRef.current
-
-    async function loadTextModels() {
-      setLoadingLlmModels(true)
-      setLlmError('')
-      try {
-        const models = await getKnowledgeModels(accountId, 'LLM')
-        if (requestVersion === requestVersionRef.current) {
-          setLlmModels(models)
-        }
-      } catch (error) {
-        if (requestVersion === requestVersionRef.current) {
-          setLlmModels([])
-          setLlmError(error instanceof Error ? error.message : '加载失败')
-        }
-      } finally {
-        if (requestVersion === requestVersionRef.current) {
-          setLoadingLlmModels(false)
-        }
+  async function loadLlmModels() {
+    setLlmLoading(true)
+    setLlmError('')
+    try {
+      const models = await getKnowledgeModels(accountId, 'LLM')
+      if (!aliveRef.current) {
+        return
+      }
+      setLlmModels(models)
+    } catch (error) {
+      if (!aliveRef.current) {
+        return
+      }
+      setLlmError(error instanceof Error ? error.message : 'LLM 模型加载失败')
+    } finally {
+      if (aliveRef.current) {
+        setLlmLoading(false)
       }
     }
+  }
 
-    async function loadVisionModels() {
-      setLoadingImageModels(true)
-      setImageError('')
-      try {
-        const models = await getKnowledgeModels(accountId, 'IMAGE')
-        if (requestVersion === requestVersionRef.current) {
-          setImageModels(models)
-        }
-      } catch (error) {
-        if (requestVersion === requestVersionRef.current) {
-          setImageModels([])
-          setImageError(error instanceof Error ? error.message : '加载失败')
-        }
-      } finally {
-        if (requestVersion === requestVersionRef.current) {
-          setLoadingImageModels(false)
-        }
-      }
-    }
-
-    void loadTextModels()
-    void loadVisionModels()
-  }, [accountId, step])
-
-  function retryModelLoad(modelType: 'LLM' | 'IMAGE') {
-    const requestVersion = ++requestVersionRef.current
-
-    if (modelType === 'LLM') {
-      setLoadingLlmModels(true)
-      setLlmError('')
-      void getKnowledgeModels(accountId, 'LLM')
-        .then((models) => {
-          if (requestVersion === requestVersionRef.current) {
-            setLlmModels(models)
-          }
-        })
-        .catch((error: unknown) => {
-          if (requestVersion === requestVersionRef.current) {
-            setLlmModels([])
-            setLlmError(error instanceof Error ? error.message : '加载失败')
-          }
-        })
-        .finally(() => {
-          if (requestVersion === requestVersionRef.current) {
-            setLoadingLlmModels(false)
-          }
-        })
-      return
-    }
-
-    setLoadingImageModels(true)
+  async function loadImageModels() {
+    setImageLoading(true)
     setImageError('')
-    void getKnowledgeModels(accountId, 'IMAGE')
-      .then((models) => {
-        if (requestVersion === requestVersionRef.current) {
-          setImageModels(models)
-        }
-      })
-      .catch((error: unknown) => {
-        if (requestVersion === requestVersionRef.current) {
-          setImageModels([])
-          setImageError(error instanceof Error ? error.message : '加载失败')
-        }
-      })
-      .finally(() => {
-        if (requestVersion === requestVersionRef.current) {
-          setLoadingImageModels(false)
-        }
-      })
+    try {
+      const models = await getKnowledgeModels(accountId, 'IMAGE')
+      if (!aliveRef.current) {
+        return
+      }
+      setImageModels(models)
+    } catch (error) {
+      if (!aliveRef.current) {
+        return
+      }
+      setImageError(error instanceof Error ? error.message : '视觉模型加载失败')
+    } finally {
+      if (aliveRef.current) {
+        setImageLoading(false)
+      }
+    }
   }
 
-  function showValidationMessages(errors: string[]) {
-    errors.forEach((item) => message.warning(item))
+  async function enterRulesStep() {
+    setStep('rules')
+    if (llmModels.length === 0 && !llmLoading) {
+      void loadLlmModels()
+    }
+    if (imageModels.length === 0 && !imageLoading) {
+      void loadImageModels()
+    }
   }
 
-  function handleUploadChange(info: { fileList: UploadFile[] }) {
-    const incomingFiles = info.fileList.flatMap((item) => item.originFileObj ? [item.originFileObj as File] : [])
-    const result = validateIncomingFiles({ currentFiles: files, incomingFiles })
-    setFiles(result.acceptedFiles)
-    showValidationMessages(result.errors)
-  }
-
-  const uploadProps: UploadProps = {
-    accept: Array.from(SUPPORTED_EXTENSIONS).map((item) => `.${item}`).join(','),
-    beforeUpload: () => false,
-    fileList: [],
-    multiple: true,
-    onChange: handleUploadChange,
-    showUploadList: false,
+  function syncTask(payload: unknown) {
+    const nextTask = normalizeTask(payload)
+    setCurrentTask(nextTask)
+    setHistoryItems((items) => {
+      const withoutCurrent = items.filter((item) => item.taskId !== nextTask.taskId)
+      return [nextTask, ...withoutCurrent]
+    })
+    return nextTask
   }
 
   async function loadPreview(taskId: string, silent = false) {
-    const requestVersion = ++requestVersionRef.current
-    if (!silent) {
-      setPreviewLoading(true)
+    if (!taskId) {
+      return
     }
+    setPreviewLoading(true)
+    setPreviewError('')
     try {
-      const payload = await previewKnowledgeUploadTask(accountId, knowledgeId, taskId, { page: 1, page_size: 100 })
-      if (requestVersion === requestVersionRef.current) {
-        setPreviewItems(previewItemsFromPayload(payload))
+      const payload = await previewKnowledgeUploadTask(accountId, knowledgeId, taskId, { page: 1, page_size: 200 })
+      if (!aliveRef.current) {
+        return
+      }
+      setPreviewDocuments(normalizePreviewDocuments(extractRecords(payload)))
+      if (!silent) {
+        message.success('预览已加载')
       }
     } catch (error) {
-      if (requestVersion === requestVersionRef.current) {
-        setPreviewItems([])
-        if (!silent) {
-          message.error(`预览加载失败：${error instanceof Error ? error.message : '未知错误'}`)
-        }
+      if (!aliveRef.current) {
+        return
+      }
+      const nextError = error instanceof Error ? error.message : '预览加载失败'
+      setPreviewDocuments([])
+      setPreviewError(nextError)
+      if (!silent) {
+        message.error(`预览加载失败：${nextError}`)
       }
     } finally {
-      if (requestVersion === requestVersionRef.current && !silent) {
+      if (aliveRef.current) {
         setPreviewLoading(false)
       }
     }
-  }
-
-  async function loadTaskHistory(force = false) {
-    if (historyLoaded && !force) {
-      return
-    }
-    const requestVersion = ++requestVersionRef.current
-    setHistoryLoading(true)
-    try {
-      const payload = await listKnowledgeUploadTasks(accountId, knowledgeId, { page: 1, page_size: 20 })
-      if (requestVersion === requestVersionRef.current) {
-        setHistoryItems(historyItemsFromPayload(payload))
-        setHistoryLoaded(true)
-      }
-    } catch (error) {
-      if (requestVersion === requestVersionRef.current) {
-        message.error(`任务列表加载失败：${error instanceof Error ? error.message : '未知错误'}`)
-      }
-    } finally {
-      if (requestVersion === requestVersionRef.current) {
-        setHistoryLoading(false)
-      }
-    }
-  }
-
-  async function syncTaskState(taskId: string) {
-    const requestVersion = ++requestVersionRef.current
-    const payload = await getKnowledgeUploadTask(accountId, knowledgeId, taskId)
-    if (requestVersion !== requestVersionRef.current) {
-      return null
-    }
-    const nextTask = normalizeTaskPayload(payload)
-    setCurrentTask(nextTask)
-    return nextTask
   }
 
   async function pollTask(taskId: string) {
@@ -548,22 +577,14 @@ function WorkbenchInner({ accountId, knowledgeId, knowledgeName, onCancel, onImp
       return
     }
     try {
-      const nextTask = await syncTaskState(taskId)
-      if (!nextTask) {
+      const payload = await getKnowledgeUploadTask(accountId, knowledgeId, taskId)
+      if (!aliveRef.current) {
         return
       }
+      const nextTask = syncTask(payload)
       if (nextTask.status === 'PREVIEW_READY') {
         clearPollTimer()
         void loadPreview(taskId, true)
-        return
-      }
-      if (nextTask.status === 'COMPLETED') {
-        clearPollTimer()
-        setStep('success')
-        return
-      }
-      if (nextTask.status === 'FAILED' || nextTask.status === 'CANCELLED') {
-        clearPollTimer()
         return
       }
       if (shouldPollStatus(nextTask.status)) {
@@ -571,76 +592,154 @@ function WorkbenchInner({ accountId, knowledgeId, knowledgeName, onCancel, onImp
         pollTimerRef.current = window.setTimeout(() => {
           void pollTask(taskId)
         }, 1000)
+        return
+      }
+      if (isTerminalStatus(nextTask.status)) {
+        clearPollTimer()
       }
     } catch (error) {
+      if (!aliveRef.current) {
+        return
+      }
       clearPollTimer()
-      message.error(`任务状态刷新失败：${error instanceof Error ? error.message : '未知错误'}`)
+      const nextError = error instanceof Error ? error.message : '任务刷新失败'
+      message.error(`任务刷新失败：${nextError}`)
     }
   }
 
-  function startPolling(taskId: string) {
+  function beginPolling(taskId: string) {
     clearPollTimer()
+    if (!taskId) {
+      return
+    }
     pollTimerRef.current = window.setTimeout(() => {
       void pollTask(taskId)
     }, 1000)
   }
 
-  async function createTask() {
-    if (files.length === 0) {
-      message.warning('文件不能为空')
-      return
+  async function loadTaskHistory(silent = false) {
+    setHistoryLoading(true)
+    try {
+      const payload = await listKnowledgeUploadTasks(accountId, knowledgeId, { page: 1, page_size: 20 })
+      if (!aliveRef.current) {
+        return
+      }
+      setHistoryItems(extractRecords(payload).map((record) => normalizeTask(record)))
+    } catch (error) {
+      if (!aliveRef.current) {
+        return
+      }
+      if (!silent) {
+        const nextError = error instanceof Error ? error.message : '任务历史加载失败'
+        message.error(`任务历史加载失败：${nextError}`)
+      }
+    } finally {
+      if (aliveRef.current) {
+        setHistoryLoading(false)
+      }
     }
-    if (modeNeedsTextModel(splitMode) && !llmModelId) {
-      message.warning('请选择文本模型')
-      return
-    }
-    if (modeNeedsVisionModel(splitMode) && !visionModelId) {
-      message.warning('请选择视觉模型')
+  }
+
+  const handleDraggerChange: NonNullable<UploadProps['onChange']> = (info) => {
+    const incomingFiles = info.fileList
+      .map((item) => item.originFileObj)
+      .filter((item): item is NonNullable<typeof item> => item instanceof File)
+
+    if (incomingFiles.length === 0) {
       return
     }
 
-    setSubmitting(true)
+    const result = validateIncomingFiles({ currentFiles: selectedFiles, incomingFiles })
+    setSelectedFiles(result.acceptedFiles)
+    result.errors.forEach((item) => message.error(item))
+    setDraggerKey((value) => value + 1)
+  }
+
+  async function createPreviewTask() {
+    if (selectedFiles.length === 0) {
+      message.warning('请先选择文件')
+      return
+    }
+    if (splitMode === 'advanced' && advancedLimit <= 0) {
+      message.warning('高级分段需要有效的分段长度')
+      return
+    }
+    if (splitMode === 'llm_text' && !llmModelId) {
+      message.warning('模型分段需要选择一个 LLM 模型')
+      return
+    }
+    if (splitMode === 'llm_vision' && (!llmModelId || !visionModelId)) {
+      message.warning('视觉模型分段需要同时选择 LLM 与 IMAGE 模型')
+      return
+    }
+
+    setCreatingPreview(true)
+    setPreviewDocuments([])
+    setPreviewError('')
     try {
-      const payload = buildUploadPayload({
-        files,
+      const payload = await uploadKnowledgeDocuments(accountId, knowledgeId, buildUploadPayload({
+        files: selectedFiles,
         splitMode,
-        limit,
+        limit: advancedLimit,
         patternsText,
         withFilter,
         llmModelId,
         visionModelId,
         qualityOptimize,
-      })
-      const response = await uploadKnowledgeDocuments(accountId, knowledgeId, payload)
-      const task = normalizeTaskPayload(response)
-      if (!task.taskId) {
-        throw new Error('上传任务未返回 task_id')
+      }))
+      if (!aliveRef.current) {
+        return
       }
-      setCurrentTask(task)
-      setPreviewItems([])
-      await loadTaskHistory(true)
-      startPolling(task.taskId)
+      const nextTask = syncTask(payload)
+      if (!nextTask.taskId) {
+        message.error('预览任务缺少 task_id')
+        return
+      }
+      if (nextTask.status === 'PREVIEW_READY') {
+        void loadPreview(nextTask.taskId, true)
+      } else if (shouldPollStatus(nextTask.status)) {
+        beginPolling(nextTask.taskId)
+      }
+      void loadTaskHistory(true)
+      message.success('预览任务已创建')
     } catch (error) {
-      message.error(`创建上传任务失败：${error instanceof Error ? error.message : '未知错误'}`)
+      if (!aliveRef.current) {
+        return
+      }
+      const nextError = error instanceof Error ? error.message : '预览任务创建失败'
+      message.error(`预览任务创建失败：${nextError}`)
     } finally {
-      setSubmitting(false)
+      if (aliveRef.current) {
+        setCreatingPreview(false)
+      }
     }
   }
 
-  async function confirmApply(taskId: string) {
+  async function confirmImport(taskId: string) {
     if (!taskId) {
       return
     }
-    setSubmitting(true)
+    setApplyingTask(true)
     try {
-      await applyKnowledgeUploadTask(accountId, knowledgeId, taskId)
-      setCurrentTask((current) => current && current.taskId === taskId ? { ...current, status: 'APPLYING' } : current)
-      startPolling(taskId)
-      await loadTaskHistory(true)
+      const payload = await applyKnowledgeUploadTask(accountId, knowledgeId, taskId)
+      if (!aliveRef.current) {
+        return
+      }
+      const nextTask = syncTask(payload)
+      beginPolling(nextTask.taskId || taskId)
+      setStep('success')
+      void loadTaskHistory(true)
+      message.success('已确认导入')
     } catch (error) {
-      message.error(`确认导入失败：${error instanceof Error ? error.message : '未知错误'}`)
+      if (!aliveRef.current) {
+        return
+      }
+      const nextError = error instanceof Error ? error.message : '确认导入失败'
+      message.error(`确认导入失败：${nextError}`)
     } finally {
-      setSubmitting(false)
+      if (aliveRef.current) {
+        setApplyingTask(false)
+      }
     }
   }
 
@@ -648,19 +747,28 @@ function WorkbenchInner({ accountId, knowledgeId, knowledgeName, onCancel, onImp
     if (!taskId) {
       return
     }
-    setSubmitting(true)
+    setMutatingTaskId(`cancel:${taskId}`)
     try {
-      clearPollTimer()
       await cancelKnowledgeUploadTask(accountId, knowledgeId, taskId)
-      const task = await syncTaskState(taskId)
-      if (!task) {
-        setCurrentTask((current) => current && current.taskId === taskId ? { ...current, status: 'CANCELLED' } : current)
+      if (!aliveRef.current) {
+        return
       }
-      await loadTaskHistory(true)
+      clearPollTimer()
+      if (currentTask?.taskId === taskId) {
+        setCurrentTask({ ...currentTask, status: 'CANCELLED' })
+      }
+      void loadTaskHistory(true)
+      message.success('任务已取消')
     } catch (error) {
-      message.error(`取消任务失败：${error instanceof Error ? error.message : '未知错误'}`)
+      if (!aliveRef.current) {
+        return
+      }
+      const nextError = error instanceof Error ? error.message : '任务取消失败'
+      message.error(`任务取消失败：${nextError}`)
     } finally {
-      setSubmitting(false)
+      if (aliveRef.current) {
+        setMutatingTaskId('')
+      }
     }
   }
 
@@ -668,311 +776,470 @@ function WorkbenchInner({ accountId, knowledgeId, knowledgeName, onCancel, onImp
     if (!taskId) {
       return
     }
-    setSubmitting(true)
+    setMutatingTaskId(`delete:${taskId}`)
     try {
       await deleteKnowledgeUploadTask(accountId, knowledgeId, taskId)
+      if (!aliveRef.current) {
+        return
+      }
+      setHistoryItems((items) => items.filter((item) => item.taskId !== taskId))
       if (currentTask?.taskId === taskId) {
         setCurrentTask(null)
-        setPreviewItems([])
+        setPreviewDocuments([])
       }
-      await loadTaskHistory(true)
+      message.success('任务记录已删除')
     } catch (error) {
-      message.error(`删除任务失败：${error instanceof Error ? error.message : '未知错误'}`)
+      if (!aliveRef.current) {
+        return
+      }
+      const nextError = error instanceof Error ? error.message : '任务删除失败'
+      message.error(`任务删除失败：${nextError}`)
     } finally {
-      setSubmitting(false)
+      if (aliveRef.current) {
+        setMutatingTaskId('')
+      }
     }
   }
 
-  function handleHistoryTask(task: HistoryItem) {
+  function restoreHistoryTask(task: NormalizedTask) {
     setCurrentTask(task)
-    if (task.status === 'PREVIEW_READY' || task.status === 'COMPLETED') {
-      void loadPreview(task.taskId)
-    } else {
-      setPreviewItems([])
+    if (task.status === 'PREVIEW_READY') {
+      void loadPreview(task.taskId, true)
+      return
     }
+    if (shouldPollStatus(task.status)) {
+      beginPolling(task.taskId)
+      return
+    }
+    setPreviewDocuments([])
   }
 
-  const historyCollapseItems: CollapseProps['items'] = [
+  const historyItemsConfig = [
     {
       key: 'history',
       label: '任务历史',
-      children: historyLoading ? <Spin /> : (
-        historyItems.length === 0 ? <Empty description="暂无任务" image={Empty.PRESENTED_IMAGE_SIMPLE} /> : (
-          <List
-            dataSource={historyItems}
-            renderItem={(task) => (
+      children: historyLoading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
+          <Spin />
+        </div>
+      ) : historyItems.length === 0 ? (
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无历史任务" />
+      ) : (
+        <List
+          size="small"
+          dataSource={historyItems}
+          renderItem={(item) => {
+            const status = taskStatusMeta(item.status)
+            return (
               <List.Item
                 actions={[
-                  <Button key="use" size="small" type="text" onClick={() => handleHistoryTask(task)}>查看</Button>,
-                  <Button key="refresh" size="small" type="text" icon={<ReloadOutlined />} onClick={() => startPolling(task.taskId)} />,
-                  <Button key="preview" size="small" type="text" icon={<EyeOutlined />} disabled={task.status !== 'PREVIEW_READY' && task.status !== 'COMPLETED'} onClick={() => void loadPreview(task.taskId)} />,
-                  <Button key="apply" size="small" type="text" disabled={task.status !== 'PREVIEW_READY'} onClick={() => void confirmApply(task.taskId)}>确认导入</Button>,
-                  <Button key="cancel" size="small" type="text" disabled={!shouldPollStatus(task.status)} onClick={() => void cancelTask(task.taskId)}>取消</Button>,
-                  <Button key="delete" size="small" type="text" danger icon={<DeleteOutlined />} onClick={() => void deleteTask(task.taskId)} />,
-                ]}
+                  <Button key="restore" size="small" type="text" icon={<EyeOutlined />} onClick={() => restoreHistoryTask(item)}>
+                    恢复
+                  </Button>,
+                  item.status === 'PREVIEW_READY' ? (
+                    <Button key="apply" size="small" type="text" icon={<CheckCircleFilled />} onClick={() => void confirmImport(item.taskId)}>
+                      确认导入
+                    </Button>
+                  ) : null,
+                  shouldPollStatus(item.status) ? (
+                    <Button
+                      key="cancel"
+                      size="small"
+                      type="text"
+                      icon={<StopOutlined />}
+                      loading={mutatingTaskId === `cancel:${item.taskId}`}
+                      onClick={() => void cancelTask(item.taskId)}
+                    >
+                      取消
+                    </Button>
+                  ) : null,
+                  <Button
+                    key="delete"
+                    size="small"
+                    type="text"
+                    danger
+                    icon={<DeleteOutlined />}
+                    loading={mutatingTaskId === `delete:${item.taskId}`}
+                    onClick={() => void deleteTask(item.taskId)}
+                  >
+                    删除
+                  </Button>,
+                ].filter(Boolean)}
               >
                 <List.Item.Meta
-                  title={(
-                    <Space wrap>
-                      <Text code>{task.taskId || '-'}</Text>
-                      <Tag color={STATUS_META[task.status].color}>{STATUS_META[task.status].label}</Tag>
+                  title={
+                    <Space size={8} wrap>
+                      <Text strong>{item.taskId || '未命名任务'}</Text>
+                      <Tag color={status.color}>{status.text}</Tag>
+                      <Text type="secondary">{item.createdAtText || '刚刚创建'}</Text>
                     </Space>
-                  )}
-                  description={task.createdAt || `进度 ${task.progressPercent}% · ${task.processedCount}/${task.totalCount || 0}`}
+                  }
+                  description={
+                    <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                      <Text type="secondary">{item.stageText || '-'}</Text>
+                      <Progress percent={item.progressPercent} size="small" />
+                    </Space>
+                  }
                 />
               </List.Item>
-            )}
-          />
-        )
+            )
+          }}
+        />
       ),
     },
   ]
 
   return (
-    <div style={{ display: 'grid', gap: 16 }}>
-      <Card>
-        <Space direction="vertical" size={4}>
-          <Title level={4} style={{ margin: 0 }}>MaxKB 文档上传工作台</Title>
-          <Text type="secondary">知识库：{knowledgeName}。步骤一选择文件，步骤二选择分段模式和模型，预览后再确认导入。</Text>
-          <Space wrap>
-            <Tag color={step === 'files' ? 'processing' : 'default'}>步骤一 选择文件</Tag>
-            <Tag color={step === 'rules' ? 'processing' : 'default'}>步骤二 设置规则</Tag>
-            <Tag color={step === 'success' ? 'success' : 'default'}>完成</Tag>
-          </Space>
-        </Space>
-      </Card>
+    <div style={{ display: 'grid', gap: 20 }}>
+      <div style={{ display: 'grid', gap: 8 }}>
+        <Title level={4} style={{ margin: 0 }}>
+          导入到 {knowledgeName}
+        </Title>
+        <Text type="secondary">按 MaxKB 的两步流程先选文件，再生成预览并确认导入。</Text>
+      </div>
 
-      {step === 'files' ? (
-        <Card>
-          <Space direction="vertical" size={16} style={{ width: '100%' }}>
-            <Upload.Dragger {...uploadProps} style={{ padding: '24px 16px' }}>
-              <InboxOutlined style={{ fontSize: 30 }} />
-              <div style={{ marginTop: 12, fontSize: 16, fontWeight: 600 }}>拖拽文件到此处，或点击选择文件</div>
-              <div style={{ marginTop: 8, color: 'rgba(0, 0, 0, 0.45)' }}>
-                支持常见办公与文本格式，单个文件不超过 100MB，最多 50 个。
-              </div>
-            </Upload.Dragger>
+      <Steps current={currentStepIndex} items={STEP_ITEMS} />
 
-            {files.length === 0 ? (
-              <Empty description="文件不能为空" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
-                {files.map((file) => (
-                  <Card
-                    key={fileKey(file)}
-                    size="small"
-                    styles={{ body: { padding: 12 } }}
-                    extra={(
-                      <Button
-                        aria-label={`删除 ${file.name}`}
-                        icon={<DeleteOutlined />}
-                        size="small"
-                        type="text"
-                        onClick={() => setFiles((current) => current.filter((item) => fileKey(item) !== fileKey(file)))}
-                      />
-                    )}
-                  >
-                    <Space align="start">
-                      <FileTextOutlined style={{ marginTop: 4 }} />
-                      <div>
-                        <div style={{ fontWeight: 600, wordBreak: 'break-all' }}>{file.name}</div>
-                        <Text type="secondary">{formatFileSize(file.size)}</Text>
-                      </div>
-                    </Space>
-                  </Card>
-                ))}
-              </div>
-            )}
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-              <Button onClick={onCancel}>取消</Button>
-              <Button type="primary" disabled={files.length === 0} onClick={() => setStep('rules')}>下一步</Button>
-            </div>
-          </Space>
-        </Card>
+      {step === 'success' ? (
+        <Result
+          status="success"
+          title="导入任务已提交"
+          subTitle={currentTask?.taskId ? `任务 ${currentTask.taskId} 已进入入库流程。` : '任务已进入入库流程。'}
+          extra={[
+            <Button key="done" type="primary" onClick={onImported}>
+              返回知识库
+            </Button>,
+            <Button
+              key="status"
+              onClick={() => {
+                setStep('rules')
+                setHistoryOpen(true)
+                void loadTaskHistory(true)
+              }}
+            >
+              查看任务状态
+            </Button>,
+          ]}
+        />
       ) : null}
 
-      {step === 'rules' ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1fr) minmax(320px, 1fr)', gap: 16 }}>
-          <Card title="步骤二 选择模式与模型">
-            <Space direction="vertical" size={16} style={{ width: '100%' }}>
-              <div style={{ display: 'grid', gap: 12 }}>
-                {MODE_OPTIONS.map((option) => {
-                  const active = option.value === splitMode
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => setSplitMode(option.value)}
-                      style={{
-                        textAlign: 'left',
-                        padding: '14px 16px',
-                        borderRadius: 12,
-                        border: `1px solid ${active ? '#1677ff' : '#d9d9d9'}`,
-                        background: active ? '#f0f7ff' : '#fff',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <div style={{ fontWeight: 600 }}>{option.title}</div>
-                      <div style={{ marginTop: 6, color: 'rgba(0, 0, 0, 0.45)' }}>{option.description}</div>
-                    </button>
-                  )
-                })}
-              </div>
+      {step === 'files' ? (
+        <div style={{ display: 'grid', gap: 16 }}>
+          <Alert
+            type="info"
+            showIcon
+            message="普通文档上传"
+            description="先选择文件，再在下一步配置分段规则并生成预览。这里保留 MaxKB 的两步导入方式，但不提供目录上传。"
+          />
 
-              <Alert type="info" showIcon message={currentMode.title} description={currentMode.description} />
+          <Upload.Dragger
+            key={draggerKey}
+            multiple
+            beforeUpload={() => false}
+            showUploadList={false}
+            accept={accept}
+            onChange={handleDraggerChange}
+            style={{ padding: 24 }}
+          >
+            <div style={{ display: 'grid', gap: 12, justifyItems: 'center' }}>
+              <FileTextOutlined style={{ fontSize: 28, color: '#1677ff' }} />
+              <Text strong>拖拽文件到这里，或点击选择文件</Text>
+              <Text type="secondary">支持常见办公与文本格式，单个文件不超过 100MB，最多 50 个。</Text>
+              <Button type="primary">选择文件</Button>
+            </div>
+          </Upload.Dragger>
 
-              {splitMode === 'advanced' ? (
-                <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                  <div>
-                    <Text strong>高级分段长度</Text>
-                    <InputNumber min={1} style={{ width: '100%', marginTop: 8 }} value={limit} onChange={(value) => setLimit(typeof value === 'number' ? value : 4096)} />
-                  </div>
-                  <div>
-                    <Text strong>高级分段规则</Text>
-                    <Input.TextArea rows={4} style={{ marginTop: 8 }} value={patternsText} onChange={(event) => setPatternsText(event.target.value)} />
-                  </div>
-                  <Checkbox checked={withFilter} onChange={(event) => setWithFilter(event.target.checked)}>高级分段启用过滤</Checkbox>
-                </Space>
-              ) : null}
-
-              {modeNeedsTextModel(splitMode) ? (
-                <div>
-                  <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-                    <Text strong>文本模型 UUID</Text>
-                    <Button size="small" type="text" icon={<ReloadOutlined />} loading={loadingLlmModels} onClick={() => retryModelLoad('LLM')}>重试</Button>
-                  </Space>
-                  {llmError ? <Alert style={{ marginTop: 8 }} type="warning" showIcon message="文本模型加载失败" description="智能分段和高级分段仍可继续使用。" /> : null}
-                  <Select
-                    style={{ width: '100%', marginTop: 8 }}
-                    options={llmOptions}
-                    value={llmModelId || undefined}
-                    onChange={setLlmModelId}
-                    loading={loadingLlmModels}
-                    placeholder="选择文本模型"
-                    showSearch
-                  />
-                  {llmError ? <Text type="secondary">{llmError}</Text> : null}
-                </div>
-              ) : null}
-
-              {modeNeedsVisionModel(splitMode) ? (
-                <div>
-                  <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-                    <Text strong>视觉模型 UUID</Text>
-                    <Button size="small" type="text" icon={<ReloadOutlined />} loading={loadingImageModels} onClick={() => retryModelLoad('IMAGE')}>重试</Button>
-                  </Space>
-                  {imageError ? <Alert style={{ marginTop: 8 }} type="warning" showIcon message="视觉模型加载失败" description="请重试模型列表，或切换到不依赖视觉模型的模式。" /> : null}
-                  <Select
-                    style={{ width: '100%', marginTop: 8 }}
-                    options={imageOptions}
-                    value={visionModelId || undefined}
-                    onChange={setVisionModelId}
-                    loading={loadingImageModels}
-                    placeholder="选择视觉模型"
-                    showSearch
-                  />
-                  {imageError ? <Text type="secondary">{imageError}</Text> : null}
-                </div>
-              ) : null}
-
-              {(splitMode === 'llm_text' || splitMode === 'llm_vision') ? (
-                <Checkbox checked={qualityOptimize} onChange={(event) => setQualityOptimize(event.target.checked)}>启用质量优化</Checkbox>
-              ) : null}
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                <Button onClick={() => setStep('files')}>上一步</Button>
-                <Space wrap>
-                  <Button onClick={onCancel}>取消</Button>
-                  <Button type="primary" loading={submitting} onClick={() => void createTask()}>创建预览任务</Button>
-                </Space>
-              </div>
-            </Space>
-          </Card>
-
-          <Card title="任务状态、预览与确认">
-            <Space direction="vertical" size={16} style={{ width: '100%' }}>
-              {currentTask ? (
-                <>
-                  <Space wrap>
-                    <Text code>{currentTask.taskId}</Text>
-                    <Tag color={STATUS_META[currentTask.status].color}>{STATUS_META[currentTask.status].label}</Tag>
-                  </Space>
-                  <Progress
-                    percent={currentTask.progressPercent}
-                    status={currentTask.status === 'FAILED' ? 'exception' : currentTask.status === 'COMPLETED' ? 'success' : 'active'}
-                  />
-                  <Text type="secondary">已处理 {currentTask.processedCount} / {currentTask.totalCount || 0}，剩余 {currentTask.remainingCount}</Text>
-                  {currentTask.messageText ? <Alert type={currentTask.status === 'FAILED' ? 'error' : 'info'} showIcon message={currentTask.messageText} /> : null}
-                  <Space wrap>
-                    <Button icon={<ReloadOutlined />} onClick={() => startPolling(currentTask.taskId)}>刷新状态</Button>
-                    <Button icon={<EyeOutlined />} disabled={currentTask.status !== 'PREVIEW_READY' && currentTask.status !== 'COMPLETED'} onClick={() => void loadPreview(currentTask.taskId)}>加载预览</Button>
-                    <Button type="primary" icon={<CheckCircleOutlined />} disabled={currentTask.status !== 'PREVIEW_READY'} loading={submitting} onClick={() => void confirmApply(currentTask.taskId)}>确认导入</Button>
-                    <Button danger icon={<StopOutlined />} disabled={!shouldPollStatus(currentTask.status)} loading={submitting} onClick={() => void cancelTask(currentTask.taskId)}>取消任务</Button>
-                  </Space>
-                </>
-              ) : (
-                <Empty description="先创建上传任务，再在这里查看预览和确认导入" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-              )}
-
-              <div>
-                <Title level={5} style={{ marginTop: 0 }}>预览内容</Title>
-                {previewLoading ? <Spin /> : (
-                  previewItems.length === 0 ? (
-                    <Empty description="暂无预览内容" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                  ) : (
-                    <List
-                      dataSource={previewItems}
-                      renderItem={(item) => (
-                        <List.Item>
-                          <Card size="small" style={{ width: '100%' }}>
-                            <Space direction="vertical" size={8} style={{ width: '100%' }}>
-                              <Space>
-                                <RobotOutlined />
-                                <Text strong>{item.titleText}</Text>
-                              </Space>
-                              <Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }} ellipsis={{ rows: 6, expandable: true, symbol: '展开' }}>
-                                {item.contentText || '该片段没有返回正文'}
-                              </Paragraph>
-                            </Space>
-                          </Card>
-                        </List.Item>
-                      )}
+          {selectedFiles.length > 0 ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
+              {selectedFiles.map((file) => (
+                <Card key={file.name} size="small" styles={{ body: { padding: 12 } }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <FileTextOutlined style={{ fontSize: 18, color: '#1677ff' }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <Text strong ellipsis={{ tooltip: file.name }} style={{ display: 'block' }}>
+                        {file.name}
+                      </Text>
+                      <Text type="secondary">{formatBytes(file.size)}</Text>
+                    </div>
+                    <Button
+                      aria-label={`删除 ${file.name}`}
+                      icon={<DeleteOutlined />}
+                      size="small"
+                      type="text"
+                      onClick={() => setSelectedFiles((items) => items.filter((item) => item.name !== file.name))}
                     />
-                  )
-                )}
-              </div>
-
-              <Collapse
-                items={historyCollapseItems}
-                activeKey={historyOpenKeys}
-                onChange={(keys) => {
-                  const nextKeys = Array.isArray(keys) ? keys.map(String) : [String(keys)]
-                  setHistoryOpenKeys(nextKeys)
-                  if (nextKeys.includes('history')) {
-                    void loadTaskHistory()
-                  }
-                }}
-              />
-            </Space>
-          </Card>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有选择文件" />
+          )}
         </div>
       ) : null}
 
-      {step === 'success' ? (
-        <Card>
-          <Space direction="vertical" size={16} style={{ width: '100%', alignItems: 'center', textAlign: 'center' }}>
-            <CheckCircleOutlined style={{ fontSize: 40, color: '#52c41a' }} />
-            <Title level={4} style={{ margin: 0 }}>导入完成</Title>
-            <Text type="secondary">任务已完成入库。点击下方按钮返回上层并刷新列表。</Text>
-            <Button type="primary" onClick={onImported}>返回并刷新</Button>
-          </Space>
-        </Card>
+      {step === 'rules' ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, 420px) minmax(0, 1fr)', gap: 20 }}>
+          <div style={{ display: 'grid', gap: 16, alignContent: 'start' }}>
+            <Alert
+              type="info"
+              showIcon
+              message="第二步：规则与预览"
+              description="这里创建的是 autoApply=false 的预览任务，只有在右侧确认后才会真正导入知识库。"
+            />
+
+            <div style={{ display: 'grid', gap: 12 }}>
+              {STRATEGY_CARDS.map((item) => {
+                const active = splitMode === item.value
+                return (
+                  <Card
+                    key={item.value}
+                    hoverable
+                    onClick={() => setSplitMode(item.value)}
+                    style={{
+                      borderColor: active ? '#1677ff' : undefined,
+                      boxShadow: active ? '0 0 0 1px rgba(22,119,255,0.14)' : undefined,
+                    }}
+                    styles={{ body: { padding: 14 } }}
+                  >
+                    <div style={{ display: 'grid', gap: 6 }}>
+                      <Space size={8}>
+                        <Text strong>{item.title}</Text>
+                        {active ? <Tag color="processing">当前策略</Tag> : null}
+                      </Space>
+                      <Text type="secondary">{item.description}</Text>
+                    </div>
+                  </Card>
+                )
+              })}
+            </div>
+
+            {splitMode === 'advanced' ? (
+              <Card size="small" title="高级分段设置">
+                <div style={{ display: 'grid', gap: 12 }}>
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    <Text>分段长度</Text>
+                    <InputNumber<number>
+                      min={1}
+                      value={advancedLimit}
+                      style={{ width: '100%' }}
+                      onChange={(value) => setAdvancedLimit(value ?? 0)}
+                    />
+                  </div>
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    <Text>分段标记</Text>
+                    <Input.TextArea
+                      value={patternsText}
+                      placeholder="每行一个分段标记，例如 ## 或 ###"
+                      autoSize={{ minRows: 3, maxRows: 6 }}
+                      onChange={(event) => setPatternsText(event.target.value)}
+                    />
+                  </div>
+                  <Checkbox checked={withFilter} onChange={(event) => setWithFilter(event.target.checked)}>
+                    清洗文本 with_filter
+                  </Checkbox>
+                </div>
+              </Card>
+            ) : null}
+
+            {splitMode === 'llm_text' ? (
+              <Card
+                size="small"
+                title="模型分段"
+                extra={
+                  <Button size="small" icon={<ReloadOutlined />} loading={llmLoading} onClick={() => void loadLlmModels()}>
+                    重试 LLM
+                  </Button>
+                }
+              >
+                <div style={{ display: 'grid', gap: 12 }}>
+                  <Select
+                    showSearch
+                    placeholder="选择 LLM 模型"
+                    loading={llmLoading}
+                    value={llmModelId || undefined}
+                    options={llmOptions}
+                    onChange={setLlmModelId}
+                  />
+                  {llmError ? <Alert type="error" showIcon message={llmError} /> : null}
+                  <Checkbox checked={qualityOptimize} onChange={(event) => setQualityOptimize(event.target.checked)}>
+                    高质量优化
+                  </Checkbox>
+                </div>
+              </Card>
+            ) : null}
+
+            {splitMode === 'llm_vision' ? (
+              <Card size="small" title="视觉模型分段">
+                <div style={{ display: 'grid', gap: 12 }}>
+                  <Space style={{ justifyContent: 'space-between' }} wrap>
+                    <Text type="secondary">视觉与文本模型支持分别重试。</Text>
+                    <Space>
+                      <Button size="small" icon={<ReloadOutlined />} loading={imageLoading} onClick={() => void loadImageModels()}>
+                        重试 IMAGE
+                      </Button>
+                      <Button size="small" icon={<ReloadOutlined />} loading={llmLoading} onClick={() => void loadLlmModels()}>
+                        重试 LLM
+                      </Button>
+                    </Space>
+                  </Space>
+                  <Select
+                    showSearch
+                    placeholder="选择 IMAGE 模型"
+                    loading={imageLoading}
+                    value={visionModelId || undefined}
+                    options={imageOptions}
+                    onChange={setVisionModelId}
+                  />
+                  {imageError ? <Alert type="error" showIcon message={imageError} /> : null}
+                  <Select
+                    showSearch
+                    placeholder="选择 LLM 模型"
+                    loading={llmLoading}
+                    value={llmModelId || undefined}
+                    options={llmOptions}
+                    onChange={setLlmModelId}
+                  />
+                  {llmError ? <Alert type="error" showIcon message={llmError} /> : null}
+                  <Checkbox checked={qualityOptimize} onChange={(event) => setQualityOptimize(event.target.checked)}>
+                    高质量优化
+                  </Checkbox>
+                </div>
+              </Card>
+            ) : null}
+          </div>
+
+          <div style={{ display: 'grid', gap: 16, alignContent: 'start' }}>
+            <Card
+              size="small"
+              title="当前任务"
+              extra={currentTask ? (
+                <Space size={8}>
+                  <Tag color={currentStatus.color}>{currentStatus.text}</Tag>
+                  {shouldPollStatus(currentTask.status) ? <LoadingOutlined /> : null}
+                </Space>
+              ) : null}
+            >
+              {currentTask ? (
+                <div style={{ display: 'grid', gap: 12 }}>
+                  <Progress percent={currentTask.progressPercent} />
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 12 }}>
+                    <Card size="small" styles={{ body: { padding: 12 } }}>
+                      <Text type="secondary">阶段</Text>
+                      <div><Text strong>{currentTask.stageText || '-'}</Text></div>
+                    </Card>
+                    <Card size="small" styles={{ body: { padding: 12 } }}>
+                      <Text type="secondary">已处理</Text>
+                      <div><Text strong>{currentTask.processedCount}</Text></div>
+                    </Card>
+                    <Card size="small" styles={{ body: { padding: 12 } }}>
+                      <Text type="secondary">总数</Text>
+                      <div><Text strong>{currentTask.totalCount}</Text></div>
+                    </Card>
+                    <Card size="small" styles={{ body: { padding: 12 } }}>
+                      <Text type="secondary">剩余</Text>
+                      <div><Text strong>{currentTask.remainingCount}</Text></div>
+                    </Card>
+                  </div>
+                  {currentTask.messageText ? (
+                    <Alert type={currentTask.status === 'FAILED' ? 'error' : 'info'} showIcon message={currentTask.messageText} />
+                  ) : null}
+                  <Space wrap>
+                    <Button icon={<ReloadOutlined />} loading={creatingPreview} onClick={() => void createPreviewTask()}>
+                      重试
+                    </Button>
+                    {shouldPollStatus(currentTask.status) ? (
+                      <Button
+                        danger
+                        icon={<StopOutlined />}
+                        loading={mutatingTaskId === `cancel:${currentTask.taskId}`}
+                        onClick={() => void cancelTask(currentTask.taskId)}
+                      >
+                        取消任务
+                      </Button>
+                    ) : null}
+                    {currentTask.status === 'PREVIEW_READY' ? (
+                      <Button type="primary" icon={<CheckCircleFilled />} loading={applyingTask} onClick={() => void confirmImport(currentTask.taskId)}>
+                        确认导入
+                      </Button>
+                    ) : null}
+                  </Space>
+                </div>
+              ) : (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未创建预览任务" />
+              )}
+            </Card>
+
+            <Card size="small" title="预览内容">
+              {previewLoading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
+                  <Spin />
+                </div>
+              ) : previewError ? (
+                <Alert type="error" showIcon message={previewError} />
+              ) : previewDocuments.length === 0 ? (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={previewEmptyText(currentTask)} />
+              ) : (
+                <div style={{ display: 'grid', gap: 12 }}>
+                  {previewDocuments.map((document) => (
+                    <Card key={document.key} size="small" title={document.name}>
+                      <div style={{ display: 'grid', gap: 10 }}>
+                        {document.paragraphs.map((paragraph) => (
+                          <div key={paragraph.key} style={{ display: 'grid', gap: 4 }}>
+                            <Text strong>{paragraph.title}</Text>
+                            <Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>
+                              {paragraph.content || '该分段没有可展示的内容。'}
+                            </Paragraph>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </Card>
+
+            <Collapse
+              activeKey={historyOpen ? ['history'] : []}
+              items={historyItemsConfig}
+              onChange={(keys) => {
+                const nextOpen = Array.isArray(keys) ? keys.includes('history') : keys === 'history'
+                setHistoryOpen(nextOpen)
+                if (nextOpen) {
+                  void loadTaskHistory(true)
+                }
+              }}
+            />
+          </div>
+        </div>
       ) : null}
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+        <Button
+          onClick={() => {
+            clearPollTimer()
+            onCancel()
+          }}
+        >
+          取消
+        </Button>
+
+        <Space>
+          {step === 'rules' ? (
+            <Button onClick={() => setStep('files')}>上一步</Button>
+          ) : null}
+          {step === 'files' ? (
+            <Button type="primary" disabled={selectedFiles.length === 0} onClick={() => void enterRulesStep()}>
+              下一步
+            </Button>
+          ) : null}
+          {step === 'rules' ? (
+            <Button type="primary" loading={creatingPreview} onClick={() => void createPreviewTask()}>
+              创建预览
+            </Button>
+          ) : null}
+        </Space>
+      </div>
     </div>
   )
-}
-
-export default function MaxKbDocumentUploadWorkbench(props: Props) {
-  return <WorkbenchInner key={`${props.accountId}:${props.knowledgeId}`} {...props} />
 }

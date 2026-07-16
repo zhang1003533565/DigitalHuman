@@ -1,49 +1,62 @@
-# Task 4 报告：MaxKB 两步式文档上传工作台
+# Task 4 Report
 
-## 基线
+Date: 2026-07-16
+Task: MaxKB-style two-step upload workbench
 
-- 要求基线 HEAD：`6f8dd12`
-- 实际开始基线 HEAD：`6f8dd12`
-- 最终提交：`待提交`
-
-## 修改文件
+## Files
 
 - `frontend-admin/src/pages/knowledge-openapi/MaxKbDocumentUploadWorkbench.tsx`
 - `frontend-admin/src/pages/knowledge-openapi/maxkb-document-upload-workbench.test.mjs`
-- `.superpowers/sdd/task-4-report.md`
 
-## 完成内容
+## RED
 
-- 新增独立两步式 MaxKB 文档上传工作台：
-  - 步骤一拖拽/选择文件，限制 50 个文件、单文件 100MB、扩展名 `txt/md/log/docx/pdf/html/zip/xlsx/xls/csv`
-  - 步骤二选择 `智能分段`、`高级分段`、`模型分段`、`视觉模型分段`
-- 模型列表按 `scope/provider` 分组，选项值使用真实模型 UUID；模型拉取失败时仍可继续使用智能/高级模式
-- 创建任务固定 `autoApply=false`
-- 轮询 `QUEUED`、`PROCESSING`、`APPLYING`，处理 `PREVIEW_READY`、`COMPLETED`、`FAILED`、`CANCELLED`
-- 任务详情先归一化嵌套响应 record，再读取 `task_id/status`
-- 任务历史列表通过 `extractRecords` 取数，并保留查看、刷新、预览、确认导入、取消、删除操作
-- 导出关键纯函数到测试辅助块，覆盖文件校验、任务归一化、轮询判定、模型分组、上传载荷构建
-- 使用 key 化内层组件和定时器清理，避免 `accountId/knowledgeId` 变化后的陈旧轮询状态
+1. Added `frontend-admin/src/pages/knowledge-openapi/maxkb-document-upload-workbench.test.mjs`.
+2. Ran:
+   - `cd /Users/zzs/Desktop/zzs/github/DigitalHuman/frontend-admin && node src/pages/knowledge-openapi/maxkb-document-upload-workbench.test.mjs`
+3. Observed expected failure:
+   - `ENOENT` for `frontend-admin/src/pages/knowledge-openapi/MaxKbDocumentUploadWorkbench.tsx`
 
-## 验证
+## GREEN
 
-- 组件测试：
-  - `cd frontend-admin && node src/pages/knowledge-openapi/maxkb-document-upload-workbench.test.mjs`
-  - 结果：`4/4` 通过
-- ESLint：
-  - `cd frontend-admin && npm run lint`
-  - 结果：通过
-- Vite build：
-  - `cd frontend-admin && npm run build`
-  - 结果：通过
-  - 备注：Vite 继续报告现有大 chunk warning，未在本任务范围内处理
+Implemented a focused workbench component that:
 
-## 残余风险
+- preserves the MaxKB two-step flow: file selection first, rules/preview second
+- keeps four strategy cards: `智能分段` / `高级分段` / `模型分段` / `视觉模型分段`
+- loads real grouped `LLM` and `IMAGE` model options
+- validates file count, size, extension, empties, and duplicates
+- creates preview tasks with `autoApply=false`
+- normalizes task object payloads before reading `task_id` / `status` / `progress`
+- polls only `QUEUED` / `PROCESSING` / `APPLYING`
+- stops polling on `PREVIEW_READY` / `COMPLETED` / `FAILED` / `CANCELLED`
+- clears timers on unmount / context remount
+- loads preview records via `extractRecords`
+- keeps task history in a `Collapse` section with restore / confirm / cancel / delete actions
 
-- 新组件当前只在文件级完成实现与验证，未接入 `KnowledgeOpenApiPage.tsx`，因此没有浏览器级集成证据
-- 预览面板按 `extractRecords` 渲染通用文档/段落块；若后端后续返回新的深层结构字段，可能需要补充更具体的展示映射
+## Exact Verification
 
-## 提交
+Ran successfully on 2026-07-16:
 
-- 提交哈希：`待提交`
-- Commit message：按 Lore Commit Protocol 创建
+1. `cd /Users/zzs/Desktop/zzs/github/DigitalHuman/frontend-admin && node src/pages/knowledge-openapi/maxkb-document-upload-workbench.test.mjs`
+2. `cd /Users/zzs/Desktop/zzs/github/DigitalHuman/frontend-admin && npm run lint`
+3. `cd /Users/zzs/Desktop/zzs/github/DigitalHuman/frontend-admin && npm run build`
+
+Build note:
+
+- Vite still reports the existing large-chunk warning for `dist/assets/index-*.js`, but the build exits successfully.
+
+## Self-Review
+
+- Kept the change scoped to the allowed component and its colocated test.
+- Used executable helper tests instead of brittle React runtime mocking.
+- Reset behavior is handled by remounting the keyed inner session and clearing timers on cleanup.
+- Reused existing upload/task APIs and `extractRecords` instead of inventing new wrappers.
+
+## Concerns
+
+- This task intentionally does not integrate the workbench into `KnowledgeOpenApiPage.tsx`, so end-to-end page wiring remains for a later task.
+- Preview rendering is generic record grouping; final visual parity can still be refined after integration against live payload samples.
+- The history panel keeps the existing operational actions, but UX polish will depend on how the parent page hosts this component.
+
+## Commit
+
+- Pending
