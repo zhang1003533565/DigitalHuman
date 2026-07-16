@@ -258,6 +258,15 @@ body.admin-page {
 .admin-page-frame__header h1 { margin: 0; color: var(--cockpit-text); font-size: var(--admin-font-page-title); line-height: 1.3; }
 .admin-page-frame__header p { margin: 0; color: var(--cockpit-muted); font-size: var(--admin-font-support); line-height: var(--admin-line-body); }
 .admin-page-frame__body { min-width: 0; }
+.admin-page-frame:has(> .admin-page-frame__body > .mkb-knowledge-page) {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+
+.admin-page-frame:has(> .admin-page-frame__body > .mkb-knowledge-page) > .admin-page-frame__body {
+  min-height: 0;
+}
 .admin-page-frame--compact .admin-page-frame__header { display: none; }
 .admin-page-frame__body > .admin-panel-grid > .ant-typography:first-child { display: none; }
 .admin-page-frame .ai-page__header,

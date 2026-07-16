@@ -4,6 +4,7 @@ import test from 'node:test'
 
 const page = readFileSync(new URL('./KnowledgeOpenApiPage.tsx', import.meta.url), 'utf8')
 const appCss = readFileSync(new URL('../App.css', import.meta.url), 'utf8')
+const cockpitCss = readFileSync(new URL('../admin-cockpit.css', import.meta.url), 'utf8')
 
 test('knowledge page delegates upload to the MaxKB-style workbench', () => {
   assert.match(page, /MaxKbDocumentUploadWorkbench/)
@@ -15,6 +16,7 @@ test('knowledge page delegates upload to the MaxKB-style workbench', () => {
 })
 
 test('upload layout keeps footer reachable and releases width on mobile', () => {
+  assert.match(appCss, /\.mkb-knowledge-page\s*\{[\s\S]*height:\s*100%;[\s\S]*min-height:\s*0;/)
   assert.match(appCss, /\.mkb-knowledge-main\s*\{[\s\S]*display:\s*flex;[\s\S]*flex-direction:\s*column;[\s\S]*min-height:\s*0;/)
   assert.match(appCss, /\.mkb-view--upload\s*\{[\s\S]*flex:\s*1;[\s\S]*min-height:\s*0;/)
   assert.match(appCss, /\.mkb-upload-workbench\s*\{[\s\S]*overflow:\s*hidden;/)
@@ -22,4 +24,6 @@ test('upload layout keeps footer reachable and releases width on mobile', () => 
   assert.match(appCss, /@media \(max-width: 768px\)\s*\{[\s\S]*\.mkb-knowledge-page\s*\{[\s\S]*grid-template-columns:\s*1fr;/)
   assert.match(appCss, /@media \(max-width: 768px\)\s*\{[\s\S]*\.mkb-knowledge-sidebar\s*\{[\s\S]*display:\s*none;/)
   assert.match(appCss, /@media \(max-width: 768px\)\s*\{[\s\S]*\.mkb-upload-footer\s*\{[\s\S]*position:\s*sticky;[\s\S]*bottom:\s*0;/)
+  assert.match(cockpitCss, /\.admin-page-frame:has\(>\s*\.admin-page-frame__body\s*>\s*\.mkb-knowledge-page\)\s*\{[\s\S]*display:\s*grid;[\s\S]*grid-template-rows:\s*auto minmax\(0,\s*1fr\);[\s\S]*min-height:\s*0;/)
+  assert.match(cockpitCss, /\.admin-page-frame:has\(>\s*\.admin-page-frame__body\s*>\s*\.mkb-knowledge-page\)\s*>\s*\.admin-page-frame__body\s*\{[\s\S]*min-height:\s*0;/)
 })
