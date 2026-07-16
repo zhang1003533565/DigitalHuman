@@ -22,3 +22,11 @@ test('MaxKB async document upload API wrappers match the open interface', () => 
   assert.match(source, /export async function deleteKnowledgeUploadTask/)
   assert.match(source, /documents\/upload-tasks/)
 })
+
+test('MaxKB upload model list uses the account proxy', () => {
+  assert.match(source, /export type MaxKbUploadModelType = 'LLM' \| 'IMAGE'/)
+  assert.match(source, /export type MaxKbUploadModel/)
+  assert.match(source, /export async function getKnowledgeModels/)
+  assert.match(source, /accounts\/\$\{accountId\}\/models/)
+  assert.match(source, /model_type: modelType/)
+})

@@ -115,6 +115,17 @@ export type MaxKbUploadDocumentsPayload = {
   idempotencyKey?: string
 }
 
+export type MaxKbUploadModelType = 'LLM' | 'IMAGE'
+
+export type MaxKbUploadModel = {
+  id: string
+  name: string
+  model_name?: string
+  model_type: MaxKbUploadModelType
+  provider?: string
+  scope?: 'workspace' | 'shared'
+}
+
 function unwrap<T>(payload: MaxKbResponse<T> | T): T {
   if (payload && typeof payload === 'object' && 'data' in payload) {
     return (payload as MaxKbResponse<T>).data as T
@@ -227,6 +238,14 @@ export async function updateKnowledgeAccountStatus(accountId: number, status: nu
 export async function testKnowledgeAccount(accountId: number) {
   const response = await axios.post<ApiResult<unknown>>(`/api/admin/knowledge/maxkb/accounts/${accountId}/test`)
   return unwrapApiResult(response.data)
+}
+
+export async function getKnowledgeModels(accountId: number, modelType: MaxKbUploadModelType) {
+  const response = await axios.get<ApiResult<MaxKbResponse<MaxKbUploadModel[]>>>(
+    `/api/admin/knowledge/maxkb/accounts/${accountId}/models`,
+    { params: { model_type: modelType } },
+  )
+  return extractRecords(unwrapApiResult(response.data)) as MaxKbUploadModel[]
 }
 
 export async function getKnowledges(accountId: number, params?: Record<string, string | number | undefined>) {
