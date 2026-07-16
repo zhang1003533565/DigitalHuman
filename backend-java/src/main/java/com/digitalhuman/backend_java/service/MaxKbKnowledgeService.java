@@ -42,12 +42,30 @@ public interface MaxKbKnowledgeService {
             Long accountId,
             String knowledgeId,
             List<MultipartFile> files,
+            List<String> fileIds,
             Integer limit,
             List<String> patterns,
             Boolean withFilter,
             String splitStrategy,
-            String modelId
+            String modelId,
+            String visionModelId,
+            String llmModelId,
+            Boolean qualityOptimize,
+            Boolean autoApply,
+            String idempotencyKey
     );
+
+    Object listUploadTasks(Long accountId, String knowledgeId, Map<String, String> queryParams);
+
+    Object getUploadTask(Long accountId, String knowledgeId, String taskId);
+
+    Object previewUploadTask(Long accountId, String knowledgeId, String taskId, Map<String, String> queryParams);
+
+    Object applyUploadTask(Long accountId, String knowledgeId, String taskId);
+
+    Object cancelUploadTask(Long accountId, String knowledgeId, String taskId);
+
+    Object deleteUploadTask(Long accountId, String knowledgeId, String taskId);
 
     Object listParagraphs(Long accountId, String knowledgeId, String documentId, Map<String, String> queryParams);
 

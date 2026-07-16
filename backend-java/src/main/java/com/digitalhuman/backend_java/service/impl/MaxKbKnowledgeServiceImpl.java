@@ -201,21 +201,36 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
             Long accountId,
             String knowledgeId,
             List<MultipartFile> files,
+            List<String> fileIds,
             Integer limit,
             List<String> patterns,
             Boolean withFilter,
             String splitStrategy,
-            String modelId
+            String modelId,
+            String visionModelId,
+            String llmModelId,
+            Boolean qualityOptimize,
+            Boolean autoApply,
+            String idempotencyKey
     ) {
         MaxKbAccount account = getAccount(accountId, true);
-        if (files == null || files.stream().allMatch(file -> file == null || file.isEmpty())) {
-            throw status(HttpStatus.BAD_REQUEST, "上传文件不能为空");
+        boolean hasFiles = files != null && files.stream().anyMatch(file -> file != null && !file.isEmpty());
+        boolean hasFileIds = fileIds != null && fileIds.stream().anyMatch(StringUtils::hasText);
+        if (!hasFiles && !hasFileIds) {
+            throw status(HttpStatus.BAD_REQUEST, "上传文件或复用文件 ID 不能为空");
         }
 
         MultipartBody.Builder bodyBuilder = new MultipartBody.Builder().setType(MultipartBody.FORM);
-        files.stream()
-                .filter(file -> file != null && !file.isEmpty())
-                .forEach(file -> addFilePart(bodyBuilder, file));
+        if (files != null) {
+            files.stream()
+                    .filter(file -> file != null && !file.isEmpty())
+                    .forEach(file -> addFilePart(bodyBuilder, file));
+        }
+        if (fileIds != null) {
+            fileIds.stream()
+                    .filter(StringUtils::hasText)
+                    .forEach(fileId -> bodyBuilder.addFormDataPart("file_id", fileId.trim()));
+        }
         bodyBuilder.addFormDataPart("limit", String.valueOf(limit == null ? 4096 : limit));
         if (patterns != null) {
             patterns.stream()
@@ -231,14 +246,64 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
         if (StringUtils.hasText(modelId)) {
             bodyBuilder.addFormDataPart("model_id", modelId.trim());
         }
+        if (StringUtils.hasText(visionModelId)) {
+            bodyBuilder.addFormDataPart("vision_model_id", visionModelId.trim());
+        }
+        if (StringUtils.hasText(llmModelId)) {
+            bodyBuilder.addFormDataPart("llm_model_id", llmModelId.trim());
+        }
+        if (qualityOptimize != null) {
+            bodyBuilder.addFormDataPart("quality_optimize", String.valueOf(qualityOptimize));
+        }
+        if (autoApply != null) {
+            bodyBuilder.addFormDataPart("auto_apply", String.valueOf(autoApply));
+        }
 
         String path = "/workspaces/" + account.getWorkspaceId()
                 + "/knowledges/" + requireId(knowledgeId, "知识库 ID")
                 + "/documents/upload";
-        Request request = baseRequest(account, path, null)
-                .post(bodyBuilder.build())
-                .build();
+        Request.Builder requestBuilder = baseRequest(account, path, null).post(bodyBuilder.build());
+        if (StringUtils.hasText(idempotencyKey)) {
+            requestBuilder.header("Idempotency-Key", idempotencyKey.trim());
+        }
+        Request request = requestBuilder.build();
         return executeObject(request, "MaxKB 文件上传失败");
+    }
+
+    @Override
+    public Object listUploadTasks(Long accountId, String knowledgeId, Map<String, String> queryParams) {
+        MaxKbAccount account = getAccount(accountId, true);
+        return getObject(account, uploadTasksPath(account, knowledgeId), queryParams);
+    }
+
+    @Override
+    public Object getUploadTask(Long accountId, String knowledgeId, String taskId) {
+        MaxKbAccount account = getAccount(accountId, true);
+        return getObject(account, uploadTaskPath(account, knowledgeId, taskId), null);
+    }
+
+    @Override
+    public Object previewUploadTask(Long accountId, String knowledgeId, String taskId, Map<String, String> queryParams) {
+        MaxKbAccount account = getAccount(accountId, true);
+        return getObject(account, uploadTaskPath(account, knowledgeId, taskId) + "/preview", queryParams);
+    }
+
+    @Override
+    public Object applyUploadTask(Long accountId, String knowledgeId, String taskId) {
+        MaxKbAccount account = getAccount(accountId, true);
+        return postEmptyObject(account, uploadTaskPath(account, knowledgeId, taskId) + "/apply");
+    }
+
+    @Override
+    public Object cancelUploadTask(Long accountId, String knowledgeId, String taskId) {
+        MaxKbAccount account = getAccount(accountId, true);
+        return postEmptyObject(account, uploadTaskPath(account, knowledgeId, taskId) + "/cancel");
+    }
+
+    @Override
+    public Object deleteUploadTask(Long accountId, String knowledgeId, String taskId) {
+        MaxKbAccount account = getAccount(accountId, true);
+        return deleteObject(account, uploadTaskPath(account, knowledgeId, taskId));
     }
 
     @Override
@@ -312,6 +377,28 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
         } catch (IOException error) {
             throw status(HttpStatus.INTERNAL_SERVER_ERROR, "构造 MaxKB 请求失败: " + error.getMessage(), error);
         }
+    }
+
+    private Object postEmptyObject(MaxKbAccount account, String path) {
+        Request request = baseRequest(account, path, null)
+                .post(RequestBody.create(new byte[0], null))
+                .build();
+        return executeObject(request, "MaxKB 服务调用失败");
+    }
+
+    private Object deleteObject(MaxKbAccount account, String path) {
+        Request request = baseRequest(account, path, null).delete().build();
+        return executeObject(request, "MaxKB 服务调用失败");
+    }
+
+    private String uploadTasksPath(MaxKbAccount account, String knowledgeId) {
+        return "/workspaces/" + account.getWorkspaceId()
+                + "/knowledges/" + requireId(knowledgeId, "知识库 ID")
+                + "/documents/upload-tasks";
+    }
+
+    private String uploadTaskPath(MaxKbAccount account, String knowledgeId, String taskId) {
+        return uploadTasksPath(account, knowledgeId) + "/" + requireId(taskId, "任务 ID");
     }
 
     private Request.Builder baseRequest(MaxKbAccount account, String path, Map<String, String> queryParams) {

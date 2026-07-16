@@ -7,6 +7,7 @@ import {
   Empty,
   Input,
   Modal,
+  Popconfirm,
   Select,
   Space,
   Table,
@@ -48,18 +49,25 @@ import {
   UnorderedListOutlined,
 } from '@ant-design/icons'
 import {
+  createKnowledgeAccount,
+  deleteKnowledgeAccount,
   extractRecords,
   extractTotal,
   getDocumentParagraphs,
   getDocumentParagraphProblems,
   getKnowledgeAssetUrl,
   getKnowledgeDocuments,
-  getKnowledgeOpenApiConfig,
   getKnowledges,
-  saveKnowledgeOpenApiConfig,
+  listKnowledgeAccountEnvironments,
+  listKnowledgeAccounts,
   syncKnowledgeOpenApiKeys,
+  testKnowledgeAccount,
+  updateKnowledgeAccount,
+  updateKnowledgeAccountStatus,
   updateDocumentParagraph,
-  type MaxKbOpenApiConfig,
+  type MaxKbAccount,
+  type MaxKbAccountPayload,
+  type MaxKbEnvironmentOption,
   type MaxKbOpenApiKey,
   type MaxKbRecord,
   type ParagraphProblemPayload,
@@ -70,16 +78,16 @@ type KnowledgeRow = MaxKbRecord & { key: string; idText: string; nameText: strin
 type DocumentRow = MaxKbRecord & { key: string; idText: string; nameText: string; contentText: string }
 type ParagraphRow = MaxKbRecord & { key: string; idText: string; nameText: string; contentText: string }
 type NoticeState = { type: 'success' | 'info' | 'warning' | 'error'; text: string } | null
+type AccountFormState = MaxKbAccountPayload & { id?: number }
 
-const EMPTY_CONFIG_FORM: MaxKbOpenApiConfig = {
-  adminBaseUrl: '',
+const EMPTY_ACCOUNT_FORM: AccountFormState = {
+  accountName: '',
+  baseUrl: '',
+  environment: 'local',
   workspaceId: 'default',
-  accessUrl: '',
   apiKey: '',
-  keyId: '',
-  keyName: '',
-  defaultKnowledgeId: '',
-  configured: false,
+  remark: '',
+  status: 1,
 }
 
 const EMPTY_IMAGE_SRC = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
@@ -328,7 +336,10 @@ function directMaxKbAssetUrl(rawUrl: string, assetBaseUrl: string) {
 function proxiedAssetPath(value: string) {
   try {
     const url = new URL(value, window.location.href)
-    if (url.pathname.endsWith('/api/admin/knowledge/assets')) {
+    if (url.pathname.endsWith('/api/admin/knowledge/assets') || (
+      url.pathname.includes('/api/admin/knowledge/maxkb/accounts/')
+      && url.pathname.endsWith('/assets')
+    )) {
       return url.searchParams.get('path') || ''
     }
   } catch {
@@ -340,13 +351,16 @@ function proxiedAssetPath(value: string) {
 function isKnowledgeAssetProxyUrl(value: string) {
   try {
     const url = new URL(value, window.location.href)
-    return url.pathname.endsWith('/api/admin/knowledge/assets')
+    return url.pathname.endsWith('/api/admin/knowledge/assets') || (
+      url.pathname.includes('/api/admin/knowledge/maxkb/accounts/')
+      && url.pathname.endsWith('/assets')
+    )
   } catch {
     return false
   }
 }
 
-function normalizeResourceUrl(rawUrl: string, assetBaseUrl: string) {
+function normalizeResourceUrl(rawUrl: string, assetBaseUrl: string, accountId?: number) {
   const trimmed = rawUrl.trim()
   if (!trimmed || /^javascript:/i.test(trimmed)) {
     return ''
@@ -363,7 +377,7 @@ function normalizeResourceUrl(rawUrl: string, assetBaseUrl: string) {
         return ''
       }
     }
-    return getKnowledgeAssetUrl(trimmed)
+    return getKnowledgeAssetUrl(trimmed, accountId)
   }
   if (/^(data:image\/|blob:|https?:\/\/|\/\/)/i.test(trimmed)) {
     return trimmed
@@ -373,13 +387,13 @@ function normalizeResourceUrl(rawUrl: string, assetBaseUrl: string) {
   }
   try {
     const resolved = new URL(trimmed, `${assetBaseUrl.replace(/\/$/, '')}/`).toString()
-    return isMaxKbAssetUrl(resolved) ? getKnowledgeAssetUrl(resolved) : resolved
+    return isMaxKbAssetUrl(resolved) ? getKnowledgeAssetUrl(resolved, accountId) : resolved
   } catch {
     return trimmed
   }
 }
 
-function sanitizeHtml(value: string, assetBaseUrl: string) {
+function sanitizeHtml(value: string, assetBaseUrl: string, accountId?: number) {
   return value
     .replace(/<script[\s\S]*?<\/script>/gi, '')
     .replace(/<style[\s\S]*?<\/style>/gi, '')
@@ -387,7 +401,7 @@ function sanitizeHtml(value: string, assetBaseUrl: string) {
     .replace(/\son\w+=(["']).*?\1/gi, '')
     .replace(/\son\w+=\S+/gi, '')
     .replace(/\s(src|href)=("([^"]*)"|'([^']*)'|([^\s>]+))/gi, (_match, attr: string, _quoted: string, doubleUrl?: string, singleUrl?: string, bareUrl?: string) => {
-      const url = normalizeResourceUrl(doubleUrl ?? singleUrl ?? bareUrl ?? '', assetBaseUrl)
+      const url = normalizeResourceUrl(doubleUrl ?? singleUrl ?? bareUrl ?? '', assetBaseUrl, accountId)
       const lowerAttr = attr.toLowerCase()
       if (!url) {
         return ''
@@ -399,7 +413,7 @@ function sanitizeHtml(value: string, assetBaseUrl: string) {
     })
 }
 
-function renderInlineMarkdown(value: string, assetBaseUrl: string) {
+function renderInlineMarkdown(value: string, assetBaseUrl: string, accountId?: number) {
   const chunks: string[] = []
   const imagePattern = /!\[([^\]]*)\]\(([^)]+)\)/g
   let lastIndex = 0
@@ -407,7 +421,7 @@ function renderInlineMarkdown(value: string, assetBaseUrl: string) {
 
   while ((match = imagePattern.exec(value)) !== null) {
     chunks.push(escapeHtml(value.slice(lastIndex, match.index)))
-    const src = normalizeResourceUrl(match[2], assetBaseUrl)
+    const src = normalizeResourceUrl(match[2], assetBaseUrl, accountId)
     if (src) {
       const directSrc = directMaxKbAssetUrl(match[2], assetBaseUrl)
       const shouldProxyWithAuth = isKnowledgeAssetProxyUrl(src)
@@ -445,23 +459,23 @@ function isMarkdownTableSeparator(line: string) {
   return cells.length > 1 && cells.every((cell) => /^:?-{3,}:?$/.test(cell))
 }
 
-function renderMarkdownTable(lines: string[], assetBaseUrl: string) {
+function renderMarkdownTable(lines: string[], assetBaseUrl: string, accountId?: number) {
   const [headerLine, , ...bodyLines] = lines
   const headers = splitTableRow(headerLine)
   const bodyRows = bodyLines.map(splitTableRow)
   return [
     '<table>',
     '<thead><tr>',
-    ...headers.map((header) => `<th>${renderInlineMarkdown(header, assetBaseUrl)}</th>`),
+    ...headers.map((header) => `<th>${renderInlineMarkdown(header, assetBaseUrl, accountId)}</th>`),
     '</tr></thead>',
     '<tbody>',
-    ...bodyRows.map((row) => `<tr>${headers.map((_header, index) => `<td>${renderInlineMarkdown(row[index] ?? '', assetBaseUrl)}</td>`).join('')}</tr>`),
+    ...bodyRows.map((row) => `<tr>${headers.map((_header, index) => `<td>${renderInlineMarkdown(row[index] ?? '', assetBaseUrl, accountId)}</td>`).join('')}</tr>`),
     '</tbody>',
     '</table>',
   ].join('')
 }
 
-function markdownToHtml(markdown: string, assetBaseUrl: string) {
+function markdownToHtml(markdown: string, assetBaseUrl: string, accountId?: number) {
   const lines = markdown.replace(/\r\n?/g, '\n').split('\n')
   const blocks: string[] = []
   let paragraphLines: string[] = []
@@ -471,7 +485,7 @@ function markdownToHtml(markdown: string, assetBaseUrl: string) {
     if (!paragraphLines.length) {
       return
     }
-    blocks.push(`<p>${renderInlineMarkdown(paragraphLines.join('\n'), assetBaseUrl).replace(/\n/g, '<br />')}</p>`)
+    blocks.push(`<p>${renderInlineMarkdown(paragraphLines.join('\n'), assetBaseUrl, accountId).replace(/\n/g, '<br />')}</p>`)
     paragraphLines = []
   }
 
@@ -493,7 +507,7 @@ function markdownToHtml(markdown: string, assetBaseUrl: string) {
         tableLines.push(lines[index])
         index += 1
       }
-      blocks.push(renderMarkdownTable(tableLines, assetBaseUrl))
+      blocks.push(renderMarkdownTable(tableLines, assetBaseUrl, accountId))
       continue
     }
 
@@ -501,7 +515,7 @@ function markdownToHtml(markdown: string, assetBaseUrl: string) {
     if (heading) {
       flushParagraph()
       const level = Math.min(heading[1].length + 1, 5)
-      blocks.push(`<h${level}>${renderInlineMarkdown(heading[2], assetBaseUrl)}</h${level}>`)
+      blocks.push(`<h${level}>${renderInlineMarkdown(heading[2], assetBaseUrl, accountId)}</h${level}>`)
       index += 1
       continue
     }
@@ -518,7 +532,7 @@ function markdownToHtml(markdown: string, assetBaseUrl: string) {
         if (!currentMatch) {
           break
         }
-        items.push(`<li>${renderInlineMarkdown(currentMatch[1], assetBaseUrl)}</li>`)
+        items.push(`<li>${renderInlineMarkdown(currentMatch[1], assetBaseUrl, accountId)}</li>`)
         index += 1
       }
       blocks.push(`<${ordered ? 'ol' : 'ul'}>${items.join('')}</${ordered ? 'ol' : 'ul'}>`)
@@ -533,31 +547,31 @@ function markdownToHtml(markdown: string, assetBaseUrl: string) {
   return blocks.join('\n')
 }
 
-function richContentHtml(rawContent: string, assetBaseUrl: string) {
+function richContentHtml(rawContent: string, assetBaseUrl: string, accountId?: number) {
   const raw = rawContent.trim()
   if (!raw) {
     return ''
   }
   if (/<(?:table|thead|tbody|tr|td|th|img|h[1-6]|p|ul|ol|li|br|strong|em|div|span)\b/i.test(raw)) {
-    return sanitizeHtml(raw, assetBaseUrl)
+    return sanitizeHtml(raw, assetBaseUrl, accountId)
   }
-  return markdownToHtml(raw, assetBaseUrl)
+  return markdownToHtml(raw, assetBaseUrl, accountId)
 }
 
 function looksLikeImageUrl(value: string) {
   return /^(?:data:image\/|blob:|https?:\/\/|\/\/|\/|\.{1,2}\/).+\.(?:png|jpe?g|gif|webp|svg|bmp)(?:[?#].*)?$/i.test(value.trim())
 }
 
-function collectImageUrls(value: unknown, assetBaseUrl: string, urls = new Set<string>(), depth = 0) {
+function collectImageUrls(value: unknown, assetBaseUrl: string, accountId?: number, urls = new Set<string>(), depth = 0) {
   if (value == null || depth > 4) {
     return urls
   }
   if (Array.isArray(value)) {
-    value.forEach((item) => collectImageUrls(item, assetBaseUrl, urls, depth + 1))
+    value.forEach((item) => collectImageUrls(item, assetBaseUrl, accountId, urls, depth + 1))
     return urls
   }
   if (typeof value === 'object') {
-    Object.values(value as Record<string, unknown>).forEach((item) => collectImageUrls(item, assetBaseUrl, urls, depth + 1))
+    Object.values(value as Record<string, unknown>).forEach((item) => collectImageUrls(item, assetBaseUrl, accountId, urls, depth + 1))
     return urls
   }
   if (typeof value !== 'string') {
@@ -571,7 +585,7 @@ function collectImageUrls(value: unknown, assetBaseUrl: string, urls = new Set<s
 
   if ((trimmed.startsWith('{') || trimmed.startsWith('[')) && trimmed.length < 10000) {
     try {
-      collectImageUrls(JSON.parse(trimmed), assetBaseUrl, urls, depth + 1)
+      collectImageUrls(JSON.parse(trimmed), assetBaseUrl, accountId, urls, depth + 1)
     } catch {
       // Ignore non-JSON strings.
     }
@@ -583,34 +597,34 @@ function collectImageUrls(value: unknown, assetBaseUrl: string, urls = new Set<s
   let match: RegExpExecArray | null
 
   while ((match = htmlImagePattern.exec(trimmed)) !== null) {
-    const url = normalizeResourceUrl(match[1], assetBaseUrl)
+    const url = normalizeResourceUrl(match[1], assetBaseUrl, accountId)
     if (url) urls.add(url)
   }
   while ((match = markdownImagePattern.exec(trimmed)) !== null) {
-    const url = normalizeResourceUrl(match[1], assetBaseUrl)
+    const url = normalizeResourceUrl(match[1], assetBaseUrl, accountId)
     if (url) urls.add(url)
   }
   while ((match = imageUrlPattern.exec(trimmed)) !== null) {
-    const url = normalizeResourceUrl(match[0], assetBaseUrl)
+    const url = normalizeResourceUrl(match[0], assetBaseUrl, accountId)
     if (url) urls.add(url)
   }
 
   if (looksLikeImageUrl(trimmed) || isMaxKbAssetUrl(trimmed)) {
-    const url = normalizeResourceUrl(trimmed, assetBaseUrl)
+    const url = normalizeResourceUrl(trimmed, assetBaseUrl, accountId)
     if (url) urls.add(url)
   }
 
   return urls
 }
 
-function extractRecordImages(record: MaxKbRecord, assetBaseUrl: string) {
+function extractRecordImages(record: MaxKbRecord, assetBaseUrl: string, accountId?: number) {
   const imageKeys = ['image', 'images', 'img', 'imgs', 'picture', 'pictures', 'screenshot', 'screenshots', 'thumbnail', 'preview', 'media', 'metadata', 'meta']
   const urls = new Set<string>()
 
   Object.entries(record).forEach(([key, value]) => {
     const normalizedKey = key.toLowerCase()
     if (imageKeys.some((imageKey) => normalizedKey.includes(imageKey))) {
-      collectImageUrls(value, assetBaseUrl, urls)
+      collectImageUrls(value, assetBaseUrl, accountId, urls)
     }
   })
 
@@ -667,13 +681,13 @@ function recordProblemList(record: MaxKbRecord) {
   return normalizeProblemList(record.problem_list ?? record.problemList ?? record.problems ?? record.problem)
 }
 
-function RichDocumentContent({ assetBaseUrl, record }: { assetBaseUrl: string; record: ParagraphRow }) {
+function RichDocumentContent({ accountId, assetBaseUrl, record }: { accountId?: number; assetBaseUrl: string; record: ParagraphRow }) {
   const contentRef = useRef<HTMLDivElement | null>(null)
-  const html = useMemo(() => richContentHtml(record.contentText, assetBaseUrl), [assetBaseUrl, record.contentText])
+  const html = useMemo(() => richContentHtml(record.contentText, assetBaseUrl, accountId), [accountId, assetBaseUrl, record.contentText])
   const images = useMemo(() => {
-    const renderedUrls = collectImageUrls(record.contentText, assetBaseUrl)
-    return extractRecordImages(record, assetBaseUrl).filter((url) => !renderedUrls.has(url))
-  }, [assetBaseUrl, record])
+    const renderedUrls = collectImageUrls(record.contentText, assetBaseUrl, accountId)
+    return extractRecordImages(record, assetBaseUrl, accountId).filter((url) => !renderedUrls.has(url))
+  }, [accountId, assetBaseUrl, record])
 
   useEffect(() => {
     const root = contentRef.current
@@ -893,11 +907,16 @@ export default function KnowledgeOpenApiPage() {
   const [paragraphSearchType, setParagraphSearchType] = useState<'title' | 'content'>('title')
   const [detailRecord, setDetailRecord] = useState<MaxKbRecord | null>(null)
   const [assetBaseUrl, setAssetBaseUrl] = useState('')
+  const [accounts, setAccounts] = useState<MaxKbAccount[]>([])
+  const [accountTotal, setAccountTotal] = useState(0)
+  const [selectedAccountId, setSelectedAccountId] = useState<number | undefined>()
+  const [loadingAccounts, setLoadingAccounts] = useState(false)
+  const [accountEnvironments, setAccountEnvironments] = useState<MaxKbEnvironmentOption[]>([])
   const [configOpen, setConfigOpen] = useState(false)
-  const [configLoading, setConfigLoading] = useState(false)
-  const [savingConfig, setSavingConfig] = useState(false)
+  const [savingAccount, setSavingAccount] = useState(false)
+  const [testingAccountId, setTestingAccountId] = useState<number | undefined>()
   const [syncingKeys, setSyncingKeys] = useState(false)
-  const [configForm, setConfigForm] = useState<MaxKbOpenApiConfig>(EMPTY_CONFIG_FORM)
+  const [accountForm, setAccountForm] = useState<AccountFormState>(EMPTY_ACCOUNT_FORM)
   const [adminToken, setAdminToken] = useState('')
   const [syncedKeys, setSyncedKeys] = useState<MaxKbOpenApiKey[]>([])
   const [editingParagraph, setEditingParagraph] = useState<ParagraphRow | null>(null)
@@ -910,6 +929,7 @@ export default function KnowledgeOpenApiPage() {
   const [savingParagraph, setSavingParagraph] = useState(false)
   const documentsRequestSeq = useRef(0)
   const editContentInputRef = useRef<TextAreaRef>(null)
+  const selectedAccountIdRef = useRef<number | undefined>(undefined)
 
   const selectedKnowledge = useMemo(
     () => knowledges.find((item) => item.idText === selectedKnowledgeId),
@@ -918,6 +938,10 @@ export default function KnowledgeOpenApiPage() {
   const selectedDocument = useMemo(
     () => documents.find((item) => item.idText === selectedDocumentId),
     [documents, selectedDocumentId],
+  )
+  const selectedAccount = useMemo(
+    () => accounts.find((item) => item.id === selectedAccountId),
+    [accounts, selectedAccountId],
   )
 
   const filteredKnowledges = useMemo(
@@ -943,14 +967,92 @@ export default function KnowledgeOpenApiPage() {
     [paragraphSearch, paragraphSearchType, paragraphs],
   )
 
+  useEffect(() => {
+    selectedAccountIdRef.current = selectedAccountId
+  }, [selectedAccountId])
+
   function notify(type: NonNullable<NoticeState>['type'], text: string) {
     setNotice({ type, text })
   }
 
+  function accountAssetOrigin(account?: Pick<MaxKbAccount, 'baseUrl'> | Pick<AccountFormState, 'baseUrl'>) {
+    const baseUrl = account?.baseUrl?.trim()
+    if (!baseUrl) {
+      return ''
+    }
+    try {
+      return new URL(baseUrl).origin
+    } catch {
+      return ''
+    }
+  }
+
+  function resetBrowserState() {
+    setView('knowledge')
+    setKnowledges([])
+    setDocuments([])
+    setParagraphs([])
+    setSelectedKnowledgeId('')
+    setSelectedDocumentId('')
+    setKnowledgeTotal(0)
+    setDocumentTotal(0)
+    setParagraphTotal(0)
+  }
+
+  const loadAccountEnvironments = useCallback(async () => {
+    try {
+      const environments = await listKnowledgeAccountEnvironments()
+      setAccountEnvironments(environments)
+    } catch {
+      setAccountEnvironments([])
+    }
+  }, [])
+
+  const loadAccounts = useCallback(async (preferredAccountId?: number, silent = false) => {
+    if (!silent) {
+      setLoadingAccounts(true)
+    }
+    try {
+      const page = await listKnowledgeAccounts({ current: 1, size: 100 })
+      const rows = page.records ?? []
+      const nextAccount =
+        rows.find((item) => item.id === preferredAccountId)
+        ?? rows.find((item) => item.id === selectedAccountIdRef.current)
+        ?? rows.find((item) => item.status === 1)
+        ?? rows[0]
+
+      setAccounts(rows)
+      setAccountTotal(page.total ?? rows.length)
+      setSelectedAccountId(nextAccount?.id)
+      setAssetBaseUrl(accountAssetOrigin(nextAccount))
+      if (!nextAccount) {
+        resetBrowserState()
+      }
+    } catch (error) {
+      setAccounts([])
+      setAccountTotal(0)
+      setSelectedAccountId(undefined)
+      setAssetBaseUrl('')
+      resetBrowserState()
+      if (!silent) {
+        notify('error', `连接配置加载失败：${extractErrorMessage(error)}`)
+      }
+    } finally {
+      if (!silent) {
+        setLoadingAccounts(false)
+      }
+    }
+  }, [])
+
   const loadKnowledges = useCallback(async () => {
+    if (!selectedAccountId) {
+      setKnowledges([])
+      setKnowledgeTotal(0)
+      return
+    }
     setLoadingKnowledges(true)
     try {
-      const payload = await getKnowledges({ page: 1, size: 100 })
+      const payload = await getKnowledges(selectedAccountId, { page: 1, size: 100 })
       const rows = makeRows(extractRecords(payload), 'knowledge') as KnowledgeRow[]
       setKnowledges(rows)
       setKnowledgeTotal(extractTotal(payload, rows.length))
@@ -960,51 +1062,82 @@ export default function KnowledgeOpenApiPage() {
     } finally {
       setLoadingKnowledges(false)
     }
-  }, [])
+  }, [selectedAccountId])
 
-  const loadKnowledgeConfig = useCallback(async (silent = false) => {
-    if (!silent) {
-      setConfigLoading(true)
-    }
-    try {
-      const config = await getKnowledgeOpenApiConfig()
-      setConfigForm({ ...EMPTY_CONFIG_FORM, ...config })
-      const base = config.accessUrl || config.adminBaseUrl
-      setAssetBaseUrl(base ? new URL(base).origin : '')
-    } catch (error) {
-      setAssetBaseUrl('')
-      if (!silent) {
-        notify('error', `连接配置加载失败：${extractErrorMessage(error)}`)
-      }
-    } finally {
-      if (!silent) {
-        setConfigLoading(false)
-      }
-    }
-  }, [])
-
-  function updateConfigField<K extends keyof MaxKbOpenApiConfig>(key: K, value: MaxKbOpenApiConfig[K]) {
-    setConfigForm((current) => ({ ...current, [key]: value }))
+  function updateAccountField<K extends keyof AccountFormState>(key: K, value: AccountFormState[K]) {
+    setAccountForm((current) => ({ ...current, [key]: value }))
   }
 
   function openConfigDrawer() {
     setConfigOpen(true)
-    void loadKnowledgeConfig()
+    void loadAccounts(undefined, true)
+    void loadAccountEnvironments()
+    if (selectedAccount) {
+      editAccount(selectedAccount)
+    } else {
+      createAccountDraft()
+    }
   }
 
-  async function saveConfig() {
-    setSavingConfig(true)
+  function createAccountDraft() {
+    setAccountForm(EMPTY_ACCOUNT_FORM)
+    setAdminToken('')
+    setSyncedKeys([])
+  }
+
+  function editAccount(account: MaxKbAccount) {
+    setAccountForm({
+      id: account.id,
+      accountName: account.accountName,
+      baseUrl: account.baseUrl,
+      environment: account.environment || 'local',
+      apiKey: '',
+      workspaceId: account.workspaceId || 'default',
+      remark: account.remark || '',
+      status: account.status ?? 1,
+    })
+    setAdminToken('')
+    setSyncedKeys([])
+  }
+
+  function selectAccount(accountId: number) {
+    const account = accounts.find((item) => item.id === accountId)
+    setSelectedAccountId(accountId)
+    setAssetBaseUrl(accountAssetOrigin(account))
+    resetBrowserState()
+  }
+
+  async function saveAccount() {
+    if (!accountForm.accountName.trim() || !accountForm.baseUrl.trim() || !accountForm.workspaceId.trim()) {
+      message.warning('请填写账号名称、MaxKB 地址和工作空间 ID')
+      return
+    }
+    if (!accountForm.id && !accountForm.apiKey?.trim()) {
+      message.warning('新增连接配置时必须填写 OpenAPI Key')
+      return
+    }
+
+    setSavingAccount(true)
     try {
-      const savedConfig = await saveKnowledgeOpenApiConfig(configForm)
-      setConfigForm({ ...EMPTY_CONFIG_FORM, ...savedConfig })
-      const base = savedConfig.accessUrl || savedConfig.adminBaseUrl
-      setAssetBaseUrl(base ? new URL(base).origin : '')
-      message.success('知识库连接配置已保存')
-      void loadKnowledges()
+      const payload: MaxKbAccountPayload = {
+        accountName: accountForm.accountName.trim(),
+        baseUrl: accountForm.baseUrl.trim(),
+        environment: accountForm.environment || 'local',
+        apiKey: accountForm.apiKey?.trim() || undefined,
+        workspaceId: accountForm.workspaceId.trim(),
+        remark: accountForm.remark?.trim() || undefined,
+        status: accountForm.status ?? 1,
+      }
+      const savedAccount = accountForm.id
+        ? await updateKnowledgeAccount(accountForm.id, payload)
+        : await createKnowledgeAccount(payload)
+      message.success(accountForm.id ? '连接配置已更新' : '连接配置已新增')
+      editAccount(savedAccount)
+      void loadAccounts(savedAccount.id, true)
     } catch (error) {
       message.error(`连接配置保存失败：${extractErrorMessage(error)}`)
     } finally {
-      setSavingConfig(false)
+      setSavingAccount(false)
     }
   }
 
@@ -1016,15 +1149,14 @@ export default function KnowledgeOpenApiPage() {
     setSyncingKeys(true)
     try {
       const payload = await syncKnowledgeOpenApiKeys({
-        adminBaseUrl: configForm.adminBaseUrl || 'http://localhost:3000',
-        workspaceId: configForm.workspaceId || 'default',
+        adminBaseUrl: accountForm.baseUrl || 'http://localhost:3000',
+        workspaceId: accountForm.workspaceId || 'default',
         adminToken,
       })
-      setConfigForm((current) => ({
+      setAccountForm((current) => ({
         ...current,
-        adminBaseUrl: payload.adminBaseUrl || current.adminBaseUrl,
+        baseUrl: payload.adminBaseUrl || current.baseUrl,
         workspaceId: payload.workspaceId || current.workspaceId,
-        accessUrl: payload.accessUrl || current.accessUrl,
       }))
       setSyncedKeys(payload.keys || [])
       message.success(payload.keys?.length ? '已同步 OpenAPI Key' : '同步完成，但没有读取到可用 Key')
@@ -1040,12 +1172,50 @@ export default function KnowledgeOpenApiPage() {
     if (!selectedKey) {
       return
     }
-    setConfigForm((current) => ({
+    setAccountForm((current) => ({
       ...current,
-      keyId: selectedKey.id ?? current.keyId,
-      keyName: selectedKey.name ?? current.keyName,
+      accountName: current.accountName || selectedKey.name || current.accountName,
       apiKey: selectedKey.secret_key ?? current.apiKey,
     }))
+  }
+
+  async function removeAccount(accountId: number) {
+    try {
+      await deleteKnowledgeAccount(accountId)
+      message.success('连接配置已删除')
+      if (accountForm.id === accountId) {
+        createAccountDraft()
+      }
+      void loadAccounts(undefined, true)
+    } catch (error) {
+      message.error(`连接配置删除失败：${extractErrorMessage(error)}`)
+    }
+  }
+
+  async function toggleAccountStatus(account: MaxKbAccount) {
+    try {
+      const nextStatus = account.status === 1 ? 0 : 1
+      const updated = await updateKnowledgeAccountStatus(account.id, nextStatus)
+      message.success(nextStatus === 1 ? '连接已启用' : '连接已停用')
+      if (accountForm.id === account.id) {
+        editAccount(updated)
+      }
+      void loadAccounts(selectedAccountId, true)
+    } catch (error) {
+      message.error(`状态更新失败：${extractErrorMessage(error)}`)
+    }
+  }
+
+  async function testAccount(accountId: number) {
+    setTestingAccountId(accountId)
+    try {
+      await testKnowledgeAccount(accountId)
+      message.success('连接测试通过')
+    } catch (error) {
+      message.error(`连接测试失败：${extractErrorMessage(error)}`)
+    } finally {
+      setTestingAccountId(undefined)
+    }
   }
 
   const loadDocuments = useCallback(async (knowledgeId: string) => {
@@ -1055,13 +1225,13 @@ export default function KnowledgeOpenApiPage() {
     setParagraphs([])
     setDocumentTotal(0)
     setParagraphTotal(0)
-    if (!knowledgeId) {
+    if (!selectedAccountId || !knowledgeId) {
       return
     }
 
     setLoadingDocuments(true)
     try {
-      const payload = await getKnowledgeDocuments(knowledgeId, { current_page: 1, page_size: 100, task_type: 1 })
+      const payload = await getKnowledgeDocuments(selectedAccountId, knowledgeId, { current_page: 1, page_size: 100, task_type: 1 })
       if (requestSeq !== documentsRequestSeq.current) {
         return
       }
@@ -1080,16 +1250,16 @@ export default function KnowledgeOpenApiPage() {
         setLoadingDocuments(false)
       }
     }
-  }, [])
+  }, [selectedAccountId])
 
   const loadParagraphs = useCallback(async (knowledgeId: string, documentId: string) => {
-    if (!knowledgeId || !documentId) {
+    if (!selectedAccountId || !knowledgeId || !documentId) {
       return
     }
 
     setLoadingParagraphs(true)
     try {
-      const payload = await getDocumentParagraphs(knowledgeId, documentId, { page: 1, size: 100 })
+      const payload = await getDocumentParagraphs(selectedAccountId, knowledgeId, documentId, { page: 1, size: 100 })
       const rows = makeRows(extractRecords(payload), 'paragraph') as ParagraphRow[]
       setParagraphs(rows)
       setParagraphTotal(extractTotal(payload, rows.length))
@@ -1100,7 +1270,7 @@ export default function KnowledgeOpenApiPage() {
     } finally {
       setLoadingParagraphs(false)
     }
-  }, [])
+  }, [selectedAccountId])
 
   async function openParagraphEditor(paragraph: ParagraphRow) {
     setEditingParagraph(paragraph)
@@ -1110,13 +1280,13 @@ export default function KnowledgeOpenApiPage() {
     setNewProblemText('')
     setProblemInputVisible(false)
 
-    if (!selectedKnowledgeId || !selectedDocumentId || !paragraph.idText) {
+    if (!selectedAccountId || !selectedKnowledgeId || !selectedDocumentId || !paragraph.idText) {
       return
     }
 
     setLoadingParagraphProblems(true)
     try {
-      const payload = await getDocumentParagraphProblems(selectedKnowledgeId, selectedDocumentId, paragraph.idText)
+      const payload = await getDocumentParagraphProblems(selectedAccountId, selectedKnowledgeId, selectedDocumentId, paragraph.idText)
       const remoteProblems = normalizeProblemList(extractRecords(payload))
       if (remoteProblems.length > 0) {
         setEditProblems(remoteProblems)
@@ -1184,7 +1354,7 @@ export default function KnowledgeOpenApiPage() {
   }
 
   async function saveParagraphEditor() {
-    if (!editingParagraph || !selectedKnowledgeId || !selectedDocumentId) {
+    if (!editingParagraph || !selectedAccountId || !selectedKnowledgeId || !selectedDocumentId) {
       return
     }
     const content = editContent.trim()
@@ -1197,7 +1367,7 @@ export default function KnowledgeOpenApiPage() {
     const problemList = editProblems.map((item) => (item.id ? { id: item.id, content: item.content } : { content: item.content }))
     setSavingParagraph(true)
     try {
-      await updateDocumentParagraph(selectedKnowledgeId, selectedDocumentId, editingParagraph.idText, {
+      await updateDocumentParagraph(selectedAccountId, selectedKnowledgeId, selectedDocumentId, editingParagraph.idText, {
         title,
         content: editContent,
         is_active: true,
@@ -1228,10 +1398,18 @@ export default function KnowledgeOpenApiPage() {
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-time remote configuration loading owns its request state
-    void loadKnowledgeConfig(true)
-    void loadKnowledges()
-  }, [loadKnowledgeConfig, loadKnowledges])
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-time remote option loading owns its request state
+    void loadAccountEnvironments()
+    void loadAccounts(undefined, true)
+  }, [loadAccountEnvironments, loadAccounts])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- account selection intentionally clears stale remote browser state
+    resetBrowserState()
+    if (selectedAccountId) {
+      void loadKnowledges()
+    }
+  }, [loadKnowledges, selectedAccountId])
 
   useEffect(() => {
     if (selectedKnowledgeId) {
@@ -1375,6 +1553,19 @@ export default function KnowledgeOpenApiPage() {
     <div className="mkb-knowledge-page">
       <aside className="mkb-knowledge-sidebar">
         <div className="mkb-sidebar-title">知识库</div>
+        <Select
+          size="small"
+          placeholder="选择连接"
+          value={selectedAccountId}
+          loading={loadingAccounts}
+          options={accounts.map((account) => ({
+            value: account.id,
+            label: account.accountName,
+            disabled: account.status !== 1,
+          }))}
+          onChange={selectAccount}
+          style={{ width: '100%', marginBottom: 10 }}
+        />
         <div className="mkb-sidebar-search">
           <Input
             allowClear
@@ -1416,8 +1607,21 @@ export default function KnowledgeOpenApiPage() {
         {view === 'knowledge' ? (
           <section className="mkb-view mkb-view--knowledge">
             <header className="mkb-view-header">
-              <h1>根目录 <span className="mkb-title-count">{knowledgeTotal}</span></h1>
+              <h1>{selectedAccount?.accountName ?? '根目录'} <span className="mkb-title-count">{knowledgeTotal}</span></h1>
               <div className="mkb-toolbar">
+                <Select
+                  size="small"
+                  placeholder="连接"
+                  value={selectedAccountId}
+                  loading={loadingAccounts}
+                  style={{ width: 150 }}
+                  options={accounts.map((account) => ({
+                    value: account.id,
+                    label: account.accountName,
+                    disabled: account.status !== 1,
+                  }))}
+                  onChange={selectAccount}
+                />
                 <Select
                   size="small"
                   value="name"
@@ -1441,6 +1645,9 @@ export default function KnowledgeOpenApiPage() {
                 <Button size="small" icon={<ReloadOutlined />} loading={loadingKnowledges} onClick={() => void loadKnowledges()} />
               </div>
             </header>
+            {!selectedAccountId ? (
+              <Empty description="请先新增或选择一个 MaxKB 连接配置" />
+            ) : null}
             <div className="mkb-knowledge-grid">
               {filteredKnowledges.map((knowledge) => (
                 <button
@@ -1578,7 +1785,7 @@ export default function KnowledgeOpenApiPage() {
                     <div className="mkb-paragraph-card__index">{index + 1}</div>
                     <div className="mkb-paragraph-card__body">
                       <h2>{paragraph.nameText || `段落 ${index + 1}`}</h2>
-                      <RichDocumentContent assetBaseUrl={assetBaseUrl} record={paragraph} />
+                      <RichDocumentContent accountId={selectedAccountId} assetBaseUrl={assetBaseUrl} record={paragraph} />
                       <div className="mkb-paragraph-card__meta">
                         <span>{numberText(paragraph.contentText.length, '0')} 字符</span>
                         <Space size={4}>
@@ -1715,66 +1922,170 @@ export default function KnowledgeOpenApiPage() {
       <Drawer
         title="知识库连接配置"
         rootClassName="mkb-config-drawer-root"
-        width={520}
+        width={880}
         open={configOpen}
         onClose={() => setConfigOpen(false)}
-        extra={<Button size="small" icon={<ReloadOutlined />} loading={configLoading} onClick={() => void loadKnowledgeConfig()}>刷新</Button>}
+        extra={
+          <Space>
+            <Button size="small" icon={<PlusOutlined />} onClick={createAccountDraft}>新增连接</Button>
+            <Button size="small" icon={<ReloadOutlined />} loading={loadingAccounts} onClick={() => void loadAccounts()}>刷新</Button>
+          </Space>
+        }
         footer={
           <div className="mkb-config-footer">
             <Button onClick={() => setConfigOpen(false)}>取消</Button>
-            <Button type="primary" loading={savingConfig} onClick={() => void saveConfig()}>保存配置</Button>
+            <Button type="primary" loading={savingAccount} onClick={() => void saveAccount()}>
+              {accountForm.id ? '保存连接' : '新增连接'}
+            </Button>
           </div>
         }
       >
         <div className="mkb-config-drawer">
           <Alert
-            type={configForm.configured ? 'success' : 'warning'}
+            type={selectedAccount ? 'success' : 'warning'}
             showIcon
-            message={configForm.configured ? '当前已配置 MaxKB OpenAPI 连接' : '请配置 MaxKB 地址和 OpenAPI Key'}
+            message={selectedAccount ? `当前正在浏览：${selectedAccount.accountName}` : '请新增或选择一个 MaxKB 连接配置'}
           />
+
+          <Table<MaxKbAccount>
+            rowKey="id"
+            size="small"
+            loading={loadingAccounts}
+            dataSource={accounts}
+            pagination={false}
+            columns={[
+              {
+                title: '连接名称',
+                dataIndex: 'accountName',
+                width: 160,
+                render: (value, account) => (
+                  <button className="mkb-table-link" type="button" onClick={() => selectAccount(account.id)}>
+                    {String(value ?? '-')}
+                  </button>
+                ),
+              },
+              { title: '环境', dataIndex: 'environmentText', width: 90, render: (value, account) => value || account.environment },
+              { title: '地址', dataIndex: 'baseUrl', ellipsis: true },
+              { title: '工作空间', dataIndex: 'workspaceId', width: 120, ellipsis: true },
+              {
+                title: 'Key',
+                width: 130,
+                render: (_, account) => account.apiKeyConfigured ? <Tag color="success">{account.apiKeyMasked || '已配置'}</Tag> : <Tag color="warning">未配置</Tag>,
+              },
+              {
+                title: '状态',
+                width: 90,
+                render: (_, account) => <Tag color={account.status === 1 ? 'success' : 'default'}>{account.statusText || (account.status === 1 ? '启用' : '停用')}</Tag>,
+              },
+              {
+                title: '操作',
+                width: 240,
+                fixed: 'right',
+                render: (_, account) => (
+                  <Space size={4}>
+                    <Button size="small" type="link" onClick={() => editAccount(account)}>编辑</Button>
+                    <Button size="small" type="link" onClick={() => selectAccount(account.id)}>使用</Button>
+                    <Button
+                      size="small"
+                      type="link"
+                      loading={testingAccountId === account.id}
+                      onClick={() => void testAccount(account.id)}
+                    >
+                      测试
+                    </Button>
+                    <Button size="small" type="link" onClick={() => void toggleAccountStatus(account)}>
+                      {account.status === 1 ? '停用' : '启用'}
+                    </Button>
+                    <Popconfirm
+                      title="删除连接配置"
+                      description="删除后无法在此页面继续使用该 MaxKB 连接。"
+                      okText="删除"
+                      cancelText="取消"
+                      onConfirm={() => void removeAccount(account.id)}
+                    >
+                      <Button size="small" danger type="link">删除</Button>
+                    </Popconfirm>
+                  </Space>
+                ),
+              },
+            ]}
+            scroll={{ x: 820 }}
+            locale={{ emptyText: '暂无连接配置' }}
+          />
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <Text strong>{accountForm.id ? '编辑连接' : '新增连接'}</Text>
+            <Text type="secondary">共 {accountTotal} 条连接</Text>
+          </div>
+
+          <label>
+            <span>连接名称</span>
+            <Input
+              value={accountForm.accountName}
+              placeholder="例如：本地 MaxKB / 生产 MaxKB"
+              onChange={(event) => updateAccountField('accountName', event.target.value)}
+            />
+          </label>
 
           <label>
             <span>MaxKB 管理端地址</span>
             <Input
-              value={configForm.adminBaseUrl}
+              value={accountForm.baseUrl}
               placeholder="http://localhost:3000"
-              onChange={(event) => updateConfigField('adminBaseUrl', event.target.value)}
+              onChange={(event) => updateAccountField('baseUrl', event.target.value)}
             />
           </label>
 
           <label>
             <span>工作空间 ID</span>
             <Input
-              value={configForm.workspaceId}
+              value={accountForm.workspaceId}
               placeholder="default"
-              onChange={(event) => updateConfigField('workspaceId', event.target.value)}
+              onChange={(event) => updateAccountField('workspaceId', event.target.value)}
             />
           </label>
 
           <label>
-            <span>OpenAPI 访问地址</span>
-            <Input
-              value={configForm.accessUrl}
-              placeholder="http://localhost:3000/openapi/knowledge/v1/workspaces/default"
-              onChange={(event) => updateConfigField('accessUrl', event.target.value)}
+            <span>环境</span>
+            <Select
+              value={accountForm.environment}
+              options={(accountEnvironments.length ? accountEnvironments : [
+                { value: 'local', label: '本地' },
+                { value: 'test', label: '测试' },
+                { value: 'prod', label: '线上' },
+                { value: 'custom', label: '自定义' },
+              ]).map((item) => ({ value: item.value, label: item.label }))}
+              onChange={(value) => updateAccountField('environment', value)}
             />
           </label>
 
           <label>
             <span>OpenAPI Key</span>
             <Input.Password
-              value={configForm.apiKey}
-              placeholder="请输入 MaxKB OpenAPI Key"
-              onChange={(event) => updateConfigField('apiKey', event.target.value)}
+              value={accountForm.apiKey}
+              placeholder={accountForm.id ? '留空表示沿用已保存 Key' : '请输入 MaxKB OpenAPI Key'}
+              onChange={(event) => updateAccountField('apiKey', event.target.value)}
             />
           </label>
 
           <label>
-            <span>默认知识库 ID</span>
+            <span>备注</span>
             <Input
-              value={configForm.defaultKnowledgeId}
-              placeholder="用于前台问答召回，可留空"
-              onChange={(event) => updateConfigField('defaultKnowledgeId', event.target.value)}
+              value={accountForm.remark}
+              placeholder="用途、负责人或访问范围"
+              onChange={(event) => updateAccountField('remark', event.target.value)}
+            />
+          </label>
+
+          <label>
+            <span>状态</span>
+            <Select
+              value={accountForm.status}
+              options={[
+                { value: 1, label: '启用' },
+                { value: 0, label: '停用' },
+              ]}
+              onChange={(value) => updateAccountField('status', value)}
             />
           </label>
 

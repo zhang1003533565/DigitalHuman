@@ -6,6 +6,19 @@ export type MaxKbResponse<T = unknown> = {
   data?: T
 }
 
+export type ApiResult<T = unknown> = {
+  code?: number
+  msg?: string
+  data?: T
+}
+
+export type PageResponse<T> = {
+  records: T[]
+  total: number
+  page: number
+  size: number
+}
+
 export type MaxKbRecord = Record<string, unknown>
 
 export type MaxKbOpenApiConfig = {
@@ -26,6 +39,38 @@ export type MaxKbOpenApiKey = {
   workspace_id?: string
   workspace_name?: string
   is_active?: boolean
+}
+
+export type MaxKbAccount = {
+  id: number
+  accountName: string
+  baseUrl: string
+  environment: string
+  environmentText?: string
+  workspaceId: string
+  remark?: string
+  status: number
+  statusText?: string
+  apiKeyConfigured?: boolean
+  apiKeyMasked?: string
+  createTime?: string
+  updateTime?: string
+}
+
+export type MaxKbEnvironmentOption = {
+  value: string
+  label: string
+  description?: string
+}
+
+export type MaxKbAccountPayload = {
+  accountName: string
+  baseUrl: string
+  environment: string
+  apiKey?: string
+  workspaceId: string
+  remark?: string
+  status: number
 }
 
 export type MaxKbSyncKeysPayload = {
@@ -55,9 +100,31 @@ export type ParagraphUpdatePayload = {
   problem_list?: ParagraphProblemPayload[]
 }
 
+export type MaxKbUploadDocumentsPayload = {
+  files?: File[]
+  fileIds?: string[]
+  limit?: number
+  patterns?: string[]
+  withFilter?: boolean
+  splitStrategy?: 'llm_text' | 'llm_vision' | string
+  modelId?: string
+  visionModelId?: string
+  llmModelId?: string
+  qualityOptimize?: boolean
+  autoApply?: boolean
+  idempotencyKey?: string
+}
+
 function unwrap<T>(payload: MaxKbResponse<T> | T): T {
   if (payload && typeof payload === 'object' && 'data' in payload) {
     return (payload as MaxKbResponse<T>).data as T
+  }
+  return payload as T
+}
+
+function unwrapApiResult<T>(payload: ApiResult<T> | T): T {
+  if (payload && typeof payload === 'object' && 'data' in payload) {
+    return (payload as ApiResult<T>).data as T
   }
   return payload as T
 }
@@ -121,62 +188,200 @@ export async function syncKnowledgeOpenApiKeys(payload: MaxKbSyncKeysPayload) {
   return response.data
 }
 
-export async function getKnowledges(params?: Record<string, string | number | undefined>) {
-  const response = await axios.get<MaxKbResponse>('/api/admin/knowledge/knowledges', { params })
+export async function listKnowledgeAccounts(params?: {
+  current?: number
+  size?: number
+  keyword?: string
+  environment?: string
+  status?: number
+}) {
+  const response = await axios.get<ApiResult<PageResponse<MaxKbAccount>>>('/api/admin/knowledge/maxkb/accounts', { params })
+  return unwrapApiResult(response.data)
+}
+
+export async function listKnowledgeAccountEnvironments() {
+  const response = await axios.get<ApiResult<MaxKbEnvironmentOption[]>>('/api/admin/knowledge/maxkb/environments')
+  return unwrapApiResult(response.data)
+}
+
+export async function createKnowledgeAccount(payload: MaxKbAccountPayload) {
+  const response = await axios.post<ApiResult<MaxKbAccount>>('/api/admin/knowledge/maxkb/accounts', payload)
+  return unwrapApiResult(response.data)
+}
+
+export async function updateKnowledgeAccount(accountId: number, payload: MaxKbAccountPayload) {
+  const response = await axios.put<ApiResult<MaxKbAccount>>(`/api/admin/knowledge/maxkb/accounts/${accountId}`, payload)
+  return unwrapApiResult(response.data)
+}
+
+export async function deleteKnowledgeAccount(accountId: number) {
+  const response = await axios.delete<ApiResult<void>>(`/api/admin/knowledge/maxkb/accounts/${accountId}`)
   return response.data
 }
 
-export async function getKnowledgeDetail(knowledgeId: string) {
-  const response = await axios.get<MaxKbResponse>(`/api/admin/knowledge/knowledges/${encodeURIComponent(knowledgeId)}`)
-  return response.data
+export async function updateKnowledgeAccountStatus(accountId: number, status: number) {
+  const response = await axios.put<ApiResult<MaxKbAccount>>(`/api/admin/knowledge/maxkb/accounts/${accountId}/status`, { status })
+  return unwrapApiResult(response.data)
 }
 
-export async function getKnowledgeDocuments(knowledgeId: string, params?: Record<string, string | number | undefined>) {
-  const response = await axios.get<MaxKbResponse>(`/api/admin/knowledge/knowledges/${encodeURIComponent(knowledgeId)}/documents`, { params })
-  return response.data
+export async function testKnowledgeAccount(accountId: number) {
+  const response = await axios.post<ApiResult<unknown>>(`/api/admin/knowledge/maxkb/accounts/${accountId}/test`)
+  return unwrapApiResult(response.data)
+}
+
+export async function getKnowledges(accountId: number, params?: Record<string, string | number | undefined>) {
+  const response = await axios.get<MaxKbResponse>(`/api/admin/knowledge/maxkb/accounts/${accountId}/knowledges`, { params })
+  return unwrapApiResult(response.data)
+}
+
+export async function getKnowledgeDetail(accountId: number, knowledgeId: string) {
+  const response = await axios.get<MaxKbResponse>(
+    `/api/admin/knowledge/maxkb/accounts/${accountId}/knowledges/${encodeURIComponent(knowledgeId)}`,
+  )
+  return unwrapApiResult(response.data)
+}
+
+export async function getKnowledgeDocuments(accountId: number, knowledgeId: string, params?: Record<string, string | number | undefined>) {
+  const response = await axios.get<MaxKbResponse>(
+    `/api/admin/knowledge/maxkb/accounts/${accountId}/knowledges/${encodeURIComponent(knowledgeId)}/documents`,
+    { params },
+  )
+  return unwrapApiResult(response.data)
+}
+
+export async function uploadKnowledgeDocuments(
+  accountId: number,
+  knowledgeId: string,
+  payload: MaxKbUploadDocumentsPayload,
+) {
+  const formData = new FormData()
+  payload.files?.forEach((file) => {
+    formData.append('file', file)
+  })
+  payload.fileIds?.filter(Boolean).forEach((fileId) => {
+    formData.append('file_id', fileId)
+  })
+  if (payload.limit != null) formData.append('limit', String(payload.limit))
+  payload.patterns?.filter(Boolean).forEach((pattern) => {
+    formData.append('patterns', pattern)
+  })
+  if (payload.withFilter != null) formData.append('with_filter', String(payload.withFilter))
+  if (payload.splitStrategy) formData.append('split_strategy', payload.splitStrategy)
+  if (payload.modelId) formData.append('model_id', payload.modelId)
+  if (payload.visionModelId) formData.append('vision_model_id', payload.visionModelId)
+  if (payload.llmModelId) formData.append('llm_model_id', payload.llmModelId)
+  if (payload.qualityOptimize != null) formData.append('quality_optimize', String(payload.qualityOptimize))
+  if (payload.autoApply != null) formData.append('auto_apply', String(payload.autoApply))
+  if (payload.idempotencyKey) formData.append('idempotency_key', payload.idempotencyKey)
+
+  const response = await axios.post<MaxKbResponse>(
+    `/api/admin/knowledge/maxkb/accounts/${accountId}/knowledges/${encodeURIComponent(knowledgeId)}/documents/upload`,
+    formData,
+    payload.idempotencyKey ? { headers: { 'Idempotency-Key': payload.idempotencyKey } } : undefined,
+  )
+  return unwrapApiResult(response.data)
+}
+
+export async function listKnowledgeUploadTasks(
+  accountId: number,
+  knowledgeId: string,
+  params?: Record<string, string | number | undefined>,
+) {
+  const response = await axios.get<MaxKbResponse>(
+    `/api/admin/knowledge/maxkb/accounts/${accountId}/knowledges/${encodeURIComponent(knowledgeId)}/documents/upload-tasks`,
+    { params },
+  )
+  return unwrapApiResult(response.data)
+}
+
+export async function getKnowledgeUploadTask(accountId: number, knowledgeId: string, taskId: string) {
+  const response = await axios.get<MaxKbResponse>(
+    `/api/admin/knowledge/maxkb/accounts/${accountId}/knowledges/${encodeURIComponent(knowledgeId)}/documents/upload-tasks/${encodeURIComponent(taskId)}`,
+  )
+  return unwrapApiResult(response.data)
+}
+
+export async function previewKnowledgeUploadTask(
+  accountId: number,
+  knowledgeId: string,
+  taskId: string,
+  params?: Record<string, string | number | undefined>,
+) {
+  const response = await axios.get<MaxKbResponse>(
+    `/api/admin/knowledge/maxkb/accounts/${accountId}/knowledges/${encodeURIComponent(knowledgeId)}/documents/upload-tasks/${encodeURIComponent(taskId)}/preview`,
+    { params },
+  )
+  return unwrapApiResult(response.data)
+}
+
+export async function applyKnowledgeUploadTask(accountId: number, knowledgeId: string, taskId: string) {
+  const response = await axios.post<MaxKbResponse>(
+    `/api/admin/knowledge/maxkb/accounts/${accountId}/knowledges/${encodeURIComponent(knowledgeId)}/documents/upload-tasks/${encodeURIComponent(taskId)}/apply`,
+  )
+  return unwrapApiResult(response.data)
+}
+
+export async function cancelKnowledgeUploadTask(accountId: number, knowledgeId: string, taskId: string) {
+  const response = await axios.post<MaxKbResponse>(
+    `/api/admin/knowledge/maxkb/accounts/${accountId}/knowledges/${encodeURIComponent(knowledgeId)}/documents/upload-tasks/${encodeURIComponent(taskId)}/cancel`,
+  )
+  return unwrapApiResult(response.data)
+}
+
+export async function deleteKnowledgeUploadTask(accountId: number, knowledgeId: string, taskId: string) {
+  const response = await axios.delete<MaxKbResponse>(
+    `/api/admin/knowledge/maxkb/accounts/${accountId}/knowledges/${encodeURIComponent(knowledgeId)}/documents/upload-tasks/${encodeURIComponent(taskId)}`,
+  )
+  return unwrapApiResult(response.data)
 }
 
 export async function getDocumentParagraphs(
+  accountId: number,
   knowledgeId: string,
   documentId: string,
   params?: Record<string, string | number | undefined>,
 ) {
   const response = await axios.get<MaxKbResponse>(
-    `/api/admin/knowledge/knowledges/${encodeURIComponent(knowledgeId)}/documents/${encodeURIComponent(documentId)}/paragraphs`,
+    `/api/admin/knowledge/maxkb/accounts/${accountId}/knowledges/${encodeURIComponent(knowledgeId)}/documents/${encodeURIComponent(documentId)}/paragraphs`,
     { params },
   )
-  return response.data
+  return unwrapApiResult(response.data)
 }
 
 export async function getDocumentParagraphProblems(
+  accountId: number,
   knowledgeId: string,
   documentId: string,
   paragraphId: string,
 ) {
   const response = await axios.get<MaxKbResponse>(
-    `/api/admin/knowledge/knowledges/${encodeURIComponent(knowledgeId)}/documents/${encodeURIComponent(documentId)}/paragraphs/${encodeURIComponent(paragraphId)}/problems`,
+    `/api/admin/knowledge/maxkb/accounts/${accountId}/knowledges/${encodeURIComponent(knowledgeId)}/documents/${encodeURIComponent(documentId)}/paragraphs/${encodeURIComponent(paragraphId)}/problems`,
   )
-  return response.data
+  return unwrapApiResult(response.data)
 }
 
 export async function updateDocumentParagraph(
+  accountId: number,
   knowledgeId: string,
   documentId: string,
   paragraphId: string,
   payload: ParagraphUpdatePayload,
 ) {
   const response = await axios.put<MaxKbResponse>(
-    `/api/admin/knowledge/knowledges/${encodeURIComponent(knowledgeId)}/documents/${encodeURIComponent(documentId)}/paragraphs/${encodeURIComponent(paragraphId)}`,
+    `/api/admin/knowledge/maxkb/accounts/${accountId}/knowledges/${encodeURIComponent(knowledgeId)}/documents/${encodeURIComponent(documentId)}/paragraphs/${encodeURIComponent(paragraphId)}`,
     payload,
   )
-  return response.data
+  return unwrapApiResult(response.data)
 }
 
-export function getKnowledgeAssetUrl(path: string) {
+export function getKnowledgeAssetUrl(path: string, accountId?: number) {
+  if (accountId) {
+    return `/api/admin/knowledge/maxkb/accounts/${accountId}/assets?path=${encodeURIComponent(path || '')}`
+  }
   return `/api/admin/knowledge/assets?path=${encodeURIComponent(path || '')}`
 }
 
-export async function runKnowledgeHitTest(payload: HitTestPayload) {
-  const response = await axios.post<MaxKbResponse>('/api/admin/knowledge/hit-test', payload)
-  return response.data
+export async function runKnowledgeHitTest(accountId: number, payload: HitTestPayload) {
+  const response = await axios.post<MaxKbResponse>(`/api/admin/knowledge/maxkb/accounts/${accountId}/hit-test`, payload)
+  return unwrapApiResult(response.data)
 }

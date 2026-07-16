@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -139,18 +140,105 @@ public class MaxKbKnowledgeController {
     public ApiResult<Object> uploadDocuments(
             @PathVariable Long accountId,
             @PathVariable String knowledgeId,
-            @RequestParam("file") List<MultipartFile> files,
+            @RequestParam(required = false, name = "file") List<MultipartFile> files,
+            @RequestParam(required = false, name = "file_id") List<String> fileIds,
             @RequestParam(required = false) Integer limit,
             @RequestParam(required = false) List<String> patterns,
             @RequestParam(required = false, name = "with_filter") Boolean withFilter,
             @RequestParam(required = false, name = "split_strategy") String splitStrategy,
             @RequestParam(required = false, name = "model_id") String modelId,
+            @RequestParam(required = false, name = "vision_model_id") String visionModelId,
+            @RequestParam(required = false, name = "llm_model_id") String llmModelId,
+            @RequestParam(required = false, name = "quality_optimize") Boolean qualityOptimize,
+            @RequestParam(required = false, name = "auto_apply") Boolean autoApply,
+            @RequestParam(required = false, name = "idempotency_key") String idempotencyKey,
+            @RequestHeader(required = false, name = "Idempotency-Key") String idempotencyKeyHeader,
             HttpServletRequest request
     ) {
         requireAdmin(request);
         return ApiResult.success(maxKbKnowledgeService.uploadDocuments(
-                accountId, knowledgeId, files, limit, patterns, withFilter, splitStrategy, modelId
+                accountId,
+                knowledgeId,
+                files,
+                fileIds,
+                limit,
+                patterns,
+                withFilter,
+                splitStrategy,
+                modelId,
+                visionModelId,
+                llmModelId,
+                qualityOptimize,
+                autoApply,
+                idempotencyKeyHeader != null && !idempotencyKeyHeader.isBlank() ? idempotencyKeyHeader : idempotencyKey
         ));
+    }
+
+    @GetMapping("/accounts/{accountId}/knowledges/{knowledgeId}/documents/upload-tasks")
+    public ApiResult<Object> listUploadTasks(
+            @PathVariable Long accountId,
+            @PathVariable String knowledgeId,
+            @RequestParam Map<String, String> queryParams,
+            HttpServletRequest request
+    ) {
+        requireAdmin(request);
+        return ApiResult.success(maxKbKnowledgeService.listUploadTasks(accountId, knowledgeId, queryParams));
+    }
+
+    @GetMapping("/accounts/{accountId}/knowledges/{knowledgeId}/documents/upload-tasks/{taskId}")
+    public ApiResult<Object> getUploadTask(
+            @PathVariable Long accountId,
+            @PathVariable String knowledgeId,
+            @PathVariable String taskId,
+            HttpServletRequest request
+    ) {
+        requireAdmin(request);
+        return ApiResult.success(maxKbKnowledgeService.getUploadTask(accountId, knowledgeId, taskId));
+    }
+
+    @GetMapping("/accounts/{accountId}/knowledges/{knowledgeId}/documents/upload-tasks/{taskId}/preview")
+    public ApiResult<Object> previewUploadTask(
+            @PathVariable Long accountId,
+            @PathVariable String knowledgeId,
+            @PathVariable String taskId,
+            @RequestParam Map<String, String> queryParams,
+            HttpServletRequest request
+    ) {
+        requireAdmin(request);
+        return ApiResult.success(maxKbKnowledgeService.previewUploadTask(accountId, knowledgeId, taskId, queryParams));
+    }
+
+    @PostMapping("/accounts/{accountId}/knowledges/{knowledgeId}/documents/upload-tasks/{taskId}/apply")
+    public ApiResult<Object> applyUploadTask(
+            @PathVariable Long accountId,
+            @PathVariable String knowledgeId,
+            @PathVariable String taskId,
+            HttpServletRequest request
+    ) {
+        requireAdmin(request);
+        return ApiResult.success(maxKbKnowledgeService.applyUploadTask(accountId, knowledgeId, taskId));
+    }
+
+    @PostMapping("/accounts/{accountId}/knowledges/{knowledgeId}/documents/upload-tasks/{taskId}/cancel")
+    public ApiResult<Object> cancelUploadTask(
+            @PathVariable Long accountId,
+            @PathVariable String knowledgeId,
+            @PathVariable String taskId,
+            HttpServletRequest request
+    ) {
+        requireAdmin(request);
+        return ApiResult.success(maxKbKnowledgeService.cancelUploadTask(accountId, knowledgeId, taskId));
+    }
+
+    @DeleteMapping("/accounts/{accountId}/knowledges/{knowledgeId}/documents/upload-tasks/{taskId}")
+    public ApiResult<Object> deleteUploadTask(
+            @PathVariable Long accountId,
+            @PathVariable String knowledgeId,
+            @PathVariable String taskId,
+            HttpServletRequest request
+    ) {
+        requireAdmin(request);
+        return ApiResult.success(maxKbKnowledgeService.deleteUploadTask(accountId, knowledgeId, taskId));
     }
 
     @GetMapping("/accounts/{accountId}/knowledges/{knowledgeId}/documents/{documentId}/paragraphs")
