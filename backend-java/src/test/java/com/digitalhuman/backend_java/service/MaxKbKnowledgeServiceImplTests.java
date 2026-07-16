@@ -199,6 +199,49 @@ class MaxKbKnowledgeServiceImplTests {
     }
 
     @Test
+    void updateParagraphShouldForwardToKnowledgeParagraphPath() {
+        service.updateParagraph(
+                1L,
+                "kb-1",
+                "doc-1",
+                "paragraph-1",
+                Map.of("title", "标题", "content", "正文")
+        );
+
+        assertEquals("PUT", capturedRequest.method());
+        assertEquals(
+                "/openapi/knowledge/v1/workspaces/ws-1/knowledges/kb-1/documents/doc-1/paragraphs/paragraph-1",
+                capturedRequest.url().encodedPath()
+        );
+        assertEquals("Bearer mkb_secret_key", capturedRequest.header("Authorization"));
+    }
+
+    @Test
+    void updateParagraphShouldFallbackToManagementEndpointWhenOpenApiDoesNotSupportWrites() throws Exception {
+        final int[] attempts = {0};
+        doAnswer(invocation -> {
+            attempts[0]++;
+            return attempts[0] == 1 ? notFoundResponse() : successfulResponse();
+        }).when(call).execute();
+
+        service.updateParagraph(
+                1L,
+                "kb-1",
+                "doc-1",
+                "paragraph-1",
+                Map.of("title", "标题", "content", "正文")
+        );
+
+        assertEquals(2, attempts[0]);
+        assertEquals("PUT", capturedRequest.method());
+        assertEquals(
+                "/admin/api/workspace/ws-1/knowledge/kb-1/document/doc-1/paragraph/paragraph-1",
+                capturedRequest.url().encodedPath()
+        );
+        assertEquals("Bearer mkb_secret_key", capturedRequest.header("Authorization"));
+    }
+
+    @Test
     void htmlSuccessResponseShouldReportUnsupportedOpenApiEndpoint() throws Exception {
         doAnswer(invocation -> htmlResponse()).when(call).execute();
 
@@ -221,6 +264,19 @@ class MaxKbKnowledgeServiceImplTests {
                 .message("OK")
                 .body(ResponseBody.create(
                         "{\"code\":200,\"data\":{\"records\":[]}}",
+                        MediaType.get("application/json")
+                ))
+                .build();
+    }
+
+    private Response notFoundResponse() {
+        return new Response.Builder()
+                .request(capturedRequest)
+                .protocol(Protocol.HTTP_1_1)
+                .code(404)
+                .message("Not Found")
+                .body(ResponseBody.create(
+                        "{\"detail\":\"Not found\"}",
                         MediaType.get("application/json")
                 ))
                 .build();

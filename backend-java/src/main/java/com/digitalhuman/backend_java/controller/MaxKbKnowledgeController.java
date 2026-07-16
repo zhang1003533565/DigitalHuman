@@ -263,6 +263,31 @@ public class MaxKbKnowledgeController {
         return ApiResult.success(maxKbKnowledgeService.listParagraphs(accountId, knowledgeId, documentId, queryParams));
     }
 
+    @GetMapping("/accounts/{accountId}/knowledges/{knowledgeId}/documents/{documentId}/paragraphs/{paragraphId}/problems")
+    public ApiResult<Object> listParagraphProblems(
+            @PathVariable Long accountId,
+            @PathVariable String knowledgeId,
+            @PathVariable String documentId,
+            @PathVariable String paragraphId,
+            HttpServletRequest request
+    ) {
+        requireAdmin(request);
+        return ApiResult.success(maxKbKnowledgeService.listParagraphProblems(accountId, knowledgeId, documentId, paragraphId));
+    }
+
+    @PutMapping("/accounts/{accountId}/knowledges/{knowledgeId}/documents/{documentId}/paragraphs/{paragraphId}")
+    public ApiResult<Object> updateParagraph(
+            @PathVariable Long accountId,
+            @PathVariable String knowledgeId,
+            @PathVariable String documentId,
+            @PathVariable String paragraphId,
+            @RequestBody Map<String, Object> payload,
+            HttpServletRequest request
+    ) {
+        requireAdmin(request);
+        return ApiResult.success(maxKbKnowledgeService.updateParagraph(accountId, knowledgeId, documentId, paragraphId, payload));
+    }
+
     @GetMapping("/accounts/{accountId}/assets")
     public ResponseEntity<byte[]> proxyAsset(
             @PathVariable Long accountId,

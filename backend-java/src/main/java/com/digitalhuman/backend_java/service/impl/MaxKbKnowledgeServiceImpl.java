@@ -327,12 +327,51 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
         MaxKbAccount account = getAccount(accountId, true);
         return getObject(
                 account,
-                "/workspaces/" + account.getWorkspaceId()
-                        + "/knowledges/" + requireId(knowledgeId, "知识库 ID")
-                        + "/documents/" + requireId(documentId, "文档 ID")
-                        + "/paragraphs",
+                paragraphPath(account, knowledgeId, documentId),
                 queryParams
         );
+    }
+
+    @Override
+    public Object listParagraphProblems(Long accountId, String knowledgeId, String documentId, String paragraphId) {
+        MaxKbAccount account = getAccount(accountId, true);
+        String openApiPath = paragraphPath(account, knowledgeId, documentId)
+                + "/" + requireId(paragraphId, "分段 ID")
+                + "/problem";
+        try {
+            return getObject(account, openApiPath, null);
+        } catch (ResponseStatusException exception) {
+            if (!shouldTryManagementFallback(exception)) {
+                throw exception;
+            }
+            return getManagementObject(account, managementParagraphPath(account, knowledgeId, documentId, paragraphId) + "/problem");
+        }
+    }
+
+    @Override
+    public Object updateParagraph(
+            Long accountId,
+            String knowledgeId,
+            String documentId,
+            String paragraphId,
+            Map<String, Object> payload
+    ) {
+        MaxKbAccount account = getAccount(accountId, true);
+        Map<String, Object> normalizedPayload = normalizeParagraphPayload(payload);
+        String openApiPath = paragraphPath(account, knowledgeId, documentId)
+                + "/" + requireId(paragraphId, "分段 ID");
+        try {
+            return putObject(account, openApiPath, normalizedPayload);
+        } catch (ResponseStatusException exception) {
+            if (!shouldTryManagementFallback(exception)) {
+                throw exception;
+            }
+            return putManagementObject(
+                    account,
+                    managementParagraphPath(account, knowledgeId, documentId, paragraphId),
+                    normalizedPayload
+            );
+        }
     }
 
     @Override
@@ -395,6 +434,17 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
         }
     }
 
+    private Object putObject(MaxKbAccount account, String path, Map<String, Object> payload) {
+        try {
+            Request request = baseRequest(account, path, null)
+                    .put(RequestBody.create(objectMapper.writeValueAsString(payload == null ? Map.of() : payload), JSON))
+                    .build();
+            return executeObject(request, "MaxKB 服务调用失败");
+        } catch (IOException error) {
+            throw status(HttpStatus.INTERNAL_SERVER_ERROR, "构造 MaxKB 请求失败: " + error.getMessage(), error);
+        }
+    }
+
     private Object postEmptyObject(MaxKbAccount account, String path) {
         Request request = baseRequest(account, path, null)
                 .post(RequestBody.create(new byte[0], null))
@@ -407,6 +457,31 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
         return executeObject(request, "MaxKB 服务调用失败");
     }
 
+    private Object getManagementObject(MaxKbAccount account, String path) {
+        return executeObject(managementRequest(account, path).get().build(), "MaxKB 服务调用失败");
+    }
+
+    private Object putManagementObject(MaxKbAccount account, String path, Map<String, Object> payload) {
+        try {
+            Request request = managementRequest(account, path)
+                    .put(RequestBody.create(objectMapper.writeValueAsString(payload == null ? Map.of() : payload), JSON))
+                    .build();
+            return executeObject(request, "MaxKB 服务调用失败");
+        } catch (IOException error) {
+            throw status(HttpStatus.INTERNAL_SERVER_ERROR, "构造 MaxKB 请求失败: " + error.getMessage(), error);
+        }
+    }
+
+    private Request.Builder managementRequest(MaxKbAccount account, String path) {
+        HttpUrl url = HttpUrl.parse(normalizeServiceRootUrl(account.getBaseUrl()) + path);
+        if (url == null) {
+            throw status(HttpStatus.BAD_REQUEST, "MaxKB 管理端 URL 配置不合法");
+        }
+        return new Request.Builder()
+                .url(url)
+                .header("Authorization", "Bearer " + account.getApiKey().trim());
+    }
+
     private String uploadTasksPath(MaxKbAccount account, String knowledgeId) {
         return "/workspaces/" + account.getWorkspaceId()
                 + "/knowledges/" + requireId(knowledgeId, "知识库 ID")
@@ -415,6 +490,54 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
 
     private String uploadTaskPath(MaxKbAccount account, String knowledgeId, String taskId) {
         return uploadTasksPath(account, knowledgeId) + "/" + requireId(taskId, "任务 ID");
+    }
+
+    private String paragraphPath(MaxKbAccount account, String knowledgeId, String documentId) {
+        return "/workspaces/" + account.getWorkspaceId()
+                + "/knowledges/" + requireId(knowledgeId, "知识库 ID")
+                + "/documents/" + requireId(documentId, "文档 ID")
+                + "/paragraphs";
+    }
+
+    private String managementParagraphPath(
+            MaxKbAccount account,
+            String knowledgeId,
+            String documentId,
+            String paragraphId
+    ) {
+        return "/admin/api/workspace/" + account.getWorkspaceId()
+                + "/knowledge/" + requireId(knowledgeId, "知识库 ID")
+                + "/document/" + requireId(documentId, "文档 ID")
+                + "/paragraph/" + requireId(paragraphId, "分段 ID");
+    }
+
+    private boolean shouldTryManagementFallback(ResponseStatusException exception) {
+        HttpStatusCode statusCode = exception.getStatusCode();
+        return statusCode.isSameCodeAs(HttpStatus.NOT_FOUND)
+                || statusCode.isSameCodeAs(HttpStatus.METHOD_NOT_ALLOWED)
+                || statusCode.isSameCodeAs(HttpStatus.BAD_REQUEST);
+    }
+
+    private Map<String, Object> normalizeParagraphPayload(Map<String, Object> payload) {
+        Map<String, Object> normalized = new LinkedHashMap<>();
+        String title = text(payload, "title");
+        String content = text(payload, "content");
+        if (!title.isBlank()) {
+            normalized.put("title", title);
+        }
+        normalized.put("content", content);
+        Object isActive = payload == null ? null : payload.get("is_active");
+        normalized.put("is_active", isActive instanceof Boolean ? isActive : true);
+        Object problemList = payload == null ? null : payload.get("problem_list");
+        if (problemList instanceof Iterable<?> || problemList instanceof Object[]) {
+            normalized.put("problem_list", problemList);
+        }
+        return normalized;
+    }
+
+    private String text(Map<String, Object> payload, String key) {
+        Object value = payload == null ? null : payload.get(key);
+        return value == null ? "" : String.valueOf(value).trim();
     }
 
     private Request.Builder baseRequest(MaxKbAccount account, String path, Map<String, String> queryParams) {

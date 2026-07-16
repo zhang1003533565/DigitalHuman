@@ -71,6 +71,16 @@ public interface MaxKbKnowledgeService {
 
     Object listParagraphs(Long accountId, String knowledgeId, String documentId, Map<String, String> queryParams);
 
+    Object listParagraphProblems(Long accountId, String knowledgeId, String documentId, String paragraphId);
+
+    Object updateParagraph(
+            Long accountId,
+            String knowledgeId,
+            String documentId,
+            String paragraphId,
+            Map<String, Object> payload
+    );
+
     ResponseEntity<byte[]> proxyAsset(Long accountId, String path);
 
     Object hitTest(Long accountId, Map<String, Object> request);
