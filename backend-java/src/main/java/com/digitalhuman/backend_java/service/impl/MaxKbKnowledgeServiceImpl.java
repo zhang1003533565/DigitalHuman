@@ -125,6 +125,7 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
         account.setBaseUrl(endpoint.baseUrl());
         account.setEnvironment(normalizeEnvironment(request.getEnvironment()));
         account.setApiKey(trim(request.getApiKey()));
+        account.setManagementToken(trimToNull(request.getManagementToken()));
         account.setWorkspaceId(endpoint.workspaceId());
         account.setRemark(trimToNull(request.getRemark()));
         account.setStatus(normalizeStatus(request.getStatus()));
@@ -140,6 +141,9 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
         account.setEnvironment(normalizeEnvironment(request.getEnvironment()));
         if (StringUtils.hasText(request.getApiKey())) {
             account.setApiKey(trim(request.getApiKey()));
+        }
+        if (StringUtils.hasText(request.getManagementToken())) {
+            account.setManagementToken(trim(request.getManagementToken()));
         }
         account.setWorkspaceId(endpoint.workspaceId());
         account.setRemark(trimToNull(request.getRemark()));
@@ -236,90 +240,139 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
             throw status(HttpStatus.BAD_REQUEST, "上传文件或复用文件 ID 不能为空");
         }
 
-        MultipartBody.Builder bodyBuilder = new MultipartBody.Builder().setType(MultipartBody.FORM);
-        if (files != null) {
-            files.stream()
-                    .filter(file -> file != null && !file.isEmpty())
-                    .forEach(file -> addFilePart(bodyBuilder, file));
-        }
-        if (fileIds != null) {
-            fileIds.stream()
-                    .filter(StringUtils::hasText)
-                    .forEach(fileId -> bodyBuilder.addFormDataPart("file_id", fileId.trim()));
-        }
-        bodyBuilder.addFormDataPart("limit", String.valueOf(limit == null ? 4096 : limit));
-        if (patterns != null) {
-            patterns.stream()
-                    .filter(StringUtils::hasText)
-                    .forEach(pattern -> bodyBuilder.addFormDataPart("patterns", pattern.trim()));
-        }
-        if (withFilter != null) {
-            bodyBuilder.addFormDataPart("with_filter", String.valueOf(withFilter));
-        }
-        if (StringUtils.hasText(splitStrategy)) {
-            bodyBuilder.addFormDataPart("split_strategy", splitStrategy.trim());
-        }
-        if (StringUtils.hasText(modelId)) {
-            bodyBuilder.addFormDataPart("model_id", modelId.trim());
-        }
-        if (StringUtils.hasText(visionModelId)) {
-            bodyBuilder.addFormDataPart("vision_model_id", visionModelId.trim());
-        }
-        if (StringUtils.hasText(llmModelId)) {
-            bodyBuilder.addFormDataPart("llm_model_id", llmModelId.trim());
-        }
-        if (qualityOptimize != null) {
-            bodyBuilder.addFormDataPart("quality_optimize", String.valueOf(qualityOptimize));
-        }
-        if (autoApply != null) {
-            bodyBuilder.addFormDataPart("auto_apply", String.valueOf(autoApply));
-        }
-
         String path = "/workspaces/" + account.getWorkspaceId()
                 + "/knowledges/" + requireId(knowledgeId, "知识库 ID")
                 + "/documents/upload";
-        Request.Builder requestBuilder = baseRequest(account, path, null).post(bodyBuilder.build());
+        Request.Builder requestBuilder = baseRequest(account, path, null).post(buildDocumentUploadMultipartBody(
+                files,
+                fileIds,
+                limit,
+                patterns,
+                withFilter,
+                splitStrategy,
+                modelId,
+                visionModelId,
+                llmModelId,
+                qualityOptimize,
+                autoApply,
+                true
+        ));
         if (StringUtils.hasText(idempotencyKey)) {
             requestBuilder.header("Idempotency-Key", idempotencyKey.trim());
         }
         Request request = requestBuilder.build();
-        return executeObject(request, "MaxKB 文件上传失败");
+        try {
+            return executeObject(request, "MaxKB 文件上传失败");
+        } catch (ResponseStatusException exception) {
+            if (!shouldTryManagementFallback(exception) || !hasFiles) {
+                throw exception;
+            }
+            Request fallbackRequest = managementRequest(account, managementSplitTaskPath(account, knowledgeId))
+                    .post(buildDocumentUploadMultipartBody(
+                            files,
+                            fileIds,
+                            limit,
+                            patterns,
+                            withFilter,
+                            splitStrategy,
+                            modelId,
+                            visionModelId,
+                            llmModelId,
+                            qualityOptimize,
+                            autoApply,
+                            false
+                    ))
+                    .build();
+            return normalizeManagementSplitTask(executeObject(fallbackRequest, "MaxKB 文件上传失败"));
+        }
     }
 
     @Override
     public Object listUploadTasks(Long accountId, String knowledgeId, Map<String, String> queryParams) {
         MaxKbAccount account = getAccount(accountId, true);
-        return getObject(account, uploadTasksPath(account, knowledgeId), queryParams);
+        try {
+            return getObject(account, uploadTasksPath(account, knowledgeId), queryParams);
+        } catch (ResponseStatusException exception) {
+            if (!shouldTryManagementFallback(exception)) {
+                throw exception;
+            }
+            return Map.of("records", List.of(), "total", 0);
+        }
     }
 
     @Override
     public Object getUploadTask(Long accountId, String knowledgeId, String taskId) {
         MaxKbAccount account = getAccount(accountId, true);
-        return getObject(account, uploadTaskPath(account, knowledgeId, taskId), null);
+        try {
+            return getObject(account, uploadTaskPath(account, knowledgeId, taskId), null);
+        } catch (ResponseStatusException exception) {
+            if (!shouldTryManagementFallback(exception)) {
+                throw exception;
+            }
+            return normalizeManagementSplitTask(getManagementObject(account, managementSplitTaskPath(account, knowledgeId, taskId)));
+        }
     }
 
     @Override
     public Object previewUploadTask(Long accountId, String knowledgeId, String taskId, Map<String, String> queryParams) {
         MaxKbAccount account = getAccount(accountId, true);
-        return getObject(account, uploadTaskPath(account, knowledgeId, taskId) + "/preview", queryParams);
+        try {
+            return getObject(account, uploadTaskPath(account, knowledgeId, taskId) + "/preview", queryParams);
+        } catch (ResponseStatusException exception) {
+            if (!shouldTryManagementFallback(exception)) {
+                throw exception;
+            }
+            Object taskState = getManagementObject(account, managementSplitTaskPath(account, knowledgeId, taskId));
+            return managementPreviewPage(taskState, queryParams);
+        }
     }
 
     @Override
     public Object applyUploadTask(Long accountId, String knowledgeId, String taskId) {
         MaxKbAccount account = getAccount(accountId, true);
-        return postEmptyObject(account, uploadTaskPath(account, knowledgeId, taskId) + "/apply");
+        try {
+            return postEmptyObject(account, uploadTaskPath(account, knowledgeId, taskId) + "/apply");
+        } catch (ResponseStatusException exception) {
+            if (!shouldTryManagementFallback(exception)) {
+                throw exception;
+            }
+            Object taskState = getManagementObject(account, managementSplitTaskPath(account, knowledgeId, taskId));
+            List<Map<String, Object>> documents = managementBatchCreateDocuments(taskState);
+            if (documents.isEmpty()) {
+                throw status(HttpStatus.BAD_REQUEST, "MaxKB 预览任务没有可导入的文档");
+            }
+            Object result = putManagementObject(account, managementBatchCreatePath(account, knowledgeId), documents);
+            Map<String, Object> response = new LinkedHashMap<>(normalizeManagementSplitTask(taskState));
+            response.put("status", "COMPLETED");
+            response.put("result", unwrapMaxKbData(result));
+            return response;
+        }
     }
 
     @Override
     public Object cancelUploadTask(Long accountId, String knowledgeId, String taskId) {
         MaxKbAccount account = getAccount(accountId, true);
-        return postEmptyObject(account, uploadTaskPath(account, knowledgeId, taskId) + "/cancel");
+        try {
+            return postEmptyObject(account, uploadTaskPath(account, knowledgeId, taskId) + "/cancel");
+        } catch (ResponseStatusException exception) {
+            if (!shouldTryManagementFallback(exception)) {
+                throw exception;
+            }
+            return normalizeManagementSplitTask(deleteManagementObject(account, managementSplitTaskPath(account, knowledgeId, taskId)));
+        }
     }
 
     @Override
     public Object deleteUploadTask(Long accountId, String knowledgeId, String taskId) {
         MaxKbAccount account = getAccount(accountId, true);
-        return deleteObject(account, uploadTaskPath(account, knowledgeId, taskId));
+        try {
+            return deleteObject(account, uploadTaskPath(account, knowledgeId, taskId));
+        } catch (ResponseStatusException exception) {
+            if (!shouldTryManagementFallback(exception)) {
+                throw exception;
+            }
+            return deleteManagementObject(account, managementSplitTaskPath(account, knowledgeId, taskId));
+        }
     }
 
     @Override
@@ -461,7 +514,7 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
         return executeObject(managementRequest(account, path).get().build(), "MaxKB 服务调用失败");
     }
 
-    private Object putManagementObject(MaxKbAccount account, String path, Map<String, Object> payload) {
+    private Object putManagementObject(MaxKbAccount account, String path, Object payload) {
         try {
             Request request = managementRequest(account, path)
                     .put(RequestBody.create(objectMapper.writeValueAsString(payload == null ? Map.of() : payload), JSON))
@@ -472,14 +525,22 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
         }
     }
 
+    private Object deleteManagementObject(MaxKbAccount account, String path) {
+        return executeObject(managementRequest(account, path).delete().build(), "MaxKB 服务调用失败");
+    }
+
     private Request.Builder managementRequest(MaxKbAccount account, String path) {
         HttpUrl url = HttpUrl.parse(normalizeServiceRootUrl(account.getBaseUrl()) + path);
         if (url == null) {
             throw status(HttpStatus.BAD_REQUEST, "MaxKB 管理端 URL 配置不合法");
         }
+        String token = account.getManagementToken();
+        if (!StringUtils.hasText(token)) {
+            throw status(HttpStatus.UNAUTHORIZED, "请先在 MaxKB 连接配置中填写管理端 Token，编辑、问题和上传回退接口不能使用 OpenAPI Key 登录 MaxKB 管理端");
+        }
         return new Request.Builder()
                 .url(url)
-                .header("Authorization", "Bearer " + account.getApiKey().trim());
+                .header("Authorization", token.trim().startsWith("Bearer ") ? token.trim() : "Bearer " + token.trim());
     }
 
     private String uploadTasksPath(MaxKbAccount account, String knowledgeId) {
@@ -490,6 +551,22 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
 
     private String uploadTaskPath(MaxKbAccount account, String knowledgeId, String taskId) {
         return uploadTasksPath(account, knowledgeId) + "/" + requireId(taskId, "任务 ID");
+    }
+
+    private String managementSplitTaskPath(MaxKbAccount account, String knowledgeId) {
+        return "/admin/api/workspace/" + account.getWorkspaceId()
+                + "/knowledge/" + requireId(knowledgeId, "知识库 ID")
+                + "/document/split/task";
+    }
+
+    private String managementSplitTaskPath(MaxKbAccount account, String knowledgeId, String taskId) {
+        return managementSplitTaskPath(account, knowledgeId) + "/" + requireId(taskId, "任务 ID");
+    }
+
+    private String managementBatchCreatePath(MaxKbAccount account, String knowledgeId) {
+        return "/admin/api/workspace/" + account.getWorkspaceId()
+                + "/knowledge/" + requireId(knowledgeId, "知识库 ID")
+                + "/document/batch_create";
     }
 
     private String paragraphPath(MaxKbAccount account, String knowledgeId, String documentId) {
@@ -513,9 +590,14 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
 
     private boolean shouldTryManagementFallback(ResponseStatusException exception) {
         HttpStatusCode statusCode = exception.getStatusCode();
+        String reason = exception.getReason();
         return statusCode.isSameCodeAs(HttpStatus.NOT_FOUND)
                 || statusCode.isSameCodeAs(HttpStatus.METHOD_NOT_ALLOWED)
-                || statusCode.isSameCodeAs(HttpStatus.BAD_REQUEST);
+                || statusCode.isSameCodeAs(HttpStatus.BAD_REQUEST)
+                || (statusCode.isSameCodeAs(HttpStatus.BAD_GATEWAY)
+                && StringUtils.hasText(reason)
+                && (reason.contains("MaxKB 返回了 HTML 页面")
+                || reason.contains("module 'uuid' has no attribute 'uuid7'")));
     }
 
     private Map<String, Object> normalizeParagraphPayload(Map<String, Object> payload) {
@@ -538,6 +620,217 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
     private String text(Map<String, Object> payload, String key) {
         Object value = payload == null ? null : payload.get(key);
         return value == null ? "" : String.valueOf(value).trim();
+    }
+
+    private MultipartBody buildDocumentUploadMultipartBody(
+            List<MultipartFile> files,
+            List<String> fileIds,
+            Integer limit,
+            List<String> patterns,
+            Boolean withFilter,
+            String splitStrategy,
+            String modelId,
+            String visionModelId,
+            String llmModelId,
+            Boolean qualityOptimize,
+            Boolean autoApply,
+            boolean includeOpenApiOnlyFields
+    ) {
+        MultipartBody.Builder bodyBuilder = new MultipartBody.Builder().setType(MultipartBody.FORM);
+        if (files != null) {
+            files.stream()
+                    .filter(file -> file != null && !file.isEmpty())
+                    .forEach(file -> addFilePart(bodyBuilder, file));
+        }
+        if (includeOpenApiOnlyFields && fileIds != null) {
+            fileIds.stream()
+                    .filter(StringUtils::hasText)
+                    .forEach(fileId -> bodyBuilder.addFormDataPart("file_id", fileId.trim()));
+        }
+        bodyBuilder.addFormDataPart("limit", String.valueOf(limit == null ? 4096 : limit));
+        if (patterns != null) {
+            patterns.stream()
+                    .filter(StringUtils::hasText)
+                    .forEach(pattern -> bodyBuilder.addFormDataPart("patterns", pattern.trim()));
+        }
+        if (withFilter != null) {
+            bodyBuilder.addFormDataPart("with_filter", String.valueOf(withFilter));
+        }
+        if (StringUtils.hasText(splitStrategy)) {
+            bodyBuilder.addFormDataPart("split_strategy", splitStrategy.trim());
+        }
+        if (StringUtils.hasText(modelId)) {
+            bodyBuilder.addFormDataPart("model_id", modelId.trim());
+        }
+        if (StringUtils.hasText(visionModelId)) {
+            bodyBuilder.addFormDataPart("vision_model_id", visionModelId.trim());
+        }
+        if (StringUtils.hasText(llmModelId)) {
+            bodyBuilder.addFormDataPart("llm_model_id", llmModelId.trim());
+        }
+        if (qualityOptimize != null) {
+            bodyBuilder.addFormDataPart("quality_optimize", String.valueOf(qualityOptimize));
+        }
+        if (includeOpenApiOnlyFields && autoApply != null) {
+            bodyBuilder.addFormDataPart("auto_apply", String.valueOf(autoApply));
+        }
+        return bodyBuilder.build();
+    }
+
+    private Object unwrapMaxKbData(Object response) {
+        if (response instanceof Map<?, ?> map && map.containsKey("data")) {
+            return map.get("data");
+        }
+        return response;
+    }
+
+    private Map<String, Object> objectMap(Object value) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        if (value instanceof Map<?, ?> map) {
+            map.forEach((key, item) -> {
+                if (key != null) {
+                    result.put(String.valueOf(key), item);
+                }
+            });
+        }
+        return result;
+    }
+
+    private List<?> objectList(Object value) {
+        if (value instanceof List<?> list) {
+            return list;
+        }
+        if (value instanceof Object[] array) {
+            return java.util.Arrays.asList(array);
+        }
+        return List.of();
+    }
+
+    private String stringValue(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        return value == null ? "" : String.valueOf(value).trim();
+    }
+
+    private int intValue(Map<String, Object> map, String key, int fallback) {
+        Object value = map.get(key);
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value instanceof String text && StringUtils.hasText(text)) {
+            try {
+                return Integer.parseInt(text.trim());
+            } catch (NumberFormatException ignored) {
+                return fallback;
+            }
+        }
+        return fallback;
+    }
+
+    private Map<String, Object> normalizeManagementSplitTask(Object response) {
+        Map<String, Object> state = objectMap(unwrapMaxKbData(response));
+        String status = normalizeManagementSplitStatus(stringValue(state, "status"));
+        int processed = intValue(state, "processed", 0);
+        int total = intValue(state, "total", processed);
+        int remaining = intValue(state, "remaining", Math.max(total - processed, 0));
+        Map<String, Object> normalized = new LinkedHashMap<>();
+        normalized.put("task_id", firstNonBlank(stringValue(state, "task_id"), stringValue(state, "id")));
+        normalized.put("status", status);
+        normalized.put("stage", firstNonBlank(stringValue(state, "stage"), status));
+        normalized.put("progress", intValue(state, "progress", "PREVIEW_READY".equals(status) ? 100 : 0));
+        normalized.put("metrics", Map.of(
+                "processed", processed,
+                "total", total,
+                "remaining", remaining
+        ));
+        normalized.put("message", firstNonBlank(stringValue(state, "message"), stringValue(state, "error")));
+        normalized.put("documents", state.getOrDefault("result", List.of()));
+        normalized.put("source", "management");
+        return normalized;
+    }
+
+    private String normalizeManagementSplitStatus(String status) {
+        return switch (status == null ? "" : status.trim().toLowerCase()) {
+            case "queued" -> "QUEUED";
+            case "processing" -> "PROCESSING";
+            case "parsing" -> "PARSING";
+            case "completed" -> "PREVIEW_READY";
+            case "failed" -> "FAILED";
+            case "cancelled", "canceled" -> "CANCELLED";
+            default -> StringUtils.hasText(status) ? status.toUpperCase() : "UNKNOWN";
+        };
+    }
+
+    private Map<String, Object> managementPreviewPage(Object taskState, Map<String, String> queryParams) {
+        List<Map<String, Object>> records = flattenManagementPreviewRecords(taskState);
+        int page = parsePositiveInt(queryParams == null ? null : queryParams.get("page"), 1);
+        int pageSize = parsePositiveInt(queryParams == null ? null : queryParams.get("page_size"), records.size());
+        int fromIndex = Math.min((page - 1) * pageSize, records.size());
+        int toIndex = Math.min(fromIndex + pageSize, records.size());
+        return Map.of(
+                "records", records.subList(fromIndex, toIndex),
+                "total", records.size(),
+                "page", page,
+                "page_size", pageSize
+        );
+    }
+
+    private int parsePositiveInt(String raw, int fallback) {
+        if (!StringUtils.hasText(raw)) {
+            return Math.max(fallback, 1);
+        }
+        try {
+            return Math.max(Integer.parseInt(raw.trim()), 1);
+        } catch (NumberFormatException ignored) {
+            return Math.max(fallback, 1);
+        }
+    }
+
+    private List<Map<String, Object>> flattenManagementPreviewRecords(Object taskState) {
+        List<Map<String, Object>> records = new ArrayList<>();
+        Object documents = objectMap(unwrapMaxKbData(taskState)).get("result");
+        int documentIndex = 0;
+        for (Object documentObject : objectList(documents)) {
+            Map<String, Object> document = objectMap(documentObject);
+            String documentName = firstNonBlank(stringValue(document, "name"), "文档 " + (documentIndex + 1));
+            String sourceFileId = stringValue(document, "source_file_id");
+            Object paragraphs = document.containsKey("paragraphs") ? document.get("paragraphs") : document.get("content");
+            int paragraphIndex = 0;
+            for (Object paragraphObject : objectList(paragraphs)) {
+                Map<String, Object> paragraph = objectMap(paragraphObject);
+                Map<String, Object> record = new LinkedHashMap<>();
+                record.put("document_id", firstNonBlank(sourceFileId, String.valueOf(documentIndex + 1)));
+                record.put("document_name", documentName);
+                record.put("source_file_id", sourceFileId);
+                record.put("paragraph_id", firstNonBlank(stringValue(paragraph, "id"), documentIndex + "-" + paragraphIndex));
+                record.put("title", stringValue(paragraph, "title"));
+                record.put("content", stringValue(paragraph, "content"));
+                records.add(record);
+                paragraphIndex += 1;
+            }
+            documentIndex += 1;
+        }
+        return records;
+    }
+
+    private List<Map<String, Object>> managementBatchCreateDocuments(Object taskState) {
+        List<Map<String, Object>> documents = new ArrayList<>();
+        Object rawDocuments = objectMap(unwrapMaxKbData(taskState)).get("result");
+        for (Object documentObject : objectList(rawDocuments)) {
+            Map<String, Object> document = objectMap(documentObject);
+            String name = stringValue(document, "name");
+            Object paragraphs = document.containsKey("paragraphs") ? document.get("paragraphs") : document.get("content");
+            if (!StringUtils.hasText(name) || objectList(paragraphs).isEmpty()) {
+                continue;
+            }
+            Map<String, Object> next = new LinkedHashMap<>();
+            next.put("name", name);
+            next.put("paragraphs", paragraphs);
+            if (StringUtils.hasText(stringValue(document, "source_file_id"))) {
+                next.put("source_file_id", stringValue(document, "source_file_id"));
+            }
+            documents.add(next);
+        }
+        return documents;
     }
 
     private Request.Builder baseRequest(MaxKbAccount account, String path, Map<String, String> queryParams) {
@@ -794,6 +1087,8 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
         vo.setStatusText(Integer.valueOf(1).equals(account.getStatus()) ? "启用" : "禁用");
         vo.setApiKeyConfigured(StringUtils.hasText(account.getApiKey()));
         vo.setApiKeyMasked(maskSecret(account.getApiKey()));
+        vo.setManagementTokenConfigured(StringUtils.hasText(account.getManagementToken()));
+        vo.setManagementTokenMasked(maskSecret(account.getManagementToken()));
         vo.setCreateTime(account.getCreateTime() == null ? null : account.getCreateTime().format(DATE_TIME));
         vo.setUpdateTime(account.getUpdateTime() == null ? null : account.getUpdateTime().format(DATE_TIME));
         return vo;

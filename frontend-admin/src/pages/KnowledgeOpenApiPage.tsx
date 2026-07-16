@@ -87,6 +87,7 @@ const EMPTY_ACCOUNT_FORM: AccountFormState = {
   environment: 'local',
   workspaceId: 'default',
   apiKey: '',
+  managementToken: '',
   remark: '',
   status: 1,
 }
@@ -918,7 +919,6 @@ export default function KnowledgeOpenApiPage() {
   const [testingAccountId, setTestingAccountId] = useState<number | undefined>()
   const [syncingKeys, setSyncingKeys] = useState(false)
   const [accountForm, setAccountForm] = useState<AccountFormState>(EMPTY_ACCOUNT_FORM)
-  const [adminToken, setAdminToken] = useState('')
   const [syncedKeys, setSyncedKeys] = useState<MaxKbOpenApiKey[]>([])
   const [editingParagraph, setEditingParagraph] = useState<ParagraphRow | null>(null)
   const [editTitle, setEditTitle] = useState('')
@@ -1082,7 +1082,6 @@ export default function KnowledgeOpenApiPage() {
 
   function createAccountDraft() {
     setAccountForm(EMPTY_ACCOUNT_FORM)
-    setAdminToken('')
     setSyncedKeys([])
   }
 
@@ -1093,11 +1092,11 @@ export default function KnowledgeOpenApiPage() {
       baseUrl: account.baseUrl,
       environment: account.environment || 'local',
       apiKey: '',
+      managementToken: '',
       workspaceId: account.workspaceId || 'default',
       remark: account.remark || '',
       status: account.status ?? 1,
     })
-    setAdminToken('')
     setSyncedKeys([])
   }
 
@@ -1125,6 +1124,7 @@ export default function KnowledgeOpenApiPage() {
         baseUrl: accountForm.baseUrl.trim(),
         environment: accountForm.environment || 'local',
         apiKey: accountForm.apiKey?.trim() || undefined,
+        managementToken: accountForm.managementToken?.trim() || undefined,
         workspaceId: accountForm.workspaceId.trim(),
         remark: accountForm.remark?.trim() || undefined,
         status: accountForm.status ?? 1,
@@ -1143,7 +1143,8 @@ export default function KnowledgeOpenApiPage() {
   }
 
   async function syncKeys() {
-    if (!adminToken.trim()) {
+    const managementToken = accountForm.managementToken?.trim() || ''
+    if (!managementToken) {
       message.warning('请输入 MaxKB 管理端 Token')
       return
     }
@@ -1152,7 +1153,7 @@ export default function KnowledgeOpenApiPage() {
       const payload = await syncKnowledgeOpenApiKeys({
         adminBaseUrl: accountForm.baseUrl || 'http://localhost:3000',
         workspaceId: accountForm.workspaceId || 'default',
-        adminToken,
+        adminToken: managementToken,
       })
       setAccountForm((current) => ({
         ...current,
@@ -1997,6 +1998,11 @@ export default function KnowledgeOpenApiPage() {
                 render: (_, account) => account.apiKeyConfigured ? <Tag color="success">{account.apiKeyMasked || '已配置'}</Tag> : <Tag color="warning">未配置</Tag>,
               },
               {
+                title: '管理端',
+                width: 130,
+                render: (_, account) => account.managementTokenConfigured ? <Tag color="processing">{account.managementTokenMasked || '已配置'}</Tag> : <Tag color="warning">未配置</Tag>,
+              },
+              {
                 title: '状态',
                 width: 90,
                 render: (_, account) => <Tag color={account.status === 1 ? 'success' : 'default'}>{account.statusText || (account.status === 1 ? '启用' : '停用')}</Tag>,
@@ -2093,6 +2099,15 @@ export default function KnowledgeOpenApiPage() {
           </label>
 
           <label>
+            <span>管理端 Token</span>
+            <Input.Password
+              value={accountForm.managementToken}
+              placeholder={accountForm.id ? '留空表示沿用已保存 Token' : '用于编辑、问题和上传回退'}
+              onChange={(event) => updateAccountField('managementToken', event.target.value)}
+            />
+          </label>
+
+          <label>
             <span>备注</span>
             <Input
               value={accountForm.remark}
@@ -2115,11 +2130,6 @@ export default function KnowledgeOpenApiPage() {
 
           <div className="mkb-config-sync">
             <Text strong>同步 OpenAPI Key</Text>
-            <Input.Password
-              value={adminToken}
-              placeholder="MaxKB 管理端 Token，仅用于同步 Key"
-              onChange={(event) => setAdminToken(event.target.value)}
-            />
             <Button loading={syncingKeys} onClick={() => void syncKeys()}>同步 Key</Button>
           </div>
 

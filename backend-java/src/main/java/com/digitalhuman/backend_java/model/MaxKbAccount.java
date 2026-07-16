@@ -31,6 +31,9 @@ public class MaxKbAccount {
     @Column(nullable = false, length = 2048)
     private String apiKey;
 
+    @Column(length = 4096)
+    private String managementToken;
+
     @Column(nullable = false, length = 128)
     private String workspaceId;
 
@@ -96,6 +99,14 @@ public class MaxKbAccount {
 
     public void setApiKey(String apiKey) {
         this.apiKey = apiKey;
+    }
+
+    public String getManagementToken() {
+        return managementToken;
+    }
+
+    public void setManagementToken(String managementToken) {
+        this.managementToken = managementToken;
     }
 
     public String getWorkspaceId() {

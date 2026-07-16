@@ -53,6 +53,8 @@ export type MaxKbAccount = {
   statusText?: string
   apiKeyConfigured?: boolean
   apiKeyMasked?: string
+  managementTokenConfigured?: boolean
+  managementTokenMasked?: string
   createTime?: string
   updateTime?: string
 }
@@ -68,6 +70,7 @@ export type MaxKbAccountPayload = {
   baseUrl: string
   environment: string
   apiKey?: string
+  managementToken?: string
   workspaceId: string
   remark?: string
   status: number

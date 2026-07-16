@@ -48,6 +48,7 @@ class MaxKbKnowledgeServiceImplTests {
         account.setAccountName("景区知识库");
         account.setBaseUrl("http://maxkb.test");
         account.setApiKey("mkb_secret_key");
+        account.setManagementToken("maxkb_login_token");
         account.setWorkspaceId("ws-1");
         account.setStatus(1);
 
@@ -173,6 +174,91 @@ class MaxKbKnowledgeServiceImplTests {
     }
 
     @Test
+    void uploadDocumentsShouldFallbackToManagementSplitTaskWhenOpenApiReturnsHtmlPage() throws Exception {
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "manual.pdf",
+                "application/pdf",
+                "PDF".getBytes(StandardCharsets.UTF_8)
+        );
+        final int[] attempts = {0};
+        doAnswer(invocation -> {
+            attempts[0]++;
+            return attempts[0] == 1
+                    ? htmlResponse()
+                    : jsonResponse("{\"code\":200,\"data\":{\"task_id\":\"legacy-task\",\"status\":\"queued\"}}");
+        }).when(call).execute();
+
+        Object response = service.uploadDocuments(
+                1L,
+                "kb-1",
+                java.util.List.of((MultipartFile) file),
+                java.util.List.of(),
+                2048,
+                java.util.List.of("#"),
+                true,
+                "",
+                "",
+                "",
+                "",
+                false,
+                false,
+                "order-20260716-001"
+        );
+
+        assertEquals(2, attempts[0]);
+        assertEquals("POST", capturedRequest.method());
+        assertEquals("/admin/api/workspace/ws-1/knowledge/kb-1/document/split/task", capturedRequest.url().encodedPath());
+        assertEquals("Bearer maxkb_login_token", capturedRequest.header("Authorization"));
+        assertInstanceOf(Map.class, response);
+        Map<?, ?> responseMap = (Map<?, ?>) response;
+        assertEquals("legacy-task", responseMap.get("task_id"));
+        assertEquals("QUEUED", responseMap.get("status"));
+    }
+
+    @Test
+    void uploadDocumentsShouldFallbackToManagementSplitTaskWhenOpenApiFailsWithUuid7() throws Exception {
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "manual.pdf",
+                "application/pdf",
+                "PDF".getBytes(StandardCharsets.UTF_8)
+        );
+        final int[] attempts = {0};
+        doAnswer(invocation -> {
+            attempts[0]++;
+            return attempts[0] == 1
+                    ? jsonResponse("{\"code\":500,\"message\":\"module 'uuid' has no attribute 'uuid7'\"}")
+                    : jsonResponse("{\"code\":200,\"data\":{\"task_id\":\"legacy-task\",\"status\":\"queued\"}}");
+        }).when(call).execute();
+
+        Object response = service.uploadDocuments(
+                1L,
+                "kb-1",
+                java.util.List.of((MultipartFile) file),
+                java.util.List.of(),
+                2048,
+                java.util.List.of("#"),
+                true,
+                "",
+                "",
+                "",
+                "",
+                false,
+                false,
+                "order-20260716-002"
+        );
+
+        assertEquals(2, attempts[0]);
+        assertEquals("POST", capturedRequest.method());
+        assertEquals("/admin/api/workspace/ws-1/knowledge/kb-1/document/split/task", capturedRequest.url().encodedPath());
+        assertInstanceOf(Map.class, response);
+        Map<?, ?> responseMap = (Map<?, ?>) response;
+        assertEquals("legacy-task", responseMap.get("task_id"));
+        assertEquals("QUEUED", responseMap.get("status"));
+    }
+
+    @Test
     void uploadTaskOperationsShouldUseDocumentUploadTaskPaths() {
         service.listUploadTasks(1L, "kb-1", Map.of("page", "1", "page_size", "20"));
         assertEquals("/openapi/knowledge/v1/workspaces/ws-1/knowledges/kb-1/documents/upload-tasks", capturedRequest.url().encodedPath());
@@ -196,6 +282,85 @@ class MaxKbKnowledgeServiceImplTests {
         service.deleteUploadTask(1L, "kb-1", "task-1");
         assertEquals("DELETE", capturedRequest.method());
         assertEquals("/openapi/knowledge/v1/workspaces/ws-1/knowledges/kb-1/documents/upload-tasks/task-1", capturedRequest.url().encodedPath());
+    }
+
+    @Test
+    void legacyManagementUploadPreviewShouldReturnFlatPreviewRecords() throws Exception {
+        final int[] attempts = {0};
+        doAnswer(invocation -> {
+            attempts[0]++;
+            return attempts[0] == 1
+                    ? htmlResponse()
+                    : jsonResponse("""
+                    {"code":200,"data":{"task_id":"legacy-task","status":"completed","progress":100,"processed":1,"total":1,"result":[{"name":"manual.pdf","source_file_id":"file-1","content":[{"title":"标题","content":"正文"}]}]}}
+                    """);
+        }).when(call).execute();
+
+        Object response = service.previewUploadTask(1L, "kb-1", "legacy-task", Map.of("page", "1"));
+
+        assertEquals(2, attempts[0]);
+        assertEquals("GET", capturedRequest.method());
+        assertEquals("/admin/api/workspace/ws-1/knowledge/kb-1/document/split/task/legacy-task", capturedRequest.url().encodedPath());
+        Map<?, ?> responseMap = (Map<?, ?>) response;
+        assertInstanceOf(java.util.List.class, responseMap.get("records"));
+        java.util.List<?> records = (java.util.List<?>) responseMap.get("records");
+        assertEquals(1, records.size());
+        Map<?, ?> record = (Map<?, ?>) records.get(0);
+        assertEquals("manual.pdf", record.get("document_name"));
+        assertEquals("标题", record.get("title"));
+        assertEquals("正文", record.get("content"));
+    }
+
+    @Test
+    void legacyManagementUploadStatusShouldNormalizeCompletedTaskForPolling() throws Exception {
+        final int[] attempts = {0};
+        doAnswer(invocation -> {
+            attempts[0]++;
+            return attempts[0] == 1
+                    ? htmlResponse()
+                    : jsonResponse("""
+                    {"code":200,"data":{"task_id":"legacy-task","status":"completed","progress":100,"processed":1,"total":1,"remaining":0,"message":"done","result":[{"name":"manual.pdf","content":[{"title":"标题","content":"正文"}]}]}}
+                    """);
+        }).when(call).execute();
+
+        Object response = service.getUploadTask(1L, "kb-1", "legacy-task");
+
+        assertEquals(2, attempts[0]);
+        assertEquals("GET", capturedRequest.method());
+        assertEquals("/admin/api/workspace/ws-1/knowledge/kb-1/document/split/task/legacy-task", capturedRequest.url().encodedPath());
+        Map<?, ?> responseMap = (Map<?, ?>) response;
+        assertEquals("legacy-task", responseMap.get("task_id"));
+        assertEquals("PREVIEW_READY", responseMap.get("status"));
+        assertEquals(100, responseMap.get("progress"));
+    }
+
+    @Test
+    void legacyManagementUploadApplyShouldBatchCreatePreviewDocuments() throws Exception {
+        final int[] attempts = {0};
+        doAnswer(invocation -> {
+            attempts[0]++;
+            if (attempts[0] == 1) {
+                return htmlResponse();
+            }
+            if (attempts[0] == 2) {
+                return jsonResponse("""
+                        {"code":200,"data":{"task_id":"legacy-task","status":"completed","result":[{"name":"manual.pdf","source_file_id":"file-1","content":[{"title":"标题","content":"正文"}]}]}}
+                        """);
+            }
+            return jsonResponse("{\"code\":200,\"data\":{\"records\":[]}}");
+        }).when(call).execute();
+
+        service.applyUploadTask(1L, "kb-1", "legacy-task");
+
+        assertEquals(3, attempts[0]);
+        assertEquals("PUT", capturedRequest.method());
+        assertEquals("/admin/api/workspace/ws-1/knowledge/kb-1/document/batch_create", capturedRequest.url().encodedPath());
+        Buffer buffer = new Buffer();
+        capturedRequest.body().writeTo(buffer);
+        String body = buffer.readUtf8();
+        assertTrue(body.contains("\"name\":\"manual.pdf\""));
+        assertTrue(body.contains("\"paragraphs\""));
+        assertTrue(body.contains("\"source_file_id\":\"file-1\""));
     }
 
     @Test
@@ -238,22 +403,77 @@ class MaxKbKnowledgeServiceImplTests {
                 "/admin/api/workspace/ws-1/knowledge/kb-1/document/doc-1/paragraph/paragraph-1",
                 capturedRequest.url().encodedPath()
         );
-        assertEquals("Bearer mkb_secret_key", capturedRequest.header("Authorization"));
+        assertEquals("Bearer maxkb_login_token", capturedRequest.header("Authorization"));
     }
 
     @Test
-    void htmlSuccessResponseShouldReportUnsupportedOpenApiEndpoint() throws Exception {
+    void updateParagraphShouldFallbackToManagementEndpointWhenOpenApiReturnsHtmlPage() throws Exception {
+        final int[] attempts = {0};
+        doAnswer(invocation -> {
+            attempts[0]++;
+            return attempts[0] == 1 ? htmlResponse() : successfulResponse();
+        }).when(call).execute();
+
+        service.updateParagraph(
+                1L,
+                "kb-1",
+                "doc-1",
+                "paragraph-1",
+                Map.of("title", "标题", "content", "正文")
+        );
+
+        assertEquals(2, attempts[0]);
+        assertEquals("PUT", capturedRequest.method());
+        assertEquals(
+                "/admin/api/workspace/ws-1/knowledge/kb-1/document/doc-1/paragraph/paragraph-1",
+                capturedRequest.url().encodedPath()
+        );
+        assertEquals("Bearer maxkb_login_token", capturedRequest.header("Authorization"));
+    }
+
+    @Test
+    void listParagraphProblemsShouldFallbackToManagementEndpointWhenOpenApiReturnsHtmlPage() throws Exception {
+        final int[] attempts = {0};
+        doAnswer(invocation -> {
+            attempts[0]++;
+            return attempts[0] == 1 ? htmlResponse() : successfulResponse();
+        }).when(call).execute();
+
+        service.listParagraphProblems(1L, "kb-1", "doc-1", "paragraph-1");
+
+        assertEquals(2, attempts[0]);
+        assertEquals("GET", capturedRequest.method());
+        assertEquals(
+                "/admin/api/workspace/ws-1/knowledge/kb-1/document/doc-1/paragraph/paragraph-1/problem",
+                capturedRequest.url().encodedPath()
+        );
+        assertEquals("Bearer maxkb_login_token", capturedRequest.header("Authorization"));
+    }
+
+    @Test
+    void managementFallbackShouldExplainMissingManagementToken() throws Exception {
+        when(repository.findById(1L)).thenReturn(Optional.of(accountWithoutManagementToken()));
         doAnswer(invocation -> htmlResponse()).when(call).execute();
 
         ResponseStatusException error = assertThrows(
                 ResponseStatusException.class,
-                () -> service.listUploadTasks(1L, "kb-1", Map.of("page", "1"))
+                () -> service.listParagraphProblems(1L, "kb-1", "doc-1", "paragraph-1")
         );
 
-        assertEquals(502, error.getStatusCode().value());
-        assertTrue(error.getReason().contains("MaxKB 返回了 HTML 页面"));
-        assertTrue(error.getReason().contains("异步文档导入 OpenAPI"));
-        assertTrue(error.getReason().contains("/documents/upload-tasks"));
+        assertEquals(401, error.getStatusCode().value());
+        assertTrue(error.getReason().contains("管理端 Token"));
+    }
+
+    @Test
+    void htmlSuccessResponseShouldReturnEmptyUploadTaskHistoryWhenOpenApiEndpointIsMissing() throws Exception {
+        doAnswer(invocation -> htmlResponse()).when(call).execute();
+
+        Object response = service.listUploadTasks(1L, "kb-1", Map.of("page", "1"));
+
+        assertInstanceOf(Map.class, response);
+        Map<?, ?> responseMap = (Map<?, ?>) response;
+        assertEquals(0, responseMap.get("total"));
+        assertEquals(java.util.List.of(), responseMap.get("records"));
     }
 
     private Response successfulResponse() {
@@ -266,6 +486,27 @@ class MaxKbKnowledgeServiceImplTests {
                         "{\"code\":200,\"data\":{\"records\":[]}}",
                         MediaType.get("application/json")
                 ))
+                .build();
+    }
+
+    private MaxKbAccount accountWithoutManagementToken() {
+        MaxKbAccount account = new MaxKbAccount();
+        account.setId(1L);
+        account.setAccountName("景区知识库");
+        account.setBaseUrl("http://maxkb.test");
+        account.setApiKey("mkb_secret_key");
+        account.setWorkspaceId("ws-1");
+        account.setStatus(1);
+        return account;
+    }
+
+    private Response jsonResponse(String json) {
+        return new Response.Builder()
+                .request(capturedRequest)
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body(ResponseBody.create(json, MediaType.get("application/json")))
                 .build();
     }
 
