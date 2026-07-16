@@ -11,10 +11,13 @@ Thumbs.db
 *.tar
 *.tar.gz
 *.tgz
+tmp/
+output/
 
 # OS and editor noise
 *.swp
 *.swo
+.idea/
 
 # Maven local repository
 backend-java/.m2/
