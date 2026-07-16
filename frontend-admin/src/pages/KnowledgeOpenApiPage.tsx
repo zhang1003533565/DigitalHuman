@@ -60,7 +60,6 @@ import {
   getKnowledges,
   listKnowledgeAccountEnvironments,
   listKnowledgeAccounts,
-  syncKnowledgeOpenApiKeys,
   testKnowledgeAccount,
   updateKnowledgeAccount,
   updateKnowledgeAccountStatus,
@@ -68,7 +67,6 @@ import {
   type MaxKbAccount,
   type MaxKbAccountPayload,
   type MaxKbEnvironmentOption,
-  type MaxKbOpenApiKey,
   type MaxKbRecord,
   type ParagraphProblemPayload,
 } from '../api/knowledgeOpenApi'
@@ -87,7 +85,6 @@ const EMPTY_ACCOUNT_FORM: AccountFormState = {
   environment: 'local',
   workspaceId: 'default',
   apiKey: '',
-  managementToken: '',
   remark: '',
   status: 1,
 }
@@ -917,9 +914,7 @@ export default function KnowledgeOpenApiPage() {
   const [configOpen, setConfigOpen] = useState(false)
   const [savingAccount, setSavingAccount] = useState(false)
   const [testingAccountId, setTestingAccountId] = useState<number | undefined>()
-  const [syncingKeys, setSyncingKeys] = useState(false)
   const [accountForm, setAccountForm] = useState<AccountFormState>(EMPTY_ACCOUNT_FORM)
-  const [syncedKeys, setSyncedKeys] = useState<MaxKbOpenApiKey[]>([])
   const [editingParagraph, setEditingParagraph] = useState<ParagraphRow | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [editContent, setEditContent] = useState('')
@@ -1082,7 +1077,6 @@ export default function KnowledgeOpenApiPage() {
 
   function createAccountDraft() {
     setAccountForm(EMPTY_ACCOUNT_FORM)
-    setSyncedKeys([])
   }
 
   function editAccount(account: MaxKbAccount) {
@@ -1092,12 +1086,10 @@ export default function KnowledgeOpenApiPage() {
       baseUrl: account.baseUrl,
       environment: account.environment || 'local',
       apiKey: '',
-      managementToken: '',
       workspaceId: account.workspaceId || 'default',
       remark: account.remark || '',
       status: account.status ?? 1,
     })
-    setSyncedKeys([])
   }
 
   function selectAccount(accountId: number) {
@@ -1124,7 +1116,6 @@ export default function KnowledgeOpenApiPage() {
         baseUrl: accountForm.baseUrl.trim(),
         environment: accountForm.environment || 'local',
         apiKey: accountForm.apiKey?.trim() || undefined,
-        managementToken: accountForm.managementToken?.trim() || undefined,
         workspaceId: accountForm.workspaceId.trim(),
         remark: accountForm.remark?.trim() || undefined,
         status: accountForm.status ?? 1,
@@ -1140,45 +1131,6 @@ export default function KnowledgeOpenApiPage() {
     } finally {
       setSavingAccount(false)
     }
-  }
-
-  async function syncKeys() {
-    const managementToken = accountForm.managementToken?.trim() || ''
-    if (!managementToken) {
-      message.warning('请输入 MaxKB 管理端 Token')
-      return
-    }
-    setSyncingKeys(true)
-    try {
-      const payload = await syncKnowledgeOpenApiKeys({
-        adminBaseUrl: accountForm.baseUrl || 'http://localhost:3000',
-        workspaceId: accountForm.workspaceId || 'default',
-        adminToken: managementToken,
-      })
-      setAccountForm((current) => ({
-        ...current,
-        baseUrl: payload.adminBaseUrl || current.baseUrl,
-        workspaceId: payload.workspaceId || current.workspaceId,
-      }))
-      setSyncedKeys(payload.keys || [])
-      message.success(payload.keys?.length ? '已同步 OpenAPI Key' : '同步完成，但没有读取到可用 Key')
-    } catch (error) {
-      message.error(`同步 Key 失败：${extractErrorMessage(error)}`)
-    } finally {
-      setSyncingKeys(false)
-    }
-  }
-
-  function selectSyncedKey(keyId: string) {
-    const selectedKey = syncedKeys.find((item) => String(item.id ?? item.name ?? item.secret_key ?? '') === keyId)
-    if (!selectedKey) {
-      return
-    }
-    setAccountForm((current) => ({
-      ...current,
-      accountName: current.accountName || selectedKey.name || current.accountName,
-      apiKey: selectedKey.secret_key ?? current.apiKey,
-    }))
   }
 
   async function removeAccount(accountId: number) {
@@ -1998,11 +1950,6 @@ export default function KnowledgeOpenApiPage() {
                 render: (_, account) => account.apiKeyConfigured ? <Tag color="success">{account.apiKeyMasked || '已配置'}</Tag> : <Tag color="warning">未配置</Tag>,
               },
               {
-                title: '管理端',
-                width: 130,
-                render: (_, account) => account.managementTokenConfigured ? <Tag color="processing">{account.managementTokenMasked || '已配置'}</Tag> : <Tag color="warning">未配置</Tag>,
-              },
-              {
                 title: '状态',
                 width: 90,
                 render: (_, account) => <Tag color={account.status === 1 ? 'success' : 'default'}>{account.statusText || (account.status === 1 ? '启用' : '停用')}</Tag>,
@@ -2099,15 +2046,6 @@ export default function KnowledgeOpenApiPage() {
           </label>
 
           <label>
-            <span>管理端 Token</span>
-            <Input.Password
-              value={accountForm.managementToken}
-              placeholder={accountForm.id ? '留空表示沿用已保存 Token' : '用于编辑、问题和上传回退'}
-              onChange={(event) => updateAccountField('managementToken', event.target.value)}
-            />
-          </label>
-
-          <label>
             <span>备注</span>
             <Input
               value={accountForm.remark}
@@ -2127,25 +2065,6 @@ export default function KnowledgeOpenApiPage() {
               onChange={(value) => updateAccountField('status', value)}
             />
           </label>
-
-          <div className="mkb-config-sync">
-            <Text strong>同步 OpenAPI Key</Text>
-            <Button loading={syncingKeys} onClick={() => void syncKeys()}>同步 Key</Button>
-          </div>
-
-          {syncedKeys.length > 0 ? (
-            <label>
-              <span>选择已同步 Key</span>
-              <Select
-                placeholder="选择后自动填入 OpenAPI Key"
-                onChange={selectSyncedKey}
-                options={syncedKeys.map((item, index) => ({
-                  value: String(item.id ?? item.name ?? item.secret_key ?? index),
-                  label: item.name || item.id || `OpenAPI Key ${index + 1}`,
-                }))}
-              />
-            </label>
-          ) : null}
         </div>
       </Drawer>
 

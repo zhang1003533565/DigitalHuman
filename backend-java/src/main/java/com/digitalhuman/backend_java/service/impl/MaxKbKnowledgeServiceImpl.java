@@ -125,7 +125,6 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
         account.setBaseUrl(endpoint.baseUrl());
         account.setEnvironment(normalizeEnvironment(request.getEnvironment()));
         account.setApiKey(trim(request.getApiKey()));
-        account.setManagementToken(trimToNull(request.getManagementToken()));
         account.setWorkspaceId(endpoint.workspaceId());
         account.setRemark(trimToNull(request.getRemark()));
         account.setStatus(normalizeStatus(request.getStatus()));
@@ -141,9 +140,6 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
         account.setEnvironment(normalizeEnvironment(request.getEnvironment()));
         if (StringUtils.hasText(request.getApiKey())) {
             account.setApiKey(trim(request.getApiKey()));
-        }
-        if (StringUtils.hasText(request.getManagementToken())) {
-            account.setManagementToken(trim(request.getManagementToken()));
         }
         account.setWorkspaceId(endpoint.workspaceId());
         account.setRemark(trimToNull(request.getRemark()));
@@ -534,13 +530,9 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
         if (url == null) {
             throw status(HttpStatus.BAD_REQUEST, "MaxKB 管理端 URL 配置不合法");
         }
-        String token = account.getManagementToken();
-        if (!StringUtils.hasText(token)) {
-            throw status(HttpStatus.UNAUTHORIZED, "请先在 MaxKB 连接配置中填写管理端 Token，编辑、问题和上传回退接口不能使用 OpenAPI Key 登录 MaxKB 管理端");
-        }
         return new Request.Builder()
                 .url(url)
-                .header("Authorization", token.trim().startsWith("Bearer ") ? token.trim() : "Bearer " + token.trim());
+                .header("Authorization", "Bearer " + account.getApiKey().trim());
     }
 
     private String uploadTasksPath(MaxKbAccount account, String knowledgeId) {
@@ -1087,8 +1079,6 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
         vo.setStatusText(Integer.valueOf(1).equals(account.getStatus()) ? "启用" : "禁用");
         vo.setApiKeyConfigured(StringUtils.hasText(account.getApiKey()));
         vo.setApiKeyMasked(maskSecret(account.getApiKey()));
-        vo.setManagementTokenConfigured(StringUtils.hasText(account.getManagementToken()));
-        vo.setManagementTokenMasked(maskSecret(account.getManagementToken()));
         vo.setCreateTime(account.getCreateTime() == null ? null : account.getCreateTime().format(DATE_TIME));
         vo.setUpdateTime(account.getUpdateTime() == null ? null : account.getUpdateTime().format(DATE_TIME));
         return vo;

@@ -17,8 +17,6 @@ public class MaxKbKnowledgeDto {
         @NotBlank(message = "MaxKB OpenAPI Key 不能为空")
         private String apiKey;
 
-        private String managementToken;
-
         @NotBlank(message = "MaxKB 工作空间 ID 不能为空")
         private String workspaceId;
 
@@ -59,14 +57,6 @@ public class MaxKbKnowledgeDto {
             this.apiKey = apiKey;
         }
 
-        public String getManagementToken() {
-            return managementToken;
-        }
-
-        public void setManagementToken(String managementToken) {
-            this.managementToken = managementToken;
-        }
-
         public String getWorkspaceId() {
             return workspaceId;
         }
@@ -102,8 +92,6 @@ public class MaxKbKnowledgeDto {
         private String environment = "local";
 
         private String apiKey;
-
-        private String managementToken;
 
         @NotBlank(message = "MaxKB 工作空间 ID 不能为空")
         private String workspaceId;
@@ -143,14 +131,6 @@ public class MaxKbKnowledgeDto {
 
         public void setApiKey(String apiKey) {
             this.apiKey = apiKey;
-        }
-
-        public String getManagementToken() {
-            return managementToken;
-        }
-
-        public void setManagementToken(String managementToken) {
-            this.managementToken = managementToken;
         }
 
         public String getWorkspaceId() {
@@ -203,8 +183,6 @@ public class MaxKbKnowledgeDto {
         private String statusText;
         private Boolean apiKeyConfigured;
         private String apiKeyMasked;
-        private Boolean managementTokenConfigured;
-        private String managementTokenMasked;
         private String createTime;
         private String updateTime;
 
@@ -294,22 +272,6 @@ public class MaxKbKnowledgeDto {
 
         public void setApiKeyMasked(String apiKeyMasked) {
             this.apiKeyMasked = apiKeyMasked;
-        }
-
-        public Boolean getManagementTokenConfigured() {
-            return managementTokenConfigured;
-        }
-
-        public void setManagementTokenConfigured(Boolean managementTokenConfigured) {
-            this.managementTokenConfigured = managementTokenConfigured;
-        }
-
-        public String getManagementTokenMasked() {
-            return managementTokenMasked;
-        }
-
-        public void setManagementTokenMasked(String managementTokenMasked) {
-            this.managementTokenMasked = managementTokenMasked;
         }
 
         public String getCreateTime() {

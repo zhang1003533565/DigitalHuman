@@ -48,7 +48,6 @@ class MaxKbKnowledgeServiceImplTests {
         account.setAccountName("景区知识库");
         account.setBaseUrl("http://maxkb.test");
         account.setApiKey("mkb_secret_key");
-        account.setManagementToken("maxkb_login_token");
         account.setWorkspaceId("ws-1");
         account.setStatus(1);
 
@@ -209,7 +208,7 @@ class MaxKbKnowledgeServiceImplTests {
         assertEquals(2, attempts[0]);
         assertEquals("POST", capturedRequest.method());
         assertEquals("/admin/api/workspace/ws-1/knowledge/kb-1/document/split/task", capturedRequest.url().encodedPath());
-        assertEquals("Bearer maxkb_login_token", capturedRequest.header("Authorization"));
+        assertEquals("Bearer mkb_secret_key", capturedRequest.header("Authorization"));
         assertInstanceOf(Map.class, response);
         Map<?, ?> responseMap = (Map<?, ?>) response;
         assertEquals("legacy-task", responseMap.get("task_id"));
@@ -403,7 +402,7 @@ class MaxKbKnowledgeServiceImplTests {
                 "/admin/api/workspace/ws-1/knowledge/kb-1/document/doc-1/paragraph/paragraph-1",
                 capturedRequest.url().encodedPath()
         );
-        assertEquals("Bearer maxkb_login_token", capturedRequest.header("Authorization"));
+        assertEquals("Bearer mkb_secret_key", capturedRequest.header("Authorization"));
     }
 
     @Test
@@ -428,7 +427,7 @@ class MaxKbKnowledgeServiceImplTests {
                 "/admin/api/workspace/ws-1/knowledge/kb-1/document/doc-1/paragraph/paragraph-1",
                 capturedRequest.url().encodedPath()
         );
-        assertEquals("Bearer maxkb_login_token", capturedRequest.header("Authorization"));
+        assertEquals("Bearer mkb_secret_key", capturedRequest.header("Authorization"));
     }
 
     @Test
@@ -447,21 +446,7 @@ class MaxKbKnowledgeServiceImplTests {
                 "/admin/api/workspace/ws-1/knowledge/kb-1/document/doc-1/paragraph/paragraph-1/problem",
                 capturedRequest.url().encodedPath()
         );
-        assertEquals("Bearer maxkb_login_token", capturedRequest.header("Authorization"));
-    }
-
-    @Test
-    void managementFallbackShouldExplainMissingManagementToken() throws Exception {
-        when(repository.findById(1L)).thenReturn(Optional.of(accountWithoutManagementToken()));
-        doAnswer(invocation -> htmlResponse()).when(call).execute();
-
-        ResponseStatusException error = assertThrows(
-                ResponseStatusException.class,
-                () -> service.listParagraphProblems(1L, "kb-1", "doc-1", "paragraph-1")
-        );
-
-        assertEquals(401, error.getStatusCode().value());
-        assertTrue(error.getReason().contains("管理端 Token"));
+        assertEquals("Bearer mkb_secret_key", capturedRequest.header("Authorization"));
     }
 
     @Test
@@ -487,17 +472,6 @@ class MaxKbKnowledgeServiceImplTests {
                         MediaType.get("application/json")
                 ))
                 .build();
-    }
-
-    private MaxKbAccount accountWithoutManagementToken() {
-        MaxKbAccount account = new MaxKbAccount();
-        account.setId(1L);
-        account.setAccountName("景区知识库");
-        account.setBaseUrl("http://maxkb.test");
-        account.setApiKey("mkb_secret_key");
-        account.setWorkspaceId("ws-1");
-        account.setStatus(1);
-        return account;
     }
 
     private Response jsonResponse(String json) {

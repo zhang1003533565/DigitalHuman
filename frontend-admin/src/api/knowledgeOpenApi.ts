@@ -32,15 +32,6 @@ export type MaxKbOpenApiConfig = {
   configured?: boolean
 }
 
-export type MaxKbOpenApiKey = {
-  id?: string
-  name?: string
-  secret_key?: string
-  workspace_id?: string
-  workspace_name?: string
-  is_active?: boolean
-}
-
 export type MaxKbAccount = {
   id: number
   accountName: string
@@ -53,8 +44,6 @@ export type MaxKbAccount = {
   statusText?: string
   apiKeyConfigured?: boolean
   apiKeyMasked?: string
-  managementTokenConfigured?: boolean
-  managementTokenMasked?: string
   createTime?: string
   updateTime?: string
 }
@@ -70,16 +59,9 @@ export type MaxKbAccountPayload = {
   baseUrl: string
   environment: string
   apiKey?: string
-  managementToken?: string
   workspaceId: string
   remark?: string
   status: number
-}
-
-export type MaxKbSyncKeysPayload = {
-  adminBaseUrl: string
-  workspaceId: string
-  adminToken: string
 }
 
 export type HitTestPayload = {
@@ -189,16 +171,6 @@ export async function getKnowledgeOpenApiConfig() {
 
 export async function saveKnowledgeOpenApiConfig(payload: Partial<MaxKbOpenApiConfig>) {
   const response = await axios.post<MaxKbOpenApiConfig>('/api/admin/knowledge/open-api/config', payload)
-  return response.data
-}
-
-export async function syncKnowledgeOpenApiKeys(payload: MaxKbSyncKeysPayload) {
-  const response = await axios.post<{
-    adminBaseUrl: string
-    workspaceId: string
-    accessUrl: string
-    keys: MaxKbOpenApiKey[]
-  }>('/api/admin/knowledge/open-api/sync-keys', payload)
   return response.data
 }
 
