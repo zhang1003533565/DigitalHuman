@@ -52,6 +52,54 @@ test('workbench validates ordinary document limits', () => {
   assert.match(source, /文件不能为空/)
 })
 
+test('helpers enforce the exact file, advanced-limit, and polling contracts', async () => {
+  const { __TESTING__ } = await loadTestingHelpers()
+
+  assert.deepEqual(
+    [...__TESTING__.SUPPORTED_EXTENSIONS].sort(),
+    ['csv', 'docx', 'html', 'log', 'md', 'pdf', 'txt', 'xls', 'xlsx', 'zip'],
+  )
+  assert.equal(__TESTING__.isAdvancedLimitValid(49), false)
+  assert.equal(__TESTING__.isAdvancedLimitValid(50), true)
+  assert.equal(__TESTING__.isAdvancedLimitValid(100000), true)
+  assert.equal(__TESTING__.isAdvancedLimitValid(100001), false)
+
+  for (const status of ['QUEUED', 'PROCESSING', 'PARSING', 'APPLYING']) {
+    assert.equal(__TESTING__.shouldPollStatus(status), true, `${status} should keep polling`)
+  }
+  assert.equal(__TESTING__.shouldPollStatus('PREVIEW_READY'), false)
+})
+
+test('helpers gate confirmation, deletion, and stale request writes', async () => {
+  const { __TESTING__ } = await loadTestingHelpers()
+  const confirmable = {
+    status: 'PREVIEW_READY',
+    taskId: 'task-1',
+    previewTaskId: 'task-1',
+    previewLoading: false,
+    previewError: '',
+    previewRecordCount: 2,
+  }
+
+  assert.equal(__TESTING__.canConfirmPreview(confirmable), true)
+  assert.equal(__TESTING__.canConfirmPreview({ ...confirmable, status: 'PROCESSING' }), false)
+  assert.equal(__TESTING__.canConfirmPreview({ ...confirmable, previewTaskId: '' }), false)
+  assert.equal(__TESTING__.canConfirmPreview({ ...confirmable, previewTaskId: 'task-2' }), false)
+  assert.equal(__TESTING__.canConfirmPreview({ ...confirmable, previewLoading: true }), false)
+  assert.equal(__TESTING__.canConfirmPreview({ ...confirmable, previewError: 'preview failed' }), false)
+  assert.equal(__TESTING__.canConfirmPreview({ ...confirmable, previewRecordCount: 0 }), false)
+
+  assert.equal(__TESTING__.canDeleteTask('PARSING'), false)
+  assert.equal(__TESTING__.canDeleteTask('PROCESSING'), false)
+  assert.equal(__TESTING__.canDeleteTask('PREVIEW_READY'), true)
+  assert.equal(__TESTING__.canDeleteTask('FAILED'), true)
+
+  assert.equal(__TESTING__.isRequestScopeCurrent(7, 7), true)
+  assert.equal(__TESTING__.isRequestScopeCurrent(7, 8), false)
+  assert.equal(__TESTING__.isRequestGenerationCurrent(3, 3), true)
+  assert.equal(__TESTING__.isRequestGenerationCurrent(3, 4), false)
+})
+
 test('helpers validate files and normalize preview polling payloads', async () => {
   const { __TESTING__ } = await loadTestingHelpers()
 
@@ -91,6 +139,7 @@ test('helpers validate files and normalize preview polling payloads', async () =
   assert.equal(payload.processedCount, 12)
   assert.equal(payload.totalCount, 25)
   assert.equal(__TESTING__.shouldPollStatus('PROCESSING'), true)
+  assert.equal(__TESTING__.shouldPollStatus('PARSING'), true)
   assert.equal(__TESTING__.shouldPollStatus('PREVIEW_READY'), false)
 })
 

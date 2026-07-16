@@ -12,6 +12,7 @@ import {
   Progress,
   Result,
   Select,
+  Slider,
   Space,
   Spin,
   Steps,
@@ -85,20 +86,14 @@ const MAX_FILE_SIZE = 100 * 1024 * 1024
 const SUPPORTED_EXTENSIONS = new Set([
   'txt',
   'md',
-  'markdown',
-  'pdf',
-  'doc',
-  'docx',
-  'xls',
-  'xlsx',
-  'csv',
-  'html',
-  'htm',
   'log',
-  'json',
-  'ppt',
-  'pptx',
+  'docx',
+  'pdf',
+  'html',
   'zip',
+  'xlsx',
+  'xls',
+  'csv',
 ])
 
 type TestingSplitMode = 'smart' | 'advanced' | 'llm_text' | 'llm_vision'
@@ -137,6 +132,14 @@ type BuildUploadPayloadArgs = {
   llmModelId: string
   visionModelId: string
   qualityOptimize: boolean
+}
+type CanConfirmPreviewArgs = {
+  status: string
+  taskId: string
+  previewTaskId: string
+  previewLoading: boolean
+  previewError: string
+  previewRecordCount: number
 }
 
 function helperTextOf(record: Record<string, unknown>, keys: string[], fallback = '') {
@@ -203,11 +206,43 @@ function progressPercentOf(rawValue: number) {
 }
 
 function shouldPollStatus(status: string) {
-  return ['QUEUED', 'PROCESSING', 'APPLYING'].includes(status.toUpperCase())
+  return ['QUEUED', 'PROCESSING', 'PARSING', 'APPLYING'].includes(status.toUpperCase())
 }
 
 function isTerminalStatus(status: string) {
   return ['PREVIEW_READY', 'COMPLETED', 'FAILED', 'CANCELLED'].includes(status.toUpperCase())
+}
+
+function isAdvancedLimitValid(limit: number) {
+  return Number.isInteger(limit) && limit >= 50 && limit <= 100000
+}
+
+function canConfirmPreview({
+  status,
+  taskId,
+  previewTaskId,
+  previewLoading,
+  previewError,
+  previewRecordCount,
+}: CanConfirmPreviewArgs) {
+  return status.toUpperCase() === 'PREVIEW_READY'
+    && Boolean(taskId)
+    && taskId === previewTaskId
+    && !previewLoading
+    && !previewError
+    && previewRecordCount > 0
+}
+
+function canDeleteTask(status: string) {
+  return isTerminalStatus(status)
+}
+
+function isRequestScopeCurrent(capturedScope: number, currentScope: number) {
+  return capturedScope === currentScope
+}
+
+function isRequestGenerationCurrent(capturedGeneration: number, currentGeneration: number) {
+  return capturedGeneration === currentGeneration
 }
 
 function normalizeTaskPayload(payload: unknown): TestingNormalizedTask {
@@ -325,6 +360,11 @@ const __TESTING__ = {
   normalizeTaskPayload,
   shouldPollStatus,
   isTerminalStatus,
+  isAdvancedLimitValid,
+  canConfirmPreview,
+  canDeleteTask,
+  isRequestScopeCurrent,
+  isRequestGenerationCurrent,
   buildUploadPayload,
   groupModelOptions,
 }
@@ -365,6 +405,7 @@ function taskStatusMeta(status: string) {
   const labels: Record<string, { text: string; color: string }> = {
     QUEUED: { text: '排队中', color: 'default' },
     PROCESSING: { text: '处理中', color: 'processing' },
+    PARSING: { text: '解析中', color: 'processing' },
     PREVIEW_READY: { text: '可预览', color: 'success' },
     APPLYING: { text: '入库中', color: 'processing' },
     COMPLETED: { text: '已完成', color: 'success' },
@@ -445,6 +486,7 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
   const [applyingTask, setApplyingTask] = useState(false)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState('')
+  const [previewTaskId, setPreviewTaskId] = useState('')
   const [currentTask, setCurrentTask] = useState<NormalizedTask | null>(null)
   const [previewDocuments, setPreviewDocuments] = useState<PreviewDocument[]>([])
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -453,68 +495,100 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
   const [mutatingTaskId, setMutatingTaskId] = useState('')
 
   const pollTimerRef = useRef<number | null>(null)
+  const pollGenerationRef = useRef(0)
+  const previewRequestRef = useRef(0)
+  const requestScopeRef = useRef(0)
   const aliveRef = useRef(true)
 
   useEffect(() => {
+    aliveRef.current = true
     return () => {
       aliveRef.current = false
-      if (pollTimerRef.current != null) {
-        window.clearTimeout(pollTimerRef.current)
-        pollTimerRef.current = null
-      }
+      requestScopeRef.current += 1
+      previewRequestRef.current += 1
+      clearPollTimer()
     }
   }, [])
+
+  useEffect(() => {
+    requestScopeRef.current += 1
+    previewRequestRef.current += 1
+    clearPollTimer()
+  }, [accountId, knowledgeId])
 
   const llmOptions = useMemo(() => groupModelOptions(llmModels), [llmModels])
   const imageOptions = useMemo(() => groupModelOptions(imageModels), [imageModels])
   const accept = useMemo(() => Array.from(SUPPORTED_EXTENSIONS).map((item) => `.${item}`).join(','), [])
   const currentStatus = taskStatusMeta(currentTask?.status ?? 'UNKNOWN')
   const currentStepIndex = step === 'files' ? 0 : step === 'rules' ? 1 : 2
+  const currentPreviewConfirmable = currentTask ? canConfirmPreview({
+    status: currentTask.status,
+    taskId: currentTask.taskId,
+    previewTaskId,
+    previewLoading,
+    previewError,
+    previewRecordCount: previewDocuments.length,
+  }) : false
 
   function clearPollTimer() {
+    pollGenerationRef.current += 1
     if (pollTimerRef.current != null) {
       window.clearTimeout(pollTimerRef.current)
       pollTimerRef.current = null
     }
   }
 
+  function canWriteRequest(capturedScope: number) {
+    return aliveRef.current && isRequestScopeCurrent(capturedScope, requestScopeRef.current)
+  }
+
+  function clearPreviewState() {
+    previewRequestRef.current += 1
+    setPreviewLoading(false)
+    setPreviewError('')
+    setPreviewTaskId('')
+    setPreviewDocuments([])
+  }
+
   async function loadLlmModels() {
+    const requestScope = requestScopeRef.current
     setLlmLoading(true)
     setLlmError('')
     try {
       const models = await getKnowledgeModels(accountId, 'LLM')
-      if (!aliveRef.current) {
+      if (!canWriteRequest(requestScope)) {
         return
       }
       setLlmModels(models)
     } catch (error) {
-      if (!aliveRef.current) {
+      if (!canWriteRequest(requestScope)) {
         return
       }
       setLlmError(error instanceof Error ? error.message : 'LLM 模型加载失败')
     } finally {
-      if (aliveRef.current) {
+      if (canWriteRequest(requestScope)) {
         setLlmLoading(false)
       }
     }
   }
 
   async function loadImageModels() {
+    const requestScope = requestScopeRef.current
     setImageLoading(true)
     setImageError('')
     try {
       const models = await getKnowledgeModels(accountId, 'IMAGE')
-      if (!aliveRef.current) {
+      if (!canWriteRequest(requestScope)) {
         return
       }
       setImageModels(models)
     } catch (error) {
-      if (!aliveRef.current) {
+      if (!canWriteRequest(requestScope)) {
         return
       }
       setImageError(error instanceof Error ? error.message : '视觉模型加载失败')
     } finally {
-      if (aliveRef.current) {
+      if (canWriteRequest(requestScope)) {
         setImageLoading(false)
       }
     }
@@ -544,41 +618,53 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
     if (!taskId) {
       return
     }
+    const requestScope = requestScopeRef.current
+    const previewRequest = previewRequestRef.current + 1
+    previewRequestRef.current = previewRequest
     setPreviewLoading(true)
     setPreviewError('')
+    setPreviewTaskId('')
+    setPreviewDocuments([])
     try {
       const payload = await previewKnowledgeUploadTask(accountId, knowledgeId, taskId, { page: 1, page_size: 200 })
-      if (!aliveRef.current) {
+      if (!canWriteRequest(requestScope) || !isRequestGenerationCurrent(previewRequest, previewRequestRef.current)) {
         return
       }
-      setPreviewDocuments(normalizePreviewDocuments(extractRecords(payload)))
+      const documents = normalizePreviewDocuments(extractRecords(payload))
+      if (documents.length === 0) {
+        setPreviewError('预览没有返回可用记录')
+        return
+      }
+      setPreviewDocuments(documents)
+      setPreviewTaskId(taskId)
       if (!silent) {
         message.success('预览已加载')
       }
     } catch (error) {
-      if (!aliveRef.current) {
+      if (!canWriteRequest(requestScope) || !isRequestGenerationCurrent(previewRequest, previewRequestRef.current)) {
         return
       }
       const nextError = error instanceof Error ? error.message : '预览加载失败'
       setPreviewDocuments([])
+      setPreviewTaskId('')
       setPreviewError(nextError)
       if (!silent) {
         message.error(`预览加载失败：${nextError}`)
       }
     } finally {
-      if (aliveRef.current) {
+      if (canWriteRequest(requestScope) && isRequestGenerationCurrent(previewRequest, previewRequestRef.current)) {
         setPreviewLoading(false)
       }
     }
   }
 
-  async function pollTask(taskId: string) {
+  async function pollTask(taskId: string, requestScope: number, pollGeneration: number) {
     if (!taskId) {
       return
     }
     try {
       const payload = await getKnowledgeUploadTask(accountId, knowledgeId, taskId)
-      if (!aliveRef.current) {
+      if (!canWriteRequest(requestScope) || !isRequestGenerationCurrent(pollGeneration, pollGenerationRef.current)) {
         return
       }
       const nextTask = syncTask(payload)
@@ -588,9 +674,9 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
         return
       }
       if (shouldPollStatus(nextTask.status)) {
-        clearPollTimer()
         pollTimerRef.current = window.setTimeout(() => {
-          void pollTask(taskId)
+          pollTimerRef.current = null
+          void pollTask(taskId, requestScope, pollGeneration)
         }, 1000)
         return
       }
@@ -598,7 +684,7 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
         clearPollTimer()
       }
     } catch (error) {
-      if (!aliveRef.current) {
+      if (!canWriteRequest(requestScope) || !isRequestGenerationCurrent(pollGeneration, pollGenerationRef.current)) {
         return
       }
       clearPollTimer()
@@ -612,21 +698,25 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
     if (!taskId) {
       return
     }
+    const requestScope = requestScopeRef.current
+    const pollGeneration = pollGenerationRef.current
     pollTimerRef.current = window.setTimeout(() => {
-      void pollTask(taskId)
+      pollTimerRef.current = null
+      void pollTask(taskId, requestScope, pollGeneration)
     }, 1000)
   }
 
   async function loadTaskHistory(silent = false) {
+    const requestScope = requestScopeRef.current
     setHistoryLoading(true)
     try {
       const payload = await listKnowledgeUploadTasks(accountId, knowledgeId, { page: 1, page_size: 20 })
-      if (!aliveRef.current) {
+      if (!canWriteRequest(requestScope)) {
         return
       }
       setHistoryItems(extractRecords(payload).map((record) => normalizeTask(record)))
     } catch (error) {
-      if (!aliveRef.current) {
+      if (!canWriteRequest(requestScope)) {
         return
       }
       if (!silent) {
@@ -634,7 +724,7 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
         message.error(`任务历史加载失败：${nextError}`)
       }
     } finally {
-      if (aliveRef.current) {
+      if (canWriteRequest(requestScope)) {
         setHistoryLoading(false)
       }
     }
@@ -660,8 +750,8 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
       message.warning('请先选择文件')
       return
     }
-    if (splitMode === 'advanced' && advancedLimit <= 0) {
-      message.warning('高级分段需要有效的分段长度')
+    if (splitMode === 'advanced' && !isAdvancedLimitValid(advancedLimit)) {
+      message.warning('高级分段长度必须为 50 到 100000 的整数')
       return
     }
     if (splitMode === 'llm_text' && !llmModelId) {
@@ -673,9 +763,9 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
       return
     }
 
+    const requestScope = requestScopeRef.current
     setCreatingPreview(true)
-    setPreviewDocuments([])
-    setPreviewError('')
+    clearPreviewState()
     try {
       const payload = await uploadKnowledgeDocuments(accountId, knowledgeId, buildUploadPayload({
         files: selectedFiles,
@@ -687,7 +777,7 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
         visionModelId,
         qualityOptimize,
       }))
-      if (!aliveRef.current) {
+      if (!canWriteRequest(requestScope)) {
         return
       }
       const nextTask = syncTask(payload)
@@ -703,13 +793,13 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
       void loadTaskHistory(true)
       message.success('预览任务已创建')
     } catch (error) {
-      if (!aliveRef.current) {
+      if (!canWriteRequest(requestScope)) {
         return
       }
       const nextError = error instanceof Error ? error.message : '预览任务创建失败'
       message.error(`预览任务创建失败：${nextError}`)
     } finally {
-      if (aliveRef.current) {
+      if (canWriteRequest(requestScope)) {
         setCreatingPreview(false)
       }
     }
@@ -719,10 +809,22 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
     if (!taskId) {
       return
     }
+    if (!currentTask || currentTask.taskId !== taskId || !canConfirmPreview({
+      status: currentTask.status,
+      taskId,
+      previewTaskId,
+      previewLoading,
+      previewError,
+      previewRecordCount: previewDocuments.length,
+    })) {
+      message.warning('请先成功加载该任务的预览内容')
+      return
+    }
+    const requestScope = requestScopeRef.current
     setApplyingTask(true)
     try {
       const payload = await applyKnowledgeUploadTask(accountId, knowledgeId, taskId)
-      if (!aliveRef.current) {
+      if (!canWriteRequest(requestScope)) {
         return
       }
       const nextTask = syncTask(payload)
@@ -731,13 +833,13 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
       void loadTaskHistory(true)
       message.success('已确认导入')
     } catch (error) {
-      if (!aliveRef.current) {
+      if (!canWriteRequest(requestScope)) {
         return
       }
       const nextError = error instanceof Error ? error.message : '确认导入失败'
       message.error(`确认导入失败：${nextError}`)
     } finally {
-      if (aliveRef.current) {
+      if (canWriteRequest(requestScope)) {
         setApplyingTask(false)
       }
     }
@@ -747,26 +849,27 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
     if (!taskId) {
       return
     }
+    const requestScope = requestScopeRef.current
     setMutatingTaskId(`cancel:${taskId}`)
     try {
       await cancelKnowledgeUploadTask(accountId, knowledgeId, taskId)
-      if (!aliveRef.current) {
+      if (!canWriteRequest(requestScope)) {
         return
       }
-      clearPollTimer()
       if (currentTask?.taskId === taskId) {
+        clearPollTimer()
         setCurrentTask({ ...currentTask, status: 'CANCELLED' })
       }
       void loadTaskHistory(true)
       message.success('任务已取消')
     } catch (error) {
-      if (!aliveRef.current) {
+      if (!canWriteRequest(requestScope)) {
         return
       }
       const nextError = error instanceof Error ? error.message : '任务取消失败'
       message.error(`任务取消失败：${nextError}`)
     } finally {
-      if (aliveRef.current) {
+      if (canWriteRequest(requestScope)) {
         setMutatingTaskId('')
       }
     }
@@ -776,32 +879,49 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
     if (!taskId) {
       return
     }
+    const task = historyItems.find((item) => item.taskId === taskId) ?? (currentTask?.taskId === taskId ? currentTask : null)
+    if (!task || !canDeleteTask(task.status)) {
+      message.warning('进行中的任务只能取消，不能删除')
+      return
+    }
+    const requestScope = requestScopeRef.current
+    if (currentTask?.taskId === taskId) {
+      clearPollTimer()
+      previewRequestRef.current += 1
+      setPreviewLoading(false)
+      setPreviewTaskId('')
+    }
     setMutatingTaskId(`delete:${taskId}`)
     try {
       await deleteKnowledgeUploadTask(accountId, knowledgeId, taskId)
-      if (!aliveRef.current) {
+      if (!canWriteRequest(requestScope)) {
         return
       }
       setHistoryItems((items) => items.filter((item) => item.taskId !== taskId))
       if (currentTask?.taskId === taskId) {
+        clearPollTimer()
         setCurrentTask(null)
         setPreviewDocuments([])
+        setPreviewError('')
+        setPreviewTaskId('')
       }
       message.success('任务记录已删除')
     } catch (error) {
-      if (!aliveRef.current) {
+      if (!canWriteRequest(requestScope)) {
         return
       }
       const nextError = error instanceof Error ? error.message : '任务删除失败'
       message.error(`任务删除失败：${nextError}`)
     } finally {
-      if (aliveRef.current) {
+      if (canWriteRequest(requestScope)) {
         setMutatingTaskId('')
       }
     }
   }
 
   function restoreHistoryTask(task: NormalizedTask) {
+    clearPollTimer()
+    clearPreviewState()
     setCurrentTask(task)
     if (task.status === 'PREVIEW_READY') {
       void loadPreview(task.taskId, true)
@@ -811,7 +931,6 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
       beginPolling(task.taskId)
       return
     }
-    setPreviewDocuments([])
   }
 
   const historyItemsConfig = [
@@ -830,13 +949,21 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
           dataSource={historyItems}
           renderItem={(item) => {
             const status = taskStatusMeta(item.status)
+            const previewConfirmable = canConfirmPreview({
+              status: item.status,
+              taskId: item.taskId,
+              previewTaskId,
+              previewLoading,
+              previewError,
+              previewRecordCount: previewDocuments.length,
+            })
             return (
               <List.Item
                 actions={[
                   <Button key="restore" size="small" type="text" icon={<EyeOutlined />} onClick={() => restoreHistoryTask(item)}>
                     恢复
                   </Button>,
-                  item.status === 'PREVIEW_READY' ? (
+                  previewConfirmable ? (
                     <Button key="apply" size="small" type="text" icon={<CheckCircleFilled />} onClick={() => void confirmImport(item.taskId)}>
                       确认导入
                     </Button>
@@ -853,17 +980,19 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
                       取消
                     </Button>
                   ) : null,
-                  <Button
-                    key="delete"
-                    size="small"
-                    type="text"
-                    danger
-                    icon={<DeleteOutlined />}
-                    loading={mutatingTaskId === `delete:${item.taskId}`}
-                    onClick={() => void deleteTask(item.taskId)}
-                  >
-                    删除
-                  </Button>,
+                  canDeleteTask(item.status) ? (
+                    <Button
+                      key="delete"
+                      size="small"
+                      type="text"
+                      danger
+                      icon={<DeleteOutlined />}
+                      loading={mutatingTaskId === `delete:${item.taskId}`}
+                      onClick={() => void deleteTask(item.taskId)}
+                    >
+                      删除
+                    </Button>
+                  ) : null,
                 ].filter(Boolean)}
               >
                 <List.Item.Meta
@@ -1019,8 +1148,16 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
                 <div style={{ display: 'grid', gap: 12 }}>
                   <div style={{ display: 'grid', gap: 6 }}>
                     <Text>分段长度</Text>
+                    <Slider
+                      min={50}
+                      max={100000}
+                      value={advancedLimit}
+                      onChange={setAdvancedLimit}
+                    />
                     <InputNumber<number>
-                      min={1}
+                      min={50}
+                      max={100000}
+                      precision={0}
                       value={advancedLimit}
                       style={{ width: '100%' }}
                       onChange={(value) => setAdvancedLimit(value ?? 0)}
@@ -1158,7 +1295,7 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
                         取消任务
                       </Button>
                     ) : null}
-                    {currentTask.status === 'PREVIEW_READY' ? (
+                    {currentPreviewConfirmable ? (
                       <Button type="primary" icon={<CheckCircleFilled />} loading={applyingTask} onClick={() => void confirmImport(currentTask.taskId)}>
                         确认导入
                       </Button>
