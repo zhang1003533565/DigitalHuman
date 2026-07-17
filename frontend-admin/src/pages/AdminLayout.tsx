@@ -113,6 +113,7 @@ const menuPathByKey: Record<AdminPageKey, string> = {
   qa: '/admin/qa',
   'ai-models': '/admin/ai-models',
   knowledge: '/admin/knowledge',
+  'map-config': '/admin/map-config',
 }
 
 const menuKeyByPath = new Map<string, AdminPageKey>(
@@ -925,11 +926,6 @@ function SettingsPanel() {
       ),
     },
     {
-      key: 'map-config',
-      label: '地图配置',
-      children: <MapConfigPanel />,
-    },
-    {
       key: 'model-catalog',
       label: '手动维护',
       children: (
@@ -1126,6 +1122,8 @@ function renderPanel(activeKey: AdminPageKey) {
       return <AiModelManagementPage />
     case 'knowledge':
       return <KnowledgeOpenApiPage />
+    case 'map-config':
+      return <MapConfigPanel />
     case 'dashboard':
     default:
       return <OperationsDashboardPage />

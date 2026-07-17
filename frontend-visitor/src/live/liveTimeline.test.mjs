@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import axios from 'axios'
 import { apiClient } from '../api/client.ts'
 import { getLiveStatus } from '../api/liveBroadcast.ts'
 import { getCalibratedNow, resolveCurrentLivePosition, resolveLivePosition } from './liveTimeline.ts'
@@ -92,5 +93,18 @@ assert.equal(
   resolveLivePosition({ ...status, items: [{ ...items[0], durationMs: Number.MAX_SAFE_INTEGER }, items[1]] }, Date.parse(status.publishedAt)),
   null,
 )
+
+apiClient.get = async () => {
+  const response = {
+    status: 401,
+    data: {},
+    headers: {},
+    statusText: 'Unauthorized',
+    config: { headers: {} },
+  }
+  throw new axios.AxiosError('Request failed', 'ERR_BAD_REQUEST', response.config, undefined, response)
+}
+await assert.rejects(() => getLiveStatus(), /登录状态已失效，请重新登录/)
+apiClient.get = originalGet
 
 console.log('live timeline tests passed')

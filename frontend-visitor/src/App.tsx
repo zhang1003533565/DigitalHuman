@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 import './App.css'
 import {
@@ -9,20 +9,21 @@ import {
   type SessionUser,
 } from './auth/session'
 import { DIGITAL_HUMAN_ROUTE } from './digitalHuman/shared'
-import { HomePage } from './pages/HomePage'
-import { LoginPage } from './pages/LoginPage'
-import { DigitalHumanPage } from './pages/DigitalHumanPage'
-import { RouteRecommendPage } from './pages/RouteRecommendPage'
-import { MapPage } from './pages/MapPage'
-import { FeedbackPage } from './pages/FeedbackPage'
-import { HistoryPage } from './pages/HistoryPage'
-import { ProfilePage } from './pages/ProfilePage'
-import { TravelTipsPage } from './pages/TravelTipsPage'
-import { SpotRecommendPage } from './pages/SpotRecommendPage'
-import { RouteRecommendListPage } from './pages/RouteRecommendListPage'
 import { MobileBottomNav } from './components/MobileBottomNav'
 import { VisitorTopNav } from './components/VisitorTopNav'
-import { LiveBroadcastPage } from './pages/LiveBroadcastPage'
+
+const HomePage = lazy(() => import('./pages/HomePage').then((module) => ({ default: module.HomePage })))
+const LoginPage = lazy(() => import('./pages/LoginPage').then((module) => ({ default: module.LoginPage })))
+const DigitalHumanPage = lazy(() => import('./pages/DigitalHumanPage').then((module) => ({ default: module.DigitalHumanPage })))
+const RouteRecommendPage = lazy(() => import('./pages/RouteRecommendPage').then((module) => ({ default: module.RouteRecommendPage })))
+const MapPage = lazy(() => import('./pages/MapPage').then((module) => ({ default: module.MapPage })))
+const FeedbackPage = lazy(() => import('./pages/FeedbackPage').then((module) => ({ default: module.FeedbackPage })))
+const HistoryPage = lazy(() => import('./pages/HistoryPage').then((module) => ({ default: module.HistoryPage })))
+const ProfilePage = lazy(() => import('./pages/ProfilePage').then((module) => ({ default: module.ProfilePage })))
+const TravelTipsPage = lazy(() => import('./pages/TravelTipsPage').then((module) => ({ default: module.TravelTipsPage })))
+const SpotRecommendPage = lazy(() => import('./pages/SpotRecommendPage').then((module) => ({ default: module.SpotRecommendPage })))
+const RouteRecommendListPage = lazy(() => import('./pages/RouteRecommendListPage').then((module) => ({ default: module.RouteRecommendListPage })))
+const LiveBroadcastPage = lazy(() => import('./pages/LiveBroadcastPage').then((module) => ({ default: module.LiveBroadcastPage })))
 
 function ProtectedRoute({ user, onLogout }: { user: SessionUser | null; onLogout: () => void }) {
   const location = useLocation()
@@ -56,36 +57,38 @@ function App() {
   }
 
   return (
-    <Routes>
-      <Route
-        path="/"
-        element={<Navigate to={user ? DEFAULT_AUTH_REDIRECT : '/login'} replace />}
-      />
-      <Route
-        path="/login"
-        element={<LoginPage user={user} onLogin={handleLogin} />}
-      />
-      <Route element={<ProtectedRoute user={user} onLogout={handleLogout} />}>
+    <Suspense fallback={<div className="app-route-loading" aria-live="polite">加载中...</div>}>
+      <Routes>
         <Route
-          path="/home"
-          element={<HomePage user={user as SessionUser} />}
+          path="/"
+          element={<Navigate to={user ? DEFAULT_AUTH_REDIRECT : '/login'} replace />}
         />
         <Route
-          path={DIGITAL_HUMAN_ROUTE}
-          element={<DigitalHumanPage />}
+          path="/login"
+          element={<LoginPage user={user} onLogin={handleLogin} />}
         />
-        <Route path="/live" element={<LiveBroadcastPage />} />
-        <Route path="/routes" element={<RouteRecommendPage />} />
-        <Route path="/map" element={<MapPage />} />
-        <Route path="/spot-recommend" element={<SpotRecommendPage />} />
-        <Route path="/route-recommend" element={<RouteRecommendListPage />} />
-        <Route path="/feedback" element={<FeedbackPage />} />
-        <Route path="/history" element={<HistoryPage />} />
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/tips" element={<TravelTipsPage />} />
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route element={<ProtectedRoute user={user} onLogout={handleLogout} />}>
+          <Route
+            path="/home"
+            element={<HomePage user={user as SessionUser} />}
+          />
+          <Route
+            path={DIGITAL_HUMAN_ROUTE}
+            element={<DigitalHumanPage />}
+          />
+          <Route path="/live" element={<LiveBroadcastPage />} />
+          <Route path="/routes" element={<RouteRecommendPage />} />
+          <Route path="/map" element={<MapPage />} />
+          <Route path="/spot-recommend" element={<SpotRecommendPage />} />
+          <Route path="/route-recommend" element={<RouteRecommendListPage />} />
+          <Route path="/feedback" element={<FeedbackPage />} />
+          <Route path="/history" element={<HistoryPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/tips" element={<TravelTipsPage />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   )
 }
 

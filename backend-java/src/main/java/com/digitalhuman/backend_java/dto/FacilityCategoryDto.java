@@ -5,14 +5,20 @@ public class FacilityCategoryDto {
     private Long id;
     private String name;
     private Integer sortOrder;
+    private Boolean mapVisible;
 
     public FacilityCategoryDto() {
     }
 
     public FacilityCategoryDto(Long id, String name, Integer sortOrder) {
+        this(id, name, sortOrder, true);
+    }
+
+    public FacilityCategoryDto(Long id, String name, Integer sortOrder, Boolean mapVisible) {
         this.id = id;
         this.name = name;
         this.sortOrder = sortOrder;
+        this.mapVisible = mapVisible;
     }
 
     public Long getId() {
@@ -37,5 +43,13 @@ public class FacilityCategoryDto {
 
     public void setSortOrder(Integer sortOrder) {
         this.sortOrder = sortOrder;
+    }
+
+    public Boolean getMapVisible() {
+        return mapVisible;
+    }
+
+    public void setMapVisible(Boolean mapVisible) {
+        this.mapVisible = mapVisible;
     }
 }

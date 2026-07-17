@@ -9,6 +9,8 @@ public class FacilityCategoryRequestDto {
 
     private Integer sortOrder;
 
+    private Boolean mapVisible;
+
     public String getName() {
         return name;
     }
@@ -23,5 +25,13 @@ public class FacilityCategoryRequestDto {
 
     public void setSortOrder(Integer sortOrder) {
         this.sortOrder = sortOrder;
+    }
+
+    public Boolean getMapVisible() {
+        return mapVisible;
+    }
+
+    public void setMapVisible(Boolean mapVisible) {
+        this.mapVisible = mapVisible;
     }
 }

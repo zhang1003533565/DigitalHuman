@@ -59,24 +59,6 @@ body.admin-page {
 .login-brand span { color: #a7bfcc; font-size: 12px; }
 .login-brand__mark { width: 44px; height: 44px; border: 1px solid rgba(84,235,237,.44); background: linear-gradient(145deg, #159aa4, #0a668b); }
 .showcase-copy { display: none; }
-.dashboard-preview { position: absolute; z-index: 2; top: 138px; left: 38px; width: 194px; display: grid; grid-template-columns: 1fr; gap: 10px; margin: 0; }
-.dashboard-preview .metric-card,
-.dashboard-preview .map-card { min-height: auto; padding: 12px; border: 1px solid rgba(105,174,204,.25); border-radius: 7px; color: #cfe3ec; background: rgba(4,23,34,.78); box-shadow: 0 16px 38px rgba(0,0,0,.22); backdrop-filter: blur(10px); }
-.dashboard-preview .metric-card__head { color: #dceef5; font-size: 10px; }
-.dashboard-preview .metric-card__head .anticon { color: var(--cockpit-cyan); }
-.dashboard-preview .metric-card strong { margin-top: 7px; color: #f4fbff; font-size: 24px; }
-.dashboard-preview .metric-card small { margin-top: 4px; color: #7fa0b2; font-size: 9px; }
-.dashboard-preview .metric-card--routes,
-.dashboard-preview .map-card { display: none; }
-.dashboard-preview .metric-card--hit { justify-items: stretch; text-align: left; }
-.dashboard-preview .metric-card--hit .donut { width: auto; height: auto; margin: 5px 0 0; display: block; background: transparent; }
-.dashboard-preview .metric-card--hit .donut::after { display: none; }
-.dashboard-preview .metric-card--hit .donut strong { font-size: 24px; }
-.dashboard-preview .metric-card--service .service-row { min-height: 26px; color: #adc4cf; border-top-color: rgba(105,174,204,.13); font-size: 9px; }
-.dashboard-preview .metric-card--service .service-row span .anticon { color: var(--cockpit-cyan); font-size: 12px; }
-.dashboard-preview .metric-card--service .service-row em { color: #75dca6; }
-.dashboard-preview .sparkline { height: 42px; border-color: var(--cockpit-line); }
-.dashboard-preview .sparkline-labels { color: #668798; font-size: 8px; }
 .login-workspace {
   min-height: calc(100vh - 24px);
   margin: 12px 12px 12px 0;
@@ -87,7 +69,6 @@ body.admin-page {
   background: linear-gradient(145deg, rgba(7,25,39,.98), rgba(7,21,34,.98));
   box-shadow: -22px 0 60px rgba(0,0,0,.2);
 }
-.language-switch { top: 28px; right: 28px; color: #b6ccd7; border-color: var(--cockpit-line); background: #0a2131; }
 .login-form { width: min(100%, 460px); color: #dbeaf2; }
 .login-form__logo { display: none; }
 .login-form__title { margin-bottom: 42px; text-align: center; }
@@ -101,11 +82,6 @@ body.admin-page {
 .login-form .input-shell input { color: #eaf6fb; }
 .login-form .input-shell input::placeholder { color: #5f7b8c; }
 .login-form > button[type='submit'] { border-radius: 6px; background: linear-gradient(90deg, #0e88d6, #1d61d5); box-shadow: 0 12px 34px rgba(20,112,217,.18); }
-.form-options,
-.remember-toggle,
-.link-button { color: #91aab8; }
-.default-accounts { color: #9cb3c0; border-color: var(--cockpit-line); background: rgba(7,28,42,.55); }
-.status-strip { color: #93acb9; border-color: var(--cockpit-line); background: rgba(7,28,42,.55); }
 .login-workspace footer { color: #617f90; }
 
 @media (max-width: 900px) {
@@ -369,25 +345,20 @@ body.admin-page {
 .cockpit-metric strong { color: #effbff; font-size: 24px; line-height: 1.15; }
 .cockpit-metric small { color: #57d992; font-size: var(--admin-font-support); }
 .cockpit-metric small.is-down { color: var(--cockpit-red); }
-.cockpit-twin { position: relative; min-height: 500px; overflow: hidden; background-position: center; background-size: cover; }
-.cockpit-twin::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg, rgba(2,17,27,.42), transparent 22%, transparent 72%, rgba(2,17,27,.28)); }
-.cockpit-twin__legend { position: absolute; z-index: 2; top: 12px; left: 14px; display: flex; align-items: center; gap: 6px; color: #d8eef8; font-size: 10px; }
-.cockpit-twin__legend i,
-.cockpit-twin__legend b { display: block; width: 42px; height: 6px; background: linear-gradient(90deg, #2bd0d4, #ffe24a, #f63c35); }
-.cockpit-twin__legend b { width: 14px; margin-left: -6px; }
-.cockpit-twin__legend small { color: #9fb6c3; }
-.cockpit-layer-control { position: absolute; z-index: 3; top: 10px; right: 10px; display: grid; gap: 8px; width: 132px; padding: 10px; border: 1px solid rgba(105,174,204,.24); border-radius: 6px; background: rgba(4,20,30,.86); color: #a9c0cd; font-size: 9px; backdrop-filter: blur(8px); }
-.cockpit-layer-control strong { color: #e4f3f9; font-size: 10px; }
-.cockpit-layer-control span { display: flex; justify-content: space-between; }
-.cockpit-layer-control i { position: relative; width: 23px; height: 12px; border-radius: 10px; background: var(--cockpit-cyan); }
-.cockpit-layer-control i::after { content: ''; position: absolute; top: 2px; right: 2px; width: 8px; height: 8px; border-radius: 50%; background: #eaffff; }
-.cockpit-map-marker { position: absolute; z-index: 2; display: grid; place-items: center; color: #eaffff; transform: translate(-50%, -50%); }
-.cockpit-map-marker > .anticon { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid rgba(122,255,242,.88); border-radius: 50%; color: #bafff7; background: rgba(25,196,210,.28); box-shadow: 0 0 0 10px rgba(25,196,210,.08), 0 0 30px 14px rgba(255,92,45,.35); font-size: 18px; }
-.cockpit-map-marker span { margin-top: 7px; padding: 3px 7px; border: 1px solid rgba(25,196,210,.55); border-radius: 4px; color: #84fff5; background: rgba(3,25,34,.82); font-size: 10px; font-weight: 700; }
-.cockpit-map-tools { position: absolute; z-index: 3; right: 12px; bottom: 12px; display: grid; }
-.cockpit-map-tools .ant-btn { width: 30px; height: 30px; padding: 0; border-radius: 0; }
-.cockpit-map-tools .ant-btn:first-child { border-radius: 6px 6px 0 0; }
-.cockpit-map-tools .ant-btn:last-child { border-radius: 0 0 6px 6px; }
+.cockpit-twin { position: relative; min-height: 500px; overflow: hidden; background: #071b29; }
+.cockpit-amap { position: absolute; inset: 0; z-index: 1; }
+.cockpit-map-summary,
+.cockpit-map-error,
+.cockpit-map-empty { position: absolute; z-index: 2; }
+.cockpit-map-summary { top: 12px; left: 12px; display: grid; gap: 2px; min-width: 170px; padding: 9px 11px; border: 1px solid rgba(105,174,204,.24); border-radius: 6px; color: #d8eef8; background: rgba(4,20,30,.82); backdrop-filter: blur(8px); }
+.cockpit-map-summary strong { color: #e4f3f9; font-size: 12px; }
+.cockpit-map-summary span { color: #9fb6c3; font-size: var(--admin-font-support); }
+.cockpit-map-error { right: 12px; bottom: 12px; max-width: 360px; }
+.cockpit-map-empty { inset: 0; display: grid; place-items: center; pointer-events: none; }
+.cockpit-amap-marker { display: grid; gap: 2px; min-width: 72px; padding: 5px 8px; border: 1px solid rgba(25,196,210,.62); border-radius: 6px; color: #eaffff; background: rgba(3,25,34,.88); box-shadow: 0 8px 22px rgba(0,0,0,.22); transform: translate(-50%, -100%); }
+.cockpit-amap-marker::after { content: ''; position: absolute; left: 50%; bottom: -6px; width: 10px; height: 10px; border-right: 1px solid rgba(25,196,210,.62); border-bottom: 1px solid rgba(25,196,210,.62); background: rgba(3,25,34,.88); transform: translateX(-50%) rotate(45deg); }
+.cockpit-amap-marker strong { color: #84fff5; font-size: 12px; line-height: 1.2; white-space: nowrap; }
+.cockpit-amap-marker span { max-width: 180px; color: #a9c0cd; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cockpit-side-status { display: grid; align-content: start; gap: 10px; }
 .cockpit-side-status > section { padding: 10px; }
 .cockpit-side-status h2 { display: flex; justify-content: space-between; }
@@ -586,14 +557,6 @@ body.admin-page {
   gap: 10px;
 }
 
-.login-top-actions .language-switch {
-  position: static;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 32px;
-}
-
 .admin-theme-switch {
   padding: 3px;
   border: 1px solid var(--cockpit-line);
@@ -627,16 +590,6 @@ html[data-admin-theme='dark'] .admin-theme-switch .ant-segmented-item-selected {
   background: #12374c;
   box-shadow: inset 0 0 0 1px rgba(25,196,210,.24);
 }
-html[data-admin-theme='dark'] .default-accounts strong,
-html[data-admin-theme='dark'] .default-accounts span,
-html[data-admin-theme='dark'] .default-accounts b,
-html[data-admin-theme='dark'] .status-strip span,
-html[data-admin-theme='dark'] .status-strip b { color: #b8ced9; }
-html[data-admin-theme='dark'] .default-accounts b,
-html[data-admin-theme='dark'] .status-strip b { color: #e6f3f9; }
-html[data-admin-theme='dark'] .default-accounts i { background: var(--cockpit-line); }
-html[data-admin-theme='dark'] .status-strip span + span { border-left-color: var(--cockpit-line); }
-
 /* Night theme: repair legacy pages that carried fixed white surfaces. */
 html[data-admin-theme='dark'] .ai-page { color: var(--cockpit-text); }
 html[data-admin-theme='dark'] .ai-page__title,
@@ -958,10 +911,10 @@ body.admin-page,
 .cockpit-side-status article span,
 .cockpit-side-status article small,
 .cockpit-health .ant-tag,
-.cockpit-twin__legend,
-.cockpit-layer-control,
-.cockpit-layer-control strong,
-.cockpit-map-marker span { font-size: var(--admin-font-support); }
+.cockpit-map-summary,
+.cockpit-map-summary strong,
+.cockpit-amap-marker strong,
+.cockpit-amap-marker span { font-size: var(--admin-font-support); }
 .cockpit-side-status article { min-height: 52px; }
 .cockpit-health .service-health-list > div { min-height: 42px; }
 .cockpit-ranking > div { min-height: 42px; }
@@ -1050,13 +1003,8 @@ body.admin-page,
 .login-form,
 .login-form label,
 .login-form input,
-.login-form button,
-.default-accounts,
-.status-strip { font-size: var(--admin-font-body); }
+.login-form button { font-size: var(--admin-font-body); }
 .login-form__title p,
-.form-options,
-.remember-toggle,
-.link-button,
 .login-workspace footer { font-size: var(--admin-font-support); }
 .login-form .input-shell { min-height: 52px; }
 .login-form > button[type='submit'] { min-height: 50px; }
@@ -1074,18 +1022,12 @@ html[data-admin-theme='light'] .login-workspace {
   background: rgba(255,255,255,.96);
   box-shadow: -18px 0 48px rgba(41,74,96,.11);
 }
-html[data-admin-theme='light'] .language-switch { color: #425e70; border-color: var(--cockpit-line); background: #fff; }
 html[data-admin-theme='light'] .login-form,
 html[data-admin-theme='light'] .login-form label { color: #294456; }
 html[data-admin-theme='light'] .login-form__title h2 { color: #173147; }
-html[data-admin-theme='light'] .login-form__title p,
-html[data-admin-theme='light'] .form-options,
-html[data-admin-theme='light'] .remember-toggle,
-html[data-admin-theme='light'] .link-button { color: #647b8b; }
+html[data-admin-theme='light'] .login-form__title p { color: #647b8b; }
 html[data-admin-theme='light'] .login-form .input-shell { border-color: var(--cockpit-line); background: #fff; }
 html[data-admin-theme='light'] .login-form .input-shell input { color: #173147; }
-html[data-admin-theme='light'] .default-accounts,
-html[data-admin-theme='light'] .status-strip { color: #536d7e; border-color: var(--cockpit-line); background: #f5f8fa; }
 html[data-admin-theme='light'] .login-workspace footer { color: #7c909d; }
 
 @media (max-width: 1024px) {
@@ -1122,7 +1064,7 @@ html[data-admin-theme='light'] .login-workspace footer { color: #7c909d; }
   html[data-admin-theme='light'] .admin-nav-drawer .ant-menu-submenu-title { color: #536b7c; }
   .admin-mobile-menu { font-size: var(--admin-font-body); }
   .admin-topbar__account .admin-theme-switch { display: none; }
-  .login-top-actions { top: 16px; right: 16px; left: 16px; justify-content: space-between; }
+  .login-top-actions { top: 16px; right: 16px; left: 16px; justify-content: flex-end; }
   .login-workspace { padding-top: 76px; }
   .qa-records-workbench,
   .qa-records-workbench .ant-card-body,
@@ -1158,11 +1100,8 @@ html[data-admin-theme='light'] .login-workspace footer { color: #7c909d; }
   .login-form__title { margin-bottom: 8px; }
   .login-form__title h2::before { font-size: 26px; }
   .login-form__title p { margin-top: 8px; font-size: 13px; }
-  .default-accounts,
-  .status-strip,
   .login-workspace footer { display: none; }
   .admin-theme-switch .ant-segmented-item-label { padding-inline: 7px; }
   .admin-theme-switch b { font-size: var(--admin-font-support); }
   .login-top-actions { gap: 7px; }
-  .login-top-actions .language-switch { padding-inline: 9px; font-size: var(--admin-font-support); }
 }

@@ -2,6 +2,11 @@ import axios from 'axios'
 
 export type RankedItem = { label: string; count: number }
 export type ServiceHealthItem = { name: string; status: string; message: string }
+export type MetricTrend = { percentChange: number | null; baselineLabel: string }
+export type AlertItem = { level: 'success' | 'info' | 'warning' | 'error'; title: string; message: string; time: string }
+export type MapCoordinate = { longitude: number; latitude: number }
+export type MapMarker = MapCoordinate & { id: string; name: string; type: string; summary: string }
+export type MapRoute = { id: string; name: string; path: MapCoordinate[] }
 export type OperationsOverview = {
   visitorCount: number
   sessionCount: number
@@ -9,9 +14,13 @@ export type OperationsOverview = {
   successRate: number
   knowledgeHitRate: number
   averageRating: number
+  metricTrends: Record<string, MetricTrend>
   popularQuestions: RankedItem[]
   popularRoutes: RankedItem[]
   serviceHealth: ServiceHealthItem[]
+  alerts: AlertItem[]
+  mapMarkers: MapMarker[]
+  mapRoutes: MapRoute[]
 }
 
 export type FeedbackStatus = 'PENDING' | 'PROCESSING' | 'RESOLVED'

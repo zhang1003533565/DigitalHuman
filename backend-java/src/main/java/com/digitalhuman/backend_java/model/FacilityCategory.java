@@ -26,6 +26,9 @@ public class FacilityCategory {
     private Integer sortOrder = 0;
 
     @Column(nullable = false)
+    private Boolean mapVisible = true;
+
+    @Column(nullable = false)
     private LocalDateTime createdAt;
 
     @Column(nullable = false)
@@ -69,6 +72,14 @@ public class FacilityCategory {
 
     public void setSortOrder(Integer sortOrder) {
         this.sortOrder = sortOrder;
+    }
+
+    public Boolean getMapVisible() {
+        return mapVisible;
+    }
+
+    public void setMapVisible(Boolean mapVisible) {
+        this.mapVisible = mapVisible;
     }
 
     public LocalDateTime getCreatedAt() {

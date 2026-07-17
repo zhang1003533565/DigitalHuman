@@ -82,6 +82,9 @@ type PreviewDocument = {
 /* TESTING_HELPERS_START */
 const MAX_FILE_COUNT = 50
 const MAX_FILE_SIZE = 100 * 1024 * 1024
+const POLL_BASE_DELAY_MS = 1000
+const POLL_MAX_DELAY_MS = 5000
+const MAX_POLL_TRANSIENT_FAILURES = 12
 const SUPPORTED_EXTENSIONS = new Set([
   'txt',
   'md',
@@ -216,6 +219,39 @@ function shouldPollStatus(status: string) {
   return ['QUEUED', 'PROCESSING', 'PARSING', 'APPLYING'].includes(status.toUpperCase())
 }
 
+function pollDelayMs(transientFailures: number) {
+  return Math.min(POLL_MAX_DELAY_MS, POLL_BASE_DELAY_MS + Math.max(0, transientFailures) * 500)
+}
+
+function errorStatus(error: unknown) {
+  if (!error || typeof error !== 'object') {
+    return undefined
+  }
+  const record = error as Record<string, unknown>
+  if (typeof record.status === 'number') {
+    return record.status
+  }
+  const response = record.response
+  if (response && typeof response === 'object') {
+    const status = (response as Record<string, unknown>).status
+    if (typeof status === 'number') {
+      return status
+    }
+  }
+  return undefined
+}
+
+function shouldRetryPollError(error: unknown, transientFailures: number) {
+  if (transientFailures >= MAX_POLL_TRANSIENT_FAILURES) {
+    return false
+  }
+  const status = errorStatus(error)
+  if (status == null) {
+    return error instanceof Error && ['ERR_NETWORK', 'ECONNABORTED'].includes((error as Error & { code?: string }).code ?? '')
+  }
+  return [429, 502, 503, 504].includes(status)
+}
+
 function isTerminalStatus(status: string) {
   return ['PREVIEW_READY', 'COMPLETED', 'FAILED', 'CANCELLED'].includes(status.toUpperCase())
 }
@@ -272,6 +308,66 @@ function normalizeTaskPayload(payload: unknown): TestingNormalizedTask {
     stageText: helperTextOf(record, ['stage', 'current_stage', 'step', 'current_step'], status),
     messageText: helperTextOf(record, ['message', 'error_message', 'fail_reason'], ''),
   }
+}
+
+function readablePreviewText(value: unknown): string {
+  if (value == null) {
+    return ''
+  }
+  if (typeof value === 'string') {
+    return value.trim()
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value)
+  }
+  if (Array.isArray(value)) {
+    return value.map(readablePreviewText).filter(Boolean).join('\n')
+  }
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    const preferredKeys = ['content', 'text', 'paragraph_content', 'raw_content', 'markdown', 'md', 'html', 'title', 'name', 'children']
+    const preferredText = preferredKeys
+      .map((key) => readablePreviewText(record[key]))
+      .filter(Boolean)
+      .join('\n')
+    if (preferredText) {
+      return preferredText
+    }
+    return Object.values(record).map(readablePreviewText).filter(Boolean).join('\n')
+  }
+  return ''
+}
+
+function previewTextOf(record: Record<string, unknown>, keys: string[], fallback = '') {
+  for (const key of keys) {
+    const text = readablePreviewText(record[key])
+    if (text) {
+      return text
+    }
+  }
+  return fallback
+}
+
+function normalizePreviewDocuments(records: MaxKbRecord[]): PreviewDocument[] {
+  const groups = new Map<string, PreviewDocument>()
+
+  records.forEach((record, index) => {
+    const documentId = helperTextOf(record, ['document_id', 'doc_id', 'id'], String(index + 1))
+    const documentName = helperTextOf(record, ['document_name', 'name', 'title'], `文档 ${index + 1}`)
+    const paragraphId = helperTextOf(record, ['paragraph_id', 'id'], `${documentId}-${index + 1}`)
+    const paragraphTitle = helperTextOf(record, ['title', 'name'], `分段 ${index + 1}`)
+    const paragraphContent = previewTextOf(record, ['content', 'text', 'paragraph_content', 'raw_content', 'markdown', 'md', 'html'], '')
+    const key = `${documentId}:${documentName}`
+    const current = groups.get(key) ?? { key, name: documentName, paragraphs: [] }
+    current.paragraphs.push({
+      key: paragraphId,
+      title: paragraphTitle,
+      content: paragraphContent,
+    })
+    groups.set(key, current)
+  })
+
+  return Array.from(groups.values())
 }
 
 function normalizePatterns(patterns: string[]) {
@@ -393,10 +489,14 @@ function isPreviewDisabled({
 const __TESTING__ = {
   MAX_FILE_COUNT,
   MAX_FILE_SIZE,
+  MAX_POLL_TRANSIENT_FAILURES,
   SUPPORTED_EXTENSIONS,
   validateIncomingFiles,
   normalizeTaskPayload,
+  normalizePreviewDocuments,
   shouldPollStatus,
+  pollDelayMs,
+  shouldRetryPollError,
   isTerminalStatus,
   isAdvancedLimitValid,
   canConfirmPreview,
@@ -463,28 +563,6 @@ function normalizeTask(payload: unknown): NormalizedTask {
     createdAtText: textOf(record, ['create_time', 'created_at', 'createdAt'], ''),
     raw: record,
   }
-}
-
-function normalizePreviewDocuments(records: MaxKbRecord[]): PreviewDocument[] {
-  const groups = new Map<string, PreviewDocument>()
-
-  records.forEach((record, index) => {
-    const documentId = textOf(record, ['document_id', 'doc_id', 'id'], String(index + 1))
-    const documentName = textOf(record, ['document_name', 'name', 'title'], `文档 ${index + 1}`)
-    const paragraphId = textOf(record, ['paragraph_id', 'id'], `${documentId}-${index + 1}`)
-    const paragraphTitle = textOf(record, ['title', 'name'], `分段 ${index + 1}`)
-    const paragraphContent = textOf(record, ['content', 'text', 'paragraph_content', 'raw_content', 'markdown', 'md', 'html'], '')
-    const key = `${documentId}:${documentName}`
-    const current = groups.get(key) ?? { key, name: documentName, paragraphs: [] }
-    current.paragraphs.push({
-      key: paragraphId,
-      title: paragraphTitle,
-      content: paragraphContent,
-    })
-    groups.set(key, current)
-  })
-
-  return Array.from(groups.values())
 }
 
 function previewEmptyText(currentTask: NormalizedTask | null) {
@@ -705,7 +783,14 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
     }
   }
 
-  async function pollTask(taskId: string, requestScope: number, pollGeneration: number) {
+  function schedulePoll(taskId: string, requestScope: number, pollGeneration: number, transientFailures = 0) {
+    pollTimerRef.current = window.setTimeout(() => {
+      pollTimerRef.current = null
+      void pollTask(taskId, requestScope, pollGeneration, transientFailures)
+    }, pollDelayMs(transientFailures))
+  }
+
+  async function pollTask(taskId: string, requestScope: number, pollGeneration: number, transientFailures = 0) {
     if (!taskId) {
       return
     }
@@ -721,10 +806,7 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
         return
       }
       if (shouldPollStatus(nextTask.status)) {
-        pollTimerRef.current = window.setTimeout(() => {
-          pollTimerRef.current = null
-          void pollTask(taskId, requestScope, pollGeneration)
-        }, 1000)
+        schedulePoll(taskId, requestScope, pollGeneration)
         return
       }
       if (isTerminalStatus(nextTask.status)) {
@@ -732,6 +814,10 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
       }
     } catch (error) {
       if (!canWriteRequest(requestScope) || !isRequestGenerationCurrent(pollGeneration, pollGenerationRef.current)) {
+        return
+      }
+      if (shouldRetryPollError(error, transientFailures)) {
+        schedulePoll(taskId, requestScope, pollGeneration, transientFailures + 1)
         return
       }
       clearPollTimer()
@@ -747,10 +833,7 @@ function WorkbenchSession({ accountId, knowledgeId, knowledgeName, onCancel, onI
     }
     const requestScope = requestScopeRef.current
     const pollGeneration = pollGenerationRef.current
-    pollTimerRef.current = window.setTimeout(() => {
-      pollTimerRef.current = null
-      void pollTask(taskId, requestScope, pollGeneration)
-    }, 1000)
+    schedulePoll(taskId, requestScope, pollGeneration)
   }
 
   async function loadTaskHistory(silent = false) {

@@ -4,6 +4,7 @@ export type ScenicCategory = {
   id: number
   name: string
   sortOrder: number
+  mapVisible: boolean
 }
 
 export type ScenicFacility = {
@@ -24,6 +25,7 @@ export type ScenicFacility = {
 export type ScenicCategoryPayload = {
   name: string
   sortOrder?: number
+  mapVisible?: boolean
 }
 
 export type ScenicFacilityPayload = {

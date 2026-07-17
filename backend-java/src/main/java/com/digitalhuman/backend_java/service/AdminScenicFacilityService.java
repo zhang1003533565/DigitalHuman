@@ -42,6 +42,12 @@ public class AdminScenicFacilityService {
                 .toList();
     }
 
+    public List<ScenicFacilityDto> getMapVisibleFacilities() {
+        return scenicFacilityRepository.findMapVisibleFacilities().stream()
+                .map(this::toFacilityDto)
+                .toList();
+    }
+
     public ScenicFacilityDto getFacility(Long id) {
         return toFacilityDto(findFacility(id));
     }
@@ -73,6 +79,12 @@ public class AdminScenicFacilityService {
                 .toList();
     }
 
+    public List<FacilityCategoryDto> getMapVisibleCategories() {
+        return facilityCategoryRepository.findMapVisibleCategories().stream()
+                .map(this::toCategoryDto)
+                .toList();
+    }
+
     @Transactional
     public FacilityCategoryDto createCategory(FacilityCategoryRequestDto request) {
         String name = normalizeRequiredText(request.getName(), "Category name must not be blank");
@@ -83,6 +95,7 @@ public class AdminScenicFacilityService {
         FacilityCategory category = new FacilityCategory();
         category.setName(name);
         category.setSortOrder(normalizeSortOrder(request.getSortOrder()));
+        category.setMapVisible(normalizeMapVisible(request.getMapVisible()));
         return toCategoryDto(facilityCategoryRepository.save(category));
     }
 
@@ -96,6 +109,7 @@ public class AdminScenicFacilityService {
 
         category.setName(name);
         category.setSortOrder(normalizeSortOrder(request.getSortOrder()));
+        category.setMapVisible(normalizeMapVisible(request.getMapVisible()));
         return toCategoryDto(facilityCategoryRepository.save(category));
     }
 
@@ -153,7 +167,11 @@ public class AdminScenicFacilityService {
     }
 
     private FacilityCategoryDto toCategoryDto(FacilityCategory category) {
-        return new FacilityCategoryDto(category.getId(), category.getName(), category.getSortOrder());
+        return new FacilityCategoryDto(
+                category.getId(),
+                category.getName(),
+                category.getSortOrder(),
+                normalizeMapVisible(category.getMapVisible()));
     }
 
     private String normalizeRequiredText(String value, String message) {
@@ -173,6 +191,10 @@ public class AdminScenicFacilityService {
 
     private Integer normalizeSortOrder(Integer sortOrder) {
         return sortOrder == null ? 0 : sortOrder;
+    }
+
+    private Boolean normalizeMapVisible(Boolean mapVisible) {
+        return mapVisible == null || mapVisible;
     }
 
     private String writeGalleryImages(List<String> galleryImages) {

@@ -7,6 +7,7 @@ import {
   DEFAULT_PITCH,
   DEFAULT_RATE,
   DEFAULT_VOLUME,
+  LIVE2D_MODEL_LOAD_OPTIONS,
   MODEL_OPTIONS,
   TTS_ENDPOINT,
   VOICE_OPTIONS,
@@ -702,7 +703,10 @@ export function DigitalHumanPage() {
 
         app.stop()
 
-        const model = await window.PIXI.live2d.Live2DModel.from(resolveModelUrl(selectedModel, config.costumeId))
+        const model = await window.PIXI.live2d.Live2DModel.from(
+          resolveModelUrl(selectedModel, config.costumeId),
+          LIVE2D_MODEL_LOAD_OPTIONS,
+        )
 
         if (!isMountedRef.current || loadId !== loadIdRef.current) {
           return

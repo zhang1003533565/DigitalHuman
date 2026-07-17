@@ -2,7 +2,7 @@ export type AdminPageKey =
   | 'dashboard' | 'home-config' | 'spots' | 'spot-category' | 'facility-list'
   | 'routes' | 'travel-tips' | 'avatar' | 'model-emotion' | 'settings'
   | 'travel-analytics' | 'scenic-structured' | 'voice-scripts' | 'feedback'
-  | 'live-broadcast' | 'qa' | 'ai-models' | 'knowledge'
+  | 'live-broadcast' | 'qa' | 'ai-models' | 'knowledge' | 'map-config'
 
 export type AdminPageMeta = { title: string; eyebrow: string; description: string }
 
@@ -24,6 +24,7 @@ export const adminPageMeta: Record<AdminPageKey, AdminPageMeta> = {
   qa: { title: '问答记录查询', eyebrow: 'CONVERSATION TRACE', description: '检索游客问答、知识命中、响应状态和会话详情' },
   'ai-models': { title: 'AI 模型管理', eyebrow: 'MODEL CONTROL', description: '统一管理模型目录、供应商连接、绑定关系和健康测试' },
   knowledge: { title: '知识库对接站', eyebrow: 'KNOWLEDGE HUB', description: '管理知识目录、文档分段与第三方知识服务连接' },
+  'map-config': { title: '地图配置', eyebrow: 'AMAP SETTINGS', description: '维护高德地图 Web Key 与安全密钥，供游客端和管理端地图运行时读取' },
   settings: { title: '系统设置', eyebrow: 'SYSTEM SETTINGS', description: '配置模型能力、服务参数与智能体编排策略' },
 }
 

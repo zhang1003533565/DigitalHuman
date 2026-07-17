@@ -30,6 +30,16 @@
   height: 100%;
 }
 
+.app-route-loading {
+  display: grid;
+  min-height: 100vh;
+  min-height: 100dvh;
+  place-items: center;
+  color: rgba(244, 248, 255, 0.86);
+  background: #06111f;
+  font-size: 15px;
+}
+
 .mobile-bottom-nav {
   display: none;
 }

@@ -5,52 +5,14 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import './RouteRecommendPage.css'
 import { loadMapConfig } from '../api/mapConfig'
 import { readTripPlan, resolveRouteId } from './navigationContext'
+import {
+  buildRouteRecommendations,
+  type Coordinate,
+  type RouteFilters,
+  type ScenicRoute,
+} from './routeRecommendation'
 
-type Coordinate = {
-  longitude: number
-  latitude: number
-}
-
-type RouteNode = {
-  id: string
-  name: string
-  type: string
-  stay: string
-  summary: string
-  required: boolean
-  coordinate: Coordinate
-}
-
-type RouteFacility = {
-  id: string
-  name: string
-  category: string
-  nearNode: string
-  distance: string
-  coordinate: Coordinate
-}
-
-type ScenicRoute = {
-  id: string
-  name: string
-  suitableFor: string
-  duration: string
-  distance: string
-  intensity: string
-  reason: string
-  bestTime: string
-  tags: string[]
-  spots: string[]
-  nodes: RouteNode[]
-  facilities: RouteFacility[]
-  polyline: Coordinate[]
-}
-
-type FilterState = {
-  interest: string
-  duration: string
-  intensity: string
-}
+type FilterState = RouteFilters
 
 const LINGSHAN_CENTER: [number, number] = [120.1009, 31.4259]
 
@@ -104,12 +66,6 @@ function getFacilityLabel(category: string) {
     medical: '医务',
   }
   return labels[category] ?? category
-}
-
-function getRouteScore(route: ScenicRoute) {
-  if (route.suitableFor.includes('亲子')) return '亲子友好'
-  if (route.suitableFor.includes('自然')) return '舒缓观景'
-  return '文化深游'
 }
 
 export function RouteRecommendPage() {
@@ -209,16 +165,21 @@ export function RouteRecommendPage() {
     })
   }, [filters.duration, filters.intensity, routes])
 
+  const recommendedRoutes = useMemo(
+    () => buildRouteRecommendations(filteredRoutes, filters, cachedPlan?.route?.id || ''),
+    [cachedPlan?.route?.id, filteredRoutes, filters],
+  )
+
   const selectedRoute = useMemo(
-    () => filteredRoutes.find((route) => route.id === selectedRouteId) ?? filteredRoutes[0] ?? null,
-    [filteredRoutes, selectedRouteId],
+    () => recommendedRoutes.find((route) => route.id === selectedRouteId) ?? recommendedRoutes[0] ?? null,
+    [recommendedRoutes, selectedRouteId],
   )
 
   useEffect(() => {
-    if (!selectedRoute && filteredRoutes[0]) {
-      setSelectedRouteId(filteredRoutes[0].id)
+    if (!selectedRoute && recommendedRoutes[0]) {
+      setSelectedRouteId(recommendedRoutes[0].id)
     }
-  }, [filteredRoutes, selectedRoute])
+  }, [recommendedRoutes, selectedRoute])
 
   useEffect(() => {
     const map = mapInstanceRef.current
@@ -297,7 +258,7 @@ export function RouteRecommendPage() {
             <p className="surface-tag">Route Planner</p>
             <h1>路线推荐</h1>
             <p>
-              基于官方游览路线、景点节点和沿途设施，为游客推荐可执行的景区行程。
+              先选择你的游玩偏好，系统会按匹配度给出推荐路线和清楚的取舍说明。
             </p>
           </header>
 
@@ -343,16 +304,24 @@ export function RouteRecommendPage() {
           {loadError ? <p className="route-error">{loadError}</p> : null}
 
           <section className="route-list" aria-label="推荐路线">
-            {filteredRoutes.map((route) => (
+            <div className="route-list__header">
+              <span>为你推荐</span>
+              <strong>{recommendedRoutes.length} 条路线</strong>
+            </div>
+            {recommendedRoutes.map((route) => (
               <button
                 key={route.id}
                 type="button"
                 className={`route-card${selectedRoute?.id === route.id ? ' route-card--active' : ''}`}
                 onClick={() => setSelectedRouteId(route.id)}
               >
-                <span className="route-card__meta">{route.suitableFor} · {getRouteScore(route)}</span>
+                <span className="route-card__meta">
+                  <b>{route.rankLabel}</b>
+                  <i>{route.score} 分匹配</i>
+                </span>
                 <strong>{route.name}</strong>
-                <span className="route-card__reason">{route.reason}</span>
+                <span className="route-card__reason">{route.matchReason}</span>
+                <span className="route-card__tradeoff">取舍：{route.tradeoff}</span>
                 <span className="route-card__stats">
                   <b>{route.duration}</b>
                   <b>{route.distance}</b>
@@ -366,67 +335,92 @@ export function RouteRecommendPage() {
         <section className="route-detail" aria-label="路线详情">
           {selectedRoute ? (
             <>
-              <div className="route-detail__map">
-                <div ref={mapContainerRef} className="route-detail__map-canvas" />
-                <div className="route-map-fallback">
-                  <strong>{selectedRoute.name}</strong>
-                  <span>{mapError?.message || '高德地图加载中，路线节点已就绪'}</span>
-                  {mapError?.code === 'sdkLoadError' ? (
-                    <button type="button" onClick={() => window.location.reload()}>重新加载</button>
-                  ) : null}
+              <header className="route-decision">
+                <div className="route-decision__copy">
+                  <p className="surface-tag">{selectedRoute.rankLabel} · {selectedRoute.score} 分匹配</p>
+                  <h2>{selectedRoute.name}</h2>
+                  <p><strong>推荐理由：</strong>{selectedRoute.matchReason}</p>
+                  <p><strong>选择取舍：</strong>{selectedRoute.tradeoff}</p>
                 </div>
-              </div>
+                <div className="route-decision__facts" aria-label="路线关键指标">
+                  <span><b>{selectedRoute.duration}</b><small>预计时长</small></span>
+                  <span><b>{selectedRoute.distance}</b><small>步行距离</small></span>
+                  <span><b>{selectedRoute.intensity}</b><small>强度</small></span>
+                  <span><b>{selectedRoute.bestTime}</b><small>建议开始</small></span>
+                </div>
+                <button
+                  type="button"
+                  className="route-detail__map-link"
+                  onClick={() => navigate(`/map?routeId=${encodeURIComponent(selectedRoute.id)}`)}
+                >
+                  在景区地图中查看
+                </button>
+              </header>
 
               <div className="route-detail__content">
-                <div className="route-detail__summary">
-                  <p className="surface-tag">Selected Route</p>
-                  <h2>{selectedRoute.name}</h2>
-                  <p>{selectedRoute.reason}</p>
-                  <div className="route-detail__chips">
-                    <span>{selectedRoute.duration}</span>
-                    <span>{selectedRoute.distance}</span>
-                    <span>{selectedRoute.intensity}</span>
-                    <span>{selectedRoute.bestTime}</span>
-                  </div>
-                  <div className="tag-group">
-                    {(selectedRoute.tags ?? []).map((tag) => (
-                      <span key={tag} className="info-tag">{tag}</span>
-                    ))}
-                  </div>
-                  {cachedPlan?.route?.id === selectedRoute.id ? (
-                    <p className="route-detail__saved">已恢复你刚刚保存的行程规划</p>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="route-detail__map-link"
-                    onClick={() => navigate(`/map?routeId=${encodeURIComponent(selectedRoute.id)}`)}
-                  >
-                    在景区地图中查看
-                  </button>
-                </div>
-
-                <div className="route-timeline">
-                  {(selectedRoute.nodes ?? []).map((node, index) => (
-                    <article key={node.id} className="route-node">
-                      <span className="route-node__index">{index + 1}</span>
-                      <div>
-                        <h3>{node.name}</h3>
-                        <p>{node.summary}</p>
-                        <span>{node.stay} · {node.required ? '必经节点' : '可选节点'}</span>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-
-                <aside className="route-facilities">
-                  <h3>沿途服务</h3>
-                  {(selectedRoute.facilities ?? []).map((facility) => (
-                    <div key={facility.id} className="route-facility">
-                      <span>{getFacilityLabel(facility.category)}</span>
-                      <strong>{facility.name}</strong>
-                      <small>{facility.nearNode} · {facility.distance}</small>
+                <div className="route-detail__primary">
+                  <section className="route-detail__summary" aria-labelledby="route-highlights-title">
+                    <p className="surface-tag">Route Value</p>
+                    <h3 id="route-highlights-title">路线亮点</h3>
+                    <ul className="route-highlights">
+                      {selectedRoute.highlights.map((highlight) => (
+                        <li key={highlight}>{highlight}</li>
+                      ))}
+                    </ul>
+                    <div className="tag-group">
+                      {(selectedRoute.tags ?? []).map((tag) => (
+                        <span key={tag} className="info-tag">{tag}</span>
+                      ))}
                     </div>
-                  ))}
+                    {cachedPlan?.route?.id === selectedRoute.id ? (
+                      <p className="route-detail__saved">已恢复你刚刚保存的行程规划</p>
+                    ) : null}
+                  </section>
+
+                  <section className="route-timeline" aria-label="路线节点">
+                    {(selectedRoute.nodes ?? []).map((node, index) => (
+                      <article key={node.id} className="route-node">
+                        <span className="route-node__index">{index + 1}</span>
+                        <div>
+                          <h3>{node.name}</h3>
+                          <p>{node.summary}</p>
+                          <span>{node.stay} · {node.required ? '必经节点' : '可选节点'}</span>
+                        </div>
+                      </article>
+                    ))}
+                  </section>
+                </div>
+
+                <aside className="route-detail__support">
+                  <div className="route-detail__map">
+                    <div ref={mapContainerRef} className="route-detail__map-canvas" />
+                    <div className="route-map-fallback">
+                      <strong>{selectedRoute.name}</strong>
+                      <span>{mapError?.message || '高德地图加载中，先查看路线节点顺序'}</span>
+                      <div className="route-map-schematic" aria-label="路线示意">
+                        {(selectedRoute.nodes ?? []).slice(0, 6).map((node, index) => (
+                          <span key={node.id}>
+                            <b>{index + 1}</b>
+                            {node.name}
+                          </span>
+                        ))}
+                      </div>
+                      {mapError?.code === 'sdkLoadError' ? (
+                        <button type="button" onClick={() => window.location.reload()}>重新加载</button>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <section className="route-facilities">
+                    <h3>沿途服务</h3>
+                    {(selectedRoute.facilities ?? []).map((facility) => (
+                      <div key={facility.id} className="route-facility">
+                        <span>{getFacilityLabel(facility.category)}</span>
+                        <strong>{facility.name}</strong>
+                        <small>{facility.nearNode} · {facility.distance}</small>
+                      </div>
+                    ))}
+                  </section>
                 </aside>
               </div>
             </>

@@ -43,12 +43,12 @@ public class UserScenicController {
 
     @GetMapping("/facilities")
     public List<ScenicFacilityDto> getFacilities() {
-        return adminScenicFacilityService.getFacilities();
+        return adminScenicFacilityService.getMapVisibleFacilities();
     }
 
     @GetMapping("/categories")
     public List<FacilityCategoryDto> getCategories() {
-        return adminScenicFacilityService.getCategories();
+        return adminScenicFacilityService.getMapVisibleCategories();
     }
 
     @GetMapping("/routes/recommend")

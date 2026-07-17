@@ -1,4 +1,4 @@
-import { apiClient } from './client.ts'
+import { apiClient, getApiProblem } from './client.ts'
 import type { LiveStatus, LiveTimelineItem } from '../live/liveTimeline.ts'
 
 type PublishedLiveStatus = {
@@ -35,7 +35,13 @@ type GetLiveStatusOptions = {
 export async function getLiveStatus(options: GetLiveStatusOptions = {}): Promise<LiveStatusSnapshot> {
   const now = options.now ?? Date.now
   const sentAtClientMs = now()
-  const { data } = await apiClient.get<VisitorLiveStatusResponse>('/user/live/status', { signal: options.signal })
+  let data: VisitorLiveStatusResponse
+  try {
+    const response = await apiClient.get<VisitorLiveStatusResponse>('/user/live/status', { signal: options.signal })
+    data = response.data
+  } catch (error) {
+    throw new Error(getApiProblem(error).message, { cause: error })
+  }
   const receivedAtClientMs = now()
   const clientMidpointMs = sentAtClientMs + (receivedAtClientMs - sentAtClientMs) / 2
   const clockOffsetMs = Date.parse(data.serverTime) - clientMidpointMs

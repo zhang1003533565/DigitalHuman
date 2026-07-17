@@ -74,6 +74,14 @@ test('helpers enforce the exact file, advanced-limit, and polling contracts', as
     assert.equal(__TESTING__.shouldPollStatus(status), true, `${status} should keep polling`)
   }
   assert.equal(__TESTING__.shouldPollStatus('PREVIEW_READY'), false)
+  assert.equal(__TESTING__.MAX_POLL_TRANSIENT_FAILURES, 12)
+  assert.equal(__TESTING__.pollDelayMs(0), 1000)
+  assert.equal(__TESTING__.pollDelayMs(2), 2000)
+  assert.equal(__TESTING__.pollDelayMs(12), 5000)
+  assert.equal(__TESTING__.shouldRetryPollError({ response: { status: 502 } }, 0), true)
+  assert.equal(__TESTING__.shouldRetryPollError({ response: { status: 504 } }, 11), true)
+  assert.equal(__TESTING__.shouldRetryPollError({ response: { status: 502 } }, 12), false)
+  assert.equal(__TESTING__.shouldRetryPollError({ response: { status: 400 } }, 0), false)
 })
 
 test('helpers gate confirmation, deletion, and stale request writes', async () => {
@@ -151,6 +159,28 @@ test('helpers validate files and normalize preview polling payloads', async () =
   assert.equal(__TESTING__.shouldPollStatus('PROCESSING'), true)
   assert.equal(__TESTING__.shouldPollStatus('PARSING'), true)
   assert.equal(__TESTING__.shouldPollStatus('PREVIEW_READY'), false)
+})
+
+test('helpers render nested preview content without object string leakage', async () => {
+  const { __TESTING__ } = await loadTestingHelpers()
+
+  const documents = __TESTING__.normalizePreviewDocuments([
+    {
+      document_id: 'doc-1',
+      document_name: '索引.docx',
+      id: 'p-1',
+      title: '索引',
+      content: [
+        { content: '第一段内容' },
+        { text: '第二段内容' },
+        { title: '小节', children: [{ content: '第三段内容' }] },
+      ],
+    },
+  ])
+
+  assert.equal(documents.length, 1)
+  assert.equal(documents[0].paragraphs[0].content, '第一段内容\n第二段内容\n小节\n第三段内容')
+  assert.doesNotMatch(documents[0].paragraphs[0].content, /\[object Object\]/)
 })
 
 test('helpers create strategy-specific upload payloads and grouped model options', async () => {

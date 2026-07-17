@@ -9,8 +9,66 @@ import {
 } from '@ant-design/icons'
 import { Alert, Button, Empty, Skeleton, Tag, Typography } from 'antd'
 import * as echarts from 'echarts'
-import scenicTwin from '../assets/scenic-admin-bg.png'
-import { getOperationsOverview, type OperationsOverview, type RankedItem } from '../api/operations'
+import { loadMapConfig } from '../api/mapConfig'
+import {
+  getOperationsOverview,
+  type AlertItem,
+  type MapMarker,
+  type OperationsOverview,
+  type RankedItem,
+} from '../api/operations'
+
+type DashboardWindow = Omit<Window, 'AMap' | '_AMapSecurityConfig'> & {
+  _AMapSecurityConfig?: { securityJsCode: string }
+  AMap?: unknown
+}
+
+type DashboardAMapApi = {
+  Map: new (container: HTMLDivElement, options: object) => DashboardAMapInstance
+  Marker: new (options: object) => DashboardAMapOverlay
+  Polyline: new (options: object) => DashboardAMapOverlay
+  LngLat: new (longitude: number, latitude: number) => unknown
+}
+
+type DashboardAMapInstance = {
+  add: (overlay: DashboardAMapOverlay | DashboardAMapOverlay[]) => void
+  remove: (overlay: DashboardAMapOverlay | DashboardAMapOverlay[]) => void
+  destroy: () => void
+  setFitView: (overlays?: DashboardAMapOverlay[], immediate?: boolean, padding?: number[]) => void
+}
+
+type DashboardAMapOverlay = unknown
+
+let amapLoaderPromise: Promise<DashboardAMapApi> | null = null
+
+async function loadAMap(): Promise<DashboardAMapApi> {
+  const mapConfig = await loadMapConfig()
+  if (!mapConfig.configured || !mapConfig.amapKey || !mapConfig.amapSecurityKey) {
+    throw new Error('地图服务未配置，请先在后台地图配置中保存高德 Key')
+  }
+  const dashboardWindow = window as unknown as DashboardWindow
+  if (dashboardWindow.AMap) return dashboardWindow.AMap as DashboardAMapApi
+  if (amapLoaderPromise) return amapLoaderPromise
+  dashboardWindow._AMapSecurityConfig = { securityJsCode: mapConfig.amapSecurityKey }
+  amapLoaderPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script')
+    script.src = `https://webapi.amap.com/maps?v=2.0&key=${mapConfig.amapKey}`
+    script.async = true
+    script.onload = () => {
+      if (dashboardWindow.AMap) resolve(dashboardWindow.AMap as DashboardAMapApi)
+      else {
+        amapLoaderPromise = null
+        reject(new Error('地图脚本加载后未提供 AMap API'))
+      }
+    }
+    script.onerror = () => {
+      amapLoaderPromise = null
+      reject(new Error('高德地图脚本加载失败'))
+    }
+    document.head.appendChild(script)
+  })
+  return amapLoaderPromise
+}
 
 function useOverviewRegion() {
   const [data, setData] = useState<OperationsOverview>()
@@ -47,33 +105,110 @@ function MetricsRegion({ region }: { region: OverviewRegionState }) {
   if (loading) return <div className="cockpit-metric-stack"><Skeleton active /></div>
   if (error || !data) return <RegionError message={error || '核心指标不可用'} retry={() => void load()} />
   const metrics = [
-    ['游客数', data.visitorCount, '', '+12.6%'],
-    ['会话数', data.sessionCount, '', '-1.7%'],
-    ['消息数', data.messageCount, '', '+8.9%'],
-    ['问答成功率', data.successRate, '%', '+3.1%'],
-    ['知识命中率', data.knowledgeHitRate, '%', '+2.6%'],
-    ['平均评分', data.averageRating, '', '+0.2'],
+    ['游客数', 'visitorCount', data.visitorCount, ''],
+    ['会话数', 'sessionCount', data.sessionCount, ''],
+    ['消息数', 'messageCount', data.messageCount, ''],
+    ['问答成功率', 'successRate', data.successRate, '%'],
+    ['知识命中率', 'knowledgeHitRate', data.knowledgeHitRate, '%'],
+    ['平均评分', 'averageRating', data.averageRating, ''],
   ] as const
   return (
     <section className="cockpit-metric-stack" aria-label="实时运营指标">
       <h2>实时运营指标</h2>
-      {metrics.map(([title, value, suffix, trend], index) => {
+      {metrics.map(([title, key, value, suffix], index) => {
         const Icon = metricIcons[index]
-        return <article className="cockpit-metric" key={title}><Icon /><div><span>{title}</span><strong>{Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 1 })}{suffix}</strong><small className={trend.startsWith('-') ? 'is-down' : ''}>较昨日 {trend}</small></div></article>
+        const trend = data.metricTrends?.[key]
+        const trendText = trend?.percentChange == null
+          ? (trend?.baselineLabel ?? '暂无昨日基线')
+          : `${trend.baselineLabel} ${trend.percentChange >= 0 ? '+' : ''}${trend.percentChange.toFixed(1)}%`
+        return <article className="cockpit-metric" key={title}><Icon /><div><span>{title}</span><strong>{Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 1 })}{suffix}</strong><small className={trend?.percentChange != null && trend.percentChange < 0 ? 'is-down' : ''}>{trendText}</small></div></article>
       })}
     </section>
   )
 }
 
-function TwinMap() {
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[char] ?? char)
+}
+
+function formatMarkerLabel(marker: MapMarker) {
+  return `<div class="cockpit-amap-marker"><strong>${escapeHtml(marker.name)}</strong><span>${escapeHtml(marker.summary || marker.type)}</span></div>`
+}
+
+function TwinMap({ region }: { region: OverviewRegionState }) {
+  const { data, loading, error, load } = region
+  const mapRef = useRef<HTMLDivElement>(null)
+  const mapInstanceRef = useRef<DashboardAMapInstance | null>(null)
+  const overlaysRef = useRef<DashboardAMapOverlay[]>([])
+  const [mapError, setMapError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    if (!mapRef.current || !data || data.mapMarkers.length === 0) return
+    loadAMap()
+      .then((AMap) => {
+        if (cancelled || !mapRef.current) return
+        if (!mapInstanceRef.current) {
+          mapInstanceRef.current = new AMap.Map(mapRef.current, {
+            zoom: 16,
+            center: [data.mapMarkers[0].longitude, data.mapMarkers[0].latitude],
+            viewMode: '2D',
+            mapStyle: 'amap://styles/normal',
+          })
+        }
+        const map = mapInstanceRef.current
+        if (overlaysRef.current.length) map.remove(overlaysRef.current)
+        const markers = data.mapMarkers.map((marker) => new AMap.Marker({
+          position: new AMap.LngLat(marker.longitude, marker.latitude),
+          title: marker.name,
+          content: formatMarkerLabel(marker),
+        }))
+        const routes = data.mapRoutes
+          .filter((route) => route.path.length >= 2)
+          .map((route) => new AMap.Polyline({
+            path: route.path.map((point) => [point.longitude, point.latitude]),
+            strokeColor: '#1677ff',
+            strokeWeight: 6,
+            strokeOpacity: 0.82,
+            lineJoin: 'round',
+            lineCap: 'round',
+          }))
+        overlaysRef.current = [...routes, ...markers]
+        map.add(overlaysRef.current)
+        map.setFitView(overlaysRef.current, false, [56, 56, 56, 56])
+        setMapError('')
+      })
+      .catch((loadError) => {
+        if (!cancelled) setMapError(loadError instanceof Error ? loadError.message : '地图加载失败')
+      })
+    return () => { cancelled = true }
+  }, [data])
+
+  useEffect(() => () => {
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.destroy()
+      mapInstanceRef.current = null
+      overlaysRef.current = []
+    }
+  }, [])
+
+  if (loading) return <section className="cockpit-twin"><Skeleton active /></section>
+  if (error || !data) return <section className="cockpit-twin"><RegionError message={error || '地图数据不可用'} retry={() => void load()} /></section>
   return (
-    <section className="cockpit-twin" style={{ backgroundImage: `linear-gradient(180deg, rgba(3,16,25,.08), rgba(3,16,25,.62)), url(${scenicTwin})` }}>
-      <div className="cockpit-twin__legend"><span>游客热力分布</span><i /><small>低</small><b /><small>高</small></div>
-      <div className="cockpit-layer-control"><strong>图层控制</strong>{['热力图层', '客流密度', '路线网络', '景点设施'].map((item) => <span key={item}>{item}<i /></span>)}</div>
-      {[
-        ['观景台', '32%', '27%'], ['湖中群', '63%', '48%'], ['避暑馆', '50%', '70%'],
-      ].map(([name, left, top]) => <div className="cockpit-map-marker" key={name} style={{ left, top }}><EnvironmentOutlined /><span>{name}</span></div>)}
-      <div className="cockpit-map-tools"><Button>◎</Button><Button>＋</Button><Button>－</Button></div>
+    <section className="cockpit-twin">
+      <div ref={mapRef} className="cockpit-amap" />
+      <div className="cockpit-map-summary">
+        <strong>高德地图</strong>
+        <span>{data.mapMarkers.length} 个点位 · {data.mapRoutes.length} 条路线</span>
+      </div>
+      {data.mapMarkers.length === 0 ? <div className="cockpit-map-empty"><Empty description="暂无可展示点位" /></div> : null}
+      {mapError ? <div className="cockpit-map-error"><Alert type="warning" showIcon message={mapError} /></div> : null}
     </section>
   )
 }
@@ -104,8 +239,8 @@ function RankingsRegion({ region }: { region: OverviewRegionState }) {
   if (error || !data) return <RegionError message={error || '排行数据不可用'} retry={() => void load()} />
   return (
     <div className="operations-rankings">
-      <RankingChart title="客流与问答趋势" data={data.popularQuestions ?? []} />
-      <section className="cockpit-ranking"><h2>热门路线 TOP 5</h2>{(data.popularRoutes ?? []).slice(0, 5).map((item, index) => <div key={item.label}><b>{index + 1}</b><span>{item.label}</span><strong>{item.count.toLocaleString()}</strong><i style={{ width: `${Math.max(18, 100 - index * 13)}%` }} /></div>)}</section>
+      <RankingChart title="热门问题 TOP 5" data={data.popularQuestions ?? []} />
+      <section className="cockpit-ranking"><h2>热门路线 TOP 5</h2>{data.popularRoutes.length === 0 ? <Empty description="暂无路线排行" /> : data.popularRoutes.slice(0, 5).map((item, index) => <div key={item.label}><b>{index + 1}</b><span>{item.label}</span><strong>{item.count.toLocaleString()}</strong><i style={{ width: `${Math.max(18, 100 - index * 13)}%` }} /></div>)}</section>
     </div>
   )
 }
@@ -115,14 +250,10 @@ function HealthRegion({ region }: { region: OverviewRegionState }) {
   if (loading) return <section className="cockpit-health"><Skeleton active /></section>
   if (error || !data) return <RegionError message={error || '健康状态不可用'} retry={() => void load()} />
   const health = data.serviceHealth ?? []
-  const alerts = [
-    ['高客流预警', '观景台区域客流已达 85%'],
-    ['知识命中率偏低', '景点介绍类问题需补充知识'],
-    ['直播运行正常', '数字人直播稳定轮播中'],
-  ]
+  const alerts = data.alerts ?? []
   return (
     <aside className="cockpit-side-status">
-      <section><h2>实时告警 <a>查看全部</a></h2>{alerts.map(([title, copy], index) => <article key={title}><AlertOutlined className={index === 2 ? 'is-ok' : ''}/><div><strong>{title}</strong><span>{copy}</span></div><small>{index === 2 ? '10:08' : `10:${42 - index * 7}`}</small></article>)}</section>
+      <section><h2>实时告警</h2>{alerts.length === 0 ? <Empty description="暂无告警" /> : alerts.map((item) => <DashboardAlert item={item} key={`${item.title}-${item.time}`} />)}</section>
       <section className="cockpit-health"><h2>服务状态</h2>{health.length === 0 ? <Empty description="暂无健康状态" /> : <div className="service-health-list">{health.map((item) => {
         const normal = ['healthy', 'up', 'ok'].includes(item.status.toLowerCase())
         return <div key={item.name}><span><i />{item.name}</span><Tag color={normal ? 'success' : 'warning'}>{normal ? '运行中' : '降级'}</Tag><Typography.Text type="secondary">{item.message}</Typography.Text></div>
@@ -131,11 +262,16 @@ function HealthRegion({ region }: { region: OverviewRegionState }) {
   )
 }
 
+function DashboardAlert({ item }: { item: AlertItem }) {
+  const ok = item.level === 'success'
+  return <article><AlertOutlined className={ok ? 'is-ok' : ''}/><div><strong>{item.title}</strong><span>{item.message}</span></div><small>{item.time}</small></article>
+}
+
 export default function OperationsDashboardPage() {
   const region = useOverviewRegion()
   return (
     <div className="operations-dashboard">
-      <div className="cockpit-dashboard-main"><MetricsRegion region={region} /><TwinMap /><HealthRegion region={region} /></div>
+      <div className="cockpit-dashboard-main"><MetricsRegion region={region} /><TwinMap region={region} /><HealthRegion region={region} /></div>
       <RankingsRegion region={region} />
     </div>
   )

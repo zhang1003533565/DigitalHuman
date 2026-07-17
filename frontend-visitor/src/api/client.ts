@@ -13,6 +13,8 @@ export const apiClient = axios.create({
   baseURL: '/api',
 })
 
+const VISITOR_SESSION_STORAGE_KEY = 'digitalhuman.visitor.user'
+
 const STATUS_MESSAGES: Record<number, string> = {
   400: '请求参数有误，请检查后重试',
   401: '登录状态已失效，请重新登录',
@@ -27,6 +29,31 @@ const STATUS_MESSAGES: Record<number, string> = {
 }
 
 const BUSINESS_MESSAGE_STATUSES = new Set([400, 422])
+
+function getStoredVisitorToken() {
+  if (typeof sessionStorage === 'undefined') return null
+
+  try {
+    const rawValue = sessionStorage.getItem(VISITOR_SESSION_STORAGE_KEY)
+    if (!rawValue) return null
+    const user = JSON.parse(rawValue) as { token?: unknown }
+    return typeof user.token === 'string' && user.token.trim() ? user.token.trim() : null
+  } catch {
+    return null
+  }
+}
+
+apiClient.interceptors.request.use((config) => {
+  const token = getStoredVisitorToken()
+  if (!token) return config
+
+  config.headers = config.headers ?? {}
+  const headers = config.headers as Record<string, string>
+  if (!headers.Authorization) {
+    headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
 
 function safeBusinessMessage(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined

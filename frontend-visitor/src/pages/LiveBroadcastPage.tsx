@@ -5,6 +5,7 @@ import { getLiveStatus, type LiveStatusSnapshot } from '../api/liveBroadcast'
 import { getStoredUser } from '../auth/session'
 import {
   createTtsPayload,
+  LIVE2D_MODEL_LOAD_OPTIONS,
   loadLive2dScripts,
   MODEL_OPTIONS,
   resolveModelUrl,
@@ -256,7 +257,10 @@ export function LiveBroadcastPage() {
     void loadLive2dScripts().then(async () => {
       if (cancelled || !window.PIXI) return
       const app = new window.PIXI.Application({ view: canvas, autoStart: true, resizeTo: canvas.parentElement ?? window, backgroundAlpha: 0 })
-      const model = await window.PIXI.live2d.Live2DModel.from(resolveModelUrl(MODEL_OPTIONS[0]))
+      const model = await window.PIXI.live2d.Live2DModel.from(
+        resolveModelUrl(MODEL_OPTIONS[0]),
+        LIVE2D_MODEL_LOAD_OPTIONS,
+      )
       if (cancelled) { model.destroy?.(); app.destroy(true, { children: true }); return }
       model.scale.set(0.24)
       model.position.x = canvas.clientWidth / 2

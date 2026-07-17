@@ -75,6 +75,7 @@ const menuItems: NonNullable<MenuProps['items']> = [
   { key: 'qa', icon: <SearchOutlined />, label: '问答记录查询' },
   { key: 'ai-models', icon: <ApiOutlined />, label: 'AI 模型管理' },
   { key: 'knowledge', icon: <BookOutlined />, label: '知识库对接站' },
+  { key: 'map-config', icon: <EnvironmentOutlined />, label: '地图配置' },
 ]
 
 function getMenuItems(role: string): NonNullable<MenuProps['items']> {

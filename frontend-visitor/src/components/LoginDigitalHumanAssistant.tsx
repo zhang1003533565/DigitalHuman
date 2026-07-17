@@ -10,9 +10,11 @@ import {
   type Live2DModel,
   type MotionOption,
   type PixiApplication,
+  LIVE2D_MODEL_LOAD_OPTIONS,
   MODEL_OPTIONS,
   loadLive2dScripts,
   makeDraggable,
+  resolveLive2dAssetUrl,
 } from '../digitalHuman/shared'
 
 type SpeechMotion = {
@@ -586,7 +588,10 @@ export const LoginDigitalHumanAssistant = forwardRef<
       }
 
       try {
-        const model = await window.PIXI.live2d.Live2DModel.from(currentOutfit.modelUrl)
+        const model = await window.PIXI.live2d.Live2DModel.from(
+          resolveLive2dAssetUrl(currentOutfit.modelUrl),
+          LIVE2D_MODEL_LOAD_OPTIONS,
+        )
 
         if (!mounted) {
           return

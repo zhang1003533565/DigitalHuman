@@ -10,6 +10,7 @@ import {
   Pagination,
   Popconfirm,
   Space,
+  Switch,
   Table,
   message,
 } from 'antd'
@@ -27,6 +28,7 @@ import {
 type CategoryFormValues = {
   name: string
   sortOrder?: number
+  mapVisible?: boolean
 }
 
 export default function SpotCategoryPage() {
@@ -84,7 +86,7 @@ export default function SpotCategoryPage() {
   const openCreateDrawer = () => {
     setEditingCategory(null)
     form.resetFields()
-    form.setFieldsValue({ sortOrder: nextSortOrder })
+    form.setFieldsValue({ sortOrder: nextSortOrder, mapVisible: true })
     setDrawerOpen(true)
   }
 
@@ -93,6 +95,7 @@ export default function SpotCategoryPage() {
     form.setFieldsValue({
       name: record.name,
       sortOrder: record.sortOrder,
+      mapVisible: record.mapVisible,
     })
     setDrawerOpen(true)
   }
@@ -146,6 +149,12 @@ export default function SpotCategoryPage() {
   const columns: TableColumnsType<ScenicCategory> = [
     { title: '排序值', dataIndex: 'sortOrder', width: 160 },
     { title: '分类名称', dataIndex: 'name', width: 320 },
+    {
+      title: '地图显示',
+      dataIndex: 'mapVisible',
+      width: 140,
+      render: (visible: boolean) => visible ? '显示' : '隐藏',
+    },
     {
       title: '操作',
       width: 180,
@@ -237,7 +246,7 @@ export default function SpotCategoryPage() {
           <Form
             form={form}
             layout="vertical"
-            initialValues={{ sortOrder: nextSortOrder }}
+            initialValues={{ sortOrder: nextSortOrder, mapVisible: true }}
             onFinish={(values) => void handleSubmit(values)}
           >
             <Form.Item label="分类名称" name="name" rules={[{ required: true, message: '请输入分类名称' }]}>
@@ -246,6 +255,10 @@ export default function SpotCategoryPage() {
 
             <Form.Item label="排序值" name="sortOrder">
               <InputNumber min={0} style={{ width: '100%' }} placeholder="默认 0" />
+            </Form.Item>
+
+            <Form.Item label="游客地图显示" name="mapVisible" valuePropName="checked">
+              <Switch checkedChildren="显示" unCheckedChildren="隐藏" />
             </Form.Item>
 
             <div className="spot-cat__form-footer">

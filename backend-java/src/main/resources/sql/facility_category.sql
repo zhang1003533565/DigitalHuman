@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS `facility_category` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT 'category id',
   `name` VARCHAR(50) NOT NULL COMMENT 'category name',
   `sort_order` INT NOT NULL DEFAULT 0 COMMENT 'display order',
+  `map_visible` BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'whether category is shown on visitor map',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'created time',
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'updated time',
   `deleted_at` DATETIME DEFAULT NULL COMMENT 'soft delete time',

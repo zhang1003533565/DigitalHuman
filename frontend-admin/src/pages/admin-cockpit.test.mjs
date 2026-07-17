@@ -17,7 +17,7 @@ const qaApi = read('../api/qaRecords.ts')
 const requiredMenuKeys = [
   'dashboard', 'home-config', 'spots', 'spot-category', 'facility-list', 'routes',
   'travel-analytics', 'scenic-structured', 'voice-scripts', 'travel-tips', 'avatar',
-  'model-emotion', 'feedback', 'live-broadcast', 'qa', 'ai-models', 'knowledge', 'settings',
+  'model-emotion', 'feedback', 'live-broadcast', 'qa', 'ai-models', 'knowledge', 'map-config', 'settings',
 ]
 
 assert.doesNotMatch(main, /admin-cockpit\.css/)

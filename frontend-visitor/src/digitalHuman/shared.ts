@@ -67,7 +67,12 @@ export type PixiGlobal = {
   }) => PixiApplication
   live2d: {
     Live2DModel: {
-      from: (modelUrl: string) => Promise<Live2DModel>
+      from: (
+        modelUrl: string,
+        options?: {
+          motionPreload?: 'NONE' | 'IDLE' | 'ALL'
+        },
+      ) => Promise<Live2DModel>
     }
   }
 }
@@ -130,6 +135,24 @@ export const LIVE2D_SCRIPTS = [
   '/live2d/js/pixi.min.js',
   '/live2d/js/cubism4.min.js',
 ]
+
+const LIVE2D_ASSET_VERSION =
+  typeof import.meta !== 'undefined'
+    ? import.meta.env?.VITE_LIVE2D_ASSET_VERSION?.trim()
+    : undefined
+
+export const LIVE2D_MODEL_LOAD_OPTIONS = {
+  motionPreload: 'NONE',
+} as const
+
+export function resolveLive2dAssetUrl(url: string) {
+  if (!LIVE2D_ASSET_VERSION || !url.startsWith('/live2d/')) {
+    return url
+  }
+
+  const separator = url.includes('?') ? '&' : '?'
+  return `${url}${separator}v=${encodeURIComponent(LIVE2D_ASSET_VERSION)}`
+}
 
 const HARU_MOTION_OPTIONS: MotionOption[] = [
   { label: '待机 Idle', group: 'Idle', index: 0 },
@@ -260,7 +283,7 @@ export function getModelCostumeOptions(model?: ModelOption | null) {
 
 export function resolveModelUrl(model: ModelOption, costumeId?: string | null) {
   const costume = model.costumes?.find((item) => item.id === costumeId)
-  return costume?.url ?? model.url
+  return resolveLive2dAssetUrl(costume?.url ?? model.url)
 }
 
 export const VOICE_OPTIONS = [
@@ -303,8 +326,9 @@ let live2dScriptsPromise: Promise<void> | null = null
 
 function loadScript(src: string) {
   return new Promise<void>((resolve, reject) => {
+    const versionedSrc = resolveLive2dAssetUrl(src)
     const existingScript = document.querySelector<HTMLScriptElement>(
-      `script[src="${src}"]`,
+      `script[src="${versionedSrc}"]`,
     )
 
     if (existingScript) {
@@ -313,7 +337,7 @@ function loadScript(src: string) {
     }
 
     const script = document.createElement('script')
-    script.src = src
+    script.src = versionedSrc
     script.async = false
     script.onload = () => resolve()
     script.onerror = () => reject(new Error(`加载脚本失败：${src}`))

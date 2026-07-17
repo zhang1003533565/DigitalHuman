@@ -44,6 +44,7 @@ type ScenicCategory = {
   id: number
   name: string
   sortOrder: number
+  mapVisible?: boolean
 }
 
 type SidebarCategory = {
@@ -71,6 +72,13 @@ const MAX_SIDEBAR_BUTTONS = 7
 const FIXED_SIDEBAR_BUTTONS = 1
 const MORE_BUTTON_SLOTS = 1
 const CATEGORY_ICONS = ['◆', '✦', '◉', '✸', '⌘', 'P', '▲', '■', '✿', '◎']
+const NEARBY_SERVICE_ICONS = [
+  { icon: 'P', tone: 'blue' },
+  { icon: '⌘', tone: 'cyan' },
+  { icon: '✦', tone: 'orange' },
+  { icon: '◉', tone: 'purple' },
+  { icon: '↺', tone: 'green' },
+]
 
 declare global {
   interface Window {
@@ -705,33 +713,48 @@ export function MapPage() {
 
   const liveLabel = getMobileMapLiveLabel(liveStatus)
   const showClearSearch = shouldShowMobileMapClearAction(searchResultCount)
+  const nearbyServiceCategories = categories.slice(0, 5)
+  const selectedFacilityQuery = selectedFacility
+    ? new URLSearchParams({
+        spotId: String(selectedFacility.id),
+        spotName: selectedFacility.name,
+      }).toString()
+    : ''
+  const liveRoute = selectedFacilityQuery ? `/live?${selectedFacilityQuery}` : '/live'
+  const digitalHumanRoute = selectedFacilityQuery
+    ? `${DIGITAL_HUMAN_ROUTE}?${selectedFacilityQuery}`
+    : DIGITAL_HUMAN_ROUTE
 
   function renderLiveCard() {
+    if (!selectedFacility) {
+      return null
+    }
+
     return (
       <div className="side-card live-card">
         <div className="side-card__head">
-          <h3>AI数字人直播</h3>
+          <h3>{selectedFacility.name} · AI数字人直播</h3>
           <span className="side-card__status">{liveStatus === 'live' ? '在线' : liveStatus === 'error' ? '同步失败' : '准备中'}</span>
         </div>
         <div className="live-card__chat">
           <div className="live-card__msg">
             <span className="live-card__msg-tag live-card__msg-tag--cyan">灵</span>
-            <b>直播讲解示例：</b>景区文化与游览提示
+            <b>地点：</b>{selectedFacility.name}
           </div>
           <div className="live-card__msg">
             <span className="live-card__msg-tag live-card__msg-tag--gold">灵</span>
-            <b>直播讲解示例：</b>景点故事与参观礼仪
+            <b>类型：</b>{selectedFacility.categoryName}
           </div>
           <div className="live-card__msg">
             <span className="live-card__msg-tag live-card__msg-tag--cyan">灵</span>
-            <b>直播讲解示例：</b>路线与附近服务介绍
+            <b>开放：</b>{formatOpenHours(selectedFacility.openTime, selectedFacility.closeTime)}
           </div>
         </div>
         <div className="live-card__actions">
-          <button type="button" className="live-card__btn live-card__btn--primary" onClick={() => navigate('/live')}>
+          <button type="button" className="live-card__btn live-card__btn--primary" onClick={() => navigate(liveRoute)}>
             进入直播间
           </button>
-          <button type="button" className="live-card__btn live-card__btn--ghost" onClick={() => navigate(DIGITAL_HUMAN_ROUTE)}>
+          <button type="button" className="live-card__btn live-card__btn--ghost" onClick={() => navigate(digitalHumanRoute)}>
             语音互动
           </button>
         </div>
@@ -744,34 +767,28 @@ export function MapPage() {
       <div className="side-card">
         <div className="side-card__head">
           <h3>附近服务</h3>
-          <button type="button" className="map-route-card__more">查看更多</button>
         </div>
-        <div className="nearby__grid nearby__grid--3">
-          <div className="nearby__item">
-            <div className="nearby__icon nearby__icon--blue">P</div>
-            <span>停车场</span>
+        {nearbyServiceCategories.length ? (
+          <div className="nearby__grid nearby__grid--dynamic">
+            {nearbyServiceCategories.map((category, index) => {
+              const icon = NEARBY_SERVICE_ICONS[index % NEARBY_SERVICE_ICONS.length]
+              const categoryKey = String(category.id)
+              return (
+                <button
+                  key={category.id}
+                  type="button"
+                  className={`nearby__item${activeCategory === categoryKey ? ' nearby__item--active' : ''}`}
+                  onClick={() => setActiveCategory(categoryKey)}
+                >
+                  <div className={`nearby__icon nearby__icon--${icon.tone}`}>{icon.icon}</div>
+                  <span>{category.name}</span>
+                </button>
+              )
+            })}
           </div>
-          <div className="nearby__item">
-            <div className="nearby__icon nearby__icon--cyan">⌘</div>
-            <span>卫生间</span>
-          </div>
-          <div className="nearby__item">
-            <div className="nearby__icon nearby__icon--orange">✦</div>
-            <span>餐饮</span>
-          </div>
-          <div className="nearby__item">
-            <div className="nearby__icon nearby__icon--purple">◉</div>
-            <span>游客中心</span>
-          </div>
-          <div className="nearby__item">
-            <div className="nearby__icon nearby__icon--green">↺</div>
-            <span>接驳车</span>
-          </div>
-          <div className="nearby__item">
-            <div className="nearby__icon nearby__icon--red">!</div>
-            <span>医务点</span>
-          </div>
-        </div>
+        ) : (
+          <p className="nearby__empty">后台暂未开启地图服务分类</p>
+        )}
       </div>
     )
   }
@@ -971,7 +988,7 @@ export function MapPage() {
               }}
             >
               <span className="map-mobile-drawer__peek-handle" aria-hidden />
-              <span>AI 数字人 · {liveLabel}{'\u3000'}附近服务</span>
+              <span>{selectedFacility ? `${selectedFacility.name} · AI 数字人 · ${liveLabel}` : '选择地点查看直播'}{'\u3000'}附近服务</span>
               <span className="map-mobile-drawer__action-label">展开</span>
             </button>
             {mobileDrawerState === 'expanded' ? (
