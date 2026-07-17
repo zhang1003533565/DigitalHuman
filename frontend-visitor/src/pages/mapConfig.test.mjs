@@ -3,6 +3,10 @@ import { readFileSync } from 'node:fs'
 
 for (const file of ['MapPage.tsx', 'RouteRecommendPage.tsx']) {
   const source = readFileSync(new URL(file, import.meta.url), 'utf8')
+  assert.doesNotMatch(source, /import\.meta\.env\.VITE_AMAP/)
+  assert.match(source, /loadMapConfig\(\)/)
+  assert.match(source, /mapConfig\.amapKey/)
+  assert.match(source, /mapConfig\.amapSecurityKey/)
   assert.match(source, /code: 'configMissing'/)
   assert.match(source, /code: 'sdkLoadError'/)
   assert.match(source, /mapError\??\.code === 'sdkLoadError'/)

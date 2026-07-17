@@ -1,6 +1,7 @@
 package com.digitalhuman.backend_java.service;
 
 import com.digitalhuman.backend_java.dto.DigitalHumanConfigDto;
+import com.digitalhuman.backend_java.dto.MapConfigDto;
 import com.digitalhuman.backend_java.model.DigitalHumanConfig;
 import com.digitalhuman.backend_java.repository.DigitalHumanConfigRepository;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,12 @@ public class DigitalHumanConfigService {
         return toDto(loadConfig());
     }
 
+    @Transactional(readOnly = true)
+    public MapConfigDto getMapConfig() {
+        DigitalHumanConfig config = loadConfig();
+        return toMapDto(config);
+    }
+
     @Transactional
     public DigitalHumanConfigDto updateConfig(DigitalHumanConfigDto request) {
         DigitalHumanConfig config = loadConfig();
@@ -34,6 +41,14 @@ public class DigitalHumanConfigService {
         config.setGuideStyle(normalize(request.getGuideStyle(), config.getGuideStyle()));
         config.setBroadcastStrategy(normalize(request.getBroadcastStrategy(), config.getBroadcastStrategy()));
         return toDto(repository.save(config));
+    }
+
+    @Transactional
+    public MapConfigDto updateMapConfig(MapConfigDto request) {
+        DigitalHumanConfig config = loadConfig();
+        config.setAmapKey(normalizeBlankToEmpty(request.getAmapKey()));
+        config.setAmapSecurityKey(normalizeBlankToEmpty(request.getAmapSecurityKey()));
+        return toMapDto(repository.save(config));
     }
 
     private DigitalHumanConfig loadConfig() {
@@ -58,9 +73,20 @@ public class DigitalHumanConfigService {
         );
     }
 
+    private MapConfigDto toMapDto(DigitalHumanConfig config) {
+        return new MapConfigDto(config.getAmapKey(), config.getAmapSecurityKey());
+    }
+
     private String normalize(String value, String fallback) {
         if (value == null || value.isBlank()) {
             return fallback;
+        }
+        return value.trim();
+    }
+
+    private String normalizeBlankToEmpty(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
         }
         return value.trim();
     }

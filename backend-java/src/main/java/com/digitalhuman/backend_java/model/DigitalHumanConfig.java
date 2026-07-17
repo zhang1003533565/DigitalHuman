@@ -19,6 +19,8 @@ public class DigitalHumanConfig {
     private String welcomeText = "您好，欢迎来到灵山胜境，我可以为您介绍景点、路线和活动安排。";
     private String guideStyle = "friendly";
     private String broadcastStrategy = "standard";
+    private String amapKey = "";
+    private String amapSecurityKey = "";
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -40,4 +42,8 @@ public class DigitalHumanConfig {
     public void setGuideStyle(String guideStyle) { this.guideStyle = guideStyle; }
     public String getBroadcastStrategy() { return broadcastStrategy; }
     public void setBroadcastStrategy(String broadcastStrategy) { this.broadcastStrategy = broadcastStrategy; }
+    public String getAmapKey() { return amapKey; }
+    public void setAmapKey(String amapKey) { this.amapKey = amapKey; }
+    public String getAmapSecurityKey() { return amapSecurityKey; }
+    public void setAmapSecurityKey(String amapSecurityKey) { this.amapSecurityKey = amapSecurityKey; }
 }

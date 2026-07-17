@@ -21,9 +21,8 @@ import {
   type ScenicFacilityPayload,
   updateScenicFacility,
 } from '../../api/scenic'
+import { loadMapConfig } from '../../api/mapConfig'
 
-const AMAP_KEY = import.meta.env.VITE_AMAP_KEY
-const AMAP_SECURITY_KEY = import.meta.env.VITE_AMAP_SECURITY_KEY
 const LINGSHAN_CENTER: [number, number] = [120.1009, 31.4259]
 const LINGSHAN_BOUNDS_SW: [number, number] = [120.0759, 31.4009]
 const LINGSHAN_BOUNDS_NE: [number, number] = [120.1259, 31.4509]
@@ -68,16 +67,19 @@ declare global {
 
 let amapLoaderPromise: Promise<AMapApi> | null = null
 
-function loadAMap(): Promise<AMapApi> {
+async function loadAMap(): Promise<AMapApi> {
   if (typeof window === 'undefined') return Promise.reject(new Error('no window'))
-  if (!AMAP_KEY || !AMAP_SECURITY_KEY) return Promise.reject(new Error('地图服务未配置'))
+  const mapConfig = await loadMapConfig()
+  if (!mapConfig.configured || !mapConfig.amapKey || !mapConfig.amapSecurityKey) {
+    return Promise.reject(new Error('地图服务未配置'))
+  }
   if (window.AMap) return Promise.resolve(window.AMap)
   if (amapLoaderPromise) return amapLoaderPromise
 
-  window._AMapSecurityConfig = { securityJsCode: AMAP_SECURITY_KEY }
+  window._AMapSecurityConfig = { securityJsCode: mapConfig.amapSecurityKey }
   amapLoaderPromise = new Promise((resolve, reject) => {
     const script = document.createElement('script')
-    script.src = `https://webapi.amap.com/maps?v=2.0&key=${AMAP_KEY}`
+    script.src = `https://webapi.amap.com/maps?v=2.0&key=${mapConfig.amapKey}`
     script.async = true
     script.onload = () => {
       if (window.AMap) {

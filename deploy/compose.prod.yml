@@ -1,0 +1,117 @@
+name: digitalhuman
+
+# Remote deploy script runs docker compose pull before docker compose up -d.
+
+services:
+  mysql:
+    image: docker.m.daocloud.io/library/mysql:8
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME:-digitalhuman}
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: docker.m.daocloud.io/library/redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6333:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+
+  ai-service:
+    image: ${DIGITALHUMAN_AI_SERVICE_IMAGE}
+    restart: unless-stopped
+    environment:
+      AI_SERVICE_ADMIN_TOKEN: ${AI_SERVICE_ADMIN_TOKEN}
+    ports:
+      - "${AI_SERVICE_PORT:-18755}:18755"
+    volumes:
+      - ai-runtime:/app/.runtime
+      - ai-storage:/app/storage
+      - knowledge-base:/app/knowledge-base
+    depends_on:
+      qdrant:
+        condition: service_started
+
+  backend-java:
+    image: ${DIGITALHUMAN_BACKEND_IMAGE}
+    restart: unless-stopped
+    environment:
+      SERVER_PORT: 8080
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-digitalhuman}
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${DB_PASSWORD}
+      AI_SERVICE_URL: http://ai-service:18755
+      EDGE_TTS_SERVICE_URL: http://ai-service:18755
+      AI_SERVICE_ADMIN_TOKEN: ${AI_SERVICE_ADMIN_TOKEN}
+      TTS_BASE_URL: ${TTS_BASE_URL}
+      MAXKB_BASE_URL: ${MAXKB_BASE_URL:-http://localhost:3000}
+      MAXKB_API_KEY: ${MAXKB_API_KEY:-}
+      MAXKB_WORKSPACE_ID: ${MAXKB_WORKSPACE_ID:-default}
+      MAXKB_DEFAULT_KNOWLEDGE_ID: ${MAXKB_DEFAULT_KNOWLEDGE_ID:-}
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    volumes:
+      - tts-output:/app/tts
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ai-service:
+        condition: service_started
+
+  frontend-admin:
+    image: ${DIGITALHUMAN_FRONTEND_ADMIN_IMAGE}
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_ADMIN_PORT:-8088}:80"
+    depends_on:
+      backend-java:
+        condition: service_started
+
+  frontend-visitor:
+    image: ${DIGITALHUMAN_FRONTEND_VISITOR_IMAGE}
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_VISITOR_PORT:-80}:80"
+    depends_on:
+      backend-java:
+        condition: service_started
+      ai-service:
+        condition: service_started
+
+volumes:
+  mysql-data:
+  redis-data:
+  qdrant-data:
+  ai-runtime:
+  ai-storage:
+  knowledge-base:
+  tts-output:

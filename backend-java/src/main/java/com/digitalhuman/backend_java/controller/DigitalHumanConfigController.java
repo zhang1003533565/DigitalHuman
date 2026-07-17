@@ -1,6 +1,7 @@
 package com.digitalhuman.backend_java.controller;
 
 import com.digitalhuman.backend_java.dto.DigitalHumanConfigDto;
+import com.digitalhuman.backend_java.dto.MapConfigDto;
 import com.digitalhuman.backend_java.service.DigitalHumanConfigService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -30,5 +31,20 @@ public class DigitalHumanConfigController {
     @GetMapping("/user/digital-human/config")
     public DigitalHumanConfigDto getUserConfig() {
         return service.getConfig();
+    }
+
+    @GetMapping("/app/map-config")
+    public MapConfigDto getMapConfig() {
+        return service.getMapConfig();
+    }
+
+    @GetMapping("/admin/settings/map-config")
+    public MapConfigDto getAdminMapConfig() {
+        return service.getMapConfig();
+    }
+
+    @PutMapping("/admin/settings/map-config")
+    public MapConfigDto updateMapConfig(@RequestBody MapConfigDto request) {
+        return service.updateMapConfig(request);
     }
 }

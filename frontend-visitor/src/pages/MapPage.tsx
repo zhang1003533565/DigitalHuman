@@ -6,6 +6,7 @@ import './MapPage.css'
 import { DIGITAL_HUMAN_ROUTE } from '../digitalHuman/shared'
 import { parseNavigationContext } from './navigationContext'
 import { getLiveStatus } from '../api/liveBroadcast'
+import { loadMapConfig } from '../api/mapConfig'
 import {
   MOBILE_MAP_WORKBENCH_MEDIA_QUERY,
   createMobileMapSearchDerivedSelection,
@@ -61,8 +62,6 @@ type CardPosition = {
 type RouteCoordinate = { longitude: number; latitude: number }
 type MapRoute = { id: string; name: string; polyline?: RouteCoordinate[]; nodes?: Array<{ coordinate: RouteCoordinate }> }
 
-const AMAP_KEY = import.meta.env.VITE_AMAP_KEY
-const AMAP_SECURITY_KEY = import.meta.env.VITE_AMAP_SECURITY_KEY
 const LINGSHAN_CENTER: [number, number] = [120.1009, 31.4259]
 const CARD_WIDTH = 260
 const CARD_HEIGHT = 190
@@ -83,18 +82,19 @@ declare global {
 let amapLoaderPromise: Promise<any> | null = null
 type MapLoadError = { code: 'configMissing' | 'sdkLoadError'; message: string }
 
-function loadAMap(): Promise<any> {
+async function loadAMap(): Promise<any> {
   if (typeof window === 'undefined') return Promise.reject(new Error('no window'))
-  if (!AMAP_KEY || !AMAP_SECURITY_KEY) {
+  const mapConfig = await loadMapConfig()
+  if (!mapConfig.configured || !mapConfig.amapKey || !mapConfig.amapSecurityKey) {
     return Promise.reject({ code: 'configMissing', message: '地图服务未配置，请联系管理员' } satisfies MapLoadError)
   }
   if (window.AMap) return Promise.resolve(window.AMap)
   if (amapLoaderPromise) return amapLoaderPromise
 
-  window._AMapSecurityConfig = { securityJsCode: AMAP_SECURITY_KEY }
+  window._AMapSecurityConfig = { securityJsCode: mapConfig.amapSecurityKey }
   amapLoaderPromise = new Promise((resolve, reject) => {
     const script = document.createElement('script')
-    script.src = `https://webapi.amap.com/maps?v=2.0&key=${AMAP_KEY}`
+    script.src = `https://webapi.amap.com/maps?v=2.0&key=${mapConfig.amapKey}`
     script.async = true
     script.onload = () => resolve(window.AMap)
     script.onerror = () => {

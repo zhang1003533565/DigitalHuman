@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import axios from 'axios'
 import { useLocation, useNavigate } from 'react-router-dom'
 import './RouteRecommendPage.css'
+import { loadMapConfig } from '../api/mapConfig'
 import { readTripPlan, resolveRouteId } from './navigationContext'
 
 type Coordinate = {
@@ -51,8 +52,6 @@ type FilterState = {
   intensity: string
 }
 
-const AMAP_KEY = import.meta.env.VITE_AMAP_KEY
-const AMAP_SECURITY_KEY = import.meta.env.VITE_AMAP_SECURITY_KEY
 const LINGSHAN_CENTER: [number, number] = [120.1009, 31.4259]
 
 declare global {
@@ -68,18 +67,19 @@ let amapLoaderPromise: Promise<any> | null = null
 type MapLoadError = { code: 'configMissing' | 'sdkLoadError'; message: string }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function loadAMap(): Promise<any> {
+async function loadAMap(): Promise<any> {
   if (typeof window === 'undefined') return Promise.reject(new Error('no window'))
-  if (!AMAP_KEY || !AMAP_SECURITY_KEY) {
+  const mapConfig = await loadMapConfig()
+  if (!mapConfig.configured || !mapConfig.amapKey || !mapConfig.amapSecurityKey) {
     return Promise.reject({ code: 'configMissing', message: '地图服务未配置，请联系管理员' } satisfies MapLoadError)
   }
   if (window.AMap) return Promise.resolve(window.AMap)
   if (amapLoaderPromise) return amapLoaderPromise
 
-  window._AMapSecurityConfig = { securityJsCode: AMAP_SECURITY_KEY }
+  window._AMapSecurityConfig = { securityJsCode: mapConfig.amapSecurityKey }
   amapLoaderPromise = new Promise((resolve, reject) => {
     const script = document.createElement('script')
-    script.src = `https://webapi.amap.com/maps?v=2.0&key=${AMAP_KEY}`
+    script.src = `https://webapi.amap.com/maps?v=2.0&key=${mapConfig.amapKey}`
     script.async = true
     script.onload = () => resolve(window.AMap)
     script.onerror = () => {

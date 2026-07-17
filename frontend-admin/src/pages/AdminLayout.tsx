@@ -158,6 +158,12 @@ type DigitalHumanConfig = {
   broadcastStrategy: string
 }
 
+type MapConfig = {
+  amapKey: string
+  amapSecurityKey: string
+  configured: boolean
+}
+
 type ModelCategory = 'embedding' | 'speech' | 'vision' | 'chat' | 'multimodal'
 
 type AdminModelOption = {
@@ -438,6 +444,86 @@ function AvatarPanel() {
         </Form>
       </Card>
     </div>
+  )
+}
+
+function MapConfigPanel() {
+  const [form] = Form.useForm<MapConfig>()
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  async function loadConfig() {
+    setLoading(true)
+    try {
+      const response = await axios.get<MapConfig>('/api/admin/settings/map-config')
+      form.setFieldsValue(response.data)
+    } catch (error) {
+      const description = axios.isAxiosError(error)
+        ? error.response?.data?.message ?? '地图服务配置加载失败，请检查后端服务。'
+        : '地图服务配置加载失败，请稍后重试。'
+      message.error(description)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function saveConfig() {
+    const values = await form.validateFields()
+    setSaving(true)
+    try {
+      const response = await axios.put<MapConfig>('/api/admin/settings/map-config', values)
+      form.setFieldsValue(response.data)
+      message.success('地图服务配置已保存')
+    } catch (error) {
+      const description = axios.isAxiosError(error)
+        ? error.response?.data?.message ?? '地图服务配置保存失败，请检查后端服务。'
+        : '地图服务配置保存失败，请稍后重试。'
+      message.error(description)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  useDeferredMount(() => {
+    void loadConfig()
+  })
+
+  return (
+    <Card
+      size="small"
+      title="高德地图配置"
+      extra={<Tag color={form.getFieldValue('configured') ? 'green' : 'orange'}>数据库存放</Tag>}
+    >
+      <Form form={form} layout="vertical" disabled={loading}>
+        <Typography.Paragraph type="secondary">
+          保存后游客端和管理端地图会在运行时读取新配置，不需要重新构建镜像。
+        </Typography.Paragraph>
+        <Row gutter={16}>
+          <Col xs={24} lg={12}>
+            <Form.Item
+              label="高德 Web 端 Key（原 VITE_AMAP_KEY）"
+              name="amapKey"
+              rules={[{ required: true, message: '请输入高德 Web 端 Key' }]}
+            >
+              <Input.Password placeholder="例如：用于 JSAPI 的 Web 端 Key" autoComplete="off" />
+            </Form.Item>
+          </Col>
+          <Col xs={24} lg={12}>
+            <Form.Item
+              label="高德安全密钥（原 VITE_AMAP_SECURITY_KEY）"
+              name="amapSecurityKey"
+              rules={[{ required: true, message: '请输入高德安全密钥' }]}
+            >
+              <Input.Password placeholder="高德 JSAPI 安全密钥" autoComplete="off" />
+            </Form.Item>
+          </Col>
+        </Row>
+        <div className="admin-action-row">
+          <Button type="primary" loading={saving} onClick={() => void saveConfig()}>保存地图配置</Button>
+          <Button disabled={loading || saving} onClick={() => void loadConfig()}>重新加载</Button>
+        </div>
+      </Form>
+    </Card>
   )
 }
 
@@ -837,6 +923,11 @@ function SettingsPanel() {
           result={renderTestResult('multimodal', testResults.multimodal)}
         />
       ),
+    },
+    {
+      key: 'map-config',
+      label: '地图配置',
+      children: <MapConfigPanel />,
     },
     {
       key: 'model-catalog',
