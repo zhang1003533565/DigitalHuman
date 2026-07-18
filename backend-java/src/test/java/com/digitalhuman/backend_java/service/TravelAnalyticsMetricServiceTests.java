@@ -9,6 +9,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -22,6 +25,7 @@ import static org.mockito.Mockito.when;
 class TravelAnalyticsMetricServiceTests {
 
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-07-18T16:00:00Z"), ZoneOffset.UTC);
 
     @Test
     void publicAverageSpendReturnsOnlyAggregateDataAndUsesFallbackMethodology() throws Exception {
@@ -121,15 +125,16 @@ class TravelAnalyticsMetricServiceTests {
     void averageStayDurationUsesNullAsOfWhenThereAreNoRows() {
         TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
         when(repository.findAllByOrderByUpdatedAtAscIdAsc()).thenReturn(List.of());
-        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(repository, new TravelAnalyticsValueParser());
+        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(repository, new TravelAnalyticsValueParser(), FIXED_CLOCK);
 
         TravelAnalyticsMetricResponse response = service.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.AVERAGE_STAY_DURATION);
 
         assertEquals(0, response.totalSamples());
         assertEquals(0, response.validSamples());
-        assertNull(response.asOf());
+        assertEquals(LocalDateTime.of(2026, 7, 18, 16, 0), response.asOf());
         assertTrue(response.items().isEmpty());
-        assertEquals("暂无有效数据", response.warning());
+        assertEquals("暂无来源数据，asOf 为本次计算时间", response.warning());
+        assertEquals("当前无来源记录，asOf 为本次计算时间", response.methodology());
     }
 
     @Test

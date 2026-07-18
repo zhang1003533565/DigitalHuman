@@ -5,10 +5,12 @@ import com.digitalhuman.backend_java.dto.TravelAnalyticsMetric;
 import com.digitalhuman.backend_java.dto.TravelAnalyticsMetricResponse;
 import com.digitalhuman.backend_java.model.TravelAnalyticsRecord;
 import com.digitalhuman.backend_java.repository.TravelAnalyticsRecordRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.EnumSet;
@@ -38,12 +40,22 @@ public class TravelAnalyticsMetricService {
 
     private final TravelAnalyticsRecordRepository recordRepository;
     private final TravelAnalyticsValueParser valueParser;
+    private final Clock clock;
 
+    @Autowired
     public TravelAnalyticsMetricService(
             TravelAnalyticsRecordRepository recordRepository,
             TravelAnalyticsValueParser valueParser) {
+        this(recordRepository, valueParser, Clock.systemDefaultZone());
+    }
+
+    TravelAnalyticsMetricService(
+            TravelAnalyticsRecordRepository recordRepository,
+            TravelAnalyticsValueParser valueParser,
+            Clock clock) {
         this.recordRepository = recordRepository;
         this.valueParser = valueParser;
+        this.clock = clock;
     }
 
     public TravelAnalyticsMetricResponse queryMetric(TravelAnalyticsAudience audience, TravelAnalyticsMetric metric) {
@@ -117,8 +129,8 @@ public class TravelAnalyticsMetricService {
                 validSamples,
                 asOf,
                 averageItems("平均停留时长（分钟）", totalMinutes, validSamples),
-                "基于可解析停留时长的平均值，单位：分钟",
-                validSamples == 0 ? "暂无有效数据" : null
+                zeroRowMethodology(records, "基于可解析停留时长的平均值，单位：分钟"),
+                zeroRowWarning(records, validSamples)
         );
     }
 
@@ -145,8 +157,8 @@ public class TravelAnalyticsMetricService {
                 validSamples,
                 asOf,
                 averageItems("平均消费（元）", totalAmount, validSamples),
-                "total_cost 优先，缺失时回退到五类分项费用累加",
-                validSamples == 0 ? "暂无有效数据" : null
+                zeroRowMethodology(records, "total_cost 优先，缺失时回退到五类分项费用累加"),
+                zeroRowWarning(records, validSamples)
         );
     }
 
@@ -173,8 +185,8 @@ public class TravelAnalyticsMetricService {
                 validSamples,
                 asOf,
                 averageItems("平均满意度（5分制）", totalSatisfaction, validSamples),
-                "基于可解析满意度的平均值，统一按 5 分制",
-                validSamples == 0 ? "暂无有效数据" : null
+                zeroRowMethodology(records, "基于可解析满意度的平均值，统一按 5 分制"),
+                zeroRowWarning(records, validSamples)
         );
     }
 
@@ -307,6 +319,9 @@ public class TravelAnalyticsMetricService {
     }
 
     private LocalDateTime latestUpdatedAt(List<TravelAnalyticsRecord> records) {
+        if (records.isEmpty()) {
+            return LocalDateTime.now(clock);
+        }
         LocalDateTime asOf = null;
         for (TravelAnalyticsRecord record : records) {
             asOf = latest(asOf, record.getUpdatedAt());
@@ -326,6 +341,20 @@ public class TravelAnalyticsMetricService {
 
     private String normalize(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private String zeroRowMethodology(List<TravelAnalyticsRecord> records, String defaultMethodology) {
+        if (records.isEmpty()) {
+            return "当前无来源记录，asOf 为本次计算时间";
+        }
+        return defaultMethodology;
+    }
+
+    private String zeroRowWarning(List<TravelAnalyticsRecord> records, long validSamples) {
+        if (records.isEmpty()) {
+            return "暂无来源数据，asOf 为本次计算时间";
+        }
+        return validSamples == 0 ? "暂无有效数据" : null;
     }
 
     private String buildThresholdWarning(
