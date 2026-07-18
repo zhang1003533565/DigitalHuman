@@ -150,6 +150,7 @@ export default function FacilityContentDrawer({ facility, open, onClose, onSaved
   const [videoPreviewError, setVideoPreviewError] = useState('')
   const [scripts, setScripts] = useState<ScenicFacilityVoiceScript[]>([])
   const [digitalHumanModels, setDigitalHumanModels] = useState<DigitalHumanModel[]>([])
+  const [digitalHumanModelLoadError, setDigitalHumanModelLoadError] = useState('')
   const audioEnabled = Form.useWatch('audioEnabled', form) ?? false
   const selectedScriptId = Form.useWatch('boundVoiceScriptId', form)
   const liveEnabled = Form.useWatch('liveEnabled', form) ?? false
@@ -168,21 +169,37 @@ export default function FacilityContentDrawer({ facility, open, onClose, onSaved
     let active = true
     // eslint-disable-next-line react-hooks/set-state-in-effect -- opening a new facility starts a fresh remote load
     setLoading(true)
-    Promise.all([
+    Promise.allSettled([
       getScenicFacilityContent(facility.id),
       getScenicFacilityVoiceScriptCandidates(facility.id),
-      modelEmotionApi.getModels(),
     ])
-      .then(([content, voiceScripts, models]) => {
+      .then((results) => {
         if (!active) return
+        const [contentResult, voiceScriptsResult] = results
+        if (contentResult.status !== 'fulfilled' || voiceScriptsResult.status !== 'fulfilled') {
+          throw new Error('load facility content failed')
+        }
+        const content = contentResult.value
+        const voiceScripts = voiceScriptsResult.value
         const selectedCandidate = voiceScripts.find((script) => script.id === content.boundVoiceScriptId) ?? null
         form.setFieldsValue({ ...emptyContent, ...content, ...toSynthesisValues(selectedCandidate) })
         setVideoPreviewError('')
         setScripts(voiceScripts)
-        setDigitalHumanModels(models.filter((model) => model.status.toLowerCase() === 'active'))
+        setDigitalHumanModelLoadError('')
       })
       .catch(() => message.error('加载景点内容配置失败'))
       .finally(() => active && setLoading(false))
+    modelEmotionApi.getModels()
+      .then((models) => {
+        if (!active) return
+        setDigitalHumanModels(models.filter((model) => model.status.toLowerCase() === 'active'))
+        setDigitalHumanModelLoadError('')
+      })
+      .catch(() => {
+        if (!active) return
+        setDigitalHumanModels([])
+        setDigitalHumanModelLoadError('数字人模型加载失败，直播配置暂不可用。')
+      })
     return () => { active = false }
   }, [facility, form, open])
 
@@ -257,6 +274,7 @@ export default function FacilityContentDrawer({ facility, open, onClose, onSaved
       await onSaved?.()
       onClose()
     } catch (error) {
+      if (isFormValidationError(error)) return
       message.error(`发布并绑定失败：${voiceScriptErrorMessage(error, '请稍后重试')}`)
     } finally {
       setPublishingBinding(false)
@@ -378,7 +396,7 @@ export default function FacilityContentDrawer({ facility, open, onClose, onSaved
         rules={[{ validator: (_, value) => !liveEnabled || value ? Promise.resolve() : Promise.reject(new Error('开启直播后必须选择直播数字人')) }]}
       >
         <Select
-          disabled={!liveEnabled}
+          disabled={!liveEnabled || Boolean(digitalHumanModelLoadError)}
           placeholder="选择当前景点直播使用的数字人"
           options={digitalHumanModels.map((model) => ({
             value: model.id,
@@ -387,7 +405,10 @@ export default function FacilityContentDrawer({ facility, open, onClose, onSaved
           notFoundContent="暂无可用数字人，请先到数字人动作配置扫描模型"
         />
       </Form.Item>
-      {liveEnabled && digitalHumanModels.length === 0 ? (
+      {liveEnabled && digitalHumanModelLoadError ? (
+        <Alert type="warning" showIcon title={digitalHumanModelLoadError} />
+      ) : null}
+      {liveEnabled && !digitalHumanModelLoadError && digitalHumanModels.length === 0 ? (
         <Alert type="warning" showIcon title="暂无启用的数字人模型，无法开启景点直播。" />
       ) : null}
       <Form.Item

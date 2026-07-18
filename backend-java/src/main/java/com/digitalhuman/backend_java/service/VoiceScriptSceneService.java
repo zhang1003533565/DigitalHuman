@@ -160,6 +160,9 @@ public class VoiceScriptSceneService {
 
     public VoiceScriptScene synthesize(Long id, VoiceScriptSynthesizeRequest request) {
         VoiceScriptScene entity = getById(id);
+        if (!"draft".equalsIgnoreCase(normalize(entity.getStatus()))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "只有草稿版本允许直接合成，请先回滚为新草稿");
+        }
         String voiceId = normalize(request.getVoiceId());
         String rate = defaultIfBlank(request.getSpeechRate(), "+0%");
         String volume = defaultIfBlank(request.getSpeechVolume(), "+0%");

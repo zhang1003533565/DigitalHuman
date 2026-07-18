@@ -226,6 +226,27 @@ class VoiceScriptSceneServiceTests {
     }
 
     @Test
+    void synthesizeRejectsPublishedAndArchivedVersions() {
+        VoiceScriptSceneRepository repository = repository();
+        TtsService ttsService = mock(TtsService.class);
+        VoiceScriptScene published = scene(16L, 2, "published", "ready", "hash", "已发布口播");
+        VoiceScriptScene archived = scene(17L, 1, "archived", "stale", "hash", "已归档口播");
+        when(repository.findById(16L)).thenReturn(Optional.of(published));
+        when(repository.findById(17L)).thenReturn(Optional.of(archived));
+        VoiceScriptSceneService service = new VoiceScriptSceneService(repository, ttsService);
+        VoiceScriptSynthesizeRequest request = new VoiceScriptSynthesizeRequest();
+        request.setVoiceId("zh-CN-XiaoxiaoNeural");
+
+        ResponseStatusException publishedError = assertThrows(ResponseStatusException.class, () -> service.synthesize(16L, request));
+        ResponseStatusException archivedError = assertThrows(ResponseStatusException.class, () -> service.synthesize(17L, request));
+
+        assertEquals(409, publishedError.getStatusCode().value());
+        assertTrue(publishedError.getReason().contains("草稿"));
+        assertEquals(409, archivedError.getStatusCode().value());
+        assertTrue(archivedError.getReason().contains("草稿"));
+    }
+
+    @Test
     void listPublishedOnlyReturnsReadyAudioMatchingCurrentText() {
         VoiceScriptSceneRepository repository = repository();
         VoiceScriptScene valid = scene(20L, 3, "published", "ready", VoiceScriptSceneService.scriptHash("有效口播"), "有效口播");
