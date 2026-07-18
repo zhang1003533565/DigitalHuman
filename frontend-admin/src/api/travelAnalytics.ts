@@ -43,10 +43,58 @@ export type TravelAnalyticsPageResponse = {
   size: number
 }
 
+export const TRAVEL_ANALYTICS_AI_METRICS = [
+  'popular_attractions',
+  'average_stay_duration',
+  'average_spend',
+  'average_satisfaction',
+  'common_visitor_segments',
+] as const
+
+export type TravelAnalyticsMetric = (typeof TRAVEL_ANALYTICS_AI_METRICS)[number]
+
+export type TravelAnalyticsAiConfig = {
+  id: string
+  publicEnabled: boolean
+  minimumSampleSize: number
+  updatedAt: string
+}
+
+export type TravelAnalyticsMetricItem = {
+  label: string
+  value: number
+}
+
+export type TravelAnalyticsMetricResponse = {
+  metric: TravelAnalyticsMetric
+  scope: 'PUBLIC' | 'ADMIN'
+  totalSamples: number
+  validSamples: number
+  asOf: string
+  items: TravelAnalyticsMetricItem[]
+  methodology: string
+  warning: string | null
+}
+
 export async function getTravelAnalyticsRecords(page = 0, size = 20) {
   const response = await axios.get<TravelAnalyticsPageResponse>('/api/admin/travel-analytics/records', {
     params: { page, size },
   })
+  return response.data
+}
+
+export async function getTravelAnalyticsAiConfig() {
+  const response = await axios.get<TravelAnalyticsAiConfig>('/api/admin/travel-analytics/ai-config')
+  return response.data
+}
+
+export async function updateTravelAnalyticsAiConfig(payload: Pick<TravelAnalyticsAiConfig, 'publicEnabled' | 'minimumSampleSize'>) {
+  const response = await axios.put<TravelAnalyticsAiConfig>('/api/admin/travel-analytics/ai-config', payload)
+  return response.data
+}
+
+export async function testTravelAnalyticsMetric(metric: TravelAnalyticsMetric) {
+  const response = await axios.post<TravelAnalyticsMetricResponse>(`/api/admin/travel-analytics/metrics/${metric}/test`)
   return response.data
 }
 

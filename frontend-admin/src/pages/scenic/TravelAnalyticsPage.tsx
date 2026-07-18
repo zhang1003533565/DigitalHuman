@@ -34,6 +34,7 @@ import {
   type TravelAnalyticsRecord,
   type TravelAnalyticsRecordPayload,
 } from '../../api/travelAnalytics'
+import TravelAnalyticsAiPanel, { type TravelAnalyticsAiPanelHandle } from './TravelAnalyticsAiPanel'
 
 type DataRow = Record<string, string> & { key: string; __id: string }
 
@@ -157,6 +158,7 @@ function renderTruncatedCell(
 }
 
 export default function TravelAnalyticsPage() {
+  const aiPanelRef = useRef<TravelAnalyticsAiPanelHandle | null>(null)
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
@@ -312,6 +314,7 @@ export default function TravelAnalyticsPage() {
                 await deleteTravelAnalyticsRecord(Number(record.__id))
                 message.success('删除成功')
                 await loadRows(pagination.current, pagination.pageSize)
+                await aiPanelRef.current?.refresh()
               } catch {
                 message.error('删除失败')
               }
@@ -353,6 +356,7 @@ export default function TravelAnalyticsPage() {
           message.warning(`导入问题预览：\n${issuePreview}`, 8)
         }
         await loadRows(1, pagination.pageSize)
+        await aiPanelRef.current?.refresh()
       } catch {
         message.error('导入失败，请检查 Excel 表头和数据格式')
       } finally {
@@ -402,6 +406,7 @@ export default function TravelAnalyticsPage() {
       setEditingRow(null)
       form.resetFields()
       await loadRows(editingRow ? pagination.current : 1, pagination.pageSize)
+      await aiPanelRef.current?.refresh()
     } catch (error) {
       if ((error as { errorFields?: unknown[] })?.errorFields) {
         return
@@ -414,6 +419,7 @@ export default function TravelAnalyticsPage() {
 
   return (
     <div className="admin-panel-grid travel-analytics-page">
+      <TravelAnalyticsAiPanel ref={aiPanelRef} />
       <Card
         title="旅游数据行为分析"
         className="travel-analytics-card"
