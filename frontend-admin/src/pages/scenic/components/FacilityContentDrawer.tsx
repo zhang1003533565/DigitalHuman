@@ -109,6 +109,10 @@ function toScriptOptionLabel(script: ScenicFacilityVoiceScript) {
   return `${script.title} · v${script.versionNo} · ${toScriptStatusLabel(script)} · ${toAudioStatusLabel(script)}`
 }
 
+function isDraftScript(script: ScenicFacilityVoiceScript | null | undefined) {
+  return script?.status === 'draft'
+}
+
 function toSynthesisValues(script: ScenicFacilityVoiceScript | null | undefined): VoiceScriptSynthesizePayload {
   return {
     voiceId: script?.voiceId || defaultVoiceSynthesisValues.voiceId,
@@ -157,6 +161,7 @@ export default function FacilityContentDrawer({ facility, open, onClose, onSaved
   const liveSourceType = Form.useWatch('liveSourceType', form)
   const liveVideoUrl = Form.useWatch('liveVideoUrl', form)?.trim()
   const selectedScript = scripts.find((script) => script.id === selectedScriptId) ?? null
+  const selectedScriptIsDraft = isDraftScript(selectedScript)
 
   const loadVoiceScriptCandidates = async (facilityId: number) => {
     const voiceScripts = await getScenicFacilityVoiceScriptCandidates(facilityId)
@@ -229,8 +234,8 @@ export default function FacilityContentDrawer({ facility, open, onClose, onSaved
       message.warning('请先选择一个口播版本')
       return
     }
-    if (selectedScript.status === 'published') {
-      message.warning('已发布版本不能直接重合成，请先回滚为新草稿')
+    if (!selectedScriptIsDraft) {
+      message.warning('只有草稿版本允许直接合成，请先回滚为新草稿')
       return
     }
     try {
@@ -340,33 +345,33 @@ export default function FacilityContentDrawer({ facility, open, onClose, onSaved
       {audioEnabled && selectedScript ? (
         <div className="facility-content__audio-quick-actions">
           <Alert
-            type={selectedScript.status === 'published' ? 'info' : selectedScript.audioStatus === 'ready' ? 'success' : 'warning'}
+            type={!selectedScriptIsDraft ? 'info' : selectedScript.audioStatus === 'ready' ? 'success' : 'warning'}
             showIcon
-            title={selectedScript.status === 'published'
-              ? '当前版本已发布，如需调整音色或文本，请先在口播管理中回滚为新草稿。'
+            title={!selectedScriptIsDraft
+              ? '当前版本已归档或发布，如需调整音色或文本，请先在口播管理中回滚为新草稿。'
               : selectedScript.audioStatus === 'ready'
                 ? '当前草稿已具备试听音频，可直接试听或执行发布并绑定。'
                 : '当前草稿尚未具备可绑定音频，请先完成合成试听。'}
             description={`状态：${toScriptStatusLabel(selectedScript)}；音频状态：${selectedScript.audioStatus || 'missing'}；时长：${selectedScript.durationSec}秒`}
           />
           <Form.Item name="voiceId" label="音色" rules={[{ required: true, message: '请选择音色' }]}>
-            <Select options={voiceOptions} disabled={selectedScript.status === 'published'} />
+            <Select options={voiceOptions} disabled={!selectedScriptIsDraft} />
           </Form.Item>
           <Form.Item name="speechRate" label="语速">
-            <Select options={speechRateOptions} disabled={selectedScript.status === 'published'} />
+            <Select options={speechRateOptions} disabled={!selectedScriptIsDraft} />
           </Form.Item>
           <Form.Item name="speechVolume" label="音量">
-            <Select options={speechVolumeOptions} disabled={selectedScript.status === 'published'} />
+            <Select options={speechVolumeOptions} disabled={!selectedScriptIsDraft} />
           </Form.Item>
           <Form.Item name="speechPitch" label="语调">
-            <Select options={speechPitchOptions} disabled={selectedScript.status === 'published'} />
+            <Select options={speechPitchOptions} disabled={!selectedScriptIsDraft} />
           </Form.Item>
           <Space direction="vertical" style={{ width: '100%' }}>
             <Space wrap>
               <Button
                 icon={<AudioOutlined />}
                 loading={synthesizing}
-                disabled={selectedScript.status === 'published'}
+                disabled={!selectedScriptIsDraft}
                 onClick={() => void handleSynthesize()}
               >
                 合成试听
