@@ -18,6 +18,7 @@ import {
 import { createNarrationController, type FacilityNarrationController } from '../live/facilityNarrationController'
 import { appendLiveMessage, updateLiveMessage, type LiveChatMessage } from '../live/liveChat'
 import { parseLiveGuideStreamData } from '../live/liveBroadcastRuntime'
+import { LiveChatFeed } from './components/LiveChatFeed'
 import './LiveBroadcastPage.css'
 
 type LivePhase = 'syncing' | 'narrating' | 'asking' | 'answering' | 'resume-wait' | 'unavailable' | 'error'
@@ -64,6 +65,8 @@ export function LiveBroadcastPage() {
   const [mediaReady, setMediaReady] = useState(false)
   const [mediaError, setMediaError] = useState('')
   const [modelReady, setModelReady] = useState(false)
+  const [narrationUnlockUrl, setNarrationUnlockUrl] = useState('')
+  const [narrationUnlockMessageId, setNarrationUnlockMessageId] = useState('')
   const liveConfigErrorMessage = facilityId
     ? liveConfigError
     : '缺少有效的景点编号，无法确定直播数字人。'
@@ -184,6 +187,8 @@ export function LiveBroadcastPage() {
         setMediaReady(false)
         setMediaError('')
         setModelReady(false)
+        setNarrationUnlockUrl('')
+        setNarrationUnlockMessageId('')
         setMessages([])
         setPhase('syncing')
         return getFacilityLiveConfig(facilityId, { signal: controller.signal })
@@ -265,8 +270,18 @@ export function LiveBroadcastPage() {
       stopAudio: stopPlayback,
       delayMs: 2000,
       onError: (error) => {
+        const messageId = createMessageId('system')
+        setNarrationUnlockUrl(narrationAudioUrl)
+        setNarrationUnlockMessageId(messageId)
         setBroadcastSpeechError(`循环讲解播放失败：${error.message}`)
-        setPhase('unavailable')
+        setMessages((previous) => appendLiveMessage(previous, {
+          id: messageId,
+          role: 'system',
+          nickname: '系统',
+          content: '浏览器阻止了自动讲解，点击开启讲解后会继续播放。',
+          createdAt: Date.now(),
+          status: 'sent',
+        }))
       },
     })
     narrationControllerRef.current = controller
@@ -292,16 +307,16 @@ export function LiveBroadcastPage() {
     stopPlayback()
   }, [clearResumeTimer, stopPlayback])
 
-  async function askQuestion(event: FormEvent) {
+  async function askQuestion(event: FormEvent, retryContent?: string) {
     event.preventDefault()
-    const question = draft.trim()
+    const question = (retryContent ?? draft).trim()
     if (!question) return
 
     narrationControllerRef.current?.interrupt()
     interactionRequestRef.current?.abort()
     clearResumeTimer()
     setPhase('asking')
-    setDraft('')
+    if (!retryContent) setDraft('')
     setInteractionError('')
     setBroadcastSpeechError('')
 
@@ -395,6 +410,20 @@ export function LiveBroadcastPage() {
     }
   }
 
+  const retryQuestion = (message: LiveChatMessage) => {
+    void askQuestion({ preventDefault() {} } as FormEvent, message.content)
+  }
+
+  const unlockNarration = useCallback(() => {
+    const audioUrl = narrationUnlockUrl || liveConfig?.narration?.audioUrl
+    if (!audioUrl) return
+    setNarrationUnlockUrl('')
+    setNarrationUnlockMessageId('')
+    setBroadcastSpeechError('')
+    setPhase('narrating')
+    narrationControllerRef.current?.start(audioUrl)
+  }, [liveConfig?.narration?.audioUrl, narrationUnlockUrl])
+
   const isLiveAvailable = Boolean(liveConfig?.available && liveConfig.digitalHuman)
   const isVideoSource = liveConfig?.liveSourceType === 'video' && Boolean(liveConfig.liveVideoUrl)
   const isInteractionBusy = !isLiveAvailable || ['syncing', 'asking', 'answering'].includes(phase)
@@ -425,28 +454,30 @@ export function LiveBroadcastPage() {
           <p>{liveConfigErrorMessage || mediaError || latestHostMessage?.content || interactionError || broadcastSpeechError || (liveConfig?.narration?.audioUrl ? '循环讲解播放中，提问时会自动暂停。' : '直播内容准备中')}</p>
         </div>
       </section>
-      <aside className="live-interaction">
+      <aside className="live-interaction" aria-label="直播互动">
         <Link to="/map" className="live-interaction__back">← 返回地图</Link>
         <h1>{liveConfig?.digitalHuman ? `和${liveConfig.digitalHuman.displayName}聊一聊` : '和数字人聊一聊'}</h1>
         {liveConfig?.digitalHuman ? <p className="live-interaction__presenter">当前主播：{liveConfig.digitalHuman.displayName}</p> : null}
         <p className="live-interaction__hint">提问期间只会暂停你的本地直播语音，不影响其他游客。</p>
-        <div className="live-interaction__answer" aria-live="polite">
-          {messages.length ? messages.map((message) => (
-            <p key={message.id} className={`live-interaction__message live-interaction__message--${message.role}`}>
-              <strong>{message.nickname}</strong>：{message.content || (message.status === 'streaming' ? '正在输入…' : '')}
-              {message.status === 'failed' ? <span>（发送失败）</span> : null}
-            </p>
-          )) : '欢迎进入直播间，发送问题即可与数字人互动。'}
-        </div>
         {interactionError && <p className="live-interaction__error" role="alert">{interactionError}</p>}
         {broadcastSpeechError && <p className="live-interaction__speech-error" role="status">{broadcastSpeechError}</p>}
         {liveConfigErrorMessage && <p className="live-interaction__sync-error" role="status">{liveConfigErrorMessage}</p>}
-        <form onSubmit={askQuestion}>
-          <textarea disabled={!isLiveAvailable} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="输入你想了解的问题" />
-          <div className="live-interaction__actions">
-            <button type="submit" disabled={!draft.trim() || isInteractionBusy}>发送</button>
-          </div>
-        </form>
+        <LiveChatFeed
+          messages={messages}
+          draft={draft}
+          busy={isInteractionBusy}
+          disabled={!isLiveAvailable}
+          presenterName={liveConfig?.digitalHuman?.displayName}
+          type="text"
+          aria-label="发送弹幕"
+          placeholder="输入你想了解的问题"
+          systemActionLabel={narrationUnlockUrl ? '开启讲解' : undefined}
+          systemActionMessageId={narrationUnlockMessageId || undefined}
+          onDraftChange={setDraft}
+          onSend={askQuestion}
+          onRetry={retryQuestion}
+          onSystemAction={unlockNarration}
+        />
       </aside>
     </main>
   </div>
