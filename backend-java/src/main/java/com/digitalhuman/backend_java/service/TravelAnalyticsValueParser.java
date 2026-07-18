@@ -34,7 +34,8 @@ public class TravelAnalyticsValueParser {
             "^(?:(\\d+(?:\\.\\d+)?)\\s*(?:小时|时|h|hour|hours))?\\s*(?:(\\d+(?:\\.\\d+)?)\\s*(?:分钟|分|min|mins|minute|minutes))?$",
             Pattern.CASE_INSENSITIVE
     );
-    private static final Pattern MONEY_PATTERN = Pattern.compile("[-+]?\\d+(?:\\.\\d+)?");
+    private static final Pattern MONEY_PATTERN = Pattern.compile("^[-+]?(?:¥|￥)?\\d+(?:\\.\\d+)?(?:元|人民币)?$");
+    private static final Pattern NUMBER_PATTERN = Pattern.compile("[-+]?\\d+(?:\\.\\d+)?");
     private static final Pattern SATISFACTION_FIVE_POINT = Pattern.compile("^([-+]?\\d+(?:\\.\\d+)?)\\s*/\\s*5(?:\\.0+)?$");
     private static final Pattern SATISFACTION_PERCENT = Pattern.compile("^([-+]?\\d+(?:\\.\\d+)?)\\s*%$");
     private static final List<DateTimeFormatter> DATE_FORMATTERS = List.of(
@@ -56,12 +57,11 @@ public class TravelAnalyticsValueParser {
                 .replace("￥", "")
                 .replace(",", "")
                 .replace(" ", "");
-        Matcher matcher = MONEY_PATTERN.matcher(cleaned);
-        if (!matcher.find()) {
+        if (!MONEY_PATTERN.matcher(normalized.replace(",", "").replace(" ", "")).matches()) {
             return Optional.empty();
         }
         try {
-            return Optional.of(new BigDecimal(matcher.group()).setScale(2, RoundingMode.HALF_UP));
+            return Optional.of(new BigDecimal(cleaned).setScale(2, RoundingMode.HALF_UP));
         } catch (NumberFormatException exception) {
             return Optional.empty();
         }
@@ -116,7 +116,7 @@ public class TravelAnalyticsValueParser {
         }
 
         String cleaned = compact.replace("分", "");
-        if (!MONEY_PATTERN.matcher(cleaned).matches()) {
+        if (!NUMBER_PATTERN.matcher(cleaned).matches()) {
             return Optional.empty();
         }
         return sanitizeSatisfaction(new BigDecimal(cleaned));
