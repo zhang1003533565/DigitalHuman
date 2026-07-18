@@ -14,6 +14,7 @@ import java.util.Map;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -71,5 +72,31 @@ class MaxKbKnowledgeControllerTests {
                 .andExpect(status().isOk());
 
         verify(service).deleteDocument(3L, "kb-1", "doc-1");
+    }
+
+    @Test
+    void deleteDocumentRouteShouldRejectUnauthenticatedRequest() throws Exception {
+        MaxKbKnowledgeService service = mock(MaxKbKnowledgeService.class);
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new MaxKbKnowledgeController(service)).build();
+
+        mvc.perform(delete("/api/admin/knowledge/maxkb/accounts/3/knowledges/kb-1/documents/doc-1"))
+                .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void deleteDocumentRouteShouldRejectObserverRequest() throws Exception {
+        MaxKbKnowledgeService service = mock(MaxKbKnowledgeService.class);
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new MaxKbKnowledgeController(service)).build();
+
+        mvc.perform(delete("/api/admin/knowledge/maxkb/accounts/3/knowledges/kb-1/documents/doc-1")
+                        .requestAttr(
+                                AuthInterceptor.REQUEST_ATTR_AUTH_SESSION,
+                                new AuthSession(2L, "observer", "观察员", UserRole.OBSERVER)
+                        ))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(service);
     }
 }
