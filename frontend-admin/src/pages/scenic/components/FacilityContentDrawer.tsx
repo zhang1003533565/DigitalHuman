@@ -190,7 +190,6 @@ export default function FacilityContentDrawer({ facility, open, onClose, onSaved
         form.setFieldsValue({ ...emptyContent, ...content, ...toSynthesisValues(selectedCandidate) })
         setVideoPreviewError('')
         setScripts(voiceScripts)
-        setDigitalHumanModelLoadError('')
       })
       .catch(() => message.error('加载景点内容配置失败'))
       .finally(() => active && setLoading(false))
