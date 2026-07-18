@@ -59,7 +59,7 @@ public class TravelAnalyticsService {
     );
 
     private final TravelAnalyticsRecordRepository recordRepository;
-    private final TravelAnalyticsMetricCache metricCache;
+    private final TravelAnalyticsMetricCacheInvalidator metricCacheInvalidator;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -67,13 +67,13 @@ public class TravelAnalyticsService {
     @Autowired
     public TravelAnalyticsService(
             TravelAnalyticsRecordRepository recordRepository,
-            TravelAnalyticsMetricCache metricCache) {
+            TravelAnalyticsMetricCacheInvalidator metricCacheInvalidator) {
         this.recordRepository = recordRepository;
-        this.metricCache = metricCache;
+        this.metricCacheInvalidator = metricCacheInvalidator;
     }
 
     TravelAnalyticsService(TravelAnalyticsRecordRepository recordRepository) {
-        this(recordRepository, new TravelAnalyticsMetricCache());
+        this(recordRepository, new TravelAnalyticsMetricCacheInvalidator(new TravelAnalyticsMetricCache()));
     }
 
     public List<TravelAnalyticsRecord> listAll() {
@@ -107,7 +107,7 @@ public class TravelAnalyticsService {
         TravelAnalyticsRecord entity = new TravelAnalyticsRecord();
         applyRequest(entity, request);
         TravelAnalyticsRecord saved = recordRepository.save(entity);
-        metricCache.invalidateAll();
+        metricCacheInvalidator.invalidateAfterCommitOrNow();
         return saved;
     }
 
@@ -123,7 +123,7 @@ public class TravelAnalyticsService {
         }
         applyRequest(entity, request);
         TravelAnalyticsRecord saved = recordRepository.save(entity);
-        metricCache.invalidateAll();
+        metricCacheInvalidator.invalidateAfterCommitOrNow();
         return saved;
     }
 
@@ -133,7 +133,7 @@ public class TravelAnalyticsService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "记录不存在");
         }
         recordRepository.deleteById(id);
-        metricCache.invalidateAll();
+        metricCacheInvalidator.invalidateAfterCommitOrNow();
     }
 
     public byte[] buildTemplateFile() {
@@ -217,7 +217,7 @@ public class TravelAnalyticsService {
             if (!batch.isEmpty()) {
                 importedCount += saveImportBatch(batch);
             }
-            metricCache.invalidateAll();
+            metricCacheInvalidator.invalidateAfterCommitOrNow();
             return new TravelAnalyticsImportResult(importedCount, skippedEmptyCount, skippedDuplicateCount, issues);
         } catch (IOException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "读取 Excel 失败：" + exception.getMessage());

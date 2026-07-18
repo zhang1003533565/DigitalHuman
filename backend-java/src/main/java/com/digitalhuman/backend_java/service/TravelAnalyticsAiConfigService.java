@@ -17,18 +17,18 @@ public class TravelAnalyticsAiConfigService {
     private static final int DEFAULT_MINIMUM_SAMPLE_SIZE = 10;
 
     private final TravelAnalyticsAiConfigRepository repository;
-    private final TravelAnalyticsMetricCache metricCache;
+    private final TravelAnalyticsMetricCacheInvalidator metricCacheInvalidator;
 
     @Autowired
     public TravelAnalyticsAiConfigService(
             TravelAnalyticsAiConfigRepository repository,
-            TravelAnalyticsMetricCache metricCache) {
+            TravelAnalyticsMetricCacheInvalidator metricCacheInvalidator) {
         this.repository = repository;
-        this.metricCache = metricCache;
+        this.metricCacheInvalidator = metricCacheInvalidator;
     }
 
     TravelAnalyticsAiConfigService(TravelAnalyticsAiConfigRepository repository) {
-        this(repository, new TravelAnalyticsMetricCache());
+        this(repository, new TravelAnalyticsMetricCacheInvalidator(new TravelAnalyticsMetricCache()));
     }
 
     public TravelAnalyticsAiConfig getConfig() {
@@ -49,7 +49,7 @@ public class TravelAnalyticsAiConfigService {
         config.setMinimumSampleSize(minimumSampleSize);
         config.setUpdatedAt(LocalDateTime.now());
         TravelAnalyticsAiConfig saved = repository.save(config);
-        metricCache.invalidateAll();
+        metricCacheInvalidator.invalidateAfterCommitOrNow();
         return saved;
     }
 

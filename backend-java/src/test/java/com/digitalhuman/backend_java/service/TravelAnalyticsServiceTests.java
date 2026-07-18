@@ -9,6 +9,8 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -25,57 +27,57 @@ import static org.mockito.Mockito.when;
 class TravelAnalyticsServiceTests {
 
     @Test
-    void createRecordInvalidatesMetricCacheAfterSuccessfulSave() {
+    void createRecordSchedulesMetricCacheInvalidationAfterSuccessfulSave() {
         TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
-        TravelAnalyticsMetricCache cache = mock(TravelAnalyticsMetricCache.class);
+        TravelAnalyticsMetricCacheInvalidator invalidator = mock(TravelAnalyticsMetricCacheInvalidator.class);
         when(repository.findByTourist_idIgnoreCase("visitor-1")).thenReturn(Optional.empty());
         when(repository.save(any(TravelAnalyticsRecord.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        TravelAnalyticsService service = new TravelAnalyticsService(repository, cache);
+        TravelAnalyticsService service = new TravelAnalyticsService(repository, invalidator);
 
         TravelAnalyticsRecord created = service.createRecord(request("visitor-1"));
 
         assertEquals("visitor-1", created.getTourist_id());
-        verify(cache).invalidateAll();
+        verify(invalidator).invalidateAfterCommitOrNow();
     }
 
     @Test
-    void updateRecordInvalidatesMetricCacheAfterSuccessfulSave() {
+    void updateRecordSchedulesMetricCacheInvalidationAfterSuccessfulSave() {
         TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
-        TravelAnalyticsMetricCache cache = mock(TravelAnalyticsMetricCache.class);
+        TravelAnalyticsMetricCacheInvalidator invalidator = mock(TravelAnalyticsMetricCacheInvalidator.class);
         TravelAnalyticsRecord existing = new TravelAnalyticsRecord();
         existing.setId(9L);
         existing.setTourist_id("visitor-9");
         when(repository.findById(9L)).thenReturn(Optional.of(existing));
         when(repository.findByTourist_idIgnoreCaseAndIdNot("visitor-9", 9L)).thenReturn(Optional.empty());
         when(repository.save(any(TravelAnalyticsRecord.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        TravelAnalyticsService service = new TravelAnalyticsService(repository, cache);
+        TravelAnalyticsService service = new TravelAnalyticsService(repository, invalidator);
 
         TravelAnalyticsRecord updated = service.updateRecord(9L, request("visitor-9"));
 
         assertEquals("visitor-9", updated.getTourist_id());
-        verify(cache).invalidateAll();
+        verify(invalidator).invalidateAfterCommitOrNow();
     }
 
     @Test
-    void deleteRecordInvalidatesMetricCacheAfterSuccessfulDelete() {
+    void deleteRecordSchedulesMetricCacheInvalidationAfterSuccessfulDelete() {
         TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
-        TravelAnalyticsMetricCache cache = mock(TravelAnalyticsMetricCache.class);
+        TravelAnalyticsMetricCacheInvalidator invalidator = mock(TravelAnalyticsMetricCacheInvalidator.class);
         when(repository.existsById(11L)).thenReturn(true);
-        TravelAnalyticsService service = new TravelAnalyticsService(repository, cache);
+        TravelAnalyticsService service = new TravelAnalyticsService(repository, invalidator);
 
         service.deleteRecord(11L);
 
         verify(repository).deleteById(11L);
-        verify(cache).invalidateAll();
+        verify(invalidator).invalidateAfterCommitOrNow();
     }
 
     @Test
-    void importInvalidatesMetricCacheOnceAfterSuccessfulCompletion() throws Exception {
+    void importSchedulesMetricCacheInvalidationOnceAfterSuccessfulCompletion() throws Exception {
         TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
-        TravelAnalyticsMetricCache cache = mock(TravelAnalyticsMetricCache.class);
+        TravelAnalyticsMetricCacheInvalidator invalidator = mock(TravelAnalyticsMetricCacheInvalidator.class);
         EntityManager entityManager = mock(EntityManager.class);
         when(repository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        TravelAnalyticsService service = new TravelAnalyticsService(repository, cache);
+        TravelAnalyticsService service = new TravelAnalyticsService(repository, invalidator);
         service.setEntityManagerForTests(entityManager);
 
         service.importFromExcel(importFile(), false);
@@ -84,8 +86,36 @@ class TravelAnalyticsServiceTests {
         verify(repository).saveAll(captor.capture());
         verify(repository).flush();
         verify(entityManager).clear();
-        verify(cache, times(1)).invalidateAll();
+        verify(invalidator, times(1)).invalidateAfterCommitOrNow();
         verify(repository, never()).deleteAllInBatch();
+    }
+
+    @Test
+    void importSchedulesMetricCacheInvalidationOnlyAfterCommitDuringActiveSynchronization() throws Exception {
+        TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
+        TravelAnalyticsMetricCache cache = mock(TravelAnalyticsMetricCache.class);
+        EntityManager entityManager = mock(EntityManager.class);
+        when(repository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        TravelAnalyticsService service = new TravelAnalyticsService(
+                repository,
+                new TravelAnalyticsMetricCacheInvalidator(cache));
+        service.setEntityManagerForTests(entityManager);
+        TransactionSynchronizationManager.initSynchronization();
+
+        try {
+            service.importFromExcel(importFile(), false);
+
+            verify(cache, never()).invalidateAll();
+            assertEquals(1, TransactionSynchronizationManager.getSynchronizations().size());
+
+            TransactionSynchronization synchronization = TransactionSynchronizationManager.getSynchronizations().get(0);
+            synchronization.afterCommit();
+            synchronization.afterCompletion(TransactionSynchronization.STATUS_COMMITTED);
+
+            verify(cache, times(1)).invalidateAll();
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     private TravelAnalyticsRecordRequest request(String touristId) {

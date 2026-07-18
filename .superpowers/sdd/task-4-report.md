@@ -78,3 +78,46 @@ Verification notes:
 ## Commit
 
 - Pending local commit after final review
+
+## Follow-up Race Fix
+
+Review feedback identified a transaction race in the original Task 4 implementation: invalidating the metric cache before transaction commit allowed a concurrent read to repopulate the cache from pre-commit database state and keep stale results after commit.
+
+### Follow-up RED
+
+1. Added `backend-java/src/main/java/com/digitalhuman/backend_java/service/TravelAnalyticsMetricCacheInvalidator.java`.
+2. Added `backend-java/src/test/java/com/digitalhuman/backend_java/service/TravelAnalyticsMetricCacheInvalidatorTests.java`.
+3. Reworked service/config tests to assert scheduled invalidation timing rather than eager clearing.
+4. First focused run failed on:
+   - duplicate helper-aware constructor signatures in `TravelAnalyticsService` and `TravelAnalyticsAiConfigService`
+   - use of `List.getFirst()` in the new synchronization tests
+
+### Follow-up GREEN
+
+Implemented a focused after-commit invalidation helper that:
+
+- registers `TransactionSynchronization.afterCommit()` when synchronization is active
+- invalidates immediately when no transaction synchronization is active
+- leaves cache intact on rollback / completion without `afterCommit`
+- clears once after commit
+
+Replaced direct `metricCache.invalidateAll()` calls in:
+
+- `TravelAnalyticsService.createRecord`
+- `TravelAnalyticsService.updateRecord`
+- `TravelAnalyticsService.deleteRecord`
+- `TravelAnalyticsService.importFromExcel`
+- `TravelAnalyticsAiConfigService.updateConfig`
+
+### Follow-up Exact Verification
+
+Ran successfully on 2026-07-18:
+
+1. `cd /Users/zzs/Desktop/zzs/github/DigitalHuman/.worktrees/hybrid-ai-data-access/backend-java && mvn -q -Dtest=TravelAnalyticsMetricCacheInvalidatorTests,TravelAnalyticsMetricCacheTests,TravelAnalyticsServiceTests,TravelAnalyticsAiConfigServiceTests,TravelAnalyticsMetricServiceTests test`
+2. `cd /Users/zzs/Desktop/zzs/github/DigitalHuman/.worktrees/hybrid-ai-data-access/backend-java && mvn -q test`
+
+### Follow-up Self-Review
+
+- Kept the race fix scoped to cache invalidation timing; metric computation and keying behavior did not change.
+- The synchronization tests are deterministic and do not depend on database concurrency timing.
+- Import still schedules invalidation exactly once, but now at commit time instead of pre-commit.

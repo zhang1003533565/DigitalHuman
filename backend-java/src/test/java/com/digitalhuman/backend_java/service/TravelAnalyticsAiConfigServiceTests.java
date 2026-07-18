@@ -3,6 +3,8 @@ package com.digitalhuman.backend_java.service;
 import com.digitalhuman.backend_java.model.TravelAnalyticsAiConfig;
 import com.digitalhuman.backend_java.repository.TravelAnalyticsAiConfigRepository;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.Optional;
 
@@ -35,10 +37,10 @@ class TravelAnalyticsAiConfigServiceTests {
     @Test
     void updatePersistsDefaultIdWhenRowIsMissing() {
         TravelAnalyticsAiConfigRepository repository = mock(TravelAnalyticsAiConfigRepository.class);
-        TravelAnalyticsMetricCache cache = mock(TravelAnalyticsMetricCache.class);
+        TravelAnalyticsMetricCacheInvalidator invalidator = mock(TravelAnalyticsMetricCacheInvalidator.class);
         when(repository.findById("default")).thenReturn(Optional.empty());
         when(repository.save(any(TravelAnalyticsAiConfig.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        TravelAnalyticsAiConfigService service = new TravelAnalyticsAiConfigService(repository, cache);
+        TravelAnalyticsAiConfigService service = new TravelAnalyticsAiConfigService(repository, invalidator);
 
         TravelAnalyticsAiConfig updated = service.updateConfig(false, 25);
 
@@ -46,6 +48,29 @@ class TravelAnalyticsAiConfigServiceTests {
         assertEquals(false, updated.getPublicEnabled());
         assertEquals(25, updated.getMinimumSampleSize());
         verify(repository).save(any(TravelAnalyticsAiConfig.class));
-        verify(cache).invalidateAll();
+        verify(invalidator).invalidateAfterCommitOrNow();
+    }
+
+    @Test
+    void updateDefersCacheInvalidationUntilAfterCommitWhenSynchronizationIsActive() {
+        TravelAnalyticsAiConfigRepository repository = mock(TravelAnalyticsAiConfigRepository.class);
+        TravelAnalyticsMetricCache cache = mock(TravelAnalyticsMetricCache.class);
+        when(repository.findById("default")).thenReturn(Optional.empty());
+        when(repository.save(any(TravelAnalyticsAiConfig.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        TravelAnalyticsAiConfigService service = new TravelAnalyticsAiConfigService(
+                repository,
+                new TravelAnalyticsMetricCacheInvalidator(cache));
+        TransactionSynchronizationManager.initSynchronization();
+
+        try {
+            service.updateConfig(false, 25);
+
+            verify(cache, never()).invalidateAll();
+            TransactionSynchronization synchronization = TransactionSynchronizationManager.getSynchronizations().get(0);
+            synchronization.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK);
+            verify(cache, never()).invalidateAll();
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 }
