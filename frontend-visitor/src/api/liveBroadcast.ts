@@ -55,7 +55,6 @@ export type FacilityLiveConfig = {
   liveSourceType?: 'video' | 'stream' | 'camera' | null
   liveVideoUrl?: string | null
   liveStreamUrl?: string | null
-  cameraStreamKey?: string | null
   digitalHuman?: FacilityLiveDigitalHuman | null
   narration?: FacilityLiveNarration | null
 }

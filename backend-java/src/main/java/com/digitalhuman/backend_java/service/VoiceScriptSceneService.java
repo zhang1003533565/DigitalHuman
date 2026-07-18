@@ -200,7 +200,7 @@ public class VoiceScriptSceneService {
         }
         return repository.findBySpotIdAndStatusIgnoreCaseOrderByVersionNoDesc(normalizedSpotId, "published")
                 .stream()
-                .filter(this::hasCurrentReadyAudio)
+                .filter(VoiceScriptSceneService::hasCurrentReadyAudio)
                 .toList();
     }
 
@@ -212,6 +212,13 @@ public class VoiceScriptSceneService {
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is not available", exception);
         }
+    }
+
+    public static boolean hasCurrentReadyAudio(VoiceScriptScene entity) {
+        return entity != null
+                && "ready".equalsIgnoreCase(normalizeStatic(entity.getAudioStatus()))
+                && scriptHash(entity.getScriptText()).equals(normalizeStatic(entity.getAudioScriptHash()))
+                && !normalizeStatic(entity.getAudioUrl()).isBlank();
     }
 
     @Transactional
@@ -457,12 +464,6 @@ public class VoiceScriptSceneService {
                 || !normalize(entity.getAudioScriptHash()).isBlank();
     }
 
-    private boolean hasCurrentReadyAudio(VoiceScriptScene entity) {
-        return "ready".equalsIgnoreCase(normalize(entity.getAudioStatus()))
-                && scriptHash(entity.getScriptText()).equals(normalize(entity.getAudioScriptHash()))
-                && !normalize(entity.getAudioUrl()).isBlank();
-    }
-
     private String defaultIfBlank(String value, String fallback) {
         String normalized = normalize(value);
         return normalized.isBlank() ? fallback : normalized;
@@ -685,8 +686,12 @@ public class VoiceScriptSceneService {
         return normalized.isBlank() ? normalize(fallback) : normalized;
     }
 
-    private String normalize(String value) {
+    private static String normalizeStatic(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private String normalize(String value) {
+        return normalizeStatic(value);
     }
 
     private record StructuredSpotDraft(

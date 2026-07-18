@@ -238,7 +238,8 @@ public class ScenicFacilityContentService {
             return null;
         }
         return voiceScriptRepository.findById(presentation.getBoundVoiceScriptId())
-                .filter(this::isPublishedReadyAudio)
+                .filter(script -> "published".equalsIgnoreCase(clean(script.getStatus())))
+                .filter(VoiceScriptSceneService::hasCurrentReadyAudio)
                 .map(script -> new VisitorFacilityLiveConfigDto.Narration(
                         script.getId(),
                         script.getTitle(),
@@ -246,12 +247,6 @@ public class ScenicFacilityContentService {
                         script.getDurationSec(),
                         script.getVersionNo()))
                 .orElse(null);
-    }
-
-    private boolean isPublishedReadyAudio(VoiceScriptScene script) {
-        return "published".equalsIgnoreCase(clean(script.getStatus()))
-                && "ready".equalsIgnoreCase(clean(script.getAudioStatus()))
-                && clean(script.getAudioUrl()) != null;
     }
 
     private ScenicFacility findFacility(Long id) {

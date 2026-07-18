@@ -156,7 +156,9 @@ class ScenicFacilityContentServiceTests {
         presentation.setLiveDigitalHumanModel(model);
         VoiceScriptScene narration = voice(71L, 12L, "LS-001", "published", "ready");
         narration.setTitle("灵山胜境讲解");
+        narration.setScriptText("欢迎来到灵山胜境，这里是本次讲解的正文。");
         narration.setAudioUrl("/api/tts/audio/voice-71.mp3");
+        narration.setAudioScriptHash(VoiceScriptSceneService.scriptHash(narration.getScriptText()));
         narration.setDurationSec(64);
         narration.setVersionNo(3);
         presentation.setAudioEnabled(true);
@@ -171,7 +173,7 @@ class ScenicFacilityContentServiceTests {
     }
 
     @Test
-    void hidesNarrationWhenBindingIsDraftStaleOrAudioDisabled() {
+    void hidesNarrationWhenBindingIsDraftStaleHashOrAudioDisabled() {
         Fixtures fixtures = fixtures();
         DigitalHumanModel model = new DigitalHumanModel();
         model.setStatus("active");
@@ -184,7 +186,9 @@ class ScenicFacilityContentServiceTests {
         disabledAudio.setBoundVoiceScriptId(81L);
 
         VoiceScriptScene draft = voice(81L, 12L, "LS-001", "draft", "ready");
+        draft.setScriptText("草稿讲解内容");
         draft.setAudioUrl("/api/tts/audio/draft.mp3");
+        draft.setAudioScriptHash(VoiceScriptSceneService.scriptHash(draft.getScriptText()));
         when(fixtures.presentationRepository.findByFacilityId(12L)).thenReturn(Optional.of(disabledAudio));
 
         assertEquals(null, fixtures.service.getVisitorLiveConfig(12L).narration());
@@ -201,10 +205,12 @@ class ScenicFacilityContentServiceTests {
 
         assertEquals(null, fixtures.service.getVisitorLiveConfig(12L).narration());
 
-        VoiceScriptScene stale = voice(82L, 12L, "LS-001", "published", "stale");
-        stale.setAudioUrl("/api/tts/audio/stale.mp3");
+        VoiceScriptScene staleHash = voice(82L, 12L, "LS-001", "published", "ready");
+        staleHash.setScriptText("已变更的讲解正文");
+        staleHash.setAudioUrl("/api/tts/audio/stale.mp3");
+        staleHash.setAudioScriptHash("wrong-hash");
         draftBinding.setBoundVoiceScriptId(82L);
-        when(fixtures.voiceRepository.findById(82L)).thenReturn(Optional.of(stale));
+        when(fixtures.voiceRepository.findById(82L)).thenReturn(Optional.of(staleHash));
 
         assertEquals(null, fixtures.service.getVisitorLiveConfig(12L).narration());
     }
