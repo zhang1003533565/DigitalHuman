@@ -2,9 +2,15 @@ package com.digitalhuman.backend_java.controller;
 
 import com.digitalhuman.backend_java.dto.TravelAnalyticsImportResponse;
 import com.digitalhuman.backend_java.dto.TravelAnalyticsImportResult;
+import com.digitalhuman.backend_java.dto.TravelAnalyticsMetric;
+import com.digitalhuman.backend_java.dto.TravelAnalyticsMetricResponse;
 import com.digitalhuman.backend_java.dto.TravelAnalyticsPageResponse;
 import com.digitalhuman.backend_java.dto.TravelAnalyticsRecordRequest;
+import com.digitalhuman.backend_java.dto.TravelAnalyticsAudience;
 import com.digitalhuman.backend_java.model.TravelAnalyticsRecord;
+import com.digitalhuman.backend_java.model.TravelAnalyticsAiConfig;
+import com.digitalhuman.backend_java.service.TravelAnalyticsAiConfigService;
+import com.digitalhuman.backend_java.service.TravelAnalyticsMetricService;
 import com.digitalhuman.backend_java.service.TravelAnalyticsService;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ContentDisposition;
@@ -28,9 +34,16 @@ import jakarta.validation.Valid;
 public class AdminTravelAnalyticsController {
 
     private final TravelAnalyticsService travelAnalyticsService;
+    private final TravelAnalyticsMetricService travelAnalyticsMetricService;
+    private final TravelAnalyticsAiConfigService travelAnalyticsAiConfigService;
 
-    public AdminTravelAnalyticsController(TravelAnalyticsService travelAnalyticsService) {
+    public AdminTravelAnalyticsController(
+            TravelAnalyticsService travelAnalyticsService,
+            TravelAnalyticsMetricService travelAnalyticsMetricService,
+            TravelAnalyticsAiConfigService travelAnalyticsAiConfigService) {
         this.travelAnalyticsService = travelAnalyticsService;
+        this.travelAnalyticsMetricService = travelAnalyticsMetricService;
+        this.travelAnalyticsAiConfigService = travelAnalyticsAiConfigService;
     }
 
     @GetMapping("/records")
@@ -86,5 +99,23 @@ public class AdminTravelAnalyticsController {
                 result.getSkippedEmptyCount(),
                 result.getSkippedDuplicateCount(),
                 result.getIssues());
+    }
+
+    @GetMapping("/ai-config")
+    public TravelAnalyticsAiConfig getAiConfig() {
+        return travelAnalyticsAiConfigService.getConfig();
+    }
+
+    @PutMapping("/ai-config")
+    public TravelAnalyticsAiConfig updateAiConfig(@RequestBody TravelAnalyticsAiConfigUpdateRequest request) {
+        return travelAnalyticsAiConfigService.updateConfig(request.publicEnabled(), request.minimumSampleSize());
+    }
+
+    @PostMapping("/metrics/{metric}/test")
+    public TravelAnalyticsMetricResponse testMetric(@PathVariable TravelAnalyticsMetric metric) {
+        return travelAnalyticsMetricService.queryMetric(TravelAnalyticsAudience.ADMIN, metric);
+    }
+
+    record TravelAnalyticsAiConfigUpdateRequest(Boolean publicEnabled, Integer minimumSampleSize) {
     }
 }
