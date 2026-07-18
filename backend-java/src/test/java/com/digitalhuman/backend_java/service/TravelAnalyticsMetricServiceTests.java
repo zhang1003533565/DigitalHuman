@@ -38,7 +38,10 @@ class TravelAnalyticsMetricServiceTests {
     void publicAverageSpendReturnsOnlyAggregateDataAndUsesFallbackMethodology() throws Exception {
         TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
         when(repository.findAllByOrderByUpdatedAtAscIdAsc()).thenReturn(averageSpendRecords());
-        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(repository, new TravelAnalyticsValueParser());
+        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(
+                repository,
+                new TravelAnalyticsValueParser(),
+                enabledPublicConfigService());
 
         TravelAnalyticsMetricResponse response = service.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.AVERAGE_SPEND);
         String json = objectMapper.writeValueAsString(response);
@@ -57,7 +60,10 @@ class TravelAnalyticsMetricServiceTests {
     void averageSpendDoesNotFallbackWhenTotalCostIsPresentButUnparseable() {
         TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
         when(repository.findAllByOrderByUpdatedAtAscIdAsc()).thenReturn(spendRecordsWithUnparseableTotalCost());
-        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(repository, new TravelAnalyticsValueParser());
+        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(
+                repository,
+                new TravelAnalyticsValueParser(),
+                enabledPublicConfigService());
 
         TravelAnalyticsMetricResponse response = service.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.AVERAGE_SPEND);
 
@@ -147,6 +153,7 @@ class TravelAnalyticsMetricServiceTests {
         TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(
                 repository,
                 new TravelAnalyticsValueParser(),
+                enabledPublicConfigService(),
                 new TravelAnalyticsMetricCache());
 
         TravelAnalyticsMetricResponse first = service.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.AVERAGE_SPEND);
@@ -160,7 +167,10 @@ class TravelAnalyticsMetricServiceTests {
     void popularAttractionsReturnsTopFiveGroupsOnly() {
         TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
         when(repository.findAllByOrderByUpdatedAtAscIdAsc()).thenReturn(popularAttractionRecords(12));
-        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(repository, new TravelAnalyticsValueParser());
+        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(
+                repository,
+                new TravelAnalyticsValueParser(),
+                enabledPublicConfigService());
 
         TravelAnalyticsMetricResponse response = service.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.POPULAR_ATTRACTIONS);
 
@@ -179,7 +189,11 @@ class TravelAnalyticsMetricServiceTests {
     void popularAttractionsUsesCalculationTimeAndExplicitMessagingWhenThereAreNoRows() {
         TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
         when(repository.findAllByOrderByUpdatedAtAscIdAsc()).thenReturn(List.of());
-        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(repository, new TravelAnalyticsValueParser(), FIXED_CLOCK);
+        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(
+                repository,
+                new TravelAnalyticsValueParser(),
+                enabledPublicConfigService(),
+                FIXED_CLOCK);
 
         TravelAnalyticsMetricResponse response = service.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.POPULAR_ATTRACTIONS);
 
@@ -195,7 +209,10 @@ class TravelAnalyticsMetricServiceTests {
     void averageStayDurationUsesLatestRowTimestampEvenWhenNoRowsAreValid() {
         TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
         when(repository.findAllByOrderByUpdatedAtAscIdAsc()).thenReturn(invalidStayDurationRecords());
-        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(repository, new TravelAnalyticsValueParser());
+        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(
+                repository,
+                new TravelAnalyticsValueParser(),
+                enabledPublicConfigService());
 
         TravelAnalyticsMetricResponse response = service.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.AVERAGE_STAY_DURATION);
 
@@ -210,7 +227,11 @@ class TravelAnalyticsMetricServiceTests {
     void averageStayDurationUsesNullAsOfWhenThereAreNoRows() {
         TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
         when(repository.findAllByOrderByUpdatedAtAscIdAsc()).thenReturn(List.of());
-        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(repository, new TravelAnalyticsValueParser(), FIXED_CLOCK);
+        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(
+                repository,
+                new TravelAnalyticsValueParser(),
+                enabledPublicConfigService(),
+                FIXED_CLOCK);
 
         TravelAnalyticsMetricResponse response = service.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.AVERAGE_STAY_DURATION);
 
@@ -226,7 +247,10 @@ class TravelAnalyticsMetricServiceTests {
     void averageStayDurationAveragesOnlyParseableDurations() {
         TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
         when(repository.findAllByOrderByUpdatedAtAscIdAsc()).thenReturn(stayDurationRecords());
-        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(repository, new TravelAnalyticsValueParser());
+        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(
+                repository,
+                new TravelAnalyticsValueParser(),
+                enabledPublicConfigService());
 
         TravelAnalyticsMetricResponse response = service.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.AVERAGE_STAY_DURATION);
 
@@ -240,7 +264,10 @@ class TravelAnalyticsMetricServiceTests {
     void averageSatisfactionUsesFivePointScaleOnly() {
         TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
         when(repository.findAllByOrderByUpdatedAtAscIdAsc()).thenReturn(satisfactionRecords());
-        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(repository, new TravelAnalyticsValueParser());
+        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(
+                repository,
+                new TravelAnalyticsValueParser(),
+                enabledPublicConfigService());
 
         TravelAnalyticsMetricResponse response = service.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.AVERAGE_SATISFACTION);
 
@@ -254,7 +281,10 @@ class TravelAnalyticsMetricServiceTests {
     void commonVisitorSegmentsReturnsTopFiveAgeAndGenderGroupsOnly() {
         TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
         when(repository.findAllByOrderByUpdatedAtAscIdAsc()).thenReturn(visitorSegmentRecords());
-        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(repository, new TravelAnalyticsValueParser());
+        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(
+                repository,
+                new TravelAnalyticsValueParser(),
+                enabledPublicConfigService());
 
         TravelAnalyticsMetricResponse response = service.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.COMMON_VISITOR_SEGMENTS);
 
@@ -274,7 +304,10 @@ class TravelAnalyticsMetricServiceTests {
     void commonVisitorSegmentsNormalizesAliasesAndDropsUnexpectedValues() throws Exception {
         TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
         when(repository.findAllByOrderByUpdatedAtAscIdAsc()).thenReturn(segmentNormalizationRecords());
-        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(repository, new TravelAnalyticsValueParser());
+        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(
+                repository,
+                new TravelAnalyticsValueParser(),
+                enabledPublicConfigService());
 
         TravelAnalyticsMetricResponse response = service.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.COMMON_VISITOR_SEGMENTS);
         String json = objectMapper.writeValueAsString(response);
@@ -299,7 +332,11 @@ class TravelAnalyticsMetricServiceTests {
     void commonVisitorSegmentsUsesCalculationTimeAndExplicitMessagingWhenThereAreNoRows() {
         TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
         when(repository.findAllByOrderByUpdatedAtAscIdAsc()).thenReturn(List.of());
-        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(repository, new TravelAnalyticsValueParser(), FIXED_CLOCK);
+        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(
+                repository,
+                new TravelAnalyticsValueParser(),
+                enabledPublicConfigService(),
+                FIXED_CLOCK);
 
         TravelAnalyticsMetricResponse response = service.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.COMMON_VISITOR_SEGMENTS);
 
@@ -337,6 +374,10 @@ class TravelAnalyticsMetricServiceTests {
         config.setUpdatedAt(LocalDateTime.of(2026, 7, 18, 9, 0));
         when(configService.getConfig()).thenReturn(config);
         return configService;
+    }
+
+    private TravelAnalyticsAiConfigService enabledPublicConfigService() {
+        return publicConfigService(10);
     }
 
     private List<TravelAnalyticsRecord> spendRecordsWithUnparseableTotalCost() {

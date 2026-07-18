@@ -18,6 +18,7 @@ import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -60,14 +61,14 @@ public class TravelAnalyticsMetricService {
     TravelAnalyticsMetricService(
             TravelAnalyticsRecordRepository recordRepository,
             TravelAnalyticsValueParser valueParser) {
-        this(recordRepository, valueParser, null, new TravelAnalyticsMetricCache(), Clock.systemDefaultZone());
+        this(recordRepository, valueParser, defaultAiConfigService(), new TravelAnalyticsMetricCache(), Clock.systemDefaultZone());
     }
 
     TravelAnalyticsMetricService(
             TravelAnalyticsRecordRepository recordRepository,
             TravelAnalyticsValueParser valueParser,
             Clock clock) {
-        this(recordRepository, valueParser, null, new TravelAnalyticsMetricCache(clock), clock);
+        this(recordRepository, valueParser, defaultAiConfigService(), new TravelAnalyticsMetricCache(clock), clock);
     }
 
     TravelAnalyticsMetricService(
@@ -81,7 +82,7 @@ public class TravelAnalyticsMetricService {
             TravelAnalyticsRecordRepository recordRepository,
             TravelAnalyticsValueParser valueParser,
             TravelAnalyticsMetricCache metricCache) {
-        this(recordRepository, valueParser, null, metricCache, Clock.systemDefaultZone());
+        this(recordRepository, valueParser, defaultAiConfigService(), metricCache, Clock.systemDefaultZone());
     }
 
     TravelAnalyticsMetricService(
@@ -100,7 +101,7 @@ public class TravelAnalyticsMetricService {
             Clock clock) {
         this.recordRepository = recordRepository;
         this.valueParser = valueParser;
-        this.aiConfigService = aiConfigService;
+        this.aiConfigService = Objects.requireNonNull(aiConfigService, "aiConfigService");
         this.metricCache = metricCache;
         this.clock = clock;
     }
@@ -288,9 +289,6 @@ public class TravelAnalyticsMetricService {
     }
 
     private int publicMinimumSampleSize() {
-        if (aiConfigService == null) {
-            return DEFAULT_PUBLIC_MINIMUM_SAMPLE_SIZE;
-        }
         TravelAnalyticsAiConfig config = aiConfigService.getConfig();
         Integer configuredMinimum = config.getMinimumSampleSize();
         return configuredMinimum == null || configuredMinimum < 1
@@ -299,10 +297,11 @@ public class TravelAnalyticsMetricService {
     }
 
     private boolean publicAccessEnabled() {
-        if (aiConfigService == null) {
-            return true;
-        }
         return !Boolean.FALSE.equals(aiConfigService.getConfig().getPublicEnabled());
+    }
+
+    private static TravelAnalyticsAiConfigService defaultAiConfigService() {
+        throw new IllegalStateException("TravelAnalyticsMetricService requires TravelAnalyticsAiConfigService");
     }
 
     private List<TravelAnalyticsMetricResponse.Item> averageItems(String label, BigDecimal total, long validSamples) {
