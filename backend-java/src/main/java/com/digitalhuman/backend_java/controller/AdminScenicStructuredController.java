@@ -4,9 +4,13 @@ import com.digitalhuman.backend_java.dto.ScenicStructuredImportResponse;
 import com.digitalhuman.backend_java.dto.ScenicStructuredImportResult;
 import com.digitalhuman.backend_java.dto.ScenicMediaUploadResponse;
 import com.digitalhuman.backend_java.dto.ScenicStructuredSpotRecordRequest;
+import com.digitalhuman.backend_java.dto.ScenicStructuredApplyPreview;
+import com.digitalhuman.backend_java.dto.ScenicStructuredApplyRequest;
+import com.digitalhuman.backend_java.dto.ScenicFacilityContentResponse;
 import com.digitalhuman.backend_java.model.ScenicStructuredSpotRecord;
 import com.digitalhuman.backend_java.service.ScenicMediaService;
 import com.digitalhuman.backend_java.service.ScenicStructuredSpotService;
+import com.digitalhuman.backend_java.service.ScenicStructuredApplicationService;
 import jakarta.validation.Valid;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -31,10 +35,34 @@ public class AdminScenicStructuredController {
 
     private final ScenicStructuredSpotService service;
     private final ScenicMediaService mediaService;
+    private final ScenicStructuredApplicationService applicationService;
 
-    public AdminScenicStructuredController(ScenicStructuredSpotService service, ScenicMediaService mediaService) {
+    public AdminScenicStructuredController(
+            ScenicStructuredSpotService service,
+            ScenicMediaService mediaService,
+            ScenicStructuredApplicationService applicationService) {
         this.service = service;
         this.mediaService = mediaService;
+        this.applicationService = applicationService;
+    }
+
+    @GetMapping("/records/{id}/apply-preview")
+    public ScenicStructuredApplyPreview previewApply(@PathVariable Long id, @RequestParam Long facilityId) {
+        return applicationService.preview(id, facilityId);
+    }
+
+    @PostMapping("/records/{id}/match")
+    public ScenicStructuredSpotRecord matchRecord(
+            @PathVariable Long id,
+            @RequestParam Long facilityId) {
+        return applicationService.match(id, facilityId);
+    }
+
+    @PostMapping("/records/{id}/apply")
+    public ScenicFacilityContentResponse applyRecord(
+            @PathVariable Long id,
+            @Valid @RequestBody ScenicStructuredApplyRequest request) {
+        return applicationService.apply(id, request);
     }
 
     @GetMapping("/records")

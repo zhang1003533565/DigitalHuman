@@ -37,7 +37,7 @@ import {
   type MaxKbAccount,
   type MaxKbRecord,
 } from '../../api/knowledgeOpenApi'
-import { getScenicStructuredRecords, type ScenicStructuredRecord } from '../../api/scenicStructured'
+import { getScenicFacilities, type ScenicFacility } from '../../api/scenic'
 import {
   createVoiceScriptRecord,
   deleteVoiceScriptRecord,
@@ -58,7 +58,7 @@ type SelectOption = { value: string; label: string }
 type DurationPreset = 30 | 60 | 90 | 120 | 'custom'
 
 type GenerateFormValues = {
-  spotId: string
+  facilityId: number
   accountId: number
   knowledgeIds: string[]
   documentIdsByKnowledge?: Record<string, string[]>
@@ -200,6 +200,7 @@ function sourceDetail(record: VoiceScriptScene) {
 function toEditorValues(record: VoiceScriptScene): EditorFormValues {
   return {
     scenicName: record.scenicName,
+    facilityId: record.facilityId,
     spotId: record.spotId,
     spotName: record.spotName,
     sceneType: record.sceneType,
@@ -223,6 +224,7 @@ function toEditorValues(record: VoiceScriptScene): EditorFormValues {
 function toScenePayload(values: EditorFormValues): VoiceScriptScenePayload {
   return {
     scenicName: values.scenicName,
+    facilityId: values.facilityId,
     spotId: values.spotId,
     spotName: values.spotName,
     sceneType: values.sceneType,
@@ -246,7 +248,7 @@ export default function VoiceScriptPage() {
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<Row | null>(null)
   const [rows, setRows] = useState<Row[]>([])
-  const [spots, setSpots] = useState<ScenicStructuredRecord[]>([])
+  const [spots, setSpots] = useState<ScenicFacility[]>([])
   const [accounts, setAccounts] = useState<MaxKbAccount[]>([])
   const [knowledgeOptions, setKnowledgeOptions] = useState<SelectOption[]>([])
   const [documentsByKnowledge, setDocumentsByKnowledge] = useState<Record<string, SelectOption[]>>({})
@@ -273,7 +275,7 @@ export default function VoiceScriptPage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial backend fetch owns the loading state
     void loadRows()
-    Promise.all([getScenicStructuredRecords(), getKnowledgeAccounts({ current: 1, size: 200, status: 1 })])
+    Promise.all([getScenicFacilities(), getKnowledgeAccounts({ current: 1, size: 200, status: 1 })])
       .then(([spotRecords, accountPage]) => {
         setSpots(spotRecords)
         setAccounts(accountPage.records ?? [])
@@ -282,7 +284,7 @@ export default function VoiceScriptPage() {
   }, [loadRows])
 
   const spotOptions = useMemo(
-    () => spots.map((spot) => ({ value: spot.spot_id, label: `${spot.spot_name}（${spot.spot_id}）` })),
+    () => spots.map((spot) => ({ value: spot.id, label: `${spot.name}（${spot.spotCode || `ID ${spot.id}`}）` })),
     [spots],
   )
 
@@ -345,6 +347,7 @@ export default function VoiceScriptPage() {
     editorForm.resetFields()
     editorForm.setFieldsValue({
       scenicName: '',
+      facilityId: undefined,
       spotId: '',
       spotName: '',
       sceneType: 'spot',
@@ -371,9 +374,12 @@ export default function VoiceScriptPage() {
       const targetDurationSec = values.durationPreset === 'custom'
         ? Number(values.customDurationSec)
         : values.durationPreset
+      const spot = spots.find((item) => item.id === values.facilityId)
+      if (!spot) throw new Error('请选择有效的正式景点')
       const payload: VoiceScriptGeneratePayload = {
         accountId: values.accountId,
-        spotId: values.spotId,
+        facilityId: spot.id,
+        spotId: spot.spotCode || `facility-${spot.id}`,
         style: values.style,
         targetDurationSec,
         additionalRequirements: values.additionalRequirements?.trim() || undefined,
@@ -568,7 +574,7 @@ export default function VoiceScriptPage() {
       >
         <Alert type="info" showIcon message="景点结构化数据会自动加入生成上下文；知识库与文档可以多选。生成结果仅保存为草稿。" />
         <Form form={generateForm} layout="vertical" style={{ marginTop: 20 }}>
-          <Form.Item name="spotId" label="选择景点" rules={[{ required: true, message: '请选择景点' }]}>
+          <Form.Item name="facilityId" label="选择景点" rules={[{ required: true, message: '请选择景点' }]}>
             <Select showSearch optionFilterProp="label" options={spotOptions} placeholder="选择一个景点" />
           </Form.Item>
           <Form.Item name="accountId" label="选择知识库账号" rules={[{ required: true, message: '请选择知识库账号' }]}>
@@ -655,15 +661,20 @@ export default function VoiceScriptPage() {
           scrollToFirstError
           style={{ marginTop: editing ? 20 : 0 }}
           onValuesChange={(changed) => {
-            if ('spotId' in changed) {
-              const spot = spots.find((item) => item.spot_id === changed.spotId)
-              if (spot) editorForm.setFieldsValue({ scenicName: spot.scenic_name, spotName: spot.spot_name })
+            if ('facilityId' in changed) {
+              const spot = spots.find((item) => item.id === changed.facilityId)
+              if (spot) editorForm.setFieldsValue({
+                scenicName: '灵山胜境',
+                spotId: spot.spotCode || `facility-${spot.id}`,
+                spotName: spot.name,
+              })
             }
           }}
         >
-          <Form.Item name="spotId" label="景点" rules={[{ required: true, message: '请选择景点' }]}>
+          <Form.Item name="facilityId" label="景点" rules={[{ required: true, message: '请选择景点' }]}>
             <Select showSearch optionFilterProp="label" options={spotOptions} disabled={Boolean(editing)} />
           </Form.Item>
+          <Form.Item name="spotId" hidden><Input /></Form.Item>
           <Form.Item name="scenicName" hidden><Input /></Form.Item>
           <Form.Item name="spotName" hidden><Input /></Form.Item>
           <Space size={16} style={{ display: 'flex' }} align="start">

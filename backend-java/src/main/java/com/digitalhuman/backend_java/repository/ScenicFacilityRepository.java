@@ -16,6 +16,7 @@ public interface ScenicFacilityRepository extends JpaRepository<ScenicFacility, 
             from ScenicFacility facility
             where facility.deletedAt is null
               and (facility.category.mapVisible = true or facility.category.mapVisible is null)
+              and (facility.mapVisible = true or facility.mapVisible is null)
             order by facility.updatedAt desc, facility.id desc
             """)
     List<ScenicFacility> findMapVisibleFacilities();
@@ -23,4 +24,12 @@ public interface ScenicFacilityRepository extends JpaRepository<ScenicFacility, 
     Optional<ScenicFacility> findByIdAndDeletedAtIsNull(Long id);
 
     boolean existsByCategory_IdAndDeletedAtIsNull(Long categoryId);
+
+    boolean existsBySpotCodeIgnoreCaseAndDeletedAtIsNull(String spotCode);
+
+    boolean existsBySpotCodeIgnoreCaseAndDeletedAtIsNullAndIdNot(String spotCode, Long id);
+
+    Optional<ScenicFacility> findBySpotCodeIgnoreCaseAndDeletedAtIsNull(String spotCode);
+
+    List<ScenicFacility> findByNameIgnoreCaseAndDeletedAtIsNull(String name);
 }

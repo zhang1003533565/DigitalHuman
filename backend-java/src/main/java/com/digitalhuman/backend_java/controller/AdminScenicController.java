@@ -3,11 +3,15 @@ package com.digitalhuman.backend_java.controller;
 import com.digitalhuman.backend_java.dto.FacilityCategoryDto;
 import com.digitalhuman.backend_java.dto.FacilityCategoryRequestDto;
 import com.digitalhuman.backend_java.dto.ScenicFacilityDto;
+import com.digitalhuman.backend_java.dto.ScenicFacilityContentRequest;
+import com.digitalhuman.backend_java.dto.ScenicFacilityContentResponse;
 import com.digitalhuman.backend_java.dto.ScenicFacilityRequestDto;
 import com.digitalhuman.backend_java.dto.ScenicRouteDto;
 import com.digitalhuman.backend_java.dto.ScenicRouteSaveRequest;
 import com.digitalhuman.backend_java.dto.ScenicSpotDto;
+import com.digitalhuman.backend_java.model.VoiceScriptScene;
 import com.digitalhuman.backend_java.service.AdminScenicFacilityService;
+import com.digitalhuman.backend_java.service.ScenicFacilityContentService;
 import com.digitalhuman.backend_java.service.GuideService;
 import com.digitalhuman.backend_java.service.ScenicRouteService;
 import jakarta.validation.Valid;
@@ -30,14 +34,17 @@ public class AdminScenicController {
     private final GuideService guideService;
     private final ScenicRouteService scenicRouteService;
     private final AdminScenicFacilityService adminScenicFacilityService;
+    private final ScenicFacilityContentService scenicFacilityContentService;
 
     public AdminScenicController(
             GuideService guideService,
             ScenicRouteService scenicRouteService,
-            AdminScenicFacilityService adminScenicFacilityService) {
+            AdminScenicFacilityService adminScenicFacilityService,
+            ScenicFacilityContentService scenicFacilityContentService) {
         this.guideService = guideService;
         this.scenicRouteService = scenicRouteService;
         this.adminScenicFacilityService = adminScenicFacilityService;
+        this.scenicFacilityContentService = scenicFacilityContentService;
     }
 
     @GetMapping("/spots")
@@ -92,6 +99,23 @@ public class AdminScenicController {
     @DeleteMapping("/facilities/{id}")
     public void deleteFacility(@PathVariable Long id) {
         adminScenicFacilityService.deleteFacility(id);
+    }
+
+    @GetMapping("/facilities/{id}/content")
+    public ScenicFacilityContentResponse getFacilityContent(@PathVariable Long id) {
+        return scenicFacilityContentService.getContent(id);
+    }
+
+    @PutMapping("/facilities/{id}/content")
+    public ScenicFacilityContentResponse saveFacilityContent(
+            @PathVariable Long id,
+            @RequestBody ScenicFacilityContentRequest request) {
+        return scenicFacilityContentService.saveContent(id, request);
+    }
+
+    @GetMapping("/facilities/{id}/voice-scripts")
+    public List<VoiceScriptScene> getBindableVoiceScripts(@PathVariable Long id) {
+        return scenicFacilityContentService.listBindableVoiceScripts(id);
     }
 
     @GetMapping("/routes")

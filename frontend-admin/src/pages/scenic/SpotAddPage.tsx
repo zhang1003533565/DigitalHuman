@@ -8,6 +8,7 @@ import {
   Input,
   Row,
   Select,
+  Switch,
   TimePicker,
   Upload,
   message,
@@ -99,13 +100,17 @@ async function loadAMap(): Promise<AMapApi> {
 }
 
 type FacilityFormValues = {
+  spotCode?: string
   name: string
+  shortDescription?: string
+  locationDescription?: string
   categoryId: number
   longitude: string
   latitude: string
   image?: string
   openTime?: Dayjs
   closeTime?: Dayjs
+  mapVisible?: boolean
 }
 
 export interface SpotDrawerProps {
@@ -182,13 +187,17 @@ export default function SpotDrawer({
     const currentGallery = initialData?.galleryImages ?? []
 
     form.setFieldsValue({
+      spotCode: initialData?.spotCode ?? '',
       name: initialData?.name ?? '',
+      shortDescription: initialData?.shortDescription ?? '',
+      locationDescription: initialData?.locationDescription ?? '',
       categoryId: initialData?.categoryId,
       longitude: longitude.toFixed(6),
       latitude: latitude.toFixed(6),
       image: currentCover,
       openTime: initialData?.openTime ? dayjs(initialData.openTime, 'HH:mm:ss') : undefined,
       closeTime: initialData?.closeTime ? dayjs(initialData.closeTime, 'HH:mm:ss') : undefined,
+      mapVisible: initialData?.mapVisible ?? true,
     })
     setCoverImage(currentCover)
     setGalleryImages(currentGallery)
@@ -300,7 +309,10 @@ export default function SpotDrawer({
     try {
       const values = await form.validateFields()
       const payload: ScenicFacilityPayload = {
+        spotCode: values.spotCode?.trim() || null,
         name: values.name.trim(),
+        shortDescription: values.shortDescription?.trim() || null,
+        locationDescription: values.locationDescription?.trim() || null,
         categoryId: values.categoryId,
         longitude: Number(values.longitude),
         latitude: Number(values.latitude),
@@ -308,6 +320,7 @@ export default function SpotDrawer({
         galleryImages,
         openTime: values.openTime ? values.openTime.format('HH:mm:ss') : null,
         closeTime: values.closeTime ? values.closeTime.format('HH:mm:ss') : null,
+        mapVisible: values.mapVisible ?? true,
       }
 
       setSaving(true)
@@ -368,8 +381,23 @@ export default function SpotDrawer({
             <div className="spot-drawer__card">
               <SectionTitle title="基础信息" />
               <Form form={form} layout="vertical">
+                <Form.Item label="景点编码" name="spotCode" tooltip="结构化导入优先通过该编码匹配正式景点">
+                  <Input placeholder="例如 LS-001；服务设施可留空" />
+                </Form.Item>
                 <Form.Item label="设施名称" name="name" rules={[{ required: true, message: '请输入设施名称' }]}>
                   <Input placeholder="请输入设施名称" />
+                </Form.Item>
+
+                <Form.Item label="简短介绍" name="shortDescription">
+                  <Input.TextArea rows={2} maxLength={500} showCount />
+                </Form.Item>
+
+                <Form.Item label="位置说明" name="locationDescription">
+                  <Input placeholder="例如 秦履峰南侧、梵宫东侧" />
+                </Form.Item>
+
+                <Form.Item label="游客地图显示" name="mapVisible" valuePropName="checked">
+                  <Switch />
                 </Form.Item>
 
                 <Form.Item label="设施分类" name="categoryId" rules={[{ required: true, message: '请选择设施分类' }]}>

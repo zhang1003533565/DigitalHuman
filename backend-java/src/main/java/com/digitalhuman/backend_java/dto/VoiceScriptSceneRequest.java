@@ -8,6 +8,8 @@ import jakarta.validation.constraints.Size;
 
 public class VoiceScriptSceneRequest {
 
+    private Long facilityId;
+
     @NotBlank(message = "景区名称不能为空")
     private String scenicName;
 
@@ -45,6 +47,9 @@ public class VoiceScriptSceneRequest {
     private String status;
 
     private String sourceFile;
+
+    public Long getFacilityId() { return facilityId; }
+    public void setFacilityId(Long value) { this.facilityId = value; }
 
     public String getScenicName() {
         return scenicName;

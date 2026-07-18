@@ -21,9 +21,11 @@ import {
   PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
+  SettingOutlined,
   CloseOutlined,
 } from '@ant-design/icons'
 import SpotDrawer from './SpotAddPage'
+import FacilityContentDrawer from './components/FacilityContentDrawer'
 import {
   deleteScenicFacility,
   getScenicCategories,
@@ -41,6 +43,7 @@ export default function FacilityListPage() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editingFacility, setEditingFacility] = useState<ScenicFacility | null>(null)
   const [viewingFacility, setViewingFacility] = useState<ScenicFacility | null>(null)
+  const [contentFacility, setContentFacility] = useState<ScenicFacility | null>(null)
 
   async function loadPageData() {
     setLoading(true)
@@ -133,7 +136,7 @@ export default function FacilityListPage() {
     },
     {
       title: '操作',
-      width: 240,
+      width: 330,
       render: (_, record) => (
         <Space size="middle">
           <Button type="link" icon={<EyeOutlined />} onClick={() => setViewingFacility(record)}>
@@ -148,6 +151,9 @@ export default function FacilityListPage() {
             }}
           >
             编辑
+          </Button>
+          <Button type="link" icon={<SettingOutlined />} onClick={() => setContentFacility(record)}>
+            内容配置
           </Button>
           <Popconfirm
             title="确认删除该设施吗？"
@@ -180,6 +186,13 @@ export default function FacilityListPage() {
           categories={categories}
           initialData={editingFacility}
           onSuccess={loadPageData}
+        />
+
+        <FacilityContentDrawer
+          facility={contentFacility}
+          open={Boolean(contentFacility)}
+          onClose={() => setContentFacility(null)}
+          onSaved={loadPageData}
         />
 
         <Drawer
@@ -232,7 +245,11 @@ export default function FacilityListPage() {
               </div>
               <Descriptions bordered column={2}>
                 <Descriptions.Item label="设施名称">{viewingFacility.name}</Descriptions.Item>
+                <Descriptions.Item label="景点编码">{viewingFacility.spotCode || '-'}</Descriptions.Item>
                 <Descriptions.Item label="分类">{viewingFacility.categoryName}</Descriptions.Item>
+                <Descriptions.Item label="地图显示">{viewingFacility.mapVisible ? '显示' : '隐藏'}</Descriptions.Item>
+                <Descriptions.Item label="位置说明" span={2}>{viewingFacility.locationDescription || '-'}</Descriptions.Item>
+                <Descriptions.Item label="简短介绍" span={2}>{viewingFacility.shortDescription || '-'}</Descriptions.Item>
                 <Descriptions.Item label="经度">{viewingFacility.longitude}</Descriptions.Item>
                 <Descriptions.Item label="纬度">{viewingFacility.latitude}</Descriptions.Item>
                 <Descriptions.Item label="开放时间" span={2}>
@@ -293,6 +310,8 @@ export default function FacilityListPage() {
             columns={columns}
             dataSource={filteredFacilities}
             loading={loading}
+            tableLayout="fixed"
+            scroll={{ x: 1450 }}
             pagination={{
               pageSize: 10,
               showSizeChanger: true,

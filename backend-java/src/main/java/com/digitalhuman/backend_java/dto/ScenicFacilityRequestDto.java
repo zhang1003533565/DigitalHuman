@@ -11,8 +11,13 @@ import java.util.List;
 
 public class ScenicFacilityRequestDto {
 
+    private String spotCode;
+
     @NotBlank(message = "Facility name must not be blank")
     private String name;
+
+    private String shortDescription;
+    private String locationDescription;
 
     @NotNull(message = "Category is required")
     private Long categoryId;
@@ -35,6 +40,11 @@ public class ScenicFacilityRequestDto {
 
     private LocalTime closeTime;
 
+    private Boolean mapVisible = true;
+
+    public String getSpotCode() { return spotCode; }
+    public void setSpotCode(String value) { this.spotCode = value; }
+
     public String getName() {
         return name;
     }
@@ -42,6 +52,11 @@ public class ScenicFacilityRequestDto {
     public void setName(String name) {
         this.name = name;
     }
+
+    public String getShortDescription() { return shortDescription; }
+    public void setShortDescription(String value) { this.shortDescription = value; }
+    public String getLocationDescription() { return locationDescription; }
+    public void setLocationDescription(String value) { this.locationDescription = value; }
 
     public Long getCategoryId() {
         return categoryId;
@@ -98,4 +113,7 @@ public class ScenicFacilityRequestDto {
     public void setCloseTime(LocalTime closeTime) {
         this.closeTime = closeTime;
     }
+
+    public Boolean getMapVisible() { return mapVisible; }
+    public void setMapVisible(Boolean value) { this.mapVisible = value; }
 }

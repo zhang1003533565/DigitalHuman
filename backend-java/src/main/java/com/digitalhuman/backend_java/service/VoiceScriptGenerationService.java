@@ -133,6 +133,7 @@ public class VoiceScriptGenerationService {
                 .map(VoiceScriptScene::getVersionNo)
                 .orElse(0) + 1;
         VoiceScriptScene scene = new VoiceScriptScene();
+        scene.setFacilityId(request.getFacilityId());
         scene.setScenicName(spot == null ? "" : normalize(spot.getScenic_name()));
         scene.setSpotId(spotId);
         scene.setSpotName(spot == null ? spotId : defaultIfBlank(spot.getSpot_name(), spotId));

@@ -29,4 +29,6 @@ public interface VoiceScriptSceneRepository extends JpaRepository<VoiceScriptSce
     );
 
     List<VoiceScriptScene> findBySpotIdAndStatusIgnoreCaseOrderByVersionNoDesc(String spotId, String status);
+
+    List<VoiceScriptScene> findByFacilityIdAndStatusIgnoreCaseOrderByVersionNoDesc(Long facilityId, String status);
 }

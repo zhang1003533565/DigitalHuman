@@ -9,7 +9,10 @@ export type ScenicCategory = {
 
 export type ScenicFacility = {
   id: number
+  spotCode?: string | null
   name: string
+  shortDescription?: string | null
+  locationDescription?: string | null
   categoryId: number
   categoryName: string
   longitude: number
@@ -18,6 +21,7 @@ export type ScenicFacility = {
   galleryImages: string[]
   openTime?: string | null
   closeTime?: string | null
+  mapVisible: boolean
   createdAt: string
   updatedAt: string
 }
@@ -29,7 +33,10 @@ export type ScenicCategoryPayload = {
 }
 
 export type ScenicFacilityPayload = {
+  spotCode?: string | null
   name: string
+  shortDescription?: string | null
+  locationDescription?: string | null
   categoryId: number
   longitude: number
   latitude: number
@@ -37,7 +44,43 @@ export type ScenicFacilityPayload = {
   galleryImages?: string[]
   openTime?: string | null
   closeTime?: string | null
+  mapVisible?: boolean
 }
+
+export type ScenicFacilityVoiceScript = {
+  id: number
+  facilityId?: number | null
+  spotId: string
+  title: string
+  style: string
+  versionNo: number
+  durationSec: number
+  audioUrl?: string
+}
+
+export type ScenicFacilityContent = {
+  facilityId?: number
+  architectureLandscapeParams?: string
+  coreFunction?: string
+  culturalConnotation?: string
+  detailedIntroduction?: string
+  highlights?: string
+  performanceOpenInfo?: string
+  visitorNotes?: string
+  remark?: string
+  sourceRecordId?: number | null
+  contentVersion?: number
+  audioEnabled: boolean
+  liveEnabled: boolean
+  defaultExperience?: 'audio' | 'live' | null
+  boundVoiceScriptId?: number | null
+  liveSourceType?: 'video' | 'stream' | 'camera' | null
+  liveVideoUrl?: string
+  liveStreamUrl?: string
+  cameraStreamKey?: string
+}
+
+export type ScenicLiveVideoUploadResponse = { url: string; fileName?: string }
 
 export async function getScenicCategories() {
   const response = await axios.get<ScenicCategory[]>('/api/admin/scenic/categories')
@@ -86,4 +129,30 @@ export async function updateScenicFacility(id: number, payload: ScenicFacilityPa
 
 export async function deleteScenicFacility(id: number) {
   await axios.delete(`/api/admin/scenic/facilities/${id}`)
+}
+
+export async function getScenicFacilityContent(id: number) {
+  const response = await axios.get<ScenicFacilityContent>(`/api/admin/scenic/facilities/${id}/content`)
+  return response.data
+}
+
+export async function saveScenicFacilityContent(id: number, payload: ScenicFacilityContent) {
+  const response = await axios.put<ScenicFacilityContent>(`/api/admin/scenic/facilities/${id}/content`, payload)
+  return response.data
+}
+
+export async function getScenicFacilityVoiceScripts(id: number) {
+  const response = await axios.get<ScenicFacilityVoiceScript[]>(`/api/admin/scenic/facilities/${id}/voice-scripts`)
+  return response.data
+}
+
+export async function uploadScenicLiveVideo(file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+  const response = await axios.post<ScenicLiveVideoUploadResponse>(
+    '/api/admin/scenic-structured/media/upload',
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  )
+  return response.data
 }

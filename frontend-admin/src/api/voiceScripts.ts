@@ -6,6 +6,7 @@ export type VoiceScriptGenerationMode = 'manual' | 'ai' | 'knowledge' | 'docx'
 
 export type VoiceScriptScene = {
   id: number
+  facilityId?: number | null
   scenicName: string
   spotId: string
   spotName: string
@@ -37,6 +38,7 @@ export type VoiceScriptScene = {
 export type VoiceScriptScenePayload = Pick<
   VoiceScriptScene,
   | 'scenicName'
+  | 'facilityId'
   | 'spotId'
   | 'spotName'
   | 'sceneType'
@@ -58,6 +60,7 @@ export type VoiceScriptKnowledgeSource = {
 
 export type VoiceScriptGeneratePayload = {
   accountId: number
+  facilityId: number
   spotId: string
   style: VoiceScriptScene['style']
   targetDurationSec: number

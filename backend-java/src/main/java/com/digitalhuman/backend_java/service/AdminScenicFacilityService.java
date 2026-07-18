@@ -55,14 +55,14 @@ public class AdminScenicFacilityService {
     @Transactional
     public ScenicFacilityDto createFacility(ScenicFacilityRequestDto request) {
         ScenicFacility facility = new ScenicFacility();
-        applyFacilityRequest(facility, request);
+        applyFacilityRequest(facility, request, null);
         return toFacilityDto(scenicFacilityRepository.save(facility));
     }
 
     @Transactional
     public ScenicFacilityDto updateFacility(Long id, ScenicFacilityRequestDto request) {
         ScenicFacility facility = findFacility(id);
-        applyFacilityRequest(facility, request);
+        applyFacilityRequest(facility, request, id);
         return toFacilityDto(scenicFacilityRepository.save(facility));
     }
 
@@ -123,11 +123,21 @@ public class AdminScenicFacilityService {
         facilityCategoryRepository.save(category);
     }
 
-    private void applyFacilityRequest(ScenicFacility facility, ScenicFacilityRequestDto request) {
+    private void applyFacilityRequest(ScenicFacility facility, ScenicFacilityRequestDto request, Long currentId) {
         String name = normalizeRequiredText(request.getName(), "Facility name must not be blank");
         FacilityCategory category = findCategory(request.getCategoryId());
+        String spotCode = normalizeOptionalText(request.getSpotCode());
+        boolean duplicateCode = spotCode != null && (currentId == null
+                ? scenicFacilityRepository.existsBySpotCodeIgnoreCaseAndDeletedAtIsNull(spotCode)
+                : scenicFacilityRepository.existsBySpotCodeIgnoreCaseAndDeletedAtIsNullAndIdNot(spotCode, currentId));
+        if (duplicateCode) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "景点编码已存在");
+        }
 
+        facility.setSpotCode(spotCode);
         facility.setName(name);
+        facility.setShortDescription(normalizeOptionalText(request.getShortDescription()));
+        facility.setLocationDescription(normalizeOptionalText(request.getLocationDescription()));
         facility.setCategory(category);
         facility.setLongitude(request.getLongitude());
         facility.setLatitude(request.getLatitude());
@@ -135,6 +145,7 @@ public class AdminScenicFacilityService {
         facility.setGalleryImages(writeGalleryImages(request.getGalleryImages()));
         facility.setOpenTime(request.getOpenTime());
         facility.setCloseTime(request.getCloseTime());
+        facility.setMapVisible(request.getMapVisible() == null || request.getMapVisible());
     }
 
     private ScenicFacility findFacility(Long id) {
@@ -153,7 +164,10 @@ public class AdminScenicFacilityService {
     private ScenicFacilityDto toFacilityDto(ScenicFacility facility) {
         return new ScenicFacilityDto(
                 facility.getId(),
+                facility.getSpotCode(),
                 facility.getName(),
+                facility.getShortDescription(),
+                facility.getLocationDescription(),
                 facility.getCategory().getId(),
                 facility.getCategory().getName(),
                 facility.getLongitude(),
@@ -162,6 +176,7 @@ public class AdminScenicFacilityService {
                 readGalleryImages(facility.getGalleryImages()),
                 facility.getOpenTime(),
                 facility.getCloseTime(),
+                facility.getMapVisible() == null || facility.getMapVisible(),
                 facility.getCreatedAt(),
                 facility.getUpdatedAt());
     }

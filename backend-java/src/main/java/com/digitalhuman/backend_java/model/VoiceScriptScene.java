@@ -29,6 +29,9 @@ public class VoiceScriptScene {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "facility_id")
+    private Long facilityId;
+
     @Column(name = "scenic_name", nullable = false, length = 255)
     private String scenicName;
 
@@ -141,6 +144,14 @@ public class VoiceScriptScene {
 
     public Long getId() {
         return id;
+    }
+
+    public Long getFacilityId() {
+        return facilityId;
+    }
+
+    public void setFacilityId(Long facilityId) {
+        this.facilityId = facilityId;
     }
 
     public void setId(Long id) {

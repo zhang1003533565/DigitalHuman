@@ -2,8 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Alert,
   Button,
-  Card,
-  Divider,
+  Checkbox,
   Drawer,
   Form,
   Input,
@@ -11,267 +10,140 @@ import {
   Radio,
   Select,
   Space,
-  Switch,
   Table,
+  Tag,
   Upload,
   message,
 } from 'antd'
 import type { TableColumnsType, UploadProps } from 'antd'
-import { DeleteOutlined, DownloadOutlined, EditOutlined, PlusOutlined, ReloadOutlined, UploadOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, LinkOutlined, PlusOutlined, ReloadOutlined, UploadOutlined } from '@ant-design/icons'
+import { getScenicFacilities, type ScenicFacility } from '../../api/scenic'
 import {
+  applyScenicStructuredRecord,
   createScenicStructuredRecord,
   deleteScenicStructuredRecord,
-  downloadScenicStructuredTemplate,
-  getPublishedVoiceScripts,
   getScenicStructuredRecords,
   importScenicStructuredDocx,
-  uploadScenicLiveVideo,
+  matchScenicStructuredRecord,
+  previewScenicStructuredApply,
   updateScenicStructuredRecord,
+  type ScenicStructuredApplyPreview,
   type ScenicStructuredRecord,
   type ScenicStructuredRecordPayload,
-  type PublishedVoiceScript,
 } from '../../api/scenicStructured'
 
-type DataRow = ScenicStructuredRecord & { key: string; __id: string }
-
-const FIELDS = [
-  'scenic_name',
-  'spot_id',
-  'spot_name',
-  'location',
-  'architecture_landscape_params',
-  'core_function',
-  'cultural_connotation',
-  'detailed_introduction',
-  'highlights',
-  'performance_open_info',
-  'remark',
+const fields = [
+  ['scenic_name', '景区名称'],
+  ['spot_id', '景点编码'],
+  ['spot_name', '景点名称'],
+  ['location', '具体位置'],
+  ['architecture_landscape_params', '建筑/景观参数'],
+  ['core_function', '核心功能'],
+  ['cultural_connotation', '文化内涵'],
+  ['detailed_introduction', '详细介绍'],
+  ['highlights', '游玩亮点'],
+  ['performance_open_info', '演艺/开放信息'],
+  ['remark', '备注'],
 ] as const
 
-type StructuredTextField = (typeof FIELDS)[number]
+type TextField = (typeof fields)[number][0]
+type EditValues = Record<TextField, string>
+type ApplyMode = 'fill_empty' | 'selected' | 'overwrite_all'
 
-const LABELS: Record<StructuredTextField, string> = {
-  scenic_name: '景区名称',
-  spot_id: '景点ID',
-  spot_name: '景点名称',
-  location: '具体位置',
-  architecture_landscape_params: '建筑/景观参数',
-  core_function: '核心功能',
-  cultural_connotation: '文化内涵',
-  detailed_introduction: '详细介绍',
-  highlights: '游玩亮点',
-  performance_open_info: '演艺/开放信息',
-  remark: '备注',
+function emptyValues(): EditValues {
+  return Object.fromEntries(fields.map(([key]) => [key, ''])) as EditValues
 }
 
-function buildRows(records: ScenicStructuredRecord[]): DataRow[] {
-  return records.map((record) => ({
-    ...record,
-    audio_enabled: Boolean(record.audio_enabled),
-    live_enabled: Boolean(record.live_enabled),
-    default_experience: record.default_experience ?? null,
-    bound_voice_script_id: record.bound_voice_script_id ?? null,
-    live_source_type: record.live_source_type ?? null,
-    live_video_url: record.live_video_url ?? '',
-    live_stream_url: record.live_stream_url ?? '',
-    camera_stream_key: record.camera_stream_key ?? '',
-    key: String(record.id),
-    __id: String(record.id),
-  }))
+function normalizePayload(values: EditValues): ScenicStructuredRecordPayload {
+  return Object.fromEntries(fields.map(([key]) => [key, String(values[key] ?? '').trim()])) as unknown as ScenicStructuredRecordPayload
 }
-
-function toPayload(values: ScenicStructuredRecordPayload): ScenicStructuredRecordPayload {
-  const payload = { ...values }
-  FIELDS.forEach((field) => {
-    ;(payload as unknown as Record<string, string>)[field] = String(values[field] ?? '').trim()
-  })
-  payload.audio_enabled = Boolean(values.audio_enabled)
-  payload.live_enabled = Boolean(values.live_enabled)
-  payload.default_experience = values.default_experience ?? null
-  payload.bound_voice_script_id = payload.audio_enabled ? (values.bound_voice_script_id ?? null) : null
-  payload.live_source_type = payload.live_enabled ? (values.live_source_type ?? null) : null
-  payload.live_video_url = payload.live_enabled && payload.live_source_type === 'video'
-    ? String(values.live_video_url ?? '').trim()
-    : ''
-  payload.live_stream_url = payload.live_enabled && payload.live_source_type === 'stream'
-    ? String(values.live_stream_url ?? '').trim()
-    : ''
-  payload.camera_stream_key = payload.live_enabled && payload.live_source_type === 'camera'
-    ? String(values.camera_stream_key ?? '').trim()
-    : ''
-  if (!payload.audio_enabled && !payload.live_enabled) {
-    payload.default_experience = null
-  }
-  return payload
-}
-
-const PRESENTATION_DEFAULTS: Pick<
-  ScenicStructuredRecordPayload,
-  | 'audio_enabled'
-  | 'live_enabled'
-  | 'default_experience'
-  | 'bound_voice_script_id'
-  | 'live_source_type'
-  | 'live_video_url'
-  | 'live_stream_url'
-  | 'camera_stream_key'
-> = {
-  audio_enabled: false,
-  live_enabled: false,
-  default_experience: null,
-  bound_voice_script_id: null,
-  live_source_type: null,
-  live_video_url: '',
-  live_stream_url: '',
-  camera_stream_key: '',
-}
-
-const longTextFields = new Set([
-  'architecture_landscape_params',
-  'core_function',
-  'cultural_connotation',
-  'detailed_introduction',
-  'highlights',
-  'performance_open_info',
-  'remark',
-])
 
 export default function ScenicStructuredPage() {
-  const [loading, setLoading] = useState(true)
+  const [rows, setRows] = useState<ScenicStructuredRecord[]>([])
+  const [facilities, setFacilities] = useState<ScenicFacility[]>([])
+  const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [downloadingTemplate, setDownloadingTemplate] = useState(false)
+  const [editing, setEditing] = useState<ScenicStructuredRecord | null | undefined>(undefined)
+  const [applyingRecord, setApplyingRecord] = useState<ScenicStructuredRecord | null>(null)
+  const [facilityId, setFacilityId] = useState<number | undefined>()
+  const [mode, setMode] = useState<ApplyMode>('fill_empty')
+  const [preview, setPreview] = useState<ScenicStructuredApplyPreview | null>(null)
+  const [selectedFields, setSelectedFields] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
-  const [replaceAll, setReplaceAll] = useState(true)
-  const [rows, setRows] = useState<DataRow[]>([])
-  const [drawerOpen, setDrawerOpen] = useState(false)
-  const [editingRow, setEditingRow] = useState<DataRow | null>(null)
-  const [publishedScriptResult, setPublishedScriptResult] = useState<{
-    spotId: string
-    scripts: PublishedVoiceScript[]
-  }>({ spotId: '', scripts: [] })
-  const [checkingCamera, setCheckingCamera] = useState(false)
-  const [uploadingLiveVideo, setUploadingLiveVideo] = useState(false)
-  const [form] = Form.useForm<ScenicStructuredRecordPayload>()
-  const audioEnabled = Form.useWatch('audio_enabled', form) ?? false
-  const liveEnabled = Form.useWatch('live_enabled', form) ?? false
-  const liveSourceType = Form.useWatch('live_source_type', form)
-  const watchedSpotId = Form.useWatch('spot_id', form)
-  const publishedSpotId = drawerOpen && audioEnabled ? String(watchedSpotId ?? '').trim() : ''
-  const publishedScripts = publishedScriptResult.spotId === publishedSpotId ? publishedScriptResult.scripts : []
-  const loadingPublishedScripts = Boolean(publishedSpotId) && publishedScriptResult.spotId !== publishedSpotId
+  const [editForm] = Form.useForm<EditValues>()
 
-  useEffect(() => {
-    const spotId = publishedSpotId
-    if (!spotId || publishedScriptResult.spotId === spotId) {
-      return
-    }
-
-    let cancelled = false
-    void getPublishedVoiceScripts(spotId)
-      .then((scripts) => {
-        if (!cancelled) {
-          setPublishedScriptResult({ spotId, scripts })
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setPublishedScriptResult({ spotId, scripts: [] })
-          message.error('加载可绑定口播失败')
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [publishedScriptResult.spotId, publishedSpotId])
-
-  const loadRows = useCallback(async () => {
+  const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const records = await getScenicStructuredRecords()
-      setRows(buildRows(records))
+      const [records, officialFacilities] = await Promise.all([
+        getScenicStructuredRecords(),
+        getScenicFacilities(),
+      ])
+      setRows(records)
+      setFacilities(officialFacilities)
     } catch {
-      message.error('加载景点结构化数据失败')
+      message.error('加载景点导入数据失败')
     } finally {
       setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial backend fetch updates the table request state
-    void loadRows()
-  }, [loadRows])
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial API hydration owns the page loading state
+    void loadData()
+  }, [loadData])
 
-  const columns: TableColumnsType<DataRow> = useMemo(() => {
-    const businessColumns: TableColumnsType<DataRow> = FIELDS.map((field) => ({
-      title: (
-        <div>
-          <div style={{ fontWeight: 700 }}>{LABELS[field] ?? field}</div>
-          <div style={{ fontSize: 13, color: '#8c8c8c' }}>{field}</div>
-        </div>
-      ),
-      dataIndex: field,
-      key: field,
-      width: longTextFields.has(field) ? 320 : 220,
-      ellipsis: true,
-    }))
+  const facilityOptions = useMemo(() => facilities.map((facility) => ({
+    value: facility.id,
+    label: `${facility.name}${facility.spotCode ? ` · ${facility.spotCode}` : ''} · ${facility.categoryName}`,
+  })), [facilities])
 
-    businessColumns.push({
-      title: '操作',
-      key: '__actions',
-      width: 180,
-      fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            icon={<EditOutlined />}
-            onClick={() => {
-              const initialValues = { ...PRESENTATION_DEFAULTS } as ScenicStructuredRecordPayload
-              FIELDS.forEach((field) => {
-                ;(initialValues as unknown as Record<string, string>)[field] = String(
-                  (record as unknown as Record<string, unknown>)[field] ?? '',
-                )
-              })
-              initialValues.audio_enabled = record.audio_enabled
-              initialValues.live_enabled = record.live_enabled
-              initialValues.default_experience = record.default_experience
-              initialValues.bound_voice_script_id = record.bound_voice_script_id
-              initialValues.live_source_type = record.live_source_type
-              initialValues.live_video_url = record.live_video_url
-              initialValues.live_stream_url = record.live_stream_url
-              initialValues.camera_stream_key = record.camera_stream_key
-              form.setFieldsValue(initialValues)
-              setEditingRow(record)
-              setDrawerOpen(true)
-            }}
-          >
-            编辑
-          </Button>
-          <Popconfirm
-            title="确认删除该条记录吗？"
-            okText="删除"
-            cancelText="取消"
-            onConfirm={async () => {
-              try {
-                await deleteScenicStructuredRecord(Number(record.__id))
-                message.success('删除成功')
-                await loadRows()
-              } catch {
-                message.error('删除失败')
-              }
-            }}
-          >
-            <Button type="link" danger icon={<DeleteOutlined />}>
-              删除
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
-    })
+  const loadPreview = async (record: ScenicStructuredRecord, selectedFacilityId: number) => {
+    setFacilityId(selectedFacilityId)
+    setPreview(null)
+    try {
+      const result = await previewScenicStructuredApply(record.id, selectedFacilityId)
+      setPreview(result)
+      setSelectedFields(result.fields.filter((field) => field.changed).map((field) => field.key))
+    } catch {
+      message.error('加载字段差异失败')
+    }
+  }
 
-    return businessColumns
-  }, [form, loadRows])
+  const openApply = (record: ScenicStructuredRecord) => {
+    setApplyingRecord(record)
+    setMode('fill_empty')
+    setPreview(null)
+    const matchedId = record.matchedFacilityId ?? facilities.find((item) =>
+      Boolean(record.spot_id && item.spotCode?.toLowerCase() === record.spot_id.toLowerCase()),
+    )?.id
+    setFacilityId(matchedId)
+    if (matchedId) void loadPreview(record, matchedId)
+  }
+
+  const saveMatch = async () => {
+    if (!applyingRecord || !facilityId) return
+    try {
+      await matchScenicStructuredRecord(applyingRecord.id, facilityId)
+      message.success('已匹配正式景点')
+      await loadData()
+    } catch { message.error('保存匹配失败') }
+  }
+
+  const applyRecord = async () => {
+    if (!applyingRecord || !facilityId) return
+    setSaving(true)
+    try {
+      await applyScenicStructuredRecord(applyingRecord.id, {
+        facilityId,
+        mode,
+        fields: mode === 'selected' ? selectedFields : [],
+      })
+      message.success('结构化资料已应用到正式景点')
+      setApplyingRecord(null)
+      await loadData()
+    } catch { message.error('应用资料失败，请检查字段或景点配置') } finally { setSaving(false) }
+  }
 
   const uploadProps: UploadProps = {
     accept: '.docx',
@@ -279,379 +151,154 @@ export default function ScenicStructuredPage() {
     beforeUpload: async (file) => {
       setUploading(true)
       try {
-        const result = await importScenicStructuredDocx(file as File, replaceAll)
-        const issuePreview = result.issues.slice(0, 6).map((item) => `第${item.rowNumber}行：${item.reason}`).join('\n')
-        message.success(
-          `导入完成：成功 ${result.importedCount}，空行跳过 ${result.skippedEmptyCount}，重复跳过 ${result.skippedDuplicateCount}，当前总计 ${result.totalCount}`,
-          5,
-        )
-        if (issuePreview) {
-          message.warning(`导入问题预览：\n${issuePreview}`, 8)
-        }
-        await loadRows()
-      } catch {
-        message.error('导入失败，请检查DOCX表头和数据格式')
-      } finally {
-        setUploading(false)
-      }
+        const result = await importScenicStructuredDocx(file as File, false)
+        message.success(`已导入 ${result.importedCount} 条，跳过 ${result.skippedEmptyCount + result.skippedDuplicateCount} 条`)
+        if (result.issues.length) message.warning(result.issues.slice(0, 3).map((item) => item.reason).join('；'))
+        await loadData()
+      } catch { message.error('DOCX 导入失败') } finally { setUploading(false) }
       return false
     },
   }
 
-  const handleSubmitRecord = async () => {
-    try {
-      const values = await form.validateFields()
-      const payload = toPayload(values)
-      setSaving(true)
-      if (editingRow) {
-        await updateScenicStructuredRecord(Number(editingRow.__id), payload)
-        message.success('更新成功')
-      } else {
-        await createScenicStructuredRecord(payload)
-        message.success('新增成功')
-      }
-      setDrawerOpen(false)
-      setEditingRow(null)
-      form.resetFields()
-      await loadRows()
-    } catch (error) {
-      if ((error as { errorFields?: unknown[] })?.errorFields) {
-        return
-      }
-      message.error('保存失败，请检查字段填写')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleDownloadTemplate = async () => {
-    setDownloadingTemplate(true)
-    try {
-      const blob = await downloadScenicStructuredTemplate()
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = 'scenic_structured_template.docx'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
-      message.success('模板下载成功')
-    } catch {
-      message.error('模板下载失败')
-    } finally {
-      setDownloadingTemplate(false)
-    }
-  }
-
-  const handleCameraPermissionCheck = async () => {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      message.error('当前浏览器不支持摄像头权限检测')
-      return
-    }
-    setCheckingCamera(true)
-    try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true })
-      mediaStream.getTracks().forEach((track) => track.stop())
-      message.success('摄像头权限检测通过；仅完成权限检测，真实直播仍需配置 WebRTC/直播网关推流通道', 6)
-    } catch {
-      message.error('摄像头权限检测失败，请检查浏览器权限和设备状态')
-    } finally {
-      setCheckingCamera(false)
-    }
-  }
-
-  const handleLiveVideoUpload = async (file: File) => {
-    if (file.type && !file.type.startsWith('video/')) {
-      message.error('请选择视频文件')
-      return false
-    }
-    setUploadingLiveVideo(true)
-    try {
-      const result = await uploadScenicLiveVideo(file as File)
-      if (!result.url?.trim()) {
-        throw new Error('上传接口未返回视频地址')
-      }
-      form.setFieldValue('live_video_url', result.url)
-      message.success('视频上传成功，已自动填入视频地址')
-    } catch {
-      message.error('视频上传失败，请稍后重试或手工填写视频地址')
-    } finally {
-      setUploadingLiveVideo(false)
-    }
-    return false
-  }
+  const columns: TableColumnsType<ScenicStructuredRecord> = [
+    { title: '景区', dataIndex: 'scenic_name', width: 150, ellipsis: true },
+    { title: '景点编码', dataIndex: 'spot_id', width: 130 },
+    { title: '景点名称', dataIndex: 'spot_name', width: 190, ellipsis: true },
+    { title: '具体位置', dataIndex: 'location', width: 220, ellipsis: true },
+    {
+      title: '正式景点', width: 210,
+      render: (_, record) => {
+        const facility = facilities.find((item) => item.id === record.matchedFacilityId)
+        return facility ? <span>{facility.name}<br /><small>{facility.spotCode || `ID ${facility.id}`}</small></span> : <Tag>未匹配</Tag>
+      },
+    },
+    {
+      title: '状态', width: 120,
+      render: (_, record) => record.applyStatus === 'applied'
+        ? <Tag color="success">已应用</Tag>
+        : record.matchedFacilityId ? <Tag color="processing">待应用</Tag> : <Tag>待匹配</Tag>,
+    },
+    {
+      title: '操作', width: 260, fixed: 'right',
+      render: (_, record) => (
+        <Space>
+          <Button type="link" icon={<LinkOutlined />} onClick={() => openApply(record)}>匹配正式景点</Button>
+          <Button type="link" icon={<EditOutlined />} onClick={() => {
+            editForm.setFieldsValue(Object.fromEntries(fields.map(([key]) => [key, record[key] ?? ''])) as EditValues)
+            setEditing(record)
+          }}>编辑</Button>
+          <Popconfirm title="确认删除该导入记录吗？" onConfirm={async () => { await deleteScenicStructuredRecord(record.id); await loadData() }}>
+            <Button type="link" danger icon={<DeleteOutlined />} aria-label="删除导入记录" />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ]
 
   return (
-    <div className="admin-panel-grid travel-analytics-page">
-      <Card
-        title="景点结构化数据（DOCX）"
-        className="travel-analytics-card"
-        extra={(
-          <Space>
-            <span>覆盖导入</span>
-            <Switch checked={replaceAll} onChange={setReplaceAll} checkedChildren="是" unCheckedChildren="否" />
-            <Upload {...uploadProps}>
-              <Button icon={<UploadOutlined />} loading={uploading}>
-                导入DOCX
-              </Button>
-            </Upload>
-            <Button icon={<DownloadOutlined />} loading={downloadingTemplate} onClick={() => void handleDownloadTemplate()}>
-              下载模板
-            </Button>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => {
-                setEditingRow(null)
-                form.resetFields()
-                form.setFieldsValue(PRESENTATION_DEFAULTS)
-                setDrawerOpen(true)
-              }}
-            >
-              新增记录
-            </Button>
-            <Button icon={<ReloadOutlined />} onClick={() => void loadRows()} loading={loading}>
-              刷新
-            </Button>
-          </Space>
-        )}
-      >
-        <Table
-          columns={columns}
-          dataSource={rows}
-          loading={loading}
-          tableLayout="fixed"
-          scroll={{ x: 3600, y: 'calc(100vh - 280px)' }}
-          pagination={{
-            pageSize: 20,
-            showSizeChanger: true,
-            pageSizeOptions: ['10', '20', '50'],
-            position: ['bottomLeft'],
-          }}
-        />
-      </Card>
+    <div className="structured-import">
+      <style>{styles}</style>
+      <div className="structured-import__toolbar">
+        <div>
+          <h1>景点资料导入</h1>
+          <p>导入数据先匹配正式景点，确认字段差异后再应用，不直接覆盖地图点位。</p>
+        </div>
+        <Space>
+          <Button icon={<ReloadOutlined />} onClick={() => void loadData()}>刷新</Button>
+          <Upload {...uploadProps}><Button icon={<UploadOutlined />} loading={uploading}>导入 DOCX</Button></Upload>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => { editForm.setFieldsValue(emptyValues()); setEditing(null) }}>手工新增</Button>
+        </Space>
+      </div>
+
+      <Alert type="info" showIcon title="这里保存的是导入来源。语音、直播和游客端展示请在正式设施的“内容配置”中维护。" />
+      <Table rowKey="id" loading={loading} columns={columns} dataSource={rows} scroll={{ x: 1280 }} pagination={{ pageSize: 20 }} />
 
       <Drawer
-        title={editingRow ? '编辑景点结构化记录' : '新增景点结构化记录'}
-        width={820}
-        open={drawerOpen}
-        onClose={() => {
-          setDrawerOpen(false)
-          setEditingRow(null)
-        }}
-        destroyOnClose
-        extra={(
-          <Space>
-            <Button
-              onClick={() => {
-                setDrawerOpen(false)
-                setEditingRow(null)
-              }}
-            >
-              取消
-            </Button>
-            <Button type="primary" loading={saving} onClick={() => void handleSubmitRecord()}>
-              保存
-            </Button>
-          </Space>
-        )}
+        title={editing ? '编辑导入资料' : '新增导入资料'}
+        open={editing !== undefined}
+        size={720}
+        onClose={() => setEditing(undefined)}
+        forceRender
+        extra={<Button type="primary" loading={saving} onClick={async () => {
+          try {
+            const values = await editForm.validateFields()
+            setSaving(true)
+            if (editing) await updateScenicStructuredRecord(editing.id, normalizePayload(values))
+            else await createScenicStructuredRecord(normalizePayload(values))
+            message.success('导入资料已保存')
+            setEditing(undefined)
+            await loadData()
+          } finally { setSaving(false) }
+        }}>保存</Button>}
       >
-        <Form form={form} layout="vertical">
-          {FIELDS.map((field) => (
-            <Form.Item
-              key={field}
-              label={`${LABELS[field] ?? field} (${field})`}
-              name={field}
-              rules={field === 'spot_id' ? [{ required: true, message: '景点ID不能为空' }] : undefined}
-            >
-              {longTextFields.has(field) ? (
-                <Input.TextArea rows={4} placeholder={`请输入 ${LABELS[field] ?? field}`} />
-              ) : (
-                <Input placeholder={`请输入 ${LABELS[field] ?? field}`} />
-              )}
+        <Form form={editForm} layout="vertical">
+          {fields.map(([key, label]) => (
+            <Form.Item key={key} name={key} label={label} rules={key === 'spot_id' ? [{ required: true, message: '请输入景点编码' }] : undefined}>
+              {['architecture_landscape_params', 'core_function', 'cultural_connotation', 'detailed_introduction', 'highlights', 'performance_open_info', 'remark'].includes(key)
+                ? <Input.TextArea rows={key === 'detailed_introduction' ? 6 : 3} />
+                : <Input />}
             </Form.Item>
           ))}
-
-          <Divider titlePlacement="start">游客呈现</Divider>
-
-          <Space size={32} wrap>
-            <Form.Item label="语音讲解" name="audio_enabled" valuePropName="checked">
-              <Switch
-                checkedChildren="开启"
-                unCheckedChildren="关闭"
-                onChange={(checked) => {
-                  const currentDefault = form.getFieldValue('default_experience')
-                  form.setFieldsValue({
-                    audio_enabled: checked,
-                    bound_voice_script_id: checked ? form.getFieldValue('bound_voice_script_id') : null,
-                    default_experience: checked
-                      ? (currentDefault ?? 'audio')
-                      : (currentDefault === 'audio' ? (form.getFieldValue('live_enabled') ? 'live' : null) : currentDefault),
-                  })
-                }}
-              />
-            </Form.Item>
-            <Form.Item label="直播讲解" name="live_enabled" valuePropName="checked">
-              <Switch
-                checkedChildren="开启"
-                unCheckedChildren="关闭"
-                onChange={(checked) => {
-                  const currentDefault = form.getFieldValue('default_experience')
-                  form.setFieldsValue({
-                    live_enabled: checked,
-                    default_experience: checked
-                      ? (currentDefault ?? 'live')
-                      : (currentDefault === 'live' ? (form.getFieldValue('audio_enabled') ? 'audio' : null) : currentDefault),
-                  })
-                }}
-              />
-            </Form.Item>
-          </Space>
-
-          {audioEnabled && (
-            <Form.Item
-              label="绑定口播"
-              name="bound_voice_script_id"
-              extra="仅显示该景点已发布且音频可用的口播"
-              rules={[{ required: true, message: '启用语音后必须绑定一条可用口播' }]}
-            >
-              <Select
-                showSearch
-                optionFilterProp="label"
-                loading={loadingPublishedScripts}
-                disabled={!String(watchedSpotId ?? '').trim()}
-                placeholder={watchedSpotId ? '请选择已发布口播' : '请先填写景点ID'}
-                notFoundContent={loadingPublishedScripts ? '加载中...' : '暂无可绑定口播，请先合成并发布'}
-                options={publishedScripts.map((script) => ({
-                  value: script.id,
-                  label: `${script.title} · v${script.versionNo} · ${script.durationSec}秒`,
-                }))}
-              />
-            </Form.Item>
-          )}
-
-          {liveEnabled && (
-            <>
-              <Form.Item
-                label="直播来源"
-                name="live_source_type"
-                rules={[{ required: true, message: '启用直播后必须选择直播来源' }]}
-              >
-                <Radio.Group
-                  optionType="button"
-                  buttonStyle="solid"
-                  onChange={() => {
-                    form.setFieldsValue({ live_video_url: '', live_stream_url: '', camera_stream_key: '' })
-                  }}
-                  options={[
-                    { value: 'video', label: '上传视频' },
-                    { value: 'stream', label: '播放流' },
-                    { value: 'camera', label: '摄像头推流' },
-                  ]}
-                />
-              </Form.Item>
-
-              {liveSourceType === 'video' && (
-                <>
-                  <Form.Item label="视频文件" extra="上传成功后会自动回填视频地址">
-                    <Upload
-                      accept="video/*"
-                      showUploadList={false}
-                      beforeUpload={(file) => handleLiveVideoUpload(file as File)}
-                    >
-                      <Button icon={<UploadOutlined />} loading={uploadingLiveVideo}>
-                        上传视频文件
-                      </Button>
-                    </Upload>
-                  </Form.Item>
-                  <Form.Item
-                    label="视频地址"
-                    name="live_video_url"
-                    extra="也可以手工填写或修改视频地址"
-                    rules={[
-                      { required: true, message: '上传视频模式必须上传文件或填写视频地址' },
-                      {
-                        validator: (_, value) => !value || /^(https?:\/\/|\/)/i.test(value)
-                          ? Promise.resolve()
-                          : Promise.reject(new Error('请输入有效的视频地址')),
-                      },
-                    ]}
-                  >
-                    <Input placeholder="https://.../scenic-video.mp4" />
-                  </Form.Item>
-                </>
-              )}
-
-              {liveSourceType === 'stream' && (
-                <Form.Item
-                  label="播放流地址"
-                  name="live_stream_url"
-                  rules={[
-                    { required: true, message: '播放流模式必须填写流地址' },
-                    {
-                      validator: (_, value) => !value || /^(https?|rtmp|rtmps|webrtc):\/\//i.test(value)
-                        ? Promise.resolve()
-                        : Promise.reject(new Error('请输入有效的播放流地址')),
-                    },
-                  ]}
-                >
-                  <Input placeholder="https://.../live.m3u8 或 rtmp://..." />
-                </Form.Item>
-              )}
-
-              {liveSourceType === 'camera' && (
-                <>
-                  <Form.Item
-                    label="摄像头推流通道"
-                    name="camera_stream_key"
-                    extra="用于连接独立 WebRTC 或直播网关；检测摄像头不会自动开始直播"
-                    rules={[{ required: true, message: '摄像头推流必须配置推流通道' }]}
-                  >
-                    <Input placeholder="请输入直播网关分配的通道标识" />
-                  </Form.Item>
-                  <Button loading={checkingCamera} onClick={() => void handleCameraPermissionCheck()}>
-                    检测摄像头权限
-                  </Button>
-                </>
-              )}
-            </>
-          )}
-
-          {(audioEnabled || liveEnabled) && (
-            <Form.Item
-              label="默认入口"
-              name="default_experience"
-              dependencies={['audio_enabled', 'live_enabled']}
-              rules={[
-                { required: true, message: '请选择默认入口' },
-                {
-                  validator: (_, value) => {
-                    if ((value === 'audio' && audioEnabled) || (value === 'live' && liveEnabled)) {
-                      return Promise.resolve()
-                    }
-                    return Promise.reject(new Error('默认入口必须是已启用的体验'))
-                  },
-                },
-              ]}
-            >
-              <Radio.Group>
-                <Radio.Button value="audio" disabled={!audioEnabled}>语音讲解</Radio.Button>
-                <Radio.Button value="live" disabled={!liveEnabled}>直播讲解</Radio.Button>
-              </Radio.Group>
-            </Form.Item>
-          )}
-
-          {audioEnabled && liveEnabled && (
-            <Alert
-              type="info"
-              showIcon
-              message="语音与直播同时开放"
-              description="游客可自行选择入口；直播不可用时将自动回退到语音讲解。"
-            />
-          )}
         </Form>
+      </Drawer>
+
+      <Drawer
+        title={applyingRecord ? `匹配并应用 · ${applyingRecord.spot_name}` : '匹配并应用'}
+        open={Boolean(applyingRecord)}
+        size={900}
+        onClose={() => setApplyingRecord(null)}
+        extra={<Space><Button disabled={!facilityId} onClick={() => void saveMatch()}>仅保存匹配</Button><Button type="primary" loading={saving} disabled={!preview} onClick={() => void applyRecord()}>应用资料</Button></Space>}
+      >
+        <div className="structured-import__apply">
+          <label>匹配正式景点</label>
+          <Select
+            showSearch
+            optionFilterProp="label"
+            value={facilityId}
+            options={facilityOptions}
+            placeholder="选择现有正式景点"
+            onChange={(value) => applyingRecord && void loadPreview(applyingRecord, value)}
+          />
+          <label>填充方式</label>
+          <Radio.Group value={mode} onChange={(event) => setMode(event.target.value)} optionType="button" buttonStyle="solid">
+            <Radio.Button value="fill_empty">仅填充空字段</Radio.Button>
+            <Radio.Button value="selected">逐字段选择</Radio.Button>
+            <Radio.Button value="overwrite_all">覆盖全部资料</Radio.Button>
+          </Radio.Group>
+          {mode === 'overwrite_all' ? <Alert type="warning" showIcon title="覆盖全部资料会替换已有内容，系统会保留应用前快照。" /> : null}
+          {preview ? (
+            <Table
+              rowKey="key"
+              pagination={false}
+              dataSource={preview.fields}
+              columns={[
+                {
+                  title: mode === 'selected' ? '选择' : '', width: 64,
+                  render: (_, field) => mode === 'selected' ? (
+                    <Checkbox checked={selectedFields.includes(field.key)} onChange={(event) => setSelectedFields((current) => event.target.checked ? [...current, field.key] : current.filter((key) => key !== field.key))} />
+                  ) : null,
+                },
+                { title: '字段', dataIndex: 'label', width: 150 },
+                { title: '当前正式数据', dataIndex: 'currentValue', render: (value) => value || <span className="structured-import__empty">空</span> },
+                { title: '导入数据', dataIndex: 'importedValue', render: (value) => value || <span className="structured-import__empty">空</span> },
+              ]}
+            />
+          ) : <div className="structured-import__placeholder">选择正式景点后查看字段差异</div>}
+        </div>
       </Drawer>
     </div>
   )
 }
+
+const styles = `
+.structured-import { padding: 0 0 28px; }
+.structured-import__toolbar { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; margin-bottom:18px; }
+.structured-import__toolbar h1 { margin:0 0 5px; font-size:24px; letter-spacing:0; }
+.structured-import__toolbar p { margin:0; color:#697586; }
+.structured-import > .ant-alert { margin-bottom:16px; }
+.structured-import__apply { display:grid; gap:14px; }
+.structured-import__apply > label { font-weight:600; margin-bottom:-6px; }
+.structured-import__empty { color:#a0a8b3; }
+.structured-import__placeholder { min-height:180px; display:grid; place-items:center; color:#8c96a5; border:1px dashed #d9dfe7; }
+@media (max-width: 760px) { .structured-import__toolbar { flex-direction:column; } }
+`

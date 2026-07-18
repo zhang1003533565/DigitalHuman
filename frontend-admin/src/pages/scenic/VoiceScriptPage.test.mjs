@@ -32,7 +32,9 @@ assert.match(api, /\/records\/\$\{id\}\/synthesize/)
 assert.match(api, /\/records\/\$\{id\}\/rollback/)
 
 // Scenic spot and MaxKB sources are loaded through existing admin APIs.
-assert.match(page, /getScenicStructuredRecords/)
+assert.match(page, /getScenicFacilities/)
+assert.match(api, /facilityId\?: number \| null/)
+assert.match(api, /facilityId: number/)
 assert.match(page, /getKnowledgeAccounts/)
 assert.match(page, /getKnowledges/)
 assert.match(page, /getKnowledgeDocuments/)
@@ -56,6 +58,7 @@ for (const duration of [30, 60, 90, 120]) {
 assert.match(page, /value: 'custom', label: '自定义'/)
 assert.match(page, /自定义时长（秒）/)
 assert.match(page, /generateVoiceScript/)
+assert.match(page, /facilityId: spot\.id/)
 
 // Manual scripts remain a first-class creation path.
 assert.match(page, /手工新增/)

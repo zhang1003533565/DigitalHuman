@@ -399,6 +399,7 @@ public class VoiceScriptSceneService {
     }
 
     private void applyRequest(VoiceScriptScene entity, VoiceScriptSceneRequest request) {
+        entity.setFacilityId(request.getFacilityId());
         entity.setScenicName(normalize(request.getScenicName()));
         entity.setSpotId(normalize(request.getSpotId()));
         entity.setSpotName(normalize(request.getSpotName()));
@@ -421,6 +422,7 @@ public class VoiceScriptSceneService {
 
     private VoiceScriptScene copyContent(VoiceScriptScene source) {
         VoiceScriptScene copy = new VoiceScriptScene();
+        copy.setFacilityId(source.getFacilityId());
         copy.setScenicName(source.getScenicName());
         copy.setSpotId(source.getSpotId());
         copy.setSpotName(source.getSpotName());

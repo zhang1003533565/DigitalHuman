@@ -52,6 +52,18 @@ public class ScenicStructuredSpotRecord {
     @Column(name = "remark", columnDefinition = "LONGTEXT")
     private String remark;
 
+    @Column(name = "matched_facility_id")
+    private Long matchedFacilityId;
+
+    @Column(name = "match_status", length = 20)
+    private String matchStatus = "unmatched";
+
+    @Column(name = "apply_status", length = 20)
+    private String applyStatus = "pending";
+
+    @Column(name = "last_applied_at")
+    private LocalDateTime lastAppliedAt;
+
     @Column(name = "audio_enabled", nullable = false)
     private Boolean audio_enabled = false;
 
@@ -191,6 +203,15 @@ public class ScenicStructuredSpotRecord {
     public void setRemark(String remark) {
         this.remark = remark;
     }
+
+    public Long getMatchedFacilityId() { return matchedFacilityId; }
+    public void setMatchedFacilityId(Long value) { this.matchedFacilityId = value; }
+    public String getMatchStatus() { return matchStatus; }
+    public void setMatchStatus(String value) { this.matchStatus = value; }
+    public String getApplyStatus() { return applyStatus; }
+    public void setApplyStatus(String value) { this.applyStatus = value; }
+    public LocalDateTime getLastAppliedAt() { return lastAppliedAt; }
+    public void setLastAppliedAt(LocalDateTime value) { this.lastAppliedAt = value; }
 
     public Boolean getAudio_enabled() {
         return audio_enabled;

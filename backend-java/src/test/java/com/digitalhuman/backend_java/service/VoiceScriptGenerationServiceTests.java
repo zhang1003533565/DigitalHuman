@@ -80,6 +80,7 @@ class VoiceScriptGenerationServiceTests {
         assertEquals(5, generated.getVersionNo());
         assertEquals("draft", generated.getStatus());
         assertEquals("ai", generated.getGenerationMode());
+        assertEquals(12L, generated.getFacilityId());
         assertEquals("missing", generated.getAudioStatus());
         assertEquals(90, generated.getTargetDurationSec());
         assertTrue(generated.getSourceRefsJson().contains("knowledge-a"));
@@ -125,6 +126,7 @@ class VoiceScriptGenerationServiceTests {
     private VoiceScriptGenerateRequest request() {
         VoiceScriptGenerateRequest request = new VoiceScriptGenerateRequest();
         request.setAccountId(7L);
+        request.setFacilityId(12L);
         request.setSpotId("LS-001");
         request.setStyle("culture");
         request.setTargetDurationSec(90);

@@ -8,7 +8,10 @@ import java.util.List;
 public class ScenicFacilityDto {
 
     private Long id;
+    private String spotCode;
     private String name;
+    private String shortDescription;
+    private String locationDescription;
     private Long categoryId;
     private String categoryName;
     private BigDecimal longitude;
@@ -17,6 +20,7 @@ public class ScenicFacilityDto {
     private List<String> galleryImages;
     private LocalTime openTime;
     private LocalTime closeTime;
+    private Boolean mapVisible;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -25,7 +29,10 @@ public class ScenicFacilityDto {
 
     public ScenicFacilityDto(
             Long id,
+            String spotCode,
             String name,
+            String shortDescription,
+            String locationDescription,
             Long categoryId,
             String categoryName,
             BigDecimal longitude,
@@ -34,10 +41,14 @@ public class ScenicFacilityDto {
             List<String> galleryImages,
             LocalTime openTime,
             LocalTime closeTime,
+            Boolean mapVisible,
             LocalDateTime createdAt,
             LocalDateTime updatedAt) {
         this.id = id;
+        this.spotCode = spotCode;
         this.name = name;
+        this.shortDescription = shortDescription;
+        this.locationDescription = locationDescription;
         this.categoryId = categoryId;
         this.categoryName = categoryName;
         this.longitude = longitude;
@@ -46,6 +57,7 @@ public class ScenicFacilityDto {
         this.galleryImages = galleryImages;
         this.openTime = openTime;
         this.closeTime = closeTime;
+        this.mapVisible = mapVisible;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
@@ -58,6 +70,9 @@ public class ScenicFacilityDto {
         this.id = id;
     }
 
+    public String getSpotCode() { return spotCode; }
+    public void setSpotCode(String value) { this.spotCode = value; }
+
     public String getName() {
         return name;
     }
@@ -65,6 +80,11 @@ public class ScenicFacilityDto {
     public void setName(String name) {
         this.name = name;
     }
+
+    public String getShortDescription() { return shortDescription; }
+    public void setShortDescription(String value) { this.shortDescription = value; }
+    public String getLocationDescription() { return locationDescription; }
+    public void setLocationDescription(String value) { this.locationDescription = value; }
 
     public Long getCategoryId() {
         return categoryId;
@@ -129,6 +149,9 @@ public class ScenicFacilityDto {
     public void setCloseTime(LocalTime closeTime) {
         this.closeTime = closeTime;
     }
+
+    public Boolean getMapVisible() { return mapVisible; }
+    public void setMapVisible(Boolean value) { this.mapVisible = value; }
 
     public LocalDateTime getCreatedAt() {
         return createdAt;

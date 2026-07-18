@@ -23,8 +23,17 @@ public class ScenicFacility {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "spot_code", length = 100)
+    private String spotCode;
+
     @Column(nullable = false, length = 100)
     private String name;
+
+    @Column(name = "short_description", length = 500)
+    private String shortDescription;
+
+    @Column(name = "location_description", length = 500)
+    private String locationDescription;
 
     @ManyToOne(optional = false)
     @JoinColumn(name = "category_id", nullable = false)
@@ -45,6 +54,9 @@ public class ScenicFacility {
     private LocalTime openTime;
 
     private LocalTime closeTime;
+
+    @Column(name = "map_visible", nullable = false)
+    private Boolean mapVisible = true;
 
     @Column(nullable = false)
     private LocalDateTime createdAt;
@@ -76,6 +88,9 @@ public class ScenicFacility {
         this.id = id;
     }
 
+    public String getSpotCode() { return spotCode; }
+    public void setSpotCode(String spotCode) { this.spotCode = spotCode; }
+
     public String getName() {
         return name;
     }
@@ -83,6 +98,11 @@ public class ScenicFacility {
     public void setName(String name) {
         this.name = name;
     }
+
+    public String getShortDescription() { return shortDescription; }
+    public void setShortDescription(String value) { this.shortDescription = value; }
+    public String getLocationDescription() { return locationDescription; }
+    public void setLocationDescription(String value) { this.locationDescription = value; }
 
     public FacilityCategory getCategory() {
         return category;
@@ -139,6 +159,9 @@ public class ScenicFacility {
     public void setCloseTime(LocalTime closeTime) {
         this.closeTime = closeTime;
     }
+
+    public Boolean getMapVisible() { return mapVisible; }
+    public void setMapVisible(Boolean value) { this.mapVisible = value; }
 
     public LocalDateTime getCreatedAt() {
         return createdAt;

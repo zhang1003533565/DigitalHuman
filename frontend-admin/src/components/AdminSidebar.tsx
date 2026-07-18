@@ -56,7 +56,7 @@ const menuItems: NonNullable<MenuProps['items']> = [
       { key: 'facility-list', label: '全部设施' },
       { key: 'routes', label: '路线管理' },
       { key: 'travel-analytics', label: '旅游数据行为分析' },
-      { key: 'scenic-structured', label: '景点结构化数据' },
+      { key: 'scenic-structured', label: '景点资料导入' },
       { key: 'voice-scripts', label: '景点口播管理' },
     ],
   },

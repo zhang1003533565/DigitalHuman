@@ -14,7 +14,7 @@ export const adminPageMeta: Record<AdminPageKey, AdminPageMeta> = {
   'facility-list': { title: '全部设施', eyebrow: 'FACILITIES', description: '统一管理停车场、卫生间、医疗点与游客服务设施' },
   routes: { title: '路线管理', eyebrow: 'ROUTE OPERATIONS', description: '编排游览路线、途经节点、适用人群与发布状态' },
   'travel-analytics': { title: '旅游数据行为分析', eyebrow: 'BEHAVIOR ANALYTICS', description: '从会话、路线与偏好数据中识别趋势和异常' },
-  'scenic-structured': { title: '景点结构化数据', eyebrow: 'STRUCTURED DATA', description: '校验景点核心字段、坐标、开放时间与关联数据' },
+  'scenic-structured': { title: '景点资料导入', eyebrow: 'STRUCTURED DATA', description: '导入、匹配并按字段应用景点结构化资料' },
   'voice-scripts': { title: '景点口播管理', eyebrow: 'VOICE SCRIPTS', description: '维护数字人讲解文案、音色、时长与发布版本' },
   'travel-tips': { title: '游览贴士', eyebrow: 'TRAVEL TIPS', description: '发布天气、安全、交通与景区服务提示' },
   avatar: { title: '数字人基础配置', eyebrow: 'DIGITAL HUMAN', description: '配置形象、音色、语速、欢迎语和导览服务策略' },

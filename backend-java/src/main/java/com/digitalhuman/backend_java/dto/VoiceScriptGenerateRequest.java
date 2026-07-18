@@ -14,6 +14,8 @@ public class VoiceScriptGenerateRequest {
     @NotNull(message = "MaxKB账号不能为空")
     private Long accountId;
 
+    private Long facilityId;
+
     @NotBlank(message = "景点ID不能为空")
     private String spotId;
 
@@ -37,6 +39,9 @@ public class VoiceScriptGenerateRequest {
     public void setAccountId(Long accountId) {
         this.accountId = accountId;
     }
+
+    public Long getFacilityId() { return facilityId; }
+    public void setFacilityId(Long value) { this.facilityId = value; }
 
     public String getSpotId() {
         return spotId;
