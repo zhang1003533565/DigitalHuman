@@ -3,6 +3,7 @@ package com.digitalhuman.backend_java.service;
 import com.digitalhuman.backend_java.dto.TravelAnalyticsAudience;
 import com.digitalhuman.backend_java.dto.TravelAnalyticsMetric;
 import com.digitalhuman.backend_java.dto.TravelAnalyticsMetricResponse;
+import com.digitalhuman.backend_java.model.TravelAnalyticsAiConfig;
 import com.digitalhuman.backend_java.model.TravelAnalyticsRecord;
 import com.digitalhuman.backend_java.repository.TravelAnalyticsRecordRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -20,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class TravelAnalyticsMetricServiceTests {
@@ -64,7 +66,10 @@ class TravelAnalyticsMetricServiceTests {
     void publicDetailedMetricHidesBreakdownWhenValidSamplesAreBelowThreshold() {
         TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
         when(repository.findAllByOrderByUpdatedAtAscIdAsc()).thenReturn(popularAttractionRecords(9));
-        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(repository, new TravelAnalyticsValueParser());
+        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(
+                repository,
+                new TravelAnalyticsValueParser(),
+                publicConfigService(10));
 
         TravelAnalyticsMetricResponse response = service.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.POPULAR_ATTRACTIONS);
 
@@ -78,13 +83,34 @@ class TravelAnalyticsMetricServiceTests {
     void adminDetailedMetricBypassesMinimumSampleThreshold() {
         TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
         when(repository.findAllByOrderByUpdatedAtAscIdAsc()).thenReturn(popularAttractionRecords(9));
-        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(repository, new TravelAnalyticsValueParser());
+        TravelAnalyticsAiConfigService configService = publicConfigService(25);
+        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(
+                repository,
+                new TravelAnalyticsValueParser(),
+                configService);
 
         TravelAnalyticsMetricResponse response = service.queryMetric(TravelAnalyticsAudience.ADMIN, TravelAnalyticsMetric.POPULAR_ATTRACTIONS);
 
         assertEquals(9, response.validSamples());
         assertEquals(4, response.items().size());
         assertNull(response.warning());
+        verifyNoInteractions(configService);
+    }
+
+    @Test
+    void publicDetailedMetricUsesConfiguredMinimumSampleSize() {
+        TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
+        when(repository.findAllByOrderByUpdatedAtAscIdAsc()).thenReturn(popularAttractionRecords(12));
+        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(
+                repository,
+                new TravelAnalyticsValueParser(),
+                publicConfigService(25));
+
+        TravelAnalyticsMetricResponse response = service.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.POPULAR_ATTRACTIONS);
+
+        assertEquals(12, response.validSamples());
+        assertTrue(response.items().isEmpty());
+        assertEquals("样本不足", response.warning());
     }
 
     @Test
@@ -257,6 +283,17 @@ class TravelAnalyticsMetricServiceTests {
                 spendRecord("u11", "游客11", "未知", "未知", "未知", "未知", "未知", "未知", LocalDateTime.of(2026, 7, 18, 11, 0)),
                 spendRecord("u12", "游客12", "", "未知", "", "", "", "未知", LocalDateTime.of(2026, 7, 18, 12, 0))
         );
+    }
+
+    private TravelAnalyticsAiConfigService publicConfigService(int minimumSampleSize) {
+        TravelAnalyticsAiConfigService configService = mock(TravelAnalyticsAiConfigService.class);
+        TravelAnalyticsAiConfig config = new TravelAnalyticsAiConfig();
+        config.setId("default");
+        config.setPublicEnabled(true);
+        config.setMinimumSampleSize(minimumSampleSize);
+        config.setUpdatedAt(LocalDateTime.of(2026, 7, 18, 9, 0));
+        when(configService.getConfig()).thenReturn(config);
+        return configService;
     }
 
     private List<TravelAnalyticsRecord> spendRecordsWithUnparseableTotalCost() {

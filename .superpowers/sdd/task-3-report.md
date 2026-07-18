@@ -74,3 +74,66 @@ Surefire report summaries include:
 ## Concerns
 
 - `minimumSampleSize` is now persisted and editable, but the aggregation service still uses the previously reviewed in-service threshold logic from Task 2. This task keeps the reviewed `queryMetric(audience, metric)` interface unchanged.
+
+## Review fix round
+
+### RED
+
+Command:
+
+```bash
+cd backend-java && mvn -q -Dtest=TravelAnalyticsMetricServiceTests,TravelAnalyticsAiConfigServiceTests,TravelAnalyticsMetricControllerTests test
+```
+
+Output:
+
+```text
+[ERROR] TravelAnalyticsMetricServiceTests.publicDetailedMetricUsesConfiguredMinimumSampleSize
+expected: <样本不足> but was: <null>
+```
+
+### GREEN
+
+Command:
+
+```bash
+cd backend-java && mvn -q -Dtest=TravelAnalyticsMetricServiceTests,TravelAnalyticsAiConfigServiceTests,TravelAnalyticsMetricControllerTests test
+```
+
+Output:
+
+```text
+Process exited with code 0
+Surefire:
+- TravelAnalyticsMetricServiceTests: Tests run: 14, Failures: 0, Errors: 0, Skipped: 0
+- TravelAnalyticsAiConfigServiceTests: Tests run: 2, Failures: 0, Errors: 0, Skipped: 0
+- TravelAnalyticsMetricControllerTests: Tests run: 6, Failures: 0, Errors: 0, Skipped: 0
+```
+
+### Full backend suite after review fixes
+
+Command:
+
+```bash
+cd backend-java && mvn -q test
+```
+
+Output:
+
+```text
+Process exited with code 0
+Surefire report summaries include:
+- TravelAnalyticsMetricServiceTests: Tests run: 14, Failures: 0, Errors: 0, Skipped: 0
+- TravelAnalyticsAiConfigServiceTests: Tests run: 2, Failures: 0, Errors: 0, Skipped: 0
+- TravelAnalyticsMetricControllerTests: Tests run: 6, Failures: 0, Errors: 0, Skipped: 0
+- AuthControllerTests: Tests run: 2, Failures: 0, Errors: 0, Skipped: 0
+- BackendJavaApplicationTests: Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+- Remaining suite reports under target/surefire-reports also show Failures: 0, Errors: 0
+```
+
+### Fix summary
+
+- `TravelAnalyticsMetricService` now reads the configured `minimumSampleSize` only for PUBLIC breakdown suppression while keeping `queryMetric(audience, metric)` unchanged.
+- ADMIN breakdown responses still bypass PUBLIC suppression and do not consult the AI config threshold.
+- `TravelAnalyticsAiConfigService.getConfig()` is now read-only for missing rows and returns an in-memory `default` config instead of inserting on first read.
+- Explicit admin updates still persist id `default` with last-write-wins semantics; missing-row reads are covered by new service tests.

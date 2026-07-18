@@ -3,6 +3,7 @@ package com.digitalhuman.backend_java.service;
 import com.digitalhuman.backend_java.dto.TravelAnalyticsAudience;
 import com.digitalhuman.backend_java.dto.TravelAnalyticsMetric;
 import com.digitalhuman.backend_java.dto.TravelAnalyticsMetricResponse;
+import com.digitalhuman.backend_java.model.TravelAnalyticsAiConfig;
 import com.digitalhuman.backend_java.model.TravelAnalyticsRecord;
 import com.digitalhuman.backend_java.repository.TravelAnalyticsRecordRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,7 +32,7 @@ public class TravelAnalyticsMetricService {
             TravelAnalyticsMetric.AVERAGE_SATISFACTION,
             TravelAnalyticsMetric.COMMON_VISITOR_SEGMENTS
     );
-    private static final int PUBLIC_MINIMUM_SAMPLE_SIZE = 10;
+    private static final int DEFAULT_PUBLIC_MINIMUM_SAMPLE_SIZE = 10;
     private static final int TOP_GROUP_LIMIT = 5;
     private static final Pattern AGE_PATTERN = Pattern.compile("^(\\d+)(?:岁)?$");
     private static final Set<String> MALE_ALIASES = Set.of("男", "male", "m", "man");
@@ -40,21 +41,38 @@ public class TravelAnalyticsMetricService {
 
     private final TravelAnalyticsRecordRepository recordRepository;
     private final TravelAnalyticsValueParser valueParser;
+    private final TravelAnalyticsAiConfigService aiConfigService;
     private final Clock clock;
 
     @Autowired
     public TravelAnalyticsMetricService(
             TravelAnalyticsRecordRepository recordRepository,
+            TravelAnalyticsValueParser valueParser,
+            TravelAnalyticsAiConfigService aiConfigService) {
+        this(recordRepository, valueParser, aiConfigService, Clock.systemDefaultZone());
+    }
+
+    TravelAnalyticsMetricService(
+            TravelAnalyticsRecordRepository recordRepository,
             TravelAnalyticsValueParser valueParser) {
-        this(recordRepository, valueParser, Clock.systemDefaultZone());
+        this(recordRepository, valueParser, null, Clock.systemDefaultZone());
     }
 
     TravelAnalyticsMetricService(
             TravelAnalyticsRecordRepository recordRepository,
             TravelAnalyticsValueParser valueParser,
             Clock clock) {
+        this(recordRepository, valueParser, null, clock);
+    }
+
+    TravelAnalyticsMetricService(
+            TravelAnalyticsRecordRepository recordRepository,
+            TravelAnalyticsValueParser valueParser,
+            TravelAnalyticsAiConfigService aiConfigService,
+            Clock clock) {
         this.recordRepository = recordRepository;
         this.valueParser = valueParser;
+        this.aiConfigService = aiConfigService;
         this.clock = clock;
     }
 
@@ -64,18 +82,22 @@ public class TravelAnalyticsMetricService {
         }
 
         List<TravelAnalyticsRecord> records = recordRepository.findAllByOrderByUpdatedAtAscIdAsc();
+        int publicMinimumSampleSize = audience == TravelAnalyticsAudience.PUBLIC && isBreakdownMetric(metric)
+                ? publicMinimumSampleSize()
+                : DEFAULT_PUBLIC_MINIMUM_SAMPLE_SIZE;
         return switch (metric) {
-            case POPULAR_ATTRACTIONS -> buildPopularAttractionsResponse(audience, records);
+            case POPULAR_ATTRACTIONS -> buildPopularAttractionsResponse(audience, records, publicMinimumSampleSize);
             case AVERAGE_STAY_DURATION -> buildAverageStayDurationResponse(audience, records);
             case AVERAGE_SPEND -> buildAverageSpendResponse(audience, records);
             case AVERAGE_SATISFACTION -> buildAverageSatisfactionResponse(audience, records);
-            case COMMON_VISITOR_SEGMENTS -> buildCommonVisitorSegmentsResponse(audience, records);
+            case COMMON_VISITOR_SEGMENTS -> buildCommonVisitorSegmentsResponse(audience, records, publicMinimumSampleSize);
         };
     }
 
     private TravelAnalyticsMetricResponse buildPopularAttractionsResponse(
             TravelAnalyticsAudience audience,
-            List<TravelAnalyticsRecord> records) {
+            List<TravelAnalyticsRecord> records,
+            int publicMinimumSampleSize) {
         LinkedHashMap<String, Integer> counts = new LinkedHashMap<>();
         LocalDateTime asOf = latestUpdatedAt(records);
         long validSamples = 0;
@@ -90,7 +112,7 @@ public class TravelAnalyticsMetricService {
         }
 
         List<TravelAnalyticsMetricResponse.Item> items = topCounts(counts);
-        if (audience == TravelAnalyticsAudience.PUBLIC && validSamples < PUBLIC_MINIMUM_SAMPLE_SIZE) {
+        if (audience == TravelAnalyticsAudience.PUBLIC && validSamples < publicMinimumSampleSize) {
             items = List.of();
         }
 
@@ -102,7 +124,7 @@ public class TravelAnalyticsMetricService {
                 asOf,
                 items,
                 zeroRowMethodology(records, "按 attraction_name 分组统计有效记录数，仅返回前 5 项"),
-                zeroRowBreakdownWarning(records, audience, validSamples, items.isEmpty())
+                zeroRowBreakdownWarning(records, audience, validSamples, items.isEmpty(), publicMinimumSampleSize)
         );
     }
 
@@ -192,7 +214,8 @@ public class TravelAnalyticsMetricService {
 
     private TravelAnalyticsMetricResponse buildCommonVisitorSegmentsResponse(
             TravelAnalyticsAudience audience,
-            List<TravelAnalyticsRecord> records) {
+            List<TravelAnalyticsRecord> records,
+            int publicMinimumSampleSize) {
         LinkedHashMap<String, Integer> counts = new LinkedHashMap<>();
         LocalDateTime asOf = latestUpdatedAt(records);
         long validSamples = 0;
@@ -207,7 +230,7 @@ public class TravelAnalyticsMetricService {
         }
 
         List<TravelAnalyticsMetricResponse.Item> items = topCounts(counts);
-        if (audience == TravelAnalyticsAudience.PUBLIC && validSamples < PUBLIC_MINIMUM_SAMPLE_SIZE) {
+        if (audience == TravelAnalyticsAudience.PUBLIC && validSamples < publicMinimumSampleSize) {
             items = List.of();
         }
 
@@ -219,8 +242,24 @@ public class TravelAnalyticsMetricService {
                 asOf,
                 items,
                 zeroRowMethodology(records, "按年龄段和性别分组统计有效记录数，仅返回前 5 项"),
-                zeroRowBreakdownWarning(records, audience, validSamples, items.isEmpty())
+                zeroRowBreakdownWarning(records, audience, validSamples, items.isEmpty(), publicMinimumSampleSize)
         );
+    }
+
+    private boolean isBreakdownMetric(TravelAnalyticsMetric metric) {
+        return metric == TravelAnalyticsMetric.POPULAR_ATTRACTIONS
+                || metric == TravelAnalyticsMetric.COMMON_VISITOR_SEGMENTS;
+    }
+
+    private int publicMinimumSampleSize() {
+        if (aiConfigService == null) {
+            return DEFAULT_PUBLIC_MINIMUM_SAMPLE_SIZE;
+        }
+        TravelAnalyticsAiConfig config = aiConfigService.getConfig();
+        Integer configuredMinimum = config.getMinimumSampleSize();
+        return configuredMinimum == null || configuredMinimum < 1
+                ? DEFAULT_PUBLIC_MINIMUM_SAMPLE_SIZE
+                : configuredMinimum;
     }
 
     private List<TravelAnalyticsMetricResponse.Item> averageItems(String label, BigDecimal total, long validSamples) {
@@ -361,19 +400,24 @@ public class TravelAnalyticsMetricService {
             List<TravelAnalyticsRecord> records,
             TravelAnalyticsAudience audience,
             long validSamples,
-            boolean itemsEmpty) {
+            boolean itemsEmpty,
+            int publicMinimumSampleSize) {
         if (records.isEmpty()) {
             return "暂无来源数据，asOf 为本次计算时间";
         }
-        return buildThresholdWarning(audience, validSamples, true, itemsEmpty);
+        return buildThresholdWarning(audience, validSamples, true, itemsEmpty, publicMinimumSampleSize);
     }
 
     private String buildThresholdWarning(
             TravelAnalyticsAudience audience,
             long validSamples,
             boolean requiresThreshold,
-            boolean itemsEmpty) {
-        if (requiresThreshold && audience == TravelAnalyticsAudience.PUBLIC && validSamples < PUBLIC_MINIMUM_SAMPLE_SIZE && itemsEmpty) {
+            boolean itemsEmpty,
+            int publicMinimumSampleSize) {
+        if (requiresThreshold
+                && audience == TravelAnalyticsAudience.PUBLIC
+                && validSamples < publicMinimumSampleSize
+                && itemsEmpty) {
             return "样本不足";
         }
         return validSamples == 0 ? "暂无有效数据" : null;

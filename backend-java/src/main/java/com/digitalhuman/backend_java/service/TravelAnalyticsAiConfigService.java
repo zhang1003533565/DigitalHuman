@@ -22,7 +22,7 @@ public class TravelAnalyticsAiConfigService {
     }
 
     public TravelAnalyticsAiConfig getConfig() {
-        return repository.findById(DEFAULT_ID).orElseGet(this::createDefaultConfig);
+        return repository.findById(DEFAULT_ID).orElseGet(this::buildDefaultConfig);
     }
 
     public TravelAnalyticsAiConfig updateConfig(Boolean publicEnabled, Integer minimumSampleSize) {
@@ -33,19 +33,20 @@ public class TravelAnalyticsAiConfigService {
             throw new ResponseStatusException(BAD_REQUEST, "minimumSampleSize 必须大于 0");
         }
 
-        TravelAnalyticsAiConfig config = getConfig();
+        TravelAnalyticsAiConfig config = repository.findById(DEFAULT_ID).orElseGet(this::buildDefaultConfig);
+        config.setId(DEFAULT_ID);
         config.setPublicEnabled(publicEnabled);
         config.setMinimumSampleSize(minimumSampleSize);
         config.setUpdatedAt(LocalDateTime.now());
         return repository.save(config);
     }
 
-    private TravelAnalyticsAiConfig createDefaultConfig() {
+    private TravelAnalyticsAiConfig buildDefaultConfig() {
         TravelAnalyticsAiConfig config = new TravelAnalyticsAiConfig();
         config.setId(DEFAULT_ID);
         config.setPublicEnabled(true);
         config.setMinimumSampleSize(DEFAULT_MINIMUM_SAMPLE_SIZE);
         config.setUpdatedAt(LocalDateTime.now());
-        return repository.save(config);
+        return config;
     }
 }
