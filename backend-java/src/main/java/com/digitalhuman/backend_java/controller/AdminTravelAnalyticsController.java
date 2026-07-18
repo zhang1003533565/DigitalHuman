@@ -106,6 +106,11 @@ public class AdminTravelAnalyticsController {
         return travelAnalyticsAiConfigService.getConfig();
     }
 
+    @GetMapping("/metrics/{metric}")
+    public TravelAnalyticsMetricResponse getMetric(@PathVariable TravelAnalyticsMetric metric) {
+        return travelAnalyticsMetricService.queryMetric(TravelAnalyticsAudience.ADMIN, metric);
+    }
+
     @PutMapping("/ai-config")
     public TravelAnalyticsAiConfig updateAiConfig(@RequestBody TravelAnalyticsAiConfigUpdateRequest request) {
         return travelAnalyticsAiConfigService.updateConfig(request.publicEnabled(), request.minimumSampleSize());

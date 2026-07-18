@@ -105,6 +105,8 @@ class TravelAnalyticsMetricControllerTests {
         loginAdmin();
         when(aiConfigService.getConfig()).thenReturn(enabledConfig());
         when(aiConfigService.updateConfig(false, 25)).thenReturn(updatedConfig());
+        when(metricService.queryMetric(TravelAnalyticsAudience.ADMIN, TravelAnalyticsMetric.AVERAGE_SPEND))
+                .thenReturn(metricResponse(TravelAnalyticsAudience.ADMIN, TravelAnalyticsMetric.AVERAGE_SPEND));
 
         mvc.perform(get("/api/admin/travel-analytics/ai-config")
                         .header("Authorization", "Bearer admin"))
@@ -112,6 +114,13 @@ class TravelAnalyticsMetricControllerTests {
                 .andExpect(jsonPath("$.id").value("default"))
                 .andExpect(jsonPath("$.publicEnabled").value(true))
                 .andExpect(jsonPath("$.minimumSampleSize").value(10));
+
+        mvc.perform(get("/api/admin/travel-analytics/metrics/average_spend")
+                        .header("Authorization", "Bearer admin"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scope").value("ADMIN"))
+                .andExpect(jsonPath("$.metric").value("average_spend"))
+                .andExpect(jsonPath("$.items[0].label").value("平均消费（元）"));
 
         mvc.perform(put("/api/admin/travel-analytics/ai-config")
                         .header("Authorization", "Bearer admin")
@@ -127,6 +136,27 @@ class TravelAnalyticsMetricControllerTests {
     }
 
     @Test
+    void observerCanReadAdminMetricSummaryButCannotMutateAiConfig() throws Exception {
+        loginObserver();
+        when(aiConfigService.getConfig()).thenReturn(enabledConfig());
+        when(metricService.queryMetric(TravelAnalyticsAudience.ADMIN, TravelAnalyticsMetric.AVERAGE_SPEND))
+                .thenReturn(metricResponse(TravelAnalyticsAudience.ADMIN, TravelAnalyticsMetric.AVERAGE_SPEND));
+
+        mvc.perform(get("/api/admin/travel-analytics/ai-config")
+                        .header("Authorization", "Bearer observer"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.publicEnabled").value(true));
+
+        mvc.perform(get("/api/admin/travel-analytics/metrics/average_spend")
+                        .header("Authorization", "Bearer observer"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scope").value("ADMIN"))
+                .andExpect(jsonPath("$.metric").value("average_spend"));
+
+        verify(metricService).queryMetric(TravelAnalyticsAudience.ADMIN, TravelAnalyticsMetric.AVERAGE_SPEND);
+    }
+
+    @Test
     void observerCannotUpdateAiConfig() throws Exception {
         loginObserver();
 
@@ -139,6 +169,17 @@ class TravelAnalyticsMetricControllerTests {
                 .andExpect(status().isForbidden());
 
         verifyNoInteractions(aiConfigService, metricService);
+    }
+
+    @Test
+    void observerCannotUseAdminTestEndpoint() throws Exception {
+        loginObserver();
+
+        mvc.perform(post("/api/admin/travel-analytics/metrics/average_spend/test")
+                        .header("Authorization", "Bearer observer"))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(metricService);
     }
 
     @Test

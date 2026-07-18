@@ -28,6 +28,7 @@ import axios from 'axios'
 import {
   TRAVEL_ANALYTICS_AI_METRICS,
   getTravelAnalyticsAiConfig,
+  getTravelAnalyticsMetricSummary,
   testTravelAnalyticsMetric,
   updateTravelAnalyticsAiConfig,
   type TravelAnalyticsAiConfig,
@@ -94,16 +95,8 @@ const TravelAnalyticsAiPanel = forwardRef<TravelAnalyticsAiPanelHandle>(function
       setConfig(nextConfig)
       setPublicEnabled(nextConfig.publicEnabled)
 
-      if (isObserver) {
-        setSummaryMetrics([])
-        if (!keepExistingTest) {
-          setTestResult(null)
-        }
-        return
-      }
-
       setMetricsLoading(true)
-      const responses = await Promise.all(TRAVEL_ANALYTICS_AI_METRICS.map((metric) => testTravelAnalyticsMetric(metric)))
+      const responses = await Promise.all(TRAVEL_ANALYTICS_AI_METRICS.map((metric) => getTravelAnalyticsMetricSummary(metric)))
       setSummaryMetrics(responses)
       if (!keepExistingTest) {
         setTestResult(null)
@@ -114,7 +107,7 @@ const TravelAnalyticsAiPanel = forwardRef<TravelAnalyticsAiPanelHandle>(function
       setMetricsLoading(false)
       setLoading(false)
     }
-  }, [isObserver])
+  }, [])
 
   useImperativeHandle(ref, () => ({
     refresh: async () => {

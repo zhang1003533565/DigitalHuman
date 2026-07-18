@@ -88,6 +88,11 @@ export async function getTravelAnalyticsAiConfig() {
   return response.data
 }
 
+export async function getTravelAnalyticsMetricSummary(metric: TravelAnalyticsMetric) {
+  const response = await axios.get<TravelAnalyticsMetricResponse>(`/api/admin/travel-analytics/metrics/${metric}`)
+  return response.data
+}
+
 export async function updateTravelAnalyticsAiConfig(payload: Pick<TravelAnalyticsAiConfig, 'publicEnabled' | 'minimumSampleSize'>) {
   const response = await axios.put<TravelAnalyticsAiConfig>('/api/admin/travel-analytics/ai-config', payload)
   return response.data
