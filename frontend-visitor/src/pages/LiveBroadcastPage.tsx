@@ -18,6 +18,7 @@ import {
 import { createNarrationController, type FacilityNarrationController } from '../live/facilityNarrationController'
 import { appendLiveMessage, updateLiveMessage, type LiveChatMessage } from '../live/liveChat'
 import { parseLiveGuideStreamData } from '../live/liveBroadcastRuntime'
+import { disposeLive2dResources, releaseLive2dRefs } from '../live/live2dCleanup'
 import { LiveChatFeed } from './components/LiveChatFeed'
 import './LiveBroadcastPage.css'
 
@@ -39,6 +40,10 @@ function getUnavailableMessage(config: FacilityLiveConfig) {
 
 function createMessageId(prefix: LiveChatMessage['role']) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function reportLive2dCleanupError(step: string, error: unknown) {
+  console.debug(`[live2d-cleanup:${step}]`, error)
 }
 
 export function LiveBroadcastPage() {
@@ -83,7 +88,14 @@ export function LiveBroadcastPage() {
     playbackRequestRef.current = null
     audioCleanupRef.current?.()
     audioCleanupRef.current = null
-    if (modelRef.current) stopSpeech(modelRef.current)
+    const model = modelRef.current
+    if (model) {
+      try {
+        stopSpeech(model)
+      } catch (error) {
+        reportLive2dCleanupError('stop-playback', error)
+      }
+    }
   }, [])
 
   const playAudioUrl = useCallback(async (audioUrl: string, signal: AbortSignal) => {
@@ -95,7 +107,11 @@ export function LiveBroadcastPage() {
           if (settled) return
           settled = true
           signal.removeEventListener('abort', handleAbort)
-          stopSpeech(model)
+          try {
+            stopSpeech(model)
+          } catch (error) {
+            reportLive2dCleanupError('settle-playback', error)
+          }
           if (audioCleanupRef.current === handleAbort) audioCleanupRef.current = null
           if (error) reject(error); else resolve()
         }
@@ -234,7 +250,10 @@ export function LiveBroadcastPage() {
         resolveConfiguredModelUrl(digitalHuman.modelPath),
         LIVE2D_MODEL_LOAD_OPTIONS,
       )
-      if (cancelled) { model.destroy?.(); app.destroy(true, { children: true }); return }
+      if (cancelled) {
+        disposeLive2dResources({ model, app, stopSpeech, onError: reportLive2dCleanupError })
+        return
+      }
       const modelDisplay = MODEL_OPTIONS.find((option) => option.id === digitalHuman.modelKey)
       model.scale.set(0.24 * (modelDisplay?.scaleMultiplier ?? 1))
       model.position.x = canvas.clientWidth * (0.5 + (modelDisplay?.xOffsetRatio ?? 0))
@@ -252,10 +271,12 @@ export function LiveBroadcastPage() {
     return () => {
       cancelled = true
       setModelReady(false)
-      modelRef.current?.destroy?.()
-      modelRef.current = null
-      pixiRef.current?.destroy(true, { children: true })
-      pixiRef.current = null
+      releaseLive2dRefs({
+        modelRef,
+        appRef: pixiRef,
+        stopSpeech,
+        onError: reportLive2dCleanupError,
+      })
     }
   }, [liveConfig])
 
