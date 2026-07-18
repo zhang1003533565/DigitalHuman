@@ -31,7 +31,10 @@ public class TravelAnalyticsMetricService {
     );
     private static final int PUBLIC_MINIMUM_SAMPLE_SIZE = 10;
     private static final int TOP_GROUP_LIMIT = 5;
-    private static final Pattern INTEGER_PATTERN = Pattern.compile("(\\d+)");
+    private static final Pattern AGE_PATTERN = Pattern.compile("^(\\d+)(?:岁)?$");
+    private static final Set<String> MALE_ALIASES = Set.of("男", "male", "m", "man");
+    private static final Set<String> FEMALE_ALIASES = Set.of("女", "female", "f", "woman");
+    private static final Set<String> OTHER_GENDER_ALIASES = Set.of("其他", "其它", "非二元", "non-binary", "nonbinary", "other");
 
     private final TravelAnalyticsRecordRepository recordRepository;
     private final TravelAnalyticsValueParser valueParser;
@@ -62,7 +65,7 @@ public class TravelAnalyticsMetricService {
             TravelAnalyticsAudience audience,
             List<TravelAnalyticsRecord> records) {
         LinkedHashMap<String, Integer> counts = new LinkedHashMap<>();
-        LocalDateTime asOf = null;
+        LocalDateTime asOf = latestUpdatedAt(records);
         long validSamples = 0;
 
         for (TravelAnalyticsRecord record : records) {
@@ -72,7 +75,6 @@ public class TravelAnalyticsMetricService {
             }
             counts.merge(attractionName, 1, Integer::sum);
             validSamples++;
-            asOf = latest(asOf, record.getUpdatedAt());
         }
 
         List<TravelAnalyticsMetricResponse.Item> items = topCounts(counts);
@@ -97,7 +99,7 @@ public class TravelAnalyticsMetricService {
             List<TravelAnalyticsRecord> records) {
         BigDecimal totalMinutes = BigDecimal.ZERO;
         long validSamples = 0;
-        LocalDateTime asOf = null;
+        LocalDateTime asOf = latestUpdatedAt(records);
 
         for (TravelAnalyticsRecord record : records) {
             Optional<Duration> duration = valueParser.parseDuration(record.getStay_duration());
@@ -106,7 +108,6 @@ public class TravelAnalyticsMetricService {
             }
             totalMinutes = totalMinutes.add(BigDecimal.valueOf(duration.get().toMinutes()));
             validSamples++;
-            asOf = latest(asOf, record.getUpdatedAt());
         }
 
         return new TravelAnalyticsMetricResponse(
@@ -126,7 +127,7 @@ public class TravelAnalyticsMetricService {
             List<TravelAnalyticsRecord> records) {
         BigDecimal totalAmount = BigDecimal.ZERO;
         long validSamples = 0;
-        LocalDateTime asOf = null;
+        LocalDateTime asOf = latestUpdatedAt(records);
 
         for (TravelAnalyticsRecord record : records) {
             Optional<BigDecimal> amount = parseSpend(record);
@@ -135,7 +136,6 @@ public class TravelAnalyticsMetricService {
             }
             totalAmount = totalAmount.add(amount.get());
             validSamples++;
-            asOf = latest(asOf, record.getUpdatedAt());
         }
 
         return new TravelAnalyticsMetricResponse(
@@ -155,7 +155,7 @@ public class TravelAnalyticsMetricService {
             List<TravelAnalyticsRecord> records) {
         BigDecimal totalSatisfaction = BigDecimal.ZERO;
         long validSamples = 0;
-        LocalDateTime asOf = null;
+        LocalDateTime asOf = latestUpdatedAt(records);
 
         for (TravelAnalyticsRecord record : records) {
             Optional<BigDecimal> satisfaction = valueParser.parseSatisfaction(record.getSatisfaction());
@@ -164,7 +164,6 @@ public class TravelAnalyticsMetricService {
             }
             totalSatisfaction = totalSatisfaction.add(satisfaction.get());
             validSamples++;
-            asOf = latest(asOf, record.getUpdatedAt());
         }
 
         return new TravelAnalyticsMetricResponse(
@@ -183,7 +182,7 @@ public class TravelAnalyticsMetricService {
             TravelAnalyticsAudience audience,
             List<TravelAnalyticsRecord> records) {
         LinkedHashMap<String, Integer> counts = new LinkedHashMap<>();
-        LocalDateTime asOf = null;
+        LocalDateTime asOf = latestUpdatedAt(records);
         long validSamples = 0;
 
         for (TravelAnalyticsRecord record : records) {
@@ -193,7 +192,6 @@ public class TravelAnalyticsMetricService {
             }
             counts.merge(label.get(), 1, Integer::sum);
             validSamples++;
-            asOf = latest(asOf, record.getUpdatedAt());
         }
 
         List<TravelAnalyticsMetricResponse.Item> items = topCounts(counts);
@@ -230,9 +228,9 @@ public class TravelAnalyticsMetricService {
     }
 
     private Optional<BigDecimal> parseSpend(TravelAnalyticsRecord record) {
-        Optional<BigDecimal> totalCost = valueParser.parseMoney(record.getTotal_cost());
-        if (totalCost.isPresent()) {
-            return totalCost;
+        String totalCostRaw = record.getTotal_cost();
+        if (!normalize(totalCostRaw).isEmpty()) {
+            return valueParser.parseMoney(totalCostRaw);
         }
 
         List<Optional<BigDecimal>> components = List.of(
@@ -255,40 +253,65 @@ public class TravelAnalyticsMetricService {
     }
 
     private Optional<String> buildSegmentLabel(TravelAnalyticsRecord record) {
-        Optional<Integer> age = parseInteger(record.getAge());
-        String gender = normalize(record.getGender());
+        Optional<Integer> age = parseAge(record.getAge());
+        Optional<String> gender = normalizeGender(record.getGender());
         if (age.isEmpty() || gender.isEmpty()) {
             return Optional.empty();
         }
-        return Optional.of(ageBand(age.get()) + " / " + gender);
+        return Optional.of(ageBand(age.get()) + " / " + gender.get());
     }
 
-    private Optional<Integer> parseInteger(String raw) {
+    private Optional<Integer> parseAge(String raw) {
         String normalized = normalize(raw);
         if (normalized.isEmpty()) {
             return Optional.empty();
         }
-        Matcher matcher = INTEGER_PATTERN.matcher(normalized);
-        if (!matcher.find()) {
+        Matcher matcher = AGE_PATTERN.matcher(normalized);
+        if (!matcher.matches()) {
             return Optional.empty();
         }
         return Optional.of(Integer.parseInt(matcher.group(1)));
     }
 
+    private Optional<String> normalizeGender(String raw) {
+        String normalized = normalize(raw).toLowerCase();
+        if (normalized.isEmpty()) {
+            return Optional.empty();
+        }
+        if (MALE_ALIASES.contains(normalized)) {
+            return Optional.of("男");
+        }
+        if (FEMALE_ALIASES.contains(normalized)) {
+            return Optional.of("女");
+        }
+        if (OTHER_GENDER_ALIASES.contains(normalized)) {
+            return Optional.of("其他");
+        }
+        return Optional.empty();
+    }
+
     private String ageBand(int age) {
         if (age < 18) {
-            return "18岁以下";
+            return "<18";
         }
-        if (age <= 25) {
-            return "18-25岁";
+        if (age <= 29) {
+            return "18-29";
         }
-        if (age <= 35) {
-            return "26-35岁";
+        if (age <= 44) {
+            return "30-44";
         }
-        if (age <= 45) {
-            return "36-45岁";
+        if (age <= 59) {
+            return "45-59";
         }
-        return "46岁及以上";
+        return "60+";
+    }
+
+    private LocalDateTime latestUpdatedAt(List<TravelAnalyticsRecord> records) {
+        LocalDateTime asOf = null;
+        for (TravelAnalyticsRecord record : records) {
+            asOf = latest(asOf, record.getUpdatedAt());
+        }
+        return asOf;
     }
 
     private LocalDateTime latest(LocalDateTime current, LocalDateTime candidate) {

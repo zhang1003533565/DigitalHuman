@@ -34,12 +34,26 @@ class TravelAnalyticsMetricServiceTests {
 
         assertEquals(12, response.totalSamples());
         assertEquals(10, response.validSamples());
-        assertEquals(LocalDateTime.of(2026, 7, 18, 10, 0), response.asOf());
+        assertEquals(LocalDateTime.of(2026, 7, 18, 12, 0), response.asOf());
         assertEquals("total_cost 优先，缺失时回退到五类分项费用累加", response.methodology());
         assertEquals(List.of(new TravelAnalyticsMetricResponse.Item("平均消费（元）", new BigDecimal("156.00"))), response.items());
         assertNull(response.warning());
         assertFalse(json.contains("tourist_id"));
         assertFalse(json.contains("user_nickname"));
+    }
+
+    @Test
+    void averageSpendDoesNotFallbackWhenTotalCostIsPresentButUnparseable() {
+        TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
+        when(repository.findAllByOrderByUpdatedAtAscIdAsc()).thenReturn(spendRecordsWithUnparseableTotalCost());
+        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(repository, new TravelAnalyticsValueParser());
+
+        TravelAnalyticsMetricResponse response = service.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.AVERAGE_SPEND);
+
+        assertEquals(2, response.totalSamples());
+        assertEquals(1, response.validSamples());
+        assertEquals(LocalDateTime.of(2026, 7, 18, 12, 0), response.asOf());
+        assertEquals(List.of(new TravelAnalyticsMetricResponse.Item("平均消费（元）", new BigDecimal("100.00"))), response.items());
     }
 
     @Test
@@ -89,6 +103,36 @@ class TravelAnalyticsMetricServiceTests {
     }
 
     @Test
+    void averageStayDurationUsesLatestRowTimestampEvenWhenNoRowsAreValid() {
+        TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
+        when(repository.findAllByOrderByUpdatedAtAscIdAsc()).thenReturn(invalidStayDurationRecords());
+        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(repository, new TravelAnalyticsValueParser());
+
+        TravelAnalyticsMetricResponse response = service.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.AVERAGE_STAY_DURATION);
+
+        assertEquals(2, response.totalSamples());
+        assertEquals(0, response.validSamples());
+        assertEquals(LocalDateTime.of(2026, 7, 18, 12, 30), response.asOf());
+        assertTrue(response.items().isEmpty());
+        assertEquals("暂无有效数据", response.warning());
+    }
+
+    @Test
+    void averageStayDurationUsesNullAsOfWhenThereAreNoRows() {
+        TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
+        when(repository.findAllByOrderByUpdatedAtAscIdAsc()).thenReturn(List.of());
+        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(repository, new TravelAnalyticsValueParser());
+
+        TravelAnalyticsMetricResponse response = service.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.AVERAGE_STAY_DURATION);
+
+        assertEquals(0, response.totalSamples());
+        assertEquals(0, response.validSamples());
+        assertNull(response.asOf());
+        assertTrue(response.items().isEmpty());
+        assertEquals("暂无有效数据", response.warning());
+    }
+
+    @Test
     void averageStayDurationAveragesOnlyParseableDurations() {
         TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
         when(repository.findAllByOrderByUpdatedAtAscIdAsc()).thenReturn(stayDurationRecords());
@@ -127,13 +171,38 @@ class TravelAnalyticsMetricServiceTests {
         assertEquals(12, response.totalSamples());
         assertEquals(12, response.validSamples());
         assertEquals(List.of(
-                new TravelAnalyticsMetricResponse.Item("26-35岁 / 女", new BigDecimal("3")),
-                new TravelAnalyticsMetricResponse.Item("18-25岁 / 男", new BigDecimal("2")),
-                new TravelAnalyticsMetricResponse.Item("36-45岁 / 女", new BigDecimal("2")),
-                new TravelAnalyticsMetricResponse.Item("46岁及以上 / 男", new BigDecimal("2")),
-                new TravelAnalyticsMetricResponse.Item("18岁以下 / 女", new BigDecimal("2"))
+                new TravelAnalyticsMetricResponse.Item("30-44 / 女", new BigDecimal("3")),
+                new TravelAnalyticsMetricResponse.Item("18-29 / 男", new BigDecimal("2")),
+                new TravelAnalyticsMetricResponse.Item("45-59 / 男", new BigDecimal("2")),
+                new TravelAnalyticsMetricResponse.Item("<18 / 女", new BigDecimal("2")),
+                new TravelAnalyticsMetricResponse.Item("30-44 / 其他", new BigDecimal("2"))
         ), response.items());
         assertEquals("按年龄段和性别分组统计有效记录数，仅返回前 5 项", response.methodology());
+    }
+
+    @Test
+    void commonVisitorSegmentsNormalizesAliasesAndDropsUnexpectedValues() throws Exception {
+        TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
+        when(repository.findAllByOrderByUpdatedAtAscIdAsc()).thenReturn(segmentNormalizationRecords());
+        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(repository, new TravelAnalyticsValueParser());
+
+        TravelAnalyticsMetricResponse response = service.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.COMMON_VISITOR_SEGMENTS);
+        String json = objectMapper.writeValueAsString(response);
+
+        assertEquals(14, response.totalSamples());
+        assertEquals(10, response.validSamples());
+        assertEquals(List.of(
+                new TravelAnalyticsMetricResponse.Item("18-29 / 男", new BigDecimal("3")),
+                new TravelAnalyticsMetricResponse.Item("30-44 / 女", new BigDecimal("3")),
+                new TravelAnalyticsMetricResponse.Item("45-59 / 其他", new BigDecimal("2")),
+                new TravelAnalyticsMetricResponse.Item("<18 / 女", new BigDecimal("1")),
+                new TravelAnalyticsMetricResponse.Item("60+ / 男", new BigDecimal("1"))
+        ), response.items());
+        assertFalse(json.contains("未知"));
+        assertFalse(json.contains("18-25"));
+        assertFalse(json.contains("女游客"));
+        assertFalse(json.contains("男生"));
+        assertFalse(json.contains("20-30"));
     }
 
     private List<TravelAnalyticsRecord> averageSpendRecords() {
@@ -150,6 +219,13 @@ class TravelAnalyticsMetricServiceTests {
                 spendRecord("u10", "游客10", "", "50", "20", "20", "20", "140", LocalDateTime.of(2026, 7, 18, 10, 0)),
                 spendRecord("u11", "游客11", "未知", "未知", "未知", "未知", "未知", "未知", LocalDateTime.of(2026, 7, 18, 11, 0)),
                 spendRecord("u12", "游客12", "", "未知", "", "", "", "未知", LocalDateTime.of(2026, 7, 18, 12, 0))
+        );
+    }
+
+    private List<TravelAnalyticsRecord> spendRecordsWithUnparseableTotalCost() {
+        return List.of(
+                spendRecord("sx1", "游客A", "100", null, null, null, null, null, LocalDateTime.of(2026, 7, 18, 8, 0)),
+                spendRecord("sx2", "游客B", "约200", "40", "30", "20", "10", "5", LocalDateTime.of(2026, 7, 18, 12, 0))
         );
     }
 
@@ -190,6 +266,13 @@ class TravelAnalyticsMetricServiceTests {
         );
     }
 
+    private List<TravelAnalyticsRecord> invalidStayDurationRecords() {
+        return List.of(
+                durationRecord("si1", "未知", LocalDateTime.of(2026, 7, 18, 8, 0)),
+                durationRecord("si2", "两小时", LocalDateTime.of(2026, 7, 18, 12, 30))
+        );
+    }
+
     private List<TravelAnalyticsRecord> satisfactionRecords() {
         return List.of(
                 satisfactionRecord("f01", "4.0", LocalDateTime.of(2026, 7, 18, 1, 0)),
@@ -209,18 +292,37 @@ class TravelAnalyticsMetricServiceTests {
 
     private List<TravelAnalyticsRecord> visitorSegmentRecords() {
         return List.of(
-                segmentRecord("g01", "26", "女"),
-                segmentRecord("g02", "27", "女"),
-                segmentRecord("g03", "35", "女"),
+                segmentRecord("g01", "30", "女"),
+                segmentRecord("g02", "35", "女"),
+                segmentRecord("g03", "44", "女"),
                 segmentRecord("g04", "18", "男"),
-                segmentRecord("g05", "25", "男"),
-                segmentRecord("g06", "36", "女"),
-                segmentRecord("g07", "44", "女"),
-                segmentRecord("g08", "46", "男"),
-                segmentRecord("g09", "52", "男"),
-                segmentRecord("g10", "16", "女"),
-                segmentRecord("g11", "17", "女"),
-                segmentRecord("g12", "19", "女")
+                segmentRecord("g05", "29", "男"),
+                segmentRecord("g06", "45", "男"),
+                segmentRecord("g07", "59", "男"),
+                segmentRecord("g08", "16", "女"),
+                segmentRecord("g09", "17", "女"),
+                segmentRecord("g10", "31", "其他"),
+                segmentRecord("g11", "43", "其他"),
+                segmentRecord("g12", "60", "男")
+        );
+    }
+
+    private List<TravelAnalyticsRecord> segmentNormalizationRecords() {
+        return List.of(
+                segmentRecord("n01", "18", "男"),
+                segmentRecord("n02", " 29岁 ", "male"),
+                segmentRecord("n03", "22", "M"),
+                segmentRecord("n04", "30岁", "女"),
+                segmentRecord("n05", "44", "female"),
+                segmentRecord("n06", "31", "F"),
+                segmentRecord("n07", "45", "其他"),
+                segmentRecord("n08", "59岁", "非二元"),
+                segmentRecord("n09", "17", "女"),
+                segmentRecord("n10", "60", "man"),
+                segmentRecord("n11", "20-30", "男"),
+                segmentRecord("n12", "18-25", "female"),
+                segmentRecord("n13", "未知", "女"),
+                segmentRecord("n14", "33", "女游客")
         );
     }
 
