@@ -25,16 +25,19 @@ public class ScenicFacilityContentService {
     private final ScenicFacilityDetailRepository detailRepository;
     private final ScenicFacilityPresentationRepository presentationRepository;
     private final VoiceScriptSceneRepository voiceScriptRepository;
+    private final ScenicKnowledgePublicationService publicationService;
 
     public ScenicFacilityContentService(
             ScenicFacilityRepository facilityRepository,
             ScenicFacilityDetailRepository detailRepository,
             ScenicFacilityPresentationRepository presentationRepository,
-            VoiceScriptSceneRepository voiceScriptRepository) {
+            VoiceScriptSceneRepository voiceScriptRepository,
+            ScenicKnowledgePublicationService publicationService) {
         this.facilityRepository = facilityRepository;
         this.detailRepository = detailRepository;
         this.presentationRepository = presentationRepository;
         this.voiceScriptRepository = voiceScriptRepository;
+        this.publicationService = publicationService;
     }
 
     public ScenicFacilityContentResponse getContent(Long facilityId) {
@@ -89,6 +92,7 @@ public class ScenicFacilityContentService {
         applyPresentation(presentation, request);
         detailRepository.save(detail);
         presentationRepository.save(presentation);
+        publicationService.markOutdated(facilityId);
         return toResponse(facility, detail, presentation);
     }
 

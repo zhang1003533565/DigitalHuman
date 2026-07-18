@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -110,11 +111,21 @@ class ScenicFacilityContentServiceTests {
         assertEquals(List.of(51L, 52L), result.stream().map(VoiceScriptScene::getId).toList());
     }
 
+    @Test
+    void saveContentMarksLatestPublishedKnowledgeAsOutdatedAfterOfficialContentChanges() {
+        Fixtures fixtures = fixtures();
+
+        fixtures.service.saveContent(12L, contentRequest());
+
+        verify(fixtures.publicationService).markOutdated(12L);
+    }
+
     private Fixtures fixtures() {
         ScenicFacilityRepository facilityRepository = mock(ScenicFacilityRepository.class);
         ScenicFacilityDetailRepository detailRepository = mock(ScenicFacilityDetailRepository.class);
         ScenicFacilityPresentationRepository presentationRepository = mock(ScenicFacilityPresentationRepository.class);
         VoiceScriptSceneRepository voiceRepository = mock(VoiceScriptSceneRepository.class);
+        ScenicKnowledgePublicationService publicationService = mock(ScenicKnowledgePublicationService.class);
         ScenicFacility facility = new ScenicFacility();
         facility.setId(12L);
         facility.setName("灵山大佛");
@@ -125,8 +136,8 @@ class ScenicFacilityContentServiceTests {
         when(detailRepository.save(any(ScenicFacilityDetail.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(presentationRepository.save(any(ScenicFacilityPresentation.class))).thenAnswer(invocation -> invocation.getArgument(0));
         ScenicFacilityContentService service = new ScenicFacilityContentService(
-                facilityRepository, detailRepository, presentationRepository, voiceRepository);
-        return new Fixtures(service, detailRepository, presentationRepository, voiceRepository);
+                facilityRepository, detailRepository, presentationRepository, voiceRepository, publicationService);
+        return new Fixtures(service, detailRepository, presentationRepository, voiceRepository, publicationService);
     }
 
     private ScenicFacilityContentRequest contentRequest() {
@@ -158,6 +169,7 @@ class ScenicFacilityContentServiceTests {
             ScenicFacilityContentService service,
             ScenicFacilityDetailRepository detailRepository,
             ScenicFacilityPresentationRepository presentationRepository,
-            VoiceScriptSceneRepository voiceRepository) {
+            VoiceScriptSceneRepository voiceRepository,
+            ScenicKnowledgePublicationService publicationService) {
     }
 }

@@ -19,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class AdminScenicFacilityServiceTests {
@@ -27,6 +28,7 @@ class AdminScenicFacilityServiceTests {
     void savesOfficialSpotCodeSummaryLocationAndVisibilityAsFirstClassFields() {
         ScenicFacilityRepository facilityRepository = mock(ScenicFacilityRepository.class);
         FacilityCategoryRepository categoryRepository = mock(FacilityCategoryRepository.class);
+        ScenicKnowledgePublicationService publicationService = mock(ScenicKnowledgePublicationService.class);
         FacilityCategory category = category();
         when(categoryRepository.findByIdAndDeletedAtIsNull(3L)).thenReturn(Optional.of(category));
         when(facilityRepository.existsBySpotCodeIgnoreCaseAndDeletedAtIsNull("LS-001")).thenReturn(false);
@@ -36,7 +38,7 @@ class AdminScenicFacilityServiceTests {
             return facility;
         });
         AdminScenicFacilityService service = new AdminScenicFacilityService(
-                facilityRepository, categoryRepository, new ObjectMapper());
+                facilityRepository, categoryRepository, new ObjectMapper(), publicationService);
 
         ScenicFacilityDto result = service.createFacility(request());
 
@@ -50,15 +52,37 @@ class AdminScenicFacilityServiceTests {
     void rejectsDuplicateOfficialSpotCode() {
         ScenicFacilityRepository facilityRepository = mock(ScenicFacilityRepository.class);
         FacilityCategoryRepository categoryRepository = mock(FacilityCategoryRepository.class);
+        ScenicKnowledgePublicationService publicationService = mock(ScenicKnowledgePublicationService.class);
         when(categoryRepository.findByIdAndDeletedAtIsNull(3L)).thenReturn(Optional.of(category()));
         when(facilityRepository.existsBySpotCodeIgnoreCaseAndDeletedAtIsNull("LS-001")).thenReturn(true);
         AdminScenicFacilityService service = new AdminScenicFacilityService(
-                facilityRepository, categoryRepository, new ObjectMapper());
+                facilityRepository, categoryRepository, new ObjectMapper(), publicationService);
 
         ResponseStatusException error = assertThrows(ResponseStatusException.class, () -> service.createFacility(request()));
 
         assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
         assertEquals("景点编码已存在", error.getReason());
+    }
+
+    @Test
+    void updateFacilityMarksLatestPublishedKnowledgeAsOutdatedAfterOfficialChanges() {
+        ScenicFacilityRepository facilityRepository = mock(ScenicFacilityRepository.class);
+        FacilityCategoryRepository categoryRepository = mock(FacilityCategoryRepository.class);
+        ScenicKnowledgePublicationService publicationService = mock(ScenicKnowledgePublicationService.class);
+        FacilityCategory category = category();
+        ScenicFacility existing = new ScenicFacility();
+        existing.setId(12L);
+        existing.setCategory(category);
+        when(categoryRepository.findByIdAndDeletedAtIsNull(3L)).thenReturn(Optional.of(category));
+        when(facilityRepository.findByIdAndDeletedAtIsNull(12L)).thenReturn(Optional.of(existing));
+        when(facilityRepository.existsBySpotCodeIgnoreCaseAndDeletedAtIsNullAndIdNot("LS-001", 12L)).thenReturn(false);
+        when(facilityRepository.save(any(ScenicFacility.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        AdminScenicFacilityService service = new AdminScenicFacilityService(
+                facilityRepository, categoryRepository, new ObjectMapper(), publicationService);
+
+        service.updateFacility(12L, request());
+
+        verify(publicationService).markOutdated(12L);
     }
 
     private ScenicFacilityRequestDto request() {

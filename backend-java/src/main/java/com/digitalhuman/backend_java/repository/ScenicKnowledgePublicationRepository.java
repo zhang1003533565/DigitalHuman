@@ -11,4 +11,6 @@ public interface ScenicKnowledgePublicationRepository extends JpaRepository<Scen
             Long facilityId,
             Long accountId,
             String knowledgeId);
+
+    Optional<ScenicKnowledgePublication> findFirstByFacilityIdOrderByUpdatedAtDescIdDesc(Long facilityId);
 }
