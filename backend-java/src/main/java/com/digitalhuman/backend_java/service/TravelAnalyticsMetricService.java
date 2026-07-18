@@ -101,8 +101,8 @@ public class TravelAnalyticsMetricService {
                 validSamples,
                 asOf,
                 items,
-                "按 attraction_name 分组统计有效记录数，仅返回前 5 项",
-                buildThresholdWarning(audience, validSamples, true, items.isEmpty())
+                zeroRowMethodology(records, "按 attraction_name 分组统计有效记录数，仅返回前 5 项"),
+                zeroRowBreakdownWarning(records, audience, validSamples, items.isEmpty())
         );
     }
 
@@ -218,8 +218,8 @@ public class TravelAnalyticsMetricService {
                 validSamples,
                 asOf,
                 items,
-                "按年龄段和性别分组统计有效记录数，仅返回前 5 项",
-                buildThresholdWarning(audience, validSamples, true, items.isEmpty())
+                zeroRowMethodology(records, "按年龄段和性别分组统计有效记录数，仅返回前 5 项"),
+                zeroRowBreakdownWarning(records, audience, validSamples, items.isEmpty())
         );
     }
 
@@ -355,6 +355,17 @@ public class TravelAnalyticsMetricService {
             return "暂无来源数据，asOf 为本次计算时间";
         }
         return validSamples == 0 ? "暂无有效数据" : null;
+    }
+
+    private String zeroRowBreakdownWarning(
+            List<TravelAnalyticsRecord> records,
+            TravelAnalyticsAudience audience,
+            long validSamples,
+            boolean itemsEmpty) {
+        if (records.isEmpty()) {
+            return "暂无来源数据，asOf 为本次计算时间";
+        }
+        return buildThresholdWarning(audience, validSamples, true, itemsEmpty);
     }
 
     private String buildThresholdWarning(

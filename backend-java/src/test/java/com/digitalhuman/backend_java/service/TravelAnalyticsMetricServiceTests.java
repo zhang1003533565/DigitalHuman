@@ -107,6 +107,22 @@ class TravelAnalyticsMetricServiceTests {
     }
 
     @Test
+    void popularAttractionsUsesCalculationTimeAndExplicitMessagingWhenThereAreNoRows() {
+        TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
+        when(repository.findAllByOrderByUpdatedAtAscIdAsc()).thenReturn(List.of());
+        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(repository, new TravelAnalyticsValueParser(), FIXED_CLOCK);
+
+        TravelAnalyticsMetricResponse response = service.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.POPULAR_ATTRACTIONS);
+
+        assertEquals(0, response.totalSamples());
+        assertEquals(0, response.validSamples());
+        assertEquals(LocalDateTime.of(2026, 7, 18, 16, 0), response.asOf());
+        assertTrue(response.items().isEmpty());
+        assertEquals("暂无来源数据，asOf 为本次计算时间", response.warning());
+        assertEquals("当前无来源记录，asOf 为本次计算时间", response.methodology());
+    }
+
+    @Test
     void averageStayDurationUsesLatestRowTimestampEvenWhenNoRowsAreValid() {
         TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
         when(repository.findAllByOrderByUpdatedAtAscIdAsc()).thenReturn(invalidStayDurationRecords());
@@ -208,6 +224,22 @@ class TravelAnalyticsMetricServiceTests {
         assertFalse(json.contains("女游客"));
         assertFalse(json.contains("男生"));
         assertFalse(json.contains("20-30"));
+    }
+
+    @Test
+    void commonVisitorSegmentsUsesCalculationTimeAndExplicitMessagingWhenThereAreNoRows() {
+        TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
+        when(repository.findAllByOrderByUpdatedAtAscIdAsc()).thenReturn(List.of());
+        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(repository, new TravelAnalyticsValueParser(), FIXED_CLOCK);
+
+        TravelAnalyticsMetricResponse response = service.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.COMMON_VISITOR_SEGMENTS);
+
+        assertEquals(0, response.totalSamples());
+        assertEquals(0, response.validSamples());
+        assertEquals(LocalDateTime.of(2026, 7, 18, 16, 0), response.asOf());
+        assertTrue(response.items().isEmpty());
+        assertEquals("暂无来源数据，asOf 为本次计算时间", response.warning());
+        assertEquals("当前无来源记录，asOf 为本次计算时间", response.methodology());
     }
 
     private List<TravelAnalyticsRecord> averageSpendRecords() {
