@@ -56,6 +56,12 @@ export type ScenicFacilityVoiceScript = {
   versionNo: number
   durationSec: number
   audioUrl?: string
+  status: 'draft' | 'published' | 'archived'
+  audioStatus?: 'missing' | 'ready' | 'stale' | 'failed'
+  voiceId?: string
+  speechRate?: string
+  speechVolume?: string
+  speechPitch?: string
 }
 
 export type ScenicFacilityContent = {
@@ -78,6 +84,7 @@ export type ScenicFacilityContent = {
   liveVideoUrl?: string
   liveStreamUrl?: string
   cameraStreamKey?: string
+  liveDigitalHumanModelId?: number | null
 }
 
 export type ScenicLiveVideoUploadResponse = { url: string; fileName?: string }

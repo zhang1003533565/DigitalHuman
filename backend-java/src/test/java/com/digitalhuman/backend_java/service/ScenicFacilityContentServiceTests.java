@@ -2,10 +2,13 @@ package com.digitalhuman.backend_java.service;
 
 import com.digitalhuman.backend_java.dto.ScenicFacilityContentRequest;
 import com.digitalhuman.backend_java.dto.ScenicFacilityContentResponse;
+import com.digitalhuman.backend_java.dto.VisitorFacilityLiveConfigDto;
 import com.digitalhuman.backend_java.model.ScenicFacility;
 import com.digitalhuman.backend_java.model.ScenicFacilityDetail;
 import com.digitalhuman.backend_java.model.ScenicFacilityPresentation;
+import com.digitalhuman.backend_java.model.DigitalHumanModel;
 import com.digitalhuman.backend_java.model.VoiceScriptScene;
+import com.digitalhuman.backend_java.repository.DigitalHumanModelRepository;
 import com.digitalhuman.backend_java.repository.ScenicFacilityDetailRepository;
 import com.digitalhuman.backend_java.repository.ScenicFacilityPresentationRepository;
 import com.digitalhuman.backend_java.repository.ScenicFacilityRepository;
@@ -23,6 +26,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import org.mockito.ArgumentCaptor;
 
 class ScenicFacilityContentServiceTests {
 
@@ -77,6 +81,69 @@ class ScenicFacilityContentServiceTests {
     }
 
     @Test
+    void rejectsEnabledLiveWithoutADigitalHumanModel() {
+        Fixtures fixtures = fixtures();
+        ScenicFacilityContentRequest request = contentRequest();
+        request.setLiveEnabled(true);
+        request.setLiveSourceType("video");
+        request.setLiveVideoUrl("/uploads/lingshan.mp4");
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> fixtures.service.saveContent(12L, request));
+
+        assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
+        assertEquals("开启直播后必须选择直播数字人", error.getReason());
+    }
+
+    @Test
+    void savesTheSelectedActiveDigitalHumanForLiveBroadcast() {
+        Fixtures fixtures = fixtures();
+        DigitalHumanModel model = new DigitalHumanModel();
+        model.setId(7L);
+        model.setModelKey("hiyori_pro_zh");
+        model.setDisplayName("Hiyori 中文模型");
+        model.setModelPath("hiyori_pro_zh/hiyori_pro_t11.model3.json");
+        model.setStatus("active");
+        when(fixtures.modelRepository.findById(7L)).thenReturn(Optional.of(model));
+        ScenicFacilityContentRequest request = contentRequest();
+        request.setLiveEnabled(true);
+        request.setLiveDigitalHumanModelId(7L);
+        request.setLiveSourceType("video");
+        request.setLiveVideoUrl("/uploads/lingshan.mp4");
+
+        ScenicFacilityContentResponse response = fixtures.service.saveContent(12L, request);
+
+        assertEquals(7L, response.getLiveDigitalHumanModelId());
+        ArgumentCaptor<ScenicFacilityPresentation> captor = ArgumentCaptor.forClass(ScenicFacilityPresentation.class);
+        verify(fixtures.presentationRepository).save(captor.capture());
+        assertEquals(7L, captor.getValue().getLiveDigitalHumanModel().getId());
+    }
+
+    @Test
+    void exposesTheBoundDigitalHumanToTheVisitorLivePage() {
+        Fixtures fixtures = fixtures();
+        DigitalHumanModel model = new DigitalHumanModel();
+        model.setId(7L);
+        model.setModelKey("hiyori_pro_zh");
+        model.setDisplayName("Hiyori 中文模型");
+        model.setModelPath("hiyori_pro_zh/hiyori_pro_t11.model3.json");
+        model.setStatus("active");
+        ScenicFacilityPresentation presentation = new ScenicFacilityPresentation();
+        presentation.setLiveEnabled(true);
+        presentation.setLiveSourceType("video");
+        presentation.setLiveVideoUrl("/uploads/lingshan.mp4");
+        presentation.setLiveDigitalHumanModel(model);
+        when(fixtures.presentationRepository.findByFacilityId(12L)).thenReturn(Optional.of(presentation));
+
+        VisitorFacilityLiveConfigDto result = fixtures.service.getVisitorLiveConfig(12L);
+
+        assertEquals(true, result.available());
+        assertEquals("hiyori_pro_zh", result.digitalHuman().modelKey());
+        assertEquals("hiyori_pro_zh/hiyori_pro_t11.model3.json", result.digitalHuman().modelPath());
+    }
+
+    @Test
     void claimsLegacyPublishedScriptWhenItsSpotCodeMatchesTheOfficialFacility() {
         Fixtures fixtures = fixtures();
         ScenicFacilityContentRequest request = contentRequest();
@@ -110,11 +177,28 @@ class ScenicFacilityContentServiceTests {
         assertEquals(List.of(51L, 52L), result.stream().map(VoiceScriptScene::getId).toList());
     }
 
+    @Test
+    void listsAllFacilityVoiceScriptVersionsForManagement() {
+        Fixtures fixtures = fixtures();
+        VoiceScriptScene draft = voice(61L, 12L, "LS-001", "draft", "missing");
+        VoiceScriptScene published = voice(62L, 12L, "LS-001", "published", "ready");
+        VoiceScriptScene legacy = voice(63L, null, "LS-001", "archived", "stale");
+        when(fixtures.voiceRepository.findByFacilityIdOrderByUpdatedAtDescIdDesc(12L))
+                .thenReturn(List.of(published, draft));
+        when(fixtures.voiceRepository.findBySpotIdOrderByUpdatedAtDescIdDesc("LS-001"))
+                .thenReturn(List.of(published, legacy));
+
+        assertEquals(
+                List.of(62L, 61L, 63L),
+                fixtures.service.listVoiceScriptsForManagement(12L).stream().map(VoiceScriptScene::getId).toList());
+    }
+
     private Fixtures fixtures() {
         ScenicFacilityRepository facilityRepository = mock(ScenicFacilityRepository.class);
         ScenicFacilityDetailRepository detailRepository = mock(ScenicFacilityDetailRepository.class);
         ScenicFacilityPresentationRepository presentationRepository = mock(ScenicFacilityPresentationRepository.class);
         VoiceScriptSceneRepository voiceRepository = mock(VoiceScriptSceneRepository.class);
+        DigitalHumanModelRepository modelRepository = mock(DigitalHumanModelRepository.class);
         ScenicFacility facility = new ScenicFacility();
         facility.setId(12L);
         facility.setName("灵山大佛");
@@ -125,8 +209,8 @@ class ScenicFacilityContentServiceTests {
         when(detailRepository.save(any(ScenicFacilityDetail.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(presentationRepository.save(any(ScenicFacilityPresentation.class))).thenAnswer(invocation -> invocation.getArgument(0));
         ScenicFacilityContentService service = new ScenicFacilityContentService(
-                facilityRepository, detailRepository, presentationRepository, voiceRepository);
-        return new Fixtures(service, detailRepository, presentationRepository, voiceRepository);
+                facilityRepository, detailRepository, presentationRepository, voiceRepository, modelRepository);
+        return new Fixtures(service, detailRepository, presentationRepository, voiceRepository, modelRepository);
     }
 
     private ScenicFacilityContentRequest contentRequest() {
@@ -158,6 +242,7 @@ class ScenicFacilityContentServiceTests {
             ScenicFacilityContentService service,
             ScenicFacilityDetailRepository detailRepository,
             ScenicFacilityPresentationRepository presentationRepository,
-            VoiceScriptSceneRepository voiceRepository) {
+            VoiceScriptSceneRepository voiceRepository,
+            DigitalHumanModelRepository modelRepository) {
     }
 }

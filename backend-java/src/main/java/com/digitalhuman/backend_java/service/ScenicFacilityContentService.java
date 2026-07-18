@@ -2,6 +2,8 @@ package com.digitalhuman.backend_java.service;
 
 import com.digitalhuman.backend_java.dto.ScenicFacilityContentRequest;
 import com.digitalhuman.backend_java.dto.ScenicFacilityContentResponse;
+import com.digitalhuman.backend_java.dto.VisitorFacilityLiveConfigDto;
+import com.digitalhuman.backend_java.model.DigitalHumanModel;
 import com.digitalhuman.backend_java.model.ScenicFacility;
 import com.digitalhuman.backend_java.model.ScenicFacilityDetail;
 import com.digitalhuman.backend_java.model.ScenicFacilityPresentation;
@@ -10,6 +12,7 @@ import com.digitalhuman.backend_java.repository.ScenicFacilityDetailRepository;
 import com.digitalhuman.backend_java.repository.ScenicFacilityPresentationRepository;
 import com.digitalhuman.backend_java.repository.ScenicFacilityRepository;
 import com.digitalhuman.backend_java.repository.VoiceScriptSceneRepository;
+import com.digitalhuman.backend_java.repository.DigitalHumanModelRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -25,16 +28,19 @@ public class ScenicFacilityContentService {
     private final ScenicFacilityDetailRepository detailRepository;
     private final ScenicFacilityPresentationRepository presentationRepository;
     private final VoiceScriptSceneRepository voiceScriptRepository;
+    private final DigitalHumanModelRepository digitalHumanModelRepository;
 
     public ScenicFacilityContentService(
             ScenicFacilityRepository facilityRepository,
             ScenicFacilityDetailRepository detailRepository,
             ScenicFacilityPresentationRepository presentationRepository,
-            VoiceScriptSceneRepository voiceScriptRepository) {
+            VoiceScriptSceneRepository voiceScriptRepository,
+            DigitalHumanModelRepository digitalHumanModelRepository) {
         this.facilityRepository = facilityRepository;
         this.detailRepository = detailRepository;
         this.presentationRepository = presentationRepository;
         this.voiceScriptRepository = voiceScriptRepository;
+        this.digitalHumanModelRepository = digitalHumanModelRepository;
     }
 
     public ScenicFacilityContentResponse getContent(Long facilityId) {
@@ -60,10 +66,40 @@ public class ScenicFacilityContentService {
         return List.copyOf(rows.values());
     }
 
+    public List<VoiceScriptScene> listVoiceScriptsForManagement(Long facilityId) {
+        ScenicFacility facility = findFacility(facilityId);
+        Map<Long, VoiceScriptScene> rows = new LinkedHashMap<>();
+        voiceScriptRepository.findByFacilityIdOrderByUpdatedAtDescIdDesc(facilityId)
+                .forEach(scene -> rows.put(scene.getId(), scene));
+        if (clean(facility.getSpotCode()) != null) {
+            voiceScriptRepository.findBySpotIdOrderByUpdatedAtDescIdDesc(facility.getSpotCode())
+                    .forEach(scene -> rows.putIfAbsent(scene.getId(), scene));
+        }
+        return List.copyOf(rows.values());
+    }
+
+    public VisitorFacilityLiveConfigDto getVisitorLiveConfig(Long facilityId) {
+        ScenicFacility facility = findFacility(facilityId);
+        ScenicFacilityPresentation presentation = presentationRepository.findByFacilityId(facilityId).orElse(null);
+        if (presentation == null || !Boolean.TRUE.equals(presentation.getLiveEnabled())) {
+            return unavailableLiveConfig(facility, "LIVE_DISABLED", presentation);
+        }
+        DigitalHumanModel model = presentation.getLiveDigitalHumanModel();
+        if (model == null || !"active".equalsIgnoreCase(clean(model.getStatus()))) {
+            return unavailableLiveConfig(facility, "DIGITAL_HUMAN_UNAVAILABLE", presentation);
+        }
+        return new VisitorFacilityLiveConfigDto(
+                facility.getId(), facility.getName(), true, null,
+                presentation.getLiveSourceType(), presentation.getLiveVideoUrl(),
+                presentation.getLiveStreamUrl(),
+                new VisitorFacilityLiveConfigDto.DigitalHuman(
+                        model.getId(), model.getModelKey(), model.getDisplayName(), model.getModelPath()));
+    }
+
     @Transactional
     public ScenicFacilityContentResponse saveContent(Long facilityId, ScenicFacilityContentRequest request) {
         ScenicFacility facility = findFacility(facilityId);
-        validatePresentation(facility, request);
+        DigitalHumanModel liveDigitalHumanModel = validatePresentation(facility, request);
         ScenicFacilityDetail detail = detailRepository.findByFacilityId(facilityId).orElseGet(() -> {
             ScenicFacilityDetail created = new ScenicFacilityDetail();
             created.setFacility(facility);
@@ -86,13 +122,13 @@ public class ScenicFacilityContentService {
             created.setFacility(facility);
             return created;
         });
-        applyPresentation(presentation, request);
+        applyPresentation(presentation, request, liveDigitalHumanModel);
         detailRepository.save(detail);
         presentationRepository.save(presentation);
         return toResponse(facility, detail, presentation);
     }
 
-    private void validatePresentation(ScenicFacility facility, ScenicFacilityContentRequest request) {
+    private DigitalHumanModel validatePresentation(ScenicFacility facility, ScenicFacilityContentRequest request) {
         Long facilityId = facility.getId();
         boolean audioEnabled = Boolean.TRUE.equals(request.getAudioEnabled());
         boolean liveEnabled = Boolean.TRUE.equals(request.getLiveEnabled());
@@ -121,15 +157,21 @@ public class ScenicFacilityContentService {
             if ("stream".equals(sourceType) && clean(request.getLiveStreamUrl()) == null) badRequest("开启直播后必须填写直播流地址");
             if ("camera".equals(sourceType) && clean(request.getCameraStreamKey()) == null) badRequest("开启直播后必须配置摄像头通道");
             if (!"video".equals(sourceType) && !"stream".equals(sourceType) && !"camera".equals(sourceType)) badRequest("开启直播后必须选择直播来源");
+            if (request.getLiveDigitalHumanModelId() == null) badRequest("开启直播后必须选择直播数字人");
         }
         String defaultExperience = clean(request.getDefaultExperience());
         if (defaultExperience != null
                 && (!("audio".equals(defaultExperience) && audioEnabled) && !("live".equals(defaultExperience) && liveEnabled))) {
             badRequest("默认体验必须是已开启的语音或直播");
         }
+        if (!liveEnabled) return null;
+        DigitalHumanModel model = digitalHumanModelRepository.findById(request.getLiveDigitalHumanModelId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "选择的直播数字人不存在"));
+        if (!"active".equalsIgnoreCase(clean(model.getStatus()))) badRequest("选择的直播数字人不可用");
+        return model;
     }
 
-    private void applyPresentation(ScenicFacilityPresentation target, ScenicFacilityContentRequest source) {
+    private void applyPresentation(ScenicFacilityPresentation target, ScenicFacilityContentRequest source, DigitalHumanModel liveDigitalHumanModel) {
         boolean audio = Boolean.TRUE.equals(source.getAudioEnabled());
         boolean live = Boolean.TRUE.equals(source.getLiveEnabled());
         target.setAudioEnabled(audio);
@@ -140,6 +182,7 @@ public class ScenicFacilityContentService {
         target.setLiveVideoUrl(live && "video".equals(source.getLiveSourceType()) ? clean(source.getLiveVideoUrl()) : null);
         target.setLiveStreamUrl(live && "stream".equals(source.getLiveSourceType()) ? clean(source.getLiveStreamUrl()) : null);
         target.setCameraStreamKey(live && "camera".equals(source.getLiveSourceType()) ? clean(source.getCameraStreamKey()) : null);
+        target.setLiveDigitalHumanModel(live ? liveDigitalHumanModel : null);
     }
 
     private ScenicFacilityContentResponse toResponse(ScenicFacility facility, ScenicFacilityDetail detail, ScenicFacilityPresentation presentation) {
@@ -166,8 +209,19 @@ public class ScenicFacilityContentService {
             response.setLiveVideoUrl(presentation.getLiveVideoUrl());
             response.setLiveStreamUrl(presentation.getLiveStreamUrl());
             response.setCameraStreamKey(presentation.getCameraStreamKey());
+            response.setLiveDigitalHumanModelId(presentation.getLiveDigitalHumanModel() == null
+                    ? null : presentation.getLiveDigitalHumanModel().getId());
         }
         return response;
+    }
+
+    private VisitorFacilityLiveConfigDto unavailableLiveConfig(
+            ScenicFacility facility, String reason, ScenicFacilityPresentation presentation) {
+        return new VisitorFacilityLiveConfigDto(
+                facility.getId(), facility.getName(), false, reason,
+                presentation == null ? null : presentation.getLiveSourceType(),
+                presentation == null ? null : presentation.getLiveVideoUrl(),
+                presentation == null ? null : presentation.getLiveStreamUrl(), null);
     }
 
     private ScenicFacility findFacility(Long id) {
