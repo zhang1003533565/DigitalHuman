@@ -1,6 +1,7 @@
 package com.digitalhuman.backend_java.service;
 
 import com.digitalhuman.backend_java.model.FacilityCategory;
+import com.digitalhuman.backend_java.model.ScenicKnowledgePublication;
 import com.digitalhuman.backend_java.model.ScenicFacility;
 import com.digitalhuman.backend_java.model.ScenicFacilityDetail;
 import org.junit.jupiter.api.Test;
@@ -10,9 +11,11 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalTime;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ScenicKnowledgeDocumentRendererTests {
@@ -106,6 +109,66 @@ class ScenicKnowledgeDocumentRendererTests {
         assertFalse(rendered.markdown().contains("## 演艺与开放信息"));
         assertFalse(rendered.markdown().contains("## 游客须知"));
         assertFalse(rendered.markdown().contains("## 备注"));
+    }
+
+    @Test
+    void renderEscapesMarkdownStructuralSyntaxInInjectedOfficialFields() {
+        ScenicKnowledgeDocumentRenderer renderer = new ScenicKnowledgeDocumentRenderer();
+        ScenicFacility facility = facility();
+        ScenicFacilityDetail detail = detail();
+        facility.setName("# 标题\n- 列表项");
+        facility.setSpotCode("[LS](001)");
+        facility.setLocationDescription("> 引用\n```code```");
+        facility.setShortDescription("第一行\n## 伪标题\n第二行");
+        detail.setCoreFunction("\\路径\\与`代码`");
+        detail.setCulturalConnotation("- 列表\n1. 有序");
+        detail.setDetailedIntroduction("[链接](https://example.com)");
+        detail.setHighlights("> 引用块");
+        detail.setPerformanceOpenInfo("``` fenced ```");
+        detail.setVisitorNotes("保留\n# heading-like");
+        detail.setRemark("括号(test)");
+
+        ScenicKnowledgeDocumentRenderer.RenderedDocument rendered = renderer.render(facility, detail);
+
+        assertTrue(rendered.markdown().startsWith("# \\# 标题\n\\- 列表项\n\n"));
+        assertTrue(rendered.markdown().contains("- 景点编码：\\[LS\\]\\(001\\)"));
+        assertTrue(rendered.markdown().contains("- 位置：\\> 引用\n\\`\\`\\`code\\`\\`\\`"));
+        assertTrue(rendered.markdown().contains("第一行\n\\## 伪标题\n第二行"));
+        assertTrue(rendered.markdown().contains("\\\\路径\\\\与\\`代码\\`"));
+        assertTrue(rendered.markdown().contains("\\- 列表\n1\\. 有序"));
+        assertTrue(rendered.markdown().contains("\\[链接\\]\\(https://example.com\\)"));
+        assertTrue(rendered.markdown().contains("\\> 引用块"));
+        assertTrue(rendered.markdown().contains("\\`\\`\\` fenced \\`\\`\\`"));
+        assertTrue(rendered.markdown().contains("保留\n\\# heading-like"));
+        assertTrue(rendered.markdown().contains("括号\\(test\\)"));
+        assertTrue(rendered.markdown().contains("## 核心功能"));
+        assertTrue(rendered.markdown().contains("## 文化内涵"));
+        assertEquals(sha256(rendered.markdown()), rendered.sha256());
+    }
+
+    @Test
+    void publicationStatusRejectsNullBlankAndUnknownValues() {
+        ScenicKnowledgePublication publication = new ScenicKnowledgePublication();
+
+        assertThrows(IllegalArgumentException.class, () -> publication.setStatus(null));
+        assertThrows(IllegalArgumentException.class, () -> publication.setStatus(" "));
+        assertThrows(IllegalArgumentException.class, () -> publication.setStatus("draft"));
+    }
+
+    @Test
+    void publicationStatusAcceptsAllSupportedValues() {
+        ScenicKnowledgePublication publication = new ScenicKnowledgePublication();
+
+        List<String> validStatuses = List.of(
+                ScenicKnowledgePublication.STATUS_PUBLISHING,
+                ScenicKnowledgePublication.STATUS_PUBLISHED,
+                ScenicKnowledgePublication.STATUS_OUTDATED,
+                ScenicKnowledgePublication.STATUS_FAILED,
+                ScenicKnowledgePublication.STATUS_WITHDRAWN);
+        for (String status : validStatuses) {
+            publication.setStatus(status);
+            assertEquals(status, publication.getStatus());
+        }
     }
 
     private ScenicFacility facility() {

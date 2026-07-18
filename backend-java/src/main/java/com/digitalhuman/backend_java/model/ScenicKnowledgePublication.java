@@ -10,16 +10,23 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 
 @Entity
 @Table(name = "scenic_knowledge_publication")
 public class ScenicKnowledgePublication {
-
     public static final String STATUS_PUBLISHING = "publishing";
     public static final String STATUS_PUBLISHED = "published";
     public static final String STATUS_OUTDATED = "outdated";
     public static final String STATUS_FAILED = "failed";
     public static final String STATUS_WITHDRAWN = "withdrawn";
+
+    private static final Set<String> VALID_STATUSES = Set.of(
+            STATUS_PUBLISHING,
+            STATUS_PUBLISHED,
+            STATUS_OUTDATED,
+            STATUS_FAILED,
+            STATUS_WITHDRAWN);
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -70,6 +77,7 @@ public class ScenicKnowledgePublication {
     @PrePersist
     void prePersist() {
         LocalDateTime now = LocalDateTime.now();
+        status = requireValidStatus(status);
         if (createdAt == null) {
             createdAt = now;
         }
@@ -78,6 +86,7 @@ public class ScenicKnowledgePublication {
 
     @PreUpdate
     void preUpdate() {
+        status = requireValidStatus(status);
         updatedAt = LocalDateTime.now();
     }
 
@@ -158,7 +167,7 @@ public class ScenicKnowledgePublication {
     }
 
     public void setStatus(String status) {
-        this.status = status;
+        this.status = requireValidStatus(status);
     }
 
     public String getLastError() {
@@ -199,5 +208,16 @@ public class ScenicKnowledgePublication {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    private String requireValidStatus(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            throw new IllegalArgumentException("Scenic knowledge publication status must not be blank");
+        }
+        String normalized = value.trim();
+        if (!VALID_STATUSES.contains(normalized)) {
+            throw new IllegalArgumentException("Unsupported scenic knowledge publication status: " + normalized);
+        }
+        return normalized;
     }
 }

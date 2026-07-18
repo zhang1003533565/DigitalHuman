@@ -51,7 +51,7 @@ public class ScenicKnowledgeDocumentRenderer {
     }
 
     private void appendTitle(StringBuilder builder, String title) {
-        builder.append("# ").append(title == null ? "未命名景点" : title).append("\n\n");
+        builder.append("# ").append(escapeMarkdownLiteral(title == null ? "未命名景点" : title)).append("\n\n");
     }
 
     private void appendBullet(StringBuilder builder, String label, String value) {
@@ -59,7 +59,7 @@ public class ScenicKnowledgeDocumentRenderer {
         if (normalized == null) {
             return;
         }
-        builder.append("- ").append(label).append("：").append(normalized).append("\n");
+        builder.append("- ").append(label).append("：").append(escapeMarkdownLiteral(normalized)).append("\n");
     }
 
     private void appendSection(StringBuilder builder, String title, String value) {
@@ -68,7 +68,7 @@ public class ScenicKnowledgeDocumentRenderer {
             return;
         }
         builder.append("\n## ").append(title).append("\n\n")
-                .append(normalized)
+                .append(escapeMarkdownLiteral(normalized))
                 .append("\n");
     }
 
@@ -87,6 +87,76 @@ public class ScenicKnowledgeDocumentRenderer {
         }
         String normalized = value.trim();
         return normalized.isEmpty() ? null : normalized;
+    }
+
+    private String escapeMarkdownLiteral(String value) {
+        String[] lines = value.split("\\R", -1);
+        StringBuilder builder = new StringBuilder();
+        for (int index = 0; index < lines.length; index++) {
+            if (index > 0) {
+                builder.append("\n");
+            }
+            builder.append(escapeMarkdownLine(lines[index]));
+        }
+        return builder.toString();
+    }
+
+    private String escapeMarkdownLine(String line) {
+        String escaped = line
+                .replace("\\", "\\\\")
+                .replace("`", "\\`")
+                .replace("[", "\\[")
+                .replace("]", "\\]")
+                .replace("(", "\\(")
+                .replace(")", "\\)");
+
+        int nonWhitespaceIndex = firstNonWhitespaceIndex(escaped);
+        if (nonWhitespaceIndex < 0) {
+            return escaped;
+        }
+        if (startsWithAnyMarkdownPrefix(escaped, nonWhitespaceIndex)) {
+            return escaped.substring(0, nonWhitespaceIndex)
+                    + "\\"
+                    + escaped.substring(nonWhitespaceIndex);
+        }
+        int orderedListDotIndex = orderedListDotIndex(escaped, nonWhitespaceIndex);
+        if (orderedListDotIndex >= 0) {
+            return escaped.substring(0, orderedListDotIndex)
+                    + "\\"
+                    + escaped.substring(orderedListDotIndex);
+        }
+        return escaped;
+    }
+
+    private boolean startsWithAnyMarkdownPrefix(String value, int index) {
+        return value.startsWith("#", index)
+                || value.startsWith(">", index)
+                || value.startsWith("-", index)
+                || value.startsWith("+", index)
+                || value.startsWith("*", index);
+    }
+
+    private int orderedListDotIndex(String value, int index) {
+        int cursor = index;
+        while (cursor < value.length() && Character.isDigit(value.charAt(cursor))) {
+            cursor++;
+        }
+        if (cursor > index
+                && cursor + 1 < value.length()
+                && value.charAt(cursor) == '.'
+                && Character.isWhitespace(value.charAt(cursor + 1))) {
+            return cursor;
+        }
+        return -1;
+    }
+
+    private int firstNonWhitespaceIndex(String value) {
+        for (int index = 0; index < value.length(); index++) {
+            if (!Character.isWhitespace(value.charAt(index))) {
+                return index;
+            }
+        }
+        return -1;
     }
 
     private String sha256(String markdown) {
