@@ -87,6 +87,20 @@
     - `TravelAnalyticsAiConfigServiceTests`: 3 tests, 0 failures, 0 errors
     - `UserGuideControllerTests`: 1 test, 0 failures, 0 errors
     - `AdminGuideControllerTests`: 3 tests, 0 failures, 0 errors
+- Overload-removal cleanup on July 18, 2026:
+  - Change: removed the remaining package-private `TravelAnalyticsMetricService` overloads that accepted no explicit `TravelAnalyticsAiConfigService` and deleted the temporary `defaultAiConfigService()` throwing fallback.
+  - Focused command: `cd backend-java && mvn -q -Dtest=TravelAnalyticsMetricServiceTests,TravelAnalyticsMetricCacheTests,TravelAnalyticsMetricCacheInvalidatorTests,TravelAnalyticsIntentClassifierTests,GuideServiceTests,TravelAnalyticsMetricControllerTests,TravelAnalyticsAiConfigServiceTests,UserGuideControllerTests,AdminGuideControllerTests test`
+  - Result: PASS
+  - Evidence:
+    - `TravelAnalyticsMetricServiceTests`: 16 tests, 0 failures, 0 errors
+    - `TravelAnalyticsMetricCacheTests`: 3 tests, 0 failures, 0 errors
+    - `TravelAnalyticsMetricCacheInvalidatorTests`: 4 tests, 0 failures, 0 errors
+    - `TravelAnalyticsIntentClassifierTests`: 5 tests, 0 failures, 0 errors
+    - `GuideServiceTests`: 23 tests, 0 failures, 0 errors
+    - `TravelAnalyticsMetricControllerTests`: 6 tests, 0 failures, 0 errors
+    - `TravelAnalyticsAiConfigServiceTests`: 3 tests, 0 failures, 0 errors
+    - `UserGuideControllerTests`: 1 test, 0 failures, 0 errors
+    - `AdminGuideControllerTests`: 3 tests, 0 failures, 0 errors
 - Full backend suite:
   - `cd backend-java && mvn -q test`
   - Result: PASS
@@ -101,4 +115,5 @@
 - Ordinary chat, quick chat, and SSE chat now all depend on one deterministic classification plus one shared `PUBLIC` metric boundary, which is the lowest-risk way to keep the contracts aligned.
 - Removing the placeholder analytics fallback was the correct choice because it forces guide chat to respect the real service contract instead of silently fabricating availability.
 - The remaining constructor issue was real: leaving package-private null-config construction available would have kept an implicit `publicEnabled=true` lane alive in tests and future helpers. All metric-service test construction now injects an explicit config service.
+- Removing the throwing overloads entirely is better than a fail-fast fallback because it eliminates the accidental API shape instead of preserving it behind a runtime trap.
 - Scope stayed narrow and reversible: no client privilege expansion, no SQL/model-based metric selection, and no dependency changes.

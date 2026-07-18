@@ -60,29 +60,9 @@ public class TravelAnalyticsMetricService {
 
     TravelAnalyticsMetricService(
             TravelAnalyticsRecordRepository recordRepository,
-            TravelAnalyticsValueParser valueParser) {
-        this(recordRepository, valueParser, defaultAiConfigService(), new TravelAnalyticsMetricCache(), Clock.systemDefaultZone());
-    }
-
-    TravelAnalyticsMetricService(
-            TravelAnalyticsRecordRepository recordRepository,
-            TravelAnalyticsValueParser valueParser,
-            Clock clock) {
-        this(recordRepository, valueParser, defaultAiConfigService(), new TravelAnalyticsMetricCache(clock), clock);
-    }
-
-    TravelAnalyticsMetricService(
-            TravelAnalyticsRecordRepository recordRepository,
             TravelAnalyticsValueParser valueParser,
             TravelAnalyticsAiConfigService aiConfigService) {
         this(recordRepository, valueParser, aiConfigService, new TravelAnalyticsMetricCache(), Clock.systemDefaultZone());
-    }
-
-    TravelAnalyticsMetricService(
-            TravelAnalyticsRecordRepository recordRepository,
-            TravelAnalyticsValueParser valueParser,
-            TravelAnalyticsMetricCache metricCache) {
-        this(recordRepository, valueParser, defaultAiConfigService(), metricCache, Clock.systemDefaultZone());
     }
 
     TravelAnalyticsMetricService(
@@ -298,10 +278,6 @@ public class TravelAnalyticsMetricService {
 
     private boolean publicAccessEnabled() {
         return !Boolean.FALSE.equals(aiConfigService.getConfig().getPublicEnabled());
-    }
-
-    private static TravelAnalyticsAiConfigService defaultAiConfigService() {
-        throw new IllegalStateException("TravelAnalyticsMetricService requires TravelAnalyticsAiConfigService");
     }
 
     private List<TravelAnalyticsMetricResponse.Item> averageItems(String label, BigDecimal total, long validSamples) {
