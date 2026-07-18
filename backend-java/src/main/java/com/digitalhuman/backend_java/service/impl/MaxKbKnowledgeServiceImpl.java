@@ -213,6 +213,12 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
     }
 
     @Override
+    public Object deleteDocument(Long accountId, String knowledgeId, String documentId) {
+        MaxKbAccount account = getAccount(accountId, true);
+        return deleteObject(account, documentPath(account, knowledgeId, documentId));
+    }
+
+    @Override
     public Object uploadDocuments(
             Long accountId,
             String knowledgeId,
@@ -423,10 +429,14 @@ public class MaxKbKnowledgeServiceImpl implements MaxKbKnowledgeService {
     }
 
     private String paragraphPath(MaxKbAccount account, String knowledgeId, String documentId) {
+        return documentPath(account, knowledgeId, documentId)
+                + "/paragraphs";
+    }
+
+    private String documentPath(MaxKbAccount account, String knowledgeId, String documentId) {
         return "/workspaces/" + account.getWorkspaceId()
                 + "/knowledges/" + requireId(knowledgeId, "知识库 ID")
-                + "/documents/" + requireId(documentId, "文档 ID")
-                + "/paragraphs";
+                + "/documents/" + requireId(documentId, "文档 ID");
     }
 
     private Map<String, Object> normalizeParagraphPayload(Map<String, Object> payload) {

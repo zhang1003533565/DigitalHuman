@@ -350,6 +350,18 @@ class MaxKbKnowledgeServiceImplTests {
     }
 
     @Test
+    void deleteDocumentShouldForwardToKnowledgeDocumentPath() {
+        service.deleteDocument(1L, "kb-1", "doc-1");
+
+        assertEquals("DELETE", capturedRequest.method());
+        assertEquals(
+                "/openapi/knowledge/v1/workspaces/ws-1/knowledges/kb-1/documents/doc-1",
+                capturedRequest.url().encodedPath()
+        );
+        assertEquals("Bearer mkb_secret_key", capturedRequest.header("Authorization"));
+    }
+
+    @Test
     void updateParagraphShouldNotCallManagementEndpointWhenOpenApiWriteIsUnavailable() throws Exception {
         doAnswer(invocation -> htmlResponse()).when(call).execute();
 

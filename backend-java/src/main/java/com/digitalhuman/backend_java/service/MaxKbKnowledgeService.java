@@ -40,6 +40,8 @@ public interface MaxKbKnowledgeService {
 
     Object listDocuments(Long accountId, String knowledgeId, Map<String, String> queryParams);
 
+    Object deleteDocument(Long accountId, String knowledgeId, String documentId);
+
     Object uploadDocuments(
             Long accountId,
             String knowledgeId,

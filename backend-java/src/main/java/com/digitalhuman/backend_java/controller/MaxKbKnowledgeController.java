@@ -146,6 +146,17 @@ public class MaxKbKnowledgeController {
         return ApiResult.success(maxKbKnowledgeService.listDocuments(accountId, knowledgeId, queryParams));
     }
 
+    @DeleteMapping("/accounts/{accountId}/knowledges/{knowledgeId}/documents/{documentId}")
+    public ApiResult<Object> deleteDocument(
+            @PathVariable Long accountId,
+            @PathVariable String knowledgeId,
+            @PathVariable String documentId,
+            HttpServletRequest request
+    ) {
+        requireAdmin(request);
+        return ApiResult.success(maxKbKnowledgeService.deleteDocument(accountId, knowledgeId, documentId));
+    }
+
     @PostMapping(value = "/accounts/{accountId}/knowledges/{knowledgeId}/documents/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResult<Object> uploadDocuments(
             @PathVariable Long accountId,
