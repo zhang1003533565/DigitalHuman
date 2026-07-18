@@ -63,7 +63,8 @@ public class AdminVoiceScriptController {
             @RequestParam("file") MultipartFile file,
             @RequestParam("scenicName") String scenicName,
             @RequestParam(name = "style", defaultValue = "culture") String style,
-            @RequestParam(name = "versionNo", defaultValue = "1") Integer versionNo) {
-        return service.importFromDocx(file, scenicName, style, versionNo);
+            @RequestParam(name = "versionNo", defaultValue = "1") Integer versionNo,
+            @RequestParam(name = "replaceAll", defaultValue = "false") boolean replaceAll) {
+        return service.importFromDocx(file, scenicName, style, versionNo, replaceAll);
     }
 }

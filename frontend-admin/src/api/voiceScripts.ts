@@ -40,12 +40,13 @@ export async function getVoiceScriptRecords() {
   return response.data
 }
 
-export async function importVoiceScriptDocx(file: File, scenicName: string, style: string, versionNo: number) {
+export async function importVoiceScriptDocx(file: File, scenicName: string, style: string, versionNo: number, replaceAll: boolean) {
   const formData = new FormData()
   formData.append('file', file)
   formData.append('scenicName', scenicName)
   formData.append('style', style)
   formData.append('versionNo', String(versionNo))
+  formData.append('replaceAll', String(replaceAll))
   const response = await axios.post<VoiceScriptImportResponse>('/api/admin/voice-scripts/import-docx', formData, {
     headers: {
       'Content-Type': 'multipart/form-data',

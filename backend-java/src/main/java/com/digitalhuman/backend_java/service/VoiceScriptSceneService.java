@@ -8,6 +8,9 @@ import com.digitalhuman.backend_java.repository.VoiceScriptSceneRepository;
 import jakarta.transaction.Transactional;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
+import org.apache.poi.xwpf.usermodel.XWPFTable;
+import org.apache.poi.xwpf.usermodel.XWPFTableCell;
+import org.apache.poi.xwpf.usermodel.XWPFTableRow;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -27,6 +30,23 @@ public class VoiceScriptSceneService {
     private static final Set<String> ALLOWED_STATUS = Set.of("draft", "published", "archived");
     private static final Set<String> ALLOWED_SCENE_TYPE = Set.of("overview", "spot", "transition");
     private static final Set<String> ALLOWED_STYLE = Set.of("culture", "family", "light");
+    private static final List<String> STRUCTURED_HEADERS_ZH = List.of(
+            "景区名称",
+            "景点ID",
+            "景点名称",
+            "具体位置",
+            "建筑/景观参数",
+            "核心功能",
+            "文化内涵",
+            "详细介绍",
+            "游玩亮点",
+            "演艺/开放信息",
+            "备注"
+    );
+    private static final Set<String> NON_SPOT_SECTION_TITLES = Set.of(
+            "住宿", "餐饮", "交通", "门票", "开放时间", "特色体验", "讲解重点", "实用游览贴士",
+            "个性化游览路线推荐", "核心文化内涵", "游览指南", "总结", "温馨提示", "注意事项"
+    );
 
     private final VoiceScriptSceneRepository repository;
 
@@ -94,6 +114,11 @@ public class VoiceScriptSceneService {
 
     @Transactional
     public VoiceScriptImportResponse importFromDocx(MultipartFile file, String scenicName, String style, Integer versionNo) {
+        return importFromDocx(file, scenicName, style, versionNo, false);
+    }
+
+    @Transactional
+    public VoiceScriptImportResponse importFromDocx(MultipartFile file, String scenicName, String style, Integer versionNo, boolean replaceAll) {
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "上传文件不能为空");
         }
@@ -122,9 +147,20 @@ public class VoiceScriptSceneService {
         int skippedCount = 0;
 
         try (InputStream inputStream = file.getInputStream(); XWPFDocument document = new XWPFDocument(inputStream)) {
+            List<XWPFTable> structuredTables = findStructuredTables(document);
+            if (!structuredTables.isEmpty()) {
+                if (replaceAll) {
+                    repository.deleteAllInBatch();
+                }
+                return importFromStructuredTables(structuredTables, normalizedScenicName, normalizedStyle, versionNo, originalFilename);
+            }
+
             List<String> paragraphs = extractParagraphs(document);
             if (paragraphs.isEmpty()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "文档内容为空");
+            }
+            if (replaceAll) {
+                repository.deleteAllInBatch();
             }
 
             String overviewText = mergeTexts(paragraphs.subList(0, Math.min(paragraphs.size(), 4)));
@@ -213,6 +249,69 @@ public class VoiceScriptSceneService {
         }
     }
 
+    private VoiceScriptImportResponse importFromStructuredTables(
+            List<XWPFTable> structuredTables,
+            String defaultScenicName,
+            String style,
+            Integer versionNo,
+            String sourceFile) {
+        List<VoiceScriptImportIssueDto> issues = new ArrayList<>();
+        int importedCount = 0;
+        int skippedCount = 0;
+        Set<String> inDocSpotIds = new HashSet<>();
+        int logicalRowNumber = 1;
+
+        for (XWPFTable table : structuredTables) {
+            List<XWPFTableRow> rows = table.getRows();
+            for (int rowIndex = 1; rowIndex < rows.size(); rowIndex++) {
+                logicalRowNumber++;
+                XWPFTableRow row = rows.get(rowIndex);
+                StructuredSpotDraft draft = structuredSpotFromRow(row);
+                if (draft.empty()) {
+                    skippedCount++;
+                    continue;
+                }
+                if (draft.spotId().isBlank() || draft.spotName().isBlank()) {
+                    skippedCount++;
+                    issues.add(new VoiceScriptImportIssueDto(logicalRowNumber, "景点ID或景点名称为空，已跳过"));
+                    continue;
+                }
+                if (inDocSpotIds.contains(draft.spotId())) {
+                    skippedCount++;
+                    issues.add(new VoiceScriptImportIssueDto(logicalRowNumber, "景点《" + draft.spotName() + "》在文档中重复，已跳过"));
+                    continue;
+                }
+
+                String scriptText = buildStructuredScriptText(draft);
+                if (scriptText.length() < 100) {
+                    skippedCount++;
+                    issues.add(new VoiceScriptImportIssueDto(logicalRowNumber, "景点《" + draft.spotName() + "》可生成口播内容不足100字，已跳过"));
+                    continue;
+                }
+
+                inDocSpotIds.add(draft.spotId());
+                VoiceScriptScene scene = new VoiceScriptScene();
+                scene.setScenicName(draft.scenicName().isBlank() ? defaultScenicName : draft.scenicName());
+                scene.setSpotId(draft.spotId());
+                scene.setSpotName(draft.spotName());
+                scene.setSceneType("spot");
+                scene.setStyle(style);
+                scene.setTitle(draft.spotName() + "讲解");
+                scene.setScriptText(limitText(scriptText, 1150));
+                scene.setSsmlText(toSimpleSsml(scene.getScriptText()));
+                scene.setDurationSec(estimateDurationSec(scene.getScriptText()));
+                scene.setVersionNo(versionNo);
+                scene.setStatus("draft");
+                scene.setSourceFile(sourceFile);
+                saveReplacingIfExists(scene);
+                importedCount++;
+            }
+        }
+
+        int total = repository.findAll().size();
+        return new VoiceScriptImportResponse(importedCount, total, skippedCount, issues);
+    }
+
     private void applyRequest(VoiceScriptScene entity, VoiceScriptSceneRequest request) {
         entity.setScenicName(normalize(request.getScenicName()));
         entity.setSpotId(normalize(request.getSpotId()));
@@ -282,6 +381,82 @@ public class VoiceScriptSceneService {
         return rows;
     }
 
+    private List<XWPFTable> findStructuredTables(XWPFDocument document) {
+        List<XWPFTable> matchedTables = new ArrayList<>();
+        for (XWPFTable table : document.getTables()) {
+            List<XWPFTableRow> rows = table.getRows();
+            if (rows == null || rows.isEmpty()) {
+                continue;
+            }
+            XWPFTableRow headerRow = rows.get(0);
+            List<String> headers = new ArrayList<>();
+            for (int index = 0; index < STRUCTURED_HEADERS_ZH.size(); index++) {
+                headers.add(normalize(getCellText(headerRow, index)));
+            }
+            if (STRUCTURED_HEADERS_ZH.equals(headers)) {
+                matchedTables.add(table);
+            }
+        }
+        return matchedTables;
+    }
+
+    private StructuredSpotDraft structuredSpotFromRow(XWPFTableRow row) {
+        String scenicName = normalize(getCellText(row, 0));
+        String spotId = normalize(getCellText(row, 1));
+        String spotName = normalize(getCellText(row, 2));
+        String location = normalize(getCellText(row, 3));
+        String architecture = normalize(getCellText(row, 4));
+        String function = normalize(getCellText(row, 5));
+        String culture = normalize(getCellText(row, 6));
+        String introduction = normalize(getCellText(row, 7));
+        String highlights = normalize(getCellText(row, 8));
+        String performance = normalize(getCellText(row, 9));
+        String remark = normalize(getCellText(row, 10));
+        boolean empty = List.of(
+                scenicName, spotId, spotName, location, architecture, function, culture, introduction, highlights, performance, remark
+        ).stream().allMatch(String::isBlank);
+        return new StructuredSpotDraft(
+                scenicName, spotId, spotName, location, architecture, function, culture, introduction, highlights, performance, remark, empty
+        );
+    }
+
+    private String buildStructuredScriptText(StructuredSpotDraft draft) {
+        List<String> parts = new ArrayList<>();
+        if (!draft.introduction().isBlank()) {
+            parts.add(draft.introduction());
+        }
+        if (!draft.culture().isBlank()) {
+            parts.add("它的文化看点是：" + draft.culture());
+        }
+        if (!draft.architecture().isBlank()) {
+            parts.add("建筑与景观特色包括：" + draft.architecture());
+        }
+        if (!draft.function().isBlank()) {
+            parts.add("这里的核心体验是：" + draft.function());
+        }
+        if (!draft.highlights().isBlank()) {
+            parts.add("游览时可以重点留意：" + draft.highlights());
+        }
+        if (!draft.performance().isBlank()) {
+            parts.add("开放或演艺信息：" + draft.performance());
+        }
+        if (!draft.location().isBlank()) {
+            parts.add("位置提示：" + draft.location());
+        }
+        if (!draft.remark().isBlank()) {
+            parts.add(draft.remark());
+        }
+        return normalize(String.join("\n", parts));
+    }
+
+    private String getCellText(XWPFTableRow row, int index) {
+        if (row == null || index < 0 || index >= row.getTableCells().size()) {
+            return "";
+        }
+        XWPFTableCell cell = row.getCell(index);
+        return cell == null ? "" : cell.getText();
+    }
+
     private boolean isTopHeading(String text) {
         return text.contains("景区概况") || text.contains("核心文化") || text.contains("核心景点") || text.contains("游览指南") || text.contains("总结");
     }
@@ -290,8 +465,14 @@ public class VoiceScriptSceneService {
         if (text.length() < 3 || text.length() > 30) {
             return false;
         }
+        String normalized = text.replace("：", ":");
+        String beforeColon = normalized.contains(":") ? normalized.substring(0, normalized.indexOf(':')).trim() : normalized;
+        if (NON_SPOT_SECTION_TITLES.contains(beforeColon)) {
+            return false;
+        }
         if (text.contains("：") || text.contains(":")) {
-            return true;
+            return text.contains("景点") || text.contains("寺") || text.contains("宫") || text.contains("塔")
+                    || text.contains("佛") || text.contains("广场") || text.contains("坛城") || text.contains("湾");
         }
         return text.endsWith("寺") || text.endsWith("宫") || text.endsWith("塔") || text.endsWith("佛") || text.endsWith("广场") || text.endsWith("坛城");
     }
@@ -334,5 +515,21 @@ public class VoiceScriptSceneService {
 
     private String normalize(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private record StructuredSpotDraft(
+            String scenicName,
+            String spotId,
+            String spotName,
+            String location,
+            String architecture,
+            String function,
+            String culture,
+            String introduction,
+            String highlights,
+            String performance,
+            String remark,
+            boolean empty
+    ) {
     }
 }

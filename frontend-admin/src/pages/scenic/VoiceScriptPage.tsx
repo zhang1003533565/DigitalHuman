@@ -9,6 +9,7 @@ import {
   Popconfirm,
   Select,
   Space,
+  Switch,
   Table,
   Tag,
   Upload,
@@ -16,6 +17,7 @@ import {
 } from 'antd'
 import type { TableColumnsType, UploadProps } from 'antd'
 import { DeleteOutlined, EditOutlined, ReloadOutlined, UploadOutlined } from '@ant-design/icons'
+import axios from 'axios'
 import {
   createVoiceScriptRecord,
   deleteVoiceScriptRecord,
@@ -47,6 +49,36 @@ const statusOptions = [
   { value: 'archived', label: '已归档' },
 ]
 
+function voiceScriptErrorMessage(error: unknown, fallback: string) {
+  if (axios.isAxiosError(error)) {
+    const data = error.response?.data
+    if (data && typeof data === 'object') {
+      const record = data as { message?: unknown; error?: unknown; detail?: unknown }
+      const candidates = [record.message, record.detail, record.error]
+      for (const candidate of candidates) {
+        if (typeof candidate === 'string' && candidate.trim()) {
+          return candidate
+        }
+      }
+    }
+    if (typeof data === 'string' && data.trim()) {
+      return data
+    }
+    if (error.code === 'ERR_NETWORK') {
+      return '无法连接后端服务，请确认 backend-java 已启动'
+    }
+    return error.message || fallback
+  }
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+  return fallback
+}
+
+function isFormValidationError(error: unknown): error is { errorFields?: Array<{ name?: Array<string | number> }> } {
+  return typeof error === 'object' && error !== null && 'errorFields' in error
+}
+
 export default function VoiceScriptPage() {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -57,6 +89,7 @@ export default function VoiceScriptPage() {
   const [uploadScenicName, setUploadScenicName] = useState('灵山胜境')
   const [uploadStyle, setUploadStyle] = useState<'culture' | 'family' | 'light'>('culture')
   const [uploadVersion, setUploadVersion] = useState(1)
+  const [replaceAll, setReplaceAll] = useState(true)
   const [form] = Form.useForm<VoiceScriptScenePayload>()
 
   const loadRows = useCallback(async () => {
@@ -64,8 +97,8 @@ export default function VoiceScriptPage() {
     try {
       const data = await getVoiceScriptRecords()
       setRows(data.map((item) => ({ ...item, key: String(item.id) })))
-    } catch {
-      message.error('加载口播数据失败')
+    } catch (error) {
+      message.error(`加载口播数据失败：${voiceScriptErrorMessage(error, '请检查后端服务')}`)
     } finally {
       setLoading(false)
     }
@@ -86,15 +119,15 @@ export default function VoiceScriptPage() {
       }
       setUploading(true)
       try {
-        const result = await importVoiceScriptDocx(file as File, uploadScenicName.trim(), uploadStyle, uploadVersion)
+        const result = await importVoiceScriptDocx(file as File, uploadScenicName.trim(), uploadStyle, uploadVersion, replaceAll)
         const issuePreview = result.issues.slice(0, 6).map((it) => `第${it.rowNumber}行：${it.reason}`).join('\n')
         message.success(`导入完成：成功 ${result.importedCount}，跳过 ${result.skippedCount}，总计 ${result.totalCount}`)
         if (issuePreview) {
           message.warning(`导入问题：\n${issuePreview}`, 8)
         }
         await loadRows()
-      } catch {
-        message.error('DOCX导入失败，请检查文档格式')
+      } catch (error) {
+        message.error(`DOCX导入失败：${voiceScriptErrorMessage(error, '请检查文档格式')}`)
       } finally {
         setUploading(false)
       }
@@ -147,6 +180,7 @@ export default function VoiceScriptPage() {
               type="link"
               icon={<EditOutlined />}
               onClick={() => {
+                form.resetFields()
                 form.setFieldsValue({
                   scenicName: record.scenicName,
                   spotId: record.spotId,
@@ -174,8 +208,8 @@ export default function VoiceScriptPage() {
                   await publishVoiceScriptRecord(record.id)
                   message.success('发布成功')
                   await loadRows()
-                } catch {
-                  message.error('发布失败')
+                } catch (error) {
+                  message.error(`发布失败：${voiceScriptErrorMessage(error, '请稍后重试')}`)
                 }
               }}
               disabled={record.status === 'published'}
@@ -191,8 +225,8 @@ export default function VoiceScriptPage() {
                   await deleteVoiceScriptRecord(record.id)
                   message.success('删除成功')
                   await loadRows()
-                } catch {
-                  message.error('删除失败')
+                } catch (error) {
+                  message.error(`删除失败：${voiceScriptErrorMessage(error, '请稍后重试')}`)
                 }
               }}
             >
@@ -223,10 +257,15 @@ export default function VoiceScriptPage() {
       form.resetFields()
       await loadRows()
     } catch (error) {
-      if ((error as { errorFields?: unknown[] })?.errorFields) {
+      if (isFormValidationError(error)) {
+        message.warning('请补全必填项，并确认口播文本在100到1200字之间')
+        const firstFieldName = error.errorFields?.[0]?.name
+        if (firstFieldName) {
+          form.scrollToField(firstFieldName)
+        }
         return
       }
-      message.error('保存失败，请检查字段')
+      message.error(`保存失败：${voiceScriptErrorMessage(error, '请检查字段填写')}`)
     } finally {
       setSaving(false)
     }
@@ -252,6 +291,12 @@ export default function VoiceScriptPage() {
               style={{ width: 120 }}
             />
             <InputNumber min={1} value={uploadVersion} onChange={(value) => setUploadVersion(Number(value ?? 1))} />
+            <Switch
+              checked={replaceAll}
+              checkedChildren="清空旧口播"
+              unCheckedChildren="追加"
+              onChange={setReplaceAll}
+            />
             <Upload {...uploadProps}>
               <Button icon={<UploadOutlined />} loading={uploading}>
                 上传DOCX生成草稿
@@ -261,13 +306,20 @@ export default function VoiceScriptPage() {
               type="primary"
               onClick={() => {
                 setEditing(null)
+                form.resetFields()
                 form.setFieldsValue({
                   scenicName: uploadScenicName,
+                  spotId: '',
+                  spotName: '',
                   sceneType: 'spot',
                   style: uploadStyle,
+                  title: '',
+                  scriptText: '',
+                  ssmlText: '',
                   versionNo: uploadVersion,
                   status: 'draft',
                   durationSec: 90,
+                  sourceFile: '手工新增',
                 } as Partial<VoiceScriptScenePayload>)
                 setDrawerOpen(true)
               }}
@@ -302,6 +354,7 @@ export default function VoiceScriptPage() {
         onClose={() => {
           setDrawerOpen(false)
           setEditing(null)
+          form.resetFields()
         }}
         destroyOnClose
         extra={
@@ -310,6 +363,7 @@ export default function VoiceScriptPage() {
               onClick={() => {
                 setDrawerOpen(false)
                 setEditing(null)
+                form.resetFields()
               }}
             >
               取消
@@ -320,7 +374,7 @@ export default function VoiceScriptPage() {
           </Space>
         }
       >
-        <Form form={form} layout="vertical">
+        <Form form={form} layout="vertical" scrollToFirstError>
           <Form.Item name="scenicName" label="景区名称" rules={[{ required: true, message: '请输入景区名称' }]}>
             <Input />
           </Form.Item>
