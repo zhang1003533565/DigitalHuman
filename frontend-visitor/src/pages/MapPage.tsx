@@ -191,7 +191,6 @@ export function MapPage() {
   const [mobileCategoryOpen, setMobileCategoryOpen] = useState(false)
   const mapContainerRef = useRef<HTMLDivElement | null>(null)
   const mapInstanceRef = useRef<any>(null)
-  const geolocationRef = useRef<any>(null)
   const placeSearchRef = useRef<any>(null)
   const scenicCenterMarkerRef = useRef<any>(null)
   const facilityMarkersRef = useRef<any[]>([])
@@ -199,7 +198,6 @@ export function MapPage() {
   const routePolylineRef = useRef<any>(null)
   const selectedFacilityRef = useRef<ScenicFacility | null>(null)
   const initialUserPositionRef = useRef<[number, number] | null>(null)
-  const hasAutoLocatedRef = useRef(false)
   const liveStatusGenerationRef = useRef(0)
   const searchGenerationGateRef = useRef(createMobileMapSearchGenerationGate())
   const searchDerivedSelectionRef = useRef(createMobileMapSearchDerivedSelection())
@@ -284,7 +282,7 @@ export function MapPage() {
     if (mobileDrawerState !== 'expanded') return
     const panel = mobileDrawerRef.current
     if (!panel) return
-    const backgroundSelectors = ['.visitor-topbar', '.map-page__main', '.map-side', '.mobile-bottom-nav']
+    const backgroundSelectors = ['.visitor-topbar', '.map-page__main', '.mobile-bottom-nav']
     const backgroundRegions = backgroundSelectors.flatMap((selector) => (
       Array.from(document.querySelectorAll<HTMLElement>(selector))
     ))
@@ -473,36 +471,8 @@ export function MapPage() {
         map.on('zoomend', syncCard)
         map.on('moveend', syncCard)
 
-        AMap.plugin(['AMap.Geolocation', 'AMap.PlaceSearch'], () => {
+        AMap.plugin(['AMap.PlaceSearch'], () => {
           if (cancelled) return
-
-          const geolocation = new AMap.Geolocation({
-            enableHighAccuracy: true,
-            timeout: 10000,
-            buttonPosition: 'RB',
-            showButton: false,
-            showMarker: true,
-            showCircle: true,
-            panToLocation: true,
-            zoomToAccuracy: true,
-          })
-          map.addControl(geolocation)
-          geolocationRef.current = geolocation
-
-          if (!hasAutoLocatedRef.current) {
-            hasAutoLocatedRef.current = true
-            geolocation.getCurrentPosition((status: string, result: any) => {
-              if (cancelled) return
-              if (status === 'complete' && result?.position) {
-                const lng = result.position.lng
-                const lat = result.position.lat
-                initialUserPositionRef.current = [lng, lat]
-                map.setCenter?.([lng, lat])
-              } else {
-                console.warn('定位失败', result?.message ?? result)
-              }
-            })
-          }
 
           placeSearchRef.current = new AMap.PlaceSearch({
             map: undefined,
@@ -527,7 +497,6 @@ export function MapPage() {
         mapInstanceRef.current.destroy?.()
         mapInstanceRef.current = null
       }
-      geolocationRef.current = null
       placeSearchRef.current = null
       scenicCenterMarkerRef.current = null
       facilityMarkersRef.current = []
@@ -651,7 +620,25 @@ export function MapPage() {
       return
     }
 
-    map.setCenter?.(LINGSHAN_CENTER)
+    if (!navigator.geolocation) {
+      map.setCenter?.(LINGSHAN_CENTER)
+      map.setZoom?.(15)
+      return
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const nextPosition: [number, number] = [position.coords.longitude, position.coords.latitude]
+        initialUserPositionRef.current = nextPosition
+        map.setCenter?.(nextPosition)
+        map.setZoom?.(16)
+      },
+      () => {
+        map.setCenter?.(LINGSHAN_CENTER)
+        map.setZoom?.(15)
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+    )
   }
 
   const handleSearch = () => {
@@ -970,12 +957,12 @@ export function MapPage() {
               <button type="button" onClick={() => mapInstanceRef.current?.setCenter?.(LINGSHAN_CENTER)}>景区中心</button>
               {showClearSearch ? <button type="button" onClick={clearSearchResults}>清除结果</button> : null}
             </div>
-          </div>
 
-          <aside className="map-side">
-            {renderLiveCard()}
-            {renderNearbyCard()}
-          </aside>
+            <aside className="map-side">
+              {renderLiveCard()}
+              {renderNearbyCard()}
+            </aside>
+          </div>
 
           <section className={`map-mobile-drawer map-mobile-drawer--${mobileDrawerState}`} aria-label="地图服务">
             <button

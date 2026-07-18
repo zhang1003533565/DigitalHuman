@@ -238,6 +238,15 @@ assert.doesNotMatch(mapPage, /<aside className="map-side"[^>]*aria-hidden/, 'vis
 assert.doesNotMatch(mapPage, /style=\{\{\s*left\s*:/s, 'spot card must not directly inline positioning properties')
 assert.match(mapPage, /['"]--map-card-left['"]\s*:/, 'spot card exposes its desktop left coordinate through CSS')
 assert.match(mapPage, /['"]--map-card-top['"]\s*:/, 'spot card exposes its desktop top coordinate through CSS')
+assert.match(mapCss, /\.map-page\s*\{[^}]*position:\s*relative[^}]*display:\s*block/s, 'desktop map stage is a single map surface instead of a map-plus-sidebar grid')
+assert.match(mapCss, /\.map-side\s*\{[^}]*position:\s*absolute[^}]*right:\s*14px[^}]*bottom:\s*14px/s, 'desktop nearby services live as a right-side overlay inside the map surface')
+assert.doesNotMatch(
+  mapPage,
+  /useEffect\(\(\)\s*=>\s*\{[\s\S]*?geolocation\.getCurrentPosition[\s\S]*?\},\s*\[\]\)/,
+  'map load must not automatically request browser geolocation permission',
+)
+assert.doesNotMatch(mapPage, /AMap\.Geolocation/, 'manual locate must not depend on AMap ipLocation fallback')
+assert.match(mapPage, /navigator\.geolocation\.getCurrentPosition/, 'manual locate uses the browser permission-backed geolocation API')
 const mapMobile = mapCss.slice(mapCss.indexOf('@media (max-width: 768px)'))
 assert.match(mapMobile, /\.authenticated-app__content\s*>\s*\.page-shell--map\s*\{[^}]*height:\s*100%[^}]*min-height:\s*0[^}]*overflow:\s*hidden[^}]*padding:\s*0/s, 'map route root wins the shared mobile direct-child cascade and releases desktop padding')
 assert.match(mapMobile, /\.page-shell--map\s*>\s*\.page-content--map\s*\{[^}]*flex:\s*1[^}]*min-height:\s*0[^}]*overflow:\s*hidden/s, 'map content wins the shared page-content cascade and shrinks without creating page flow')

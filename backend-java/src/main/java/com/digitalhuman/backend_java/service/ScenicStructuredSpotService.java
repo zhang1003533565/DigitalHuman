@@ -119,8 +119,8 @@ public class ScenicStructuredSpotService {
         }
 
         try (InputStream inputStream = file.getInputStream(); XWPFDocument document = new XWPFDocument(inputStream)) {
-            XWPFTable targetTable = findTableByHeaders(document);
-            if (targetTable == null) {
+            List<XWPFTable> targetTables = findTablesByHeaders(document);
+            if (targetTables.isEmpty()) {
                 throw new ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
                         "未找到匹配表头的表格，表头必须严格为：" + String.join("、", REQUIRED_HEADERS_ZH)
@@ -137,37 +137,41 @@ public class ScenicStructuredSpotService {
             int skippedEmptyCount = 0;
             int skippedDuplicateCount = 0;
 
-            List<XWPFTableRow> tableRows = targetTable.getRows();
-            for (int rowIndex = 1; rowIndex < tableRows.size(); rowIndex++) {
-                XWPFTableRow row = tableRows.get(rowIndex);
-                if (row == null) {
-                    skippedEmptyCount++;
-                    continue;
-                }
+            int logicalRowNumber = 1;
+            for (XWPFTable targetTable : targetTables) {
+                List<XWPFTableRow> tableRows = targetTable.getRows();
+                for (int rowIndex = 1; rowIndex < tableRows.size(); rowIndex++) {
+                    logicalRowNumber++;
+                    XWPFTableRow row = tableRows.get(rowIndex);
+                    if (row == null) {
+                        skippedEmptyCount++;
+                        continue;
+                    }
 
-                ParseRowResult parsed = fromRow(row, rowIndex + 1);
-                if (parsed.emptyRow()) {
-                    skippedEmptyCount++;
-                    continue;
-                }
-                if (parsed.issue() != null) {
-                    issues.add(parsed.issue());
-                    continue;
-                }
+                    ParseRowResult parsed = fromRow(row, logicalRowNumber);
+                    if (parsed.emptyRow()) {
+                        skippedEmptyCount++;
+                        continue;
+                    }
+                    if (parsed.issue() != null) {
+                        issues.add(parsed.issue());
+                        continue;
+                    }
 
-                ScenicStructuredSpotRecord entity = parsed.entity();
-                if (entity == null) {
-                    continue;
-                }
+                    ScenicStructuredSpotRecord entity = parsed.entity();
+                    if (entity == null) {
+                        continue;
+                    }
 
-                String spotId = normalize(entity.getSpot_id());
-                if (spotIdSeen.contains(spotId)) {
-                    skippedDuplicateCount++;
-                    issues.add(new ScenicStructuredImportIssueDto(rowIndex + 1, "景点ID重复，已跳过"));
-                    continue;
+                    String spotId = normalize(entity.getSpot_id());
+                    if (spotIdSeen.contains(spotId)) {
+                        skippedDuplicateCount++;
+                        issues.add(new ScenicStructuredImportIssueDto(logicalRowNumber, "景点ID重复，已跳过"));
+                        continue;
+                    }
+                    spotIdSeen.add(spotId);
+                    rows.add(entity);
                 }
-                spotIdSeen.add(spotId);
-                rows.add(entity);
             }
 
             if (!rows.isEmpty()) {
@@ -184,7 +188,8 @@ public class ScenicStructuredSpotService {
         }
     }
 
-    private XWPFTable findTableByHeaders(XWPFDocument document) {
+    private List<XWPFTable> findTablesByHeaders(XWPFDocument document) {
+        List<XWPFTable> matchedTables = new ArrayList<>();
         for (XWPFTable table : document.getTables()) {
             List<XWPFTableRow> rows = table.getRows();
             if (rows == null || rows.isEmpty()) {
@@ -199,10 +204,10 @@ public class ScenicStructuredSpotService {
                 headers.add(normalize(getCellText(headerRow, index)));
             }
             if (REQUIRED_HEADERS_ZH.equals(headers)) {
-                return table;
+                matchedTables.add(table);
             }
         }
-        return null;
+        return matchedTables;
     }
 
     private ParseRowResult fromRow(XWPFTableRow row, int rowNumber) {
