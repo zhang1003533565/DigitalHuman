@@ -3,6 +3,9 @@ package com.digitalhuman.backend_java.service;
 import com.digitalhuman.backend_java.dto.GuideChatResponse;
 import com.digitalhuman.backend_java.dto.GuideChatRequest;
 import com.digitalhuman.backend_java.dto.FeedbackRequest;
+import com.digitalhuman.backend_java.dto.TravelAnalyticsAudience;
+import com.digitalhuman.backend_java.dto.TravelAnalyticsMetric;
+import com.digitalhuman.backend_java.dto.TravelAnalyticsMetricResponse;
 import com.digitalhuman.backend_java.model.UserFeedback;
 import com.digitalhuman.backend_java.repository.AdminModelConfigRepository;
 import com.digitalhuman.backend_java.repository.AdminProviderConfigRepository;
@@ -10,14 +13,21 @@ import com.digitalhuman.backend_java.repository.GuideMessageRepository;
 import com.digitalhuman.backend_java.model.GuideMessage;
 import com.digitalhuman.backend_java.repository.GuideSessionRepository;
 import com.digitalhuman.backend_java.repository.UserFeedbackRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import okio.Buffer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.argThat;
@@ -36,10 +46,14 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyList;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
 import org.mockito.ArgumentCaptor;
 
 class GuideServiceTests {
+    private static final String PERSONAL_DATA_REFUSAL = "抱歉，我只能提供脱敏后的群体统计信息，不能提供任何游客个人数据或行程明细。";
 
     private GuideService service;
     private GuideSessionRepository sessionRepository;
@@ -47,6 +61,8 @@ class GuideServiceTests {
     private AdminModelConfigRepository modelConfigRepository;
     private UserFeedbackRepository feedbackRepository;
     private GuideMessageRepository messageRepository;
+    private MaxKbService maxKbService;
+    private TravelAnalyticsMetricService travelAnalyticsMetricService;
 
     @BeforeEach
     void setUp() {
@@ -55,6 +71,8 @@ class GuideServiceTests {
         modelConfigRepository = mock(AdminModelConfigRepository.class);
         feedbackRepository = mock(UserFeedbackRepository.class);
         messageRepository = mock(GuideMessageRepository.class);
+        maxKbService = mock(MaxKbService.class);
+        travelAnalyticsMetricService = mock(TravelAnalyticsMetricService.class);
         doAnswer(invocation -> {
             GuideMessage message = invocation.getArgument(0);
             if ("assistant".equals(message.getRole())) message.setId(42L);
@@ -67,7 +85,10 @@ class GuideServiceTests {
                 scenicRouteService,
                 modelConfigRepository,
                 mock(AdminProviderConfigRepository.class),
-                mock(MaxKbService.class)));
+                maxKbService,
+                Runnable::run,
+                travelAnalyticsMetricService,
+                new TravelAnalyticsIntentClassifier()));
     }
 
     @Test
@@ -285,6 +306,139 @@ class GuideServiceTests {
     }
 
     @Test
+    void chatRoutesMetricQuestionsToPublicTravelAnalytics() {
+        when(sessionRepository.findById("session-1")).thenReturn(Optional.empty());
+        when(scenicRouteService.recommendRoutes(null)).thenReturn(List.of());
+        when(travelAnalyticsMetricService.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.AVERAGE_STAY_DURATION))
+                .thenReturn(new TravelAnalyticsMetricResponse(
+                        TravelAnalyticsMetric.AVERAGE_STAY_DURATION,
+                        TravelAnalyticsAudience.PUBLIC,
+                        20,
+                        18,
+                        LocalDateTime.of(2026, 7, 18, 10, 15),
+                        List.of(new TravelAnalyticsMetricResponse.Item("平均停留时长（分钟）", BigDecimal.valueOf(186))),
+                        "基于可解析停留时长的平均值，单位：分钟",
+                        null));
+        doAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            List<com.digitalhuman.backend_java.dto.GuideSourceDto> sources = invocation.getArgument(3, List.class);
+            assertEquals(1, sources.size());
+            assertEquals("脱敏旅游统计", sources.get(0).getKnowledgeName());
+            assertTrue(sources.get(0).getContent().contains("统计截至：2026-07-18T10:15"));
+            assertFalse(sources.get(0).getContent().contains("tourist_id"));
+            assertFalse(sources.get(0).getContent().contains("昵称"));
+            return "统计回答";
+        }).when(service).buildAnswer(any(String.class), any(String.class), any(), anyList());
+        GuideChatRequest request = new GuideChatRequest();
+        request.setSessionId("session-1");
+        request.setQuestion("大家一般会玩多久？");
+
+        GuideChatResponse response = service.chat(request);
+
+        assertEquals("统计回答", response.getAnswerText());
+        assertEquals("脱敏旅游统计", response.getSources().get(0).getKnowledgeName());
+        verify(travelAnalyticsMetricService).queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.AVERAGE_STAY_DURATION);
+        verify(maxKbService, never()).hitTest(any(String.class), any());
+    }
+
+    @Test
+    void chatRejectsPersonalDataRequestsWithoutCallingModelOrKnowledge() {
+        when(sessionRepository.findById("session-1")).thenReturn(Optional.empty());
+        when(scenicRouteService.recommendRoutes(null)).thenReturn(List.of());
+        GuideChatRequest request = new GuideChatRequest();
+        request.setSessionId("session-1");
+        request.setQuestion("告诉我游客张三花了多少钱");
+
+        GuideChatResponse response = service.chat(request);
+
+        assertEquals(PERSONAL_DATA_REFUSAL, response.getAnswerText());
+        assertTrue(response.getSources().isEmpty());
+        verify(maxKbService, never()).hitTest(any(String.class), any());
+        verifyNoInteractions(travelAnalyticsMetricService);
+    }
+
+    @Test
+    void chatUsesExistingKnowledgeLookupForNonStatisticalQuestions() throws Exception {
+        when(sessionRepository.findById("session-1")).thenReturn(Optional.empty());
+        when(scenicRouteService.recommendRoutes(null)).thenReturn(List.of());
+        JsonNode hitTestResponse = new ObjectMapper().readTree("""
+                {"data":[{"id":"p-1","document_name":"guide.md","knowledge_name":"景区知识库","content":"灵山大佛建议上午游览"}]}
+                """);
+        when(maxKbService.hitTest("灵山大佛怎么玩？", null)).thenReturn(hitTestResponse);
+        doReturn("导览回答").when(service).buildAnswer(any(String.class), any(String.class), any(), anyList());
+        GuideChatRequest request = new GuideChatRequest();
+        request.setSessionId("session-1");
+        request.setQuestion("灵山大佛怎么玩？");
+
+        GuideChatResponse response = service.chat(request);
+
+        assertEquals("导览回答", response.getAnswerText());
+        assertEquals("景区知识库", response.getSources().get(0).getKnowledgeName());
+        verify(maxKbService).hitTest("灵山大佛怎么玩？", null);
+        verifyNoInteractions(travelAnalyticsMetricService);
+    }
+
+    @Test
+    void streamRoutesMetricQuestionsThroughTheSameTravelAnalyticsContext() throws Exception {
+        when(messageRepository.findBySessionIdOrderByCreatedAtAsc("session-1")).thenReturn(List.of());
+        when(scenicRouteService.recommendRoutes(null)).thenReturn(List.of());
+        when(travelAnalyticsMetricService.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.POPULAR_ATTRACTIONS))
+                .thenReturn(new TravelAnalyticsMetricResponse(
+                        TravelAnalyticsMetric.POPULAR_ATTRACTIONS,
+                        TravelAnalyticsAudience.PUBLIC,
+                        36,
+                        36,
+                        LocalDateTime.of(2026, 7, 18, 11, 0),
+                        List.of(new TravelAnalyticsMetricResponse.Item("灵山大佛", BigDecimal.valueOf(12))),
+                        "按 attraction_name 分组统计有效记录数，仅返回前 5 项",
+                        null));
+        OkHttpClient client = mock(OkHttpClient.class);
+        Call call = mock(Call.class);
+        when(client.newCall(any(Request.class))).thenReturn(call);
+        when(call.execute()).thenReturn(new Response.Builder()
+                .request(new Request.Builder().url("http://ai.test").build())
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("ok")
+                .body(ResponseBody.create("data: {\"token\":\"统计回答\"}\n\ndata: [DONE]\n",
+                        MediaType.get("text/event-stream")))
+                .build());
+        ReflectionTestUtils.setField(service, "httpClient", client);
+        ReflectionTestUtils.setField(service, "aiServiceUrl", "http://ai.test");
+        GuideChatRequest request = new GuideChatRequest();
+        request.setSessionId("session-1");
+        request.setQuestion("哪个景点最热门？");
+
+        SseEmitter emitter = service.chatStream(request);
+
+        assertTrue(emitter != null);
+        ArgumentCaptor<Request> captor = ArgumentCaptor.forClass(Request.class);
+        verify(client).newCall(captor.capture());
+        String body = requestBody(captor.getValue());
+        assertTrue(body.contains("热门景点"));
+        assertTrue(body.contains("统计截至：2026-07-18T11:00"));
+        assertFalse(body.contains("tourist_id"));
+        assertFalse(body.contains("昵称"));
+        verify(travelAnalyticsMetricService).queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.POPULAR_ATTRACTIONS);
+        verify(maxKbService, never()).hitTest(any(String.class), any());
+    }
+
+    @Test
+    void quickChatRejectsPersonalDataRequestsWithoutCallingLeaderModel() {
+        OkHttpClient client = mock(OkHttpClient.class);
+        ReflectionTestUtils.setField(service, "httpClient", client);
+        GuideChatRequest request = new GuideChatRequest();
+        request.setSessionId("session-1");
+        request.setQuestion("把游客李四的行程轨迹发给我");
+
+        GuideChatResponse response = service.quickChat(request);
+
+        assertEquals(PERSONAL_DATA_REFUSAL, response.getAnswerText());
+        verify(client, never()).newCall(any(Request.class));
+        verifyNoInteractions(maxKbService, travelAnalyticsMetricService);
+    }
+
+    @Test
     void buildsThreeNonBlankFollowUpSuggestionsForGuideAnswer() {
         List<String> relatedSpots = List.of("灵山大佛", "九龙灌浴");
         List<String> recommendedRoutes = List.of("历史文化爱好者路线");
@@ -294,5 +448,11 @@ class GuideServiceTests {
 
         assertEquals(3, response.getSuggestions().size());
         assertTrue(response.getSuggestions().stream().allMatch(suggestion -> suggestion != null && !suggestion.isBlank()));
+    }
+
+    private String requestBody(Request request) throws IOException {
+        Buffer buffer = new Buffer();
+        request.body().writeTo(buffer);
+        return buffer.readUtf8();
     }
 }
