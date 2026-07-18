@@ -8,6 +8,7 @@ import com.digitalhuman.backend_java.model.TravelAnalyticsRecord;
 import com.digitalhuman.backend_java.repository.TravelAnalyticsRecordRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -21,6 +22,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 @Service
 public class TravelAnalyticsMetricService {
@@ -105,6 +108,9 @@ public class TravelAnalyticsMetricService {
     public TravelAnalyticsMetricResponse queryMetric(TravelAnalyticsAudience audience, TravelAnalyticsMetric metric) {
         if (audience == TravelAnalyticsAudience.PUBLIC && !PUBLIC_METRICS.contains(metric)) {
             throw new IllegalArgumentException("Unsupported public travel analytics metric: " + metric);
+        }
+        if (audience == TravelAnalyticsAudience.PUBLIC && !publicAccessEnabled()) {
+            throw new ResponseStatusException(NOT_FOUND, "统计接口未开放");
         }
 
         return metricCache.getOrCompute(audience, metric, () -> computeMetric(audience, metric));
@@ -290,6 +296,13 @@ public class TravelAnalyticsMetricService {
         return configuredMinimum == null || configuredMinimum < 1
                 ? DEFAULT_PUBLIC_MINIMUM_SAMPLE_SIZE
                 : configuredMinimum;
+    }
+
+    private boolean publicAccessEnabled() {
+        if (aiConfigService == null) {
+            return true;
+        }
+        return !Boolean.FALSE.equals(aiConfigService.getConfig().getPublicEnabled());
     }
 
     private List<TravelAnalyticsMetricResponse.Item> averageItems(String label, BigDecimal total, long validSamples) {

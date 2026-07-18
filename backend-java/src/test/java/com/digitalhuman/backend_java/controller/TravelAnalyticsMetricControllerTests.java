@@ -22,10 +22,13 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.web.server.ResponseStatusException;
+
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.http.HttpStatus.NOT_FOUND;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -46,7 +49,7 @@ class TravelAnalyticsMetricControllerTests {
         conversionService.addConverter(String.class, TravelAnalyticsMetric.class, TravelAnalyticsMetric::fromValue);
 
         mvc = MockMvcBuilders.standaloneSetup(
-                        new UserTravelAnalyticsController(metricService, aiConfigService),
+                        new UserTravelAnalyticsController(metricService),
                         new AdminTravelAnalyticsController(null, metricService, aiConfigService))
                 .setConversionService(conversionService)
                 .setMessageConverters(new MappingJackson2HttpMessageConverter())
@@ -57,7 +60,6 @@ class TravelAnalyticsMetricControllerTests {
     @Test
     void userMetricPathBindsSnakeCaseMetric() throws Exception {
         loginUser();
-        when(aiConfigService.getConfig()).thenReturn(enabledConfig());
         when(metricService.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.AVERAGE_SPEND))
                 .thenReturn(metricResponse(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.AVERAGE_SPEND));
 
@@ -77,7 +79,6 @@ class TravelAnalyticsMetricControllerTests {
     @Test
     void unknownMetricReturnsBadRequestWithoutCallingService() throws Exception {
         loginUser();
-        when(aiConfigService.getConfig()).thenReturn(enabledConfig());
 
         mvc.perform(get("/api/user/travel-analytics/metrics/not_a_metric")
                         .header("Authorization", "Bearer user"))
@@ -89,13 +90,14 @@ class TravelAnalyticsMetricControllerTests {
     @Test
     void userMetricReturnsNotFoundWhenPublicAccessDisabled() throws Exception {
         loginUser();
-        when(aiConfigService.getConfig()).thenReturn(disabledConfig());
+        when(metricService.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.AVERAGE_SPEND))
+                .thenThrow(new ResponseStatusException(NOT_FOUND, "统计接口未开放"));
 
         mvc.perform(get("/api/user/travel-analytics/metrics/average_spend")
                         .header("Authorization", "Bearer user"))
                 .andExpect(status().isNotFound());
 
-        verifyNoInteractions(metricService);
+        verify(metricService).queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.AVERAGE_SPEND);
     }
 
     @Test

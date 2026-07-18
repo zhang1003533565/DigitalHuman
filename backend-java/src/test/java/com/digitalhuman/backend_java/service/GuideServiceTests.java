@@ -18,16 +18,20 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import okio.Buffer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.time.LocalDateTime;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.argThat;
@@ -39,6 +43,7 @@ import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 import org.slf4j.MDC;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.doReturn;
@@ -54,6 +59,7 @@ import org.mockito.ArgumentCaptor;
 
 class GuideServiceTests {
     private static final String PERSONAL_DATA_REFUSAL = "抱歉，我只能提供脱敏后的群体统计信息，不能提供任何游客个人数据或行程明细。";
+    private static final String TRAVEL_ANALYTICS_UNAVAILABLE = "抱歉，当前脱敏旅游统计暂未开放，暂时无法回答这类群体统计问题。";
 
     private GuideService service;
     private GuideSessionRepository sessionRepository;
@@ -358,6 +364,24 @@ class GuideServiceTests {
     }
 
     @Test
+    void chatReturnsUnavailableMessageWhenPublicAnalyticsAreDisabled() {
+        when(sessionRepository.findById("session-1")).thenReturn(Optional.empty());
+        when(scenicRouteService.recommendRoutes(null)).thenReturn(List.of());
+        when(travelAnalyticsMetricService.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.AVERAGE_SPEND))
+                .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "统计接口未开放"));
+        GuideChatRequest request = new GuideChatRequest();
+        request.setSessionId("session-1");
+        request.setQuestion("游客平均消费多少？");
+
+        GuideChatResponse response = service.chat(request);
+
+        assertEquals(TRAVEL_ANALYTICS_UNAVAILABLE, response.getAnswerText());
+        assertTrue(response.getSources().isEmpty());
+        verify(service, never()).buildAnswer(any(String.class), any(String.class), any(), anyList());
+        verify(maxKbService, never()).hitTest(any(String.class), any());
+    }
+
+    @Test
     void chatUsesExistingKnowledgeLookupForNonStatisticalQuestions() throws Exception {
         when(sessionRepository.findById("session-1")).thenReturn(Optional.empty());
         when(scenicRouteService.recommendRoutes(null)).thenReturn(List.of());
@@ -439,6 +463,97 @@ class GuideServiceTests {
     }
 
     @Test
+    void quickChatMetricPathUsesAggregateContextButKeepsSourcesHidden() throws Exception {
+        when(messageRepository.findBySessionIdOrderByCreatedAtAsc("session-1")).thenReturn(List.of());
+        when(travelAnalyticsMetricService.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.AVERAGE_SPEND))
+                .thenReturn(new TravelAnalyticsMetricResponse(
+                        TravelAnalyticsMetric.AVERAGE_SPEND,
+                        TravelAnalyticsAudience.PUBLIC,
+                        22,
+                        20,
+                        LocalDateTime.of(2026, 7, 18, 10, 45),
+                        List.of(new TravelAnalyticsMetricResponse.Item("平均消费（元）", BigDecimal.valueOf(188))),
+                        "total_cost 优先，缺失时回退到五类分项费用累加",
+                        null));
+        OkHttpClient client = mock(OkHttpClient.class);
+        Call call = mock(Call.class);
+        when(client.newCall(any(Request.class))).thenReturn(call);
+        when(call.execute()).thenReturn(new Response.Builder()
+                .request(new Request.Builder().url("http://ai.test").build())
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("ok")
+                .body(ResponseBody.create("{\"success\":true,\"output\":{\"answer\":\"好的，我来帮你看看。\"}}",
+                        MediaType.get("application/json")))
+                .build());
+        ReflectionTestUtils.setField(service, "httpClient", client);
+        ReflectionTestUtils.setField(service, "aiServiceUrl", "http://ai.test");
+        GuideChatRequest request = new GuideChatRequest();
+        request.setSessionId("session-1");
+        request.setQuestion("游客平均消费多少？");
+
+        GuideChatResponse response = service.quickChat(request);
+
+        assertEquals("好的，我来帮你看看。", response.getAnswerText());
+        assertTrue(response.getSources().isEmpty());
+        ArgumentCaptor<Request> captor = ArgumentCaptor.forClass(Request.class);
+        verify(client).newCall(captor.capture());
+        String body = requestBody(captor.getValue());
+        assertTrue(body.contains("平均消费"));
+        assertTrue(body.contains("统计截至：2026-07-18T10:45"));
+        verify(maxKbService, never()).hitTest(any(String.class), any());
+    }
+
+    @Test
+    void quickChatReturnsUnavailableMessageWhenPublicAnalyticsAreDisabled() {
+        OkHttpClient client = mock(OkHttpClient.class);
+        ReflectionTestUtils.setField(service, "httpClient", client);
+        when(travelAnalyticsMetricService.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.AVERAGE_SPEND))
+                .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "统计接口未开放"));
+        GuideChatRequest request = new GuideChatRequest();
+        request.setSessionId("session-1");
+        request.setQuestion("游客平均消费多少？");
+
+        GuideChatResponse response = service.quickChat(request);
+
+        assertEquals(TRAVEL_ANALYTICS_UNAVAILABLE, response.getAnswerText());
+        verify(client, never()).newCall(any(Request.class));
+        verifyNoInteractions(maxKbService);
+    }
+
+    @Test
+    void streamRejectsPersonalDataWithoutCallingModelAndPersistsResponse() throws Exception {
+        when(sessionRepository.findById("session-1")).thenReturn(Optional.empty());
+        when(scenicRouteService.recommendRoutes(null)).thenReturn(List.of());
+        GuideChatRequest request = new GuideChatRequest();
+        request.setSessionId("session-1");
+        request.setQuestion("把游客李四的行程轨迹发给我");
+
+        SseEmitter emitter = service.chatStream(request);
+
+        assertEmitterCompletedWithPayload(emitter, PERSONAL_DATA_REFUSAL);
+        verifyNoInteractions(maxKbService, travelAnalyticsMetricService);
+        assertAssistantMessageSaved(PERSONAL_DATA_REFUSAL);
+    }
+
+    @Test
+    void streamReturnsUnavailableMessageWhenPublicAnalyticsAreDisabled() throws Exception {
+        when(sessionRepository.findById("session-1")).thenReturn(Optional.empty());
+        when(scenicRouteService.recommendRoutes(null)).thenReturn(List.of());
+        when(travelAnalyticsMetricService.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.AVERAGE_SPEND))
+                .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "统计接口未开放"));
+        GuideChatRequest request = new GuideChatRequest();
+        request.setSessionId("session-1");
+        request.setQuestion("游客平均消费多少？");
+
+        SseEmitter emitter = service.chatStream(request);
+
+        assertEmitterCompletedWithPayload(emitter, TRAVEL_ANALYTICS_UNAVAILABLE);
+        verify(maxKbService, never()).hitTest(any(String.class), any());
+        assertAssistantMessageSaved(TRAVEL_ANALYTICS_UNAVAILABLE);
+    }
+
+    @Test
     void buildsThreeNonBlankFollowUpSuggestionsForGuideAnswer() {
         List<String> relatedSpots = List.of("灵山大佛", "九龙灌浴");
         List<String> recommendedRoutes = List.of("历史文化爱好者路线");
@@ -454,5 +569,32 @@ class GuideServiceTests {
         Buffer buffer = new Buffer();
         request.body().writeTo(buffer);
         return buffer.readUtf8();
+    }
+
+    private void assertAssistantMessageSaved(String expectedContent) {
+        ArgumentCaptor<GuideMessage> captor = ArgumentCaptor.forClass(GuideMessage.class);
+        verify(messageRepository, org.mockito.Mockito.atLeast(2)).save(captor.capture());
+        GuideMessage assistant = captor.getAllValues().stream()
+                .filter(message -> "assistant".equals(message.getRole()))
+                .reduce((first, second) -> second)
+                .orElseThrow();
+        assertEquals(42L, assistant.getId());
+        assertEquals(expectedContent, assistant.getContent());
+    }
+
+    @SuppressWarnings("unchecked")
+    private void assertEmitterCompletedWithPayload(SseEmitter emitter, String expectedText) throws Exception {
+        assertNotNull(emitter);
+        assertTrue((Boolean) ReflectionTestUtils.getField(emitter, "complete"));
+        Set<Object> earlySendAttempts = (Set<Object>) ReflectionTestUtils.getField(emitter, "earlySendAttempts");
+        assertNotNull(earlySendAttempts);
+        List<String> payloads = new ArrayList<>();
+        for (Object attempt : earlySendAttempts) {
+            Object data = ReflectionTestUtils.invokeMethod(attempt, "getData");
+            payloads.add(String.valueOf(data));
+        }
+        String joined = String.join("\n", payloads);
+        assertTrue(joined.contains(expectedText));
+        assertTrue(joined.contains("messageId"));
     }
 }

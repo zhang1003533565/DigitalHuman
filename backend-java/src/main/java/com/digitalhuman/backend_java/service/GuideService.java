@@ -61,6 +61,7 @@ import java.util.regex.Pattern;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.math.BigDecimal;
+import java.util.Objects;
 
 @Service
 public class GuideService {
@@ -75,6 +76,7 @@ public class GuideService {
     private static final Pattern STAGE_DIRECTION_BLOCK_PATTERN = Pattern.compile("[（(【\\[][^）)】\\]]*(?:眼角含笑|含笑|微笑|笑着|神态|表情|动作|语气|旁白|低头|抬头|点头|眨眼)[^）)】\\]]*[）)】\\]]");
     private static final Pattern INLINE_STAGE_DIRECTION_PATTERN = Pattern.compile("[^。！？!?；;\\n]{0,16}(?:眼角含笑|含笑|微笑|笑着|神态|表情|动作|语气|旁白|低头|抬头|点头|眨眼)(?:地说|说道|说|：|:)?");
     static final String PERSONAL_DATA_REFUSAL = "抱歉，我只能提供脱敏后的群体统计信息，不能提供任何游客个人数据或行程明细。";
+    static final String TRAVEL_ANALYTICS_UNAVAILABLE = "抱歉，当前脱敏旅游统计暂未开放，暂时无法回答这类群体统计问题。";
     private static final String TRAVEL_ANALYTICS_KNOWLEDGE_NAME = "脱敏旅游统计";
 
     @Value("${ai.service-url}")
@@ -260,8 +262,10 @@ public class GuideService {
         this.providerConfigRepository = providerConfigRepository;
         this.maxKbService = maxKbService;
         this.guideStreamExecutor = guideStreamExecutor;
-        this.travelAnalyticsMetricService = travelAnalyticsMetricService;
-        this.travelAnalyticsIntentClassifier = travelAnalyticsIntentClassifier;
+        this.travelAnalyticsMetricService = Objects.requireNonNull(travelAnalyticsMetricService,
+                "travelAnalyticsMetricService");
+        this.travelAnalyticsIntentClassifier = Objects.requireNonNull(travelAnalyticsIntentClassifier,
+                "travelAnalyticsIntentClassifier");
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(60, TimeUnit.SECONDS)
@@ -274,8 +278,7 @@ public class GuideService {
             UserFeedbackRepository feedbackRepository, ScenicRouteService scenicRouteService,
             AdminModelConfigRepository modelConfigRepository, AdminProviderConfigRepository providerConfigRepository,
             MaxKbService maxKbService) {
-        this(sessionRepository, messageRepository, feedbackRepository, scenicRouteService, modelConfigRepository,
-                providerConfigRepository, maxKbService, Runnable::run, null, new TravelAnalyticsIntentClassifier());
+        throw new IllegalStateException("GuideService requires TravelAnalyticsMetricService and classifier dependencies");
     }
 
     public List<ScenicSpotDto> getAllSpots() {
@@ -773,7 +776,14 @@ public class GuideService {
             return new PreparedGuideReply(PERSONAL_DATA_REFUSAL, List.of());
         }
         if (classification.kind() == TravelAnalyticsIntentClassifier.Kind.METRIC && classification.metric() != null) {
-            return new PreparedGuideReply(null, List.of(buildTravelAnalyticsSource(classification.metric())));
+            try {
+                return new PreparedGuideReply(null, List.of(buildTravelAnalyticsSource(classification.metric())));
+            } catch (ResponseStatusException exception) {
+                if (HttpStatus.NOT_FOUND.equals(exception.getStatusCode())) {
+                    return new PreparedGuideReply(TRAVEL_ANALYTICS_UNAVAILABLE, List.of());
+                }
+                throw exception;
+            }
         }
         if (!allowKnowledgeLookup) {
             return new PreparedGuideReply(null, List.of());
@@ -782,9 +792,6 @@ public class GuideService {
     }
 
     private GuideSourceDto buildTravelAnalyticsSource(TravelAnalyticsMetric metric) {
-        if (travelAnalyticsMetricService == null) {
-            return emptyTravelAnalyticsSource(metric);
-        }
         return buildTravelAnalyticsSource(travelAnalyticsMetricService.queryMetric(TravelAnalyticsAudience.PUBLIC, metric));
     }
 
@@ -798,16 +805,6 @@ public class GuideService {
             source.setUpdatedAt(response.asOf().toString());
         }
         source.setContent(buildTravelAnalyticsContent(response));
-        return source;
-    }
-
-    private GuideSourceDto emptyTravelAnalyticsSource(TravelAnalyticsMetric metric) {
-        GuideSourceDto source = new GuideSourceDto();
-        source.setKnowledgeName(TRAVEL_ANALYTICS_KNOWLEDGE_NAME);
-        source.setDocumentName("public-travel-analytics");
-        source.setSourceFile("public-travel-analytics");
-        source.setTitle(metricTitle(metric));
-        source.setContent("统计结果暂不可用，仅可回答公开脱敏后的群体统计。");
         return source;
     }
 

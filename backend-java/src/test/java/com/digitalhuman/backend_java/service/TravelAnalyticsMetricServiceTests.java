@@ -8,6 +8,7 @@ import com.digitalhuman.backend_java.model.TravelAnalyticsRecord;
 import com.digitalhuman.backend_java.repository.TravelAnalyticsRecordRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -18,6 +19,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -115,6 +117,27 @@ class TravelAnalyticsMetricServiceTests {
         assertEquals(12, response.validSamples());
         assertTrue(response.items().isEmpty());
         assertEquals("样本不足", response.warning());
+    }
+
+    @Test
+    void publicMetricRejectsWhenPublicAccessDisabledBeforeQueryingRecords() {
+        TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
+        TravelAnalyticsAiConfigService configService = mock(TravelAnalyticsAiConfigService.class);
+        TravelAnalyticsAiConfig config = new TravelAnalyticsAiConfig();
+        config.setId("default");
+        config.setPublicEnabled(false);
+        config.setMinimumSampleSize(10);
+        when(configService.getConfig()).thenReturn(config);
+        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(
+                repository,
+                new TravelAnalyticsValueParser(),
+                configService);
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> service.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.AVERAGE_SPEND));
+
+        assertEquals(404, exception.getStatusCode().value());
+        verifyNoInteractions(repository);
     }
 
     @Test

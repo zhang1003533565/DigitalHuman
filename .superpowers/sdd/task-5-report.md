@@ -4,11 +4,15 @@
 
 - Worktree: `/Users/zzs/Desktop/zzs/github/DigitalHuman/.worktrees/hybrid-ai-data-access`
 - Brief: `task-5-brief.md`
-- Scoped files:
+- Final scoped files:
   - `backend-java/src/main/java/com/digitalhuman/backend_java/service/TravelAnalyticsIntentClassifier.java`
   - `backend-java/src/test/java/com/digitalhuman/backend_java/service/TravelAnalyticsIntentClassifierTests.java`
   - `backend-java/src/main/java/com/digitalhuman/backend_java/service/GuideService.java`
   - `backend-java/src/test/java/com/digitalhuman/backend_java/service/GuideServiceTests.java`
+  - `backend-java/src/main/java/com/digitalhuman/backend_java/service/TravelAnalyticsMetricService.java`
+  - `backend-java/src/test/java/com/digitalhuman/backend_java/service/TravelAnalyticsMetricServiceTests.java`
+  - `backend-java/src/main/java/com/digitalhuman/backend_java/controller/UserTravelAnalyticsController.java`
+  - `backend-java/src/test/java/com/digitalhuman/backend_java/controller/TravelAnalyticsMetricControllerTests.java`
 
 ## Takeover Findings
 
@@ -23,44 +27,64 @@
 - Fresh takeover check on July 18, 2026:
   - Command: `cd backend-java && mvn -q -Dtest=TravelAnalyticsIntentClassifierTests,GuideServiceTests test`
   - Result: unexpected GREEN on first run, which shows the inherited WIP had already crossed the brief's original RED checkpoint before takeover.
-- Because the branch was already green, no additional code fix was required beyond validating scope, preserving the inherited implementation, and replacing this stale report.
+- Review follow-up RED evidence on July 18, 2026:
+  - Command: `cd backend-java && mvn -q -Dtest=TravelAnalyticsIntentClassifierTests,GuideServiceTests,TravelAnalyticsMetricServiceTests,TravelAnalyticsMetricControllerTests test`
+  - Result 1: compile failure in `GuideServiceTests` due an invalid import while adding SSE regression coverage.
+  - Result 2: after fixing compile, 7 targeted test failures exposed the real review gaps:
+    - classifier named-person matching was too broad and misclassified aggregate phrases such as `游客平均消费多少`
+    - remaining personal/detail heuristics missed one generic detail case
+    - SSE disabled-path tests needed explicit mocked route/session persistence preconditions
+- Review follow-up GREEN evidence on July 18, 2026:
+  - Command: `cd backend-java && mvn -q -Dtest=TravelAnalyticsIntentClassifierTests,GuideServiceTests,TravelAnalyticsMetricServiceTests,TravelAnalyticsMetricControllerTests test`
+  - Result: PASS after narrowing named-person precedence, moving `publicEnabled` enforcement into `TravelAnalyticsMetricService`, and fixing the SSE regression harness.
 
 ## Behavior Verified
 
-- Classifier maps explicit group-statistics questions to the expected whitelist metrics.
-- Classifier marks personal-data requests for fixed refusal.
+- Classifier now applies the requested precedence:
+  - strong individual selector
+  - aggregate metric
+  - remaining personal/detail heuristic
+  - `NONE`
+- Classifier covers all five public metrics with natural aggregate phrasing and refuses multiple personal-data forms including explicit selectors and named-visitor questions.
 - `chat(...)` uses `TravelAnalyticsMetricService.queryMetric(TravelAnalyticsAudience.PUBLIC, metric)` for metric questions and does not call MaxKB for those questions.
 - `chat(...)` returns the fixed refusal for personal-data requests without calling MaxKB or analytics/model services.
+- `chat(...)`, `quickChat(...)`, and `chatStream(...)` return a fixed unavailable message without MaxKB/model calls when public analytics are disabled.
 - `chat(...)` keeps existing MaxKB retrieval for non-statistical guide questions.
 - `chatStream(...)` uses the same metric routing and injects the same sanitized analytics context as ordinary chat.
+- `chatStream(...)` personal-data refusal path emits the refusal token, persists the assistant reply, sends `messageId` meta, and completes without model calls.
+- `quickChat(...)` keeps its hidden-source response contract while still using aggregate analytics context internally for metric questions.
 - Analytics context includes `统计截至` and excludes personal identifiers like `tourist_id` and `昵称`.
 - Client input cannot choose analytics audience or metric; the service derives both internally.
+- Public analytics gating is now centralized inside `TravelAnalyticsMetricService.queryMetric(PUBLIC, ...)`, so the user controller and guide chat path share the same enforcement boundary.
 
 ## Validation
 
-- Focused tests:
-  - `cd backend-java && mvn -q -Dtest=TravelAnalyticsIntentClassifierTests,GuideServiceTests test`
+- Review-focused suite:
+  - `cd backend-java && mvn -q -Dtest=TravelAnalyticsIntentClassifierTests,GuideServiceTests,TravelAnalyticsMetricServiceTests,TravelAnalyticsMetricControllerTests test`
   - Result: PASS
   - Surefire evidence:
-    - `TravelAnalyticsIntentClassifierTests`: 4 tests, 0 failures, 0 errors
-    - `GuideServiceTests`: 18 tests, 0 failures, 0 errors
-- Chat regression tests from brief:
-  - `cd backend-java && mvn -q -Dtest=TravelAnalyticsIntentClassifierTests,GuideServiceTests,UserGuideControllerTests,AdminGuideControllerTests test`
+    - `TravelAnalyticsIntentClassifierTests`: 5 tests, 0 failures, 0 errors
+    - `GuideServiceTests`: 23 tests, 0 failures, 0 errors
+    - `TravelAnalyticsMetricServiceTests`: 16 tests, 0 failures, 0 errors
+    - `TravelAnalyticsMetricControllerTests`: 6 tests, 0 failures, 0 errors
+- Requested metric/config/controller suite:
+  - `cd backend-java && mvn -q -Dtest=TravelAnalyticsIntentClassifierTests,GuideServiceTests,TravelAnalyticsMetricServiceTests,TravelAnalyticsAiConfigServiceTests,TravelAnalyticsMetricControllerTests,UserGuideControllerTests,AdminGuideControllerTests test`
   - Result: PASS
   - Surefire evidence:
+    - `TravelAnalyticsAiConfigServiceTests`: 3 tests, 0 failures, 0 errors
     - `UserGuideControllerTests`: 1 test, 0 failures, 0 errors
     - `AdminGuideControllerTests`: 3 tests, 0 failures, 0 errors
 - Full backend suite:
   - `cd backend-java && mvn -q test`
   - Result: PASS
-  - Surefire rollup after run: 35 suites, 176 tests, 0 failures, 0 errors
+  - Surefire rollup after run: 35 suites, 183 tests, 0 failures, 0 errors
 - Diff hygiene:
   - `git diff --check`
-  - Result: PASS
+  - Pending final rerun before commit
 
 ## Self Review
 
-- Ordinary and SSE chat now share the same deterministic analytics-vs-refusal-vs-MaxKB branching logic through `prepareGuideReply(...)`.
-- The refusal path short-circuits before any outbound model or knowledge call, preserving the privacy boundary required by the brief.
-- The analytics source text is aggregate-only and explicitly warns against inferring personal data.
-- Scope stayed narrow: no controller contract changes, no client metric/audience parameters, no dependency changes.
+- The original review concerns were valid: the first inherited classifier boundary was too permissive, and user-controller-only gating would have left guide chat out of sync with the public toggle.
+- Ordinary chat, quick chat, and SSE chat now all depend on one deterministic classification plus one shared `PUBLIC` metric boundary, which is the lowest-risk way to keep the contracts aligned.
+- Removing the placeholder analytics fallback was the correct choice because it forces guide chat to respect the real service contract instead of silently fabricating availability.
+- Scope stayed narrow and reversible: no client privilege expansion, no SQL/model-based metric selection, and no dependency changes.
