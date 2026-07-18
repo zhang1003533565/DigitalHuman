@@ -99,7 +99,8 @@ public class ScenicFacilityContentService {
                 presentation.getLiveSourceType(), presentation.getLiveVideoUrl(),
                 presentation.getLiveStreamUrl(),
                 new VisitorFacilityLiveConfigDto.DigitalHuman(
-                        model.getId(), model.getModelKey(), model.getDisplayName(), model.getModelPath()));
+                        model.getId(), model.getModelKey(), model.getDisplayName(), model.getModelPath()),
+                resolveNarration(presentation));
     }
 
     @Transactional
@@ -227,7 +228,30 @@ public class ScenicFacilityContentService {
                 facility.getId(), facility.getName(), false, reason,
                 presentation == null ? null : presentation.getLiveSourceType(),
                 presentation == null ? null : presentation.getLiveVideoUrl(),
-                presentation == null ? null : presentation.getLiveStreamUrl(), null);
+                presentation == null ? null : presentation.getLiveStreamUrl(), null, null);
+    }
+
+    private VisitorFacilityLiveConfigDto.Narration resolveNarration(ScenicFacilityPresentation presentation) {
+        if (presentation == null
+                || !Boolean.TRUE.equals(presentation.getAudioEnabled())
+                || presentation.getBoundVoiceScriptId() == null) {
+            return null;
+        }
+        return voiceScriptRepository.findById(presentation.getBoundVoiceScriptId())
+                .filter(this::isPublishedReadyAudio)
+                .map(script -> new VisitorFacilityLiveConfigDto.Narration(
+                        script.getId(),
+                        script.getTitle(),
+                        script.getAudioUrl(),
+                        script.getDurationSec(),
+                        script.getVersionNo()))
+                .orElse(null);
+    }
+
+    private boolean isPublishedReadyAudio(VoiceScriptScene script) {
+        return "published".equalsIgnoreCase(clean(script.getStatus()))
+                && "ready".equalsIgnoreCase(clean(script.getAudioStatus()))
+                && clean(script.getAudioUrl()) != null;
     }
 
     private ScenicFacility findFacility(Long id) {

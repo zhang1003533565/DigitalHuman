@@ -145,6 +145,71 @@ class ScenicFacilityContentServiceTests {
     }
 
     @Test
+    void exposesPublishedBoundNarrationInVisitorLiveConfig() {
+        Fixtures fixtures = fixtures();
+        DigitalHumanModel model = new DigitalHumanModel();
+        model.setStatus("active");
+        ScenicFacilityPresentation presentation = new ScenicFacilityPresentation();
+        presentation.setLiveEnabled(true);
+        presentation.setLiveSourceType("video");
+        presentation.setLiveVideoUrl("/api/scenic-media/live.mp4");
+        presentation.setLiveDigitalHumanModel(model);
+        VoiceScriptScene narration = voice(71L, 12L, "LS-001", "published", "ready");
+        narration.setTitle("灵山胜境讲解");
+        narration.setAudioUrl("/api/tts/audio/voice-71.mp3");
+        narration.setDurationSec(64);
+        narration.setVersionNo(3);
+        presentation.setAudioEnabled(true);
+        presentation.setBoundVoiceScriptId(71L);
+        when(fixtures.presentationRepository.findByFacilityId(12L)).thenReturn(Optional.of(presentation));
+        when(fixtures.voiceRepository.findById(71L)).thenReturn(Optional.of(narration));
+
+        VisitorFacilityLiveConfigDto result = fixtures.service.getVisitorLiveConfig(12L);
+
+        assertEquals("/api/tts/audio/voice-71.mp3", result.narration().audioUrl());
+        assertEquals(3, result.narration().versionNo());
+    }
+
+    @Test
+    void hidesNarrationWhenBindingIsDraftStaleOrAudioDisabled() {
+        Fixtures fixtures = fixtures();
+        DigitalHumanModel model = new DigitalHumanModel();
+        model.setStatus("active");
+        ScenicFacilityPresentation disabledAudio = new ScenicFacilityPresentation();
+        disabledAudio.setLiveEnabled(true);
+        disabledAudio.setLiveSourceType("video");
+        disabledAudio.setLiveVideoUrl("/api/scenic-media/live.mp4");
+        disabledAudio.setLiveDigitalHumanModel(model);
+        disabledAudio.setAudioEnabled(false);
+        disabledAudio.setBoundVoiceScriptId(81L);
+
+        VoiceScriptScene draft = voice(81L, 12L, "LS-001", "draft", "ready");
+        draft.setAudioUrl("/api/tts/audio/draft.mp3");
+        when(fixtures.presentationRepository.findByFacilityId(12L)).thenReturn(Optional.of(disabledAudio));
+
+        assertEquals(null, fixtures.service.getVisitorLiveConfig(12L).narration());
+
+        ScenicFacilityPresentation draftBinding = new ScenicFacilityPresentation();
+        draftBinding.setLiveEnabled(true);
+        draftBinding.setLiveSourceType("video");
+        draftBinding.setLiveVideoUrl("/api/scenic-media/live.mp4");
+        draftBinding.setLiveDigitalHumanModel(model);
+        draftBinding.setAudioEnabled(true);
+        draftBinding.setBoundVoiceScriptId(81L);
+        when(fixtures.presentationRepository.findByFacilityId(12L)).thenReturn(Optional.of(draftBinding));
+        when(fixtures.voiceRepository.findById(81L)).thenReturn(Optional.of(draft));
+
+        assertEquals(null, fixtures.service.getVisitorLiveConfig(12L).narration());
+
+        VoiceScriptScene stale = voice(82L, 12L, "LS-001", "published", "stale");
+        stale.setAudioUrl("/api/tts/audio/stale.mp3");
+        draftBinding.setBoundVoiceScriptId(82L);
+        when(fixtures.voiceRepository.findById(82L)).thenReturn(Optional.of(stale));
+
+        assertEquals(null, fixtures.service.getVisitorLiveConfig(12L).narration());
+    }
+
+    @Test
     void claimsLegacyPublishedScriptWhenItsSpotCodeMatchesTheOfficialFacility() {
         Fixtures fixtures = fixtures();
         ScenicFacilityContentRequest request = contentRequest();
