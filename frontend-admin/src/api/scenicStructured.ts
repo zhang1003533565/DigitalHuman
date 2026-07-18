@@ -13,9 +13,34 @@ export type ScenicStructuredRecord = {
   highlights: string
   performance_open_info: string
   remark: string
+  audio_enabled: boolean
+  live_enabled: boolean
+  default_experience: 'audio' | 'live' | null
+  bound_voice_script_id: number | null
+  live_source_type: 'video' | 'stream' | 'camera' | null
+  live_video_url: string
+  live_stream_url: string
+  camera_stream_key: string
 }
 
 export type ScenicStructuredRecordPayload = Omit<ScenicStructuredRecord, 'id'>
+
+export type PublishedVoiceScript = {
+  id: number
+  spotId: string
+  spotName: string
+  title: string
+  style: string
+  versionNo: number
+  durationSec: number
+  audioStatus: 'ready'
+  audioUrl: string
+}
+
+export type ScenicLiveVideoUploadResponse = {
+  url: string
+  fileName?: string
+}
 
 export type ScenicStructuredImportIssue = {
   rowNumber: number
@@ -32,6 +57,28 @@ export type ScenicStructuredImportResponse = {
 
 export async function getScenicStructuredRecords() {
   const response = await axios.get<ScenicStructuredRecord[]>('/api/admin/scenic-structured/records')
+  return response.data
+}
+
+export async function getPublishedVoiceScripts(spotId: string) {
+  const response = await axios.get<PublishedVoiceScript[]>('/api/admin/voice-scripts/published', {
+    params: { spotId },
+  })
+  return response.data
+}
+
+export async function uploadScenicLiveVideo(file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+  const response = await axios.post<ScenicLiveVideoUploadResponse>(
+    '/api/admin/scenic-structured/media/upload',
+    formData,
+    {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    },
+  )
   return response.data
 }
 

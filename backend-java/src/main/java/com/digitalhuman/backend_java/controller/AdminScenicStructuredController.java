@@ -2,8 +2,10 @@ package com.digitalhuman.backend_java.controller;
 
 import com.digitalhuman.backend_java.dto.ScenicStructuredImportResponse;
 import com.digitalhuman.backend_java.dto.ScenicStructuredImportResult;
+import com.digitalhuman.backend_java.dto.ScenicMediaUploadResponse;
 import com.digitalhuman.backend_java.dto.ScenicStructuredSpotRecordRequest;
 import com.digitalhuman.backend_java.model.ScenicStructuredSpotRecord;
+import com.digitalhuman.backend_java.service.ScenicMediaService;
 import com.digitalhuman.backend_java.service.ScenicStructuredSpotService;
 import jakarta.validation.Valid;
 import org.springframework.http.ContentDisposition;
@@ -28,9 +30,11 @@ import java.util.List;
 public class AdminScenicStructuredController {
 
     private final ScenicStructuredSpotService service;
+    private final ScenicMediaService mediaService;
 
-    public AdminScenicStructuredController(ScenicStructuredSpotService service) {
+    public AdminScenicStructuredController(ScenicStructuredSpotService service, ScenicMediaService mediaService) {
         this.service = service;
+        this.mediaService = mediaService;
     }
 
     @GetMapping("/records")
@@ -79,5 +83,10 @@ public class AdminScenicStructuredController {
                 result.getSkippedEmptyCount(),
                 result.getSkippedDuplicateCount(),
                 result.getIssues());
+    }
+
+    @PostMapping(value = "/media/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ScenicMediaUploadResponse uploadLiveVideo(@RequestParam("file") MultipartFile file) {
+        return mediaService.uploadVideo(file);
     }
 }

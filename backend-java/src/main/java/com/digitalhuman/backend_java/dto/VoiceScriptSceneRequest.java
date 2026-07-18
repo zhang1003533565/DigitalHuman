@@ -27,7 +27,7 @@ public class VoiceScriptSceneRequest {
     private String title;
 
     @NotBlank(message = "口播文本不能为空")
-    @Size(min = 100, max = 1200, message = "口播文本长度需在100到1200字之间")
+    @Size(max = 1200, message = "口播文本不能超过1200字")
     private String scriptText;
 
     private String ssmlText;

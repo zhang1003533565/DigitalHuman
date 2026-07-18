@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
+import jakarta.persistence.PostLoad;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
@@ -64,6 +65,42 @@ public class VoiceScriptScene {
     @Column(name = "source_file", length = 255)
     private String sourceFile;
 
+    @Column(name = "generation_mode", length = 20)
+    private String generationMode;
+
+    @Column(name = "target_duration_sec")
+    private Integer targetDurationSec;
+
+    @Column(name = "source_refs_json", columnDefinition = "LONGTEXT")
+    private String sourceRefsJson;
+
+    @Column(name = "audio_status", length = 20)
+    private String audioStatus;
+
+    @Column(name = "audio_url", length = 1000)
+    private String audioUrl;
+
+    @Column(name = "audio_file_name", length = 255)
+    private String audioFileName;
+
+    @Column(name = "voice_id", length = 100)
+    private String voiceId;
+
+    @Column(name = "speech_rate", length = 30)
+    private String speechRate;
+
+    @Column(name = "speech_volume", length = 30)
+    private String speechVolume;
+
+    @Column(name = "speech_pitch", length = 30)
+    private String speechPitch;
+
+    @Column(name = "audio_script_hash", length = 64)
+    private String audioScriptHash;
+
+    @Column(name = "audio_generated_at")
+    private LocalDateTime audioGeneratedAt;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
@@ -73,10 +110,28 @@ public class VoiceScriptScene {
     @PrePersist
     public void prePersist() {
         LocalDateTime now = LocalDateTime.now();
+        applyLegacyDefaults();
         if (createdAt == null) {
             createdAt = now;
         }
         updatedAt = now;
+    }
+
+    @PostLoad
+    public void postLoad() {
+        applyLegacyDefaults();
+    }
+
+    private void applyLegacyDefaults() {
+        if (generationMode == null || generationMode.isBlank()) {
+            generationMode = "manual";
+        }
+        if (audioStatus == null || audioStatus.isBlank()) {
+            audioStatus = "missing";
+        }
+        if (targetDurationSec == null) {
+            targetDurationSec = durationSec;
+        }
     }
 
     @PreUpdate
@@ -186,6 +241,102 @@ public class VoiceScriptScene {
 
     public void setSourceFile(String sourceFile) {
         this.sourceFile = sourceFile;
+    }
+
+    public String getGenerationMode() {
+        return generationMode;
+    }
+
+    public void setGenerationMode(String generationMode) {
+        this.generationMode = generationMode;
+    }
+
+    public Integer getTargetDurationSec() {
+        return targetDurationSec;
+    }
+
+    public void setTargetDurationSec(Integer targetDurationSec) {
+        this.targetDurationSec = targetDurationSec;
+    }
+
+    public String getSourceRefsJson() {
+        return sourceRefsJson;
+    }
+
+    public void setSourceRefsJson(String sourceRefsJson) {
+        this.sourceRefsJson = sourceRefsJson;
+    }
+
+    public String getAudioStatus() {
+        return audioStatus;
+    }
+
+    public void setAudioStatus(String audioStatus) {
+        this.audioStatus = audioStatus;
+    }
+
+    public String getAudioUrl() {
+        return audioUrl;
+    }
+
+    public void setAudioUrl(String audioUrl) {
+        this.audioUrl = audioUrl;
+    }
+
+    public String getAudioFileName() {
+        return audioFileName;
+    }
+
+    public void setAudioFileName(String audioFileName) {
+        this.audioFileName = audioFileName;
+    }
+
+    public String getVoiceId() {
+        return voiceId;
+    }
+
+    public void setVoiceId(String voiceId) {
+        this.voiceId = voiceId;
+    }
+
+    public String getSpeechRate() {
+        return speechRate;
+    }
+
+    public void setSpeechRate(String speechRate) {
+        this.speechRate = speechRate;
+    }
+
+    public String getSpeechVolume() {
+        return speechVolume;
+    }
+
+    public void setSpeechVolume(String speechVolume) {
+        this.speechVolume = speechVolume;
+    }
+
+    public String getSpeechPitch() {
+        return speechPitch;
+    }
+
+    public void setSpeechPitch(String speechPitch) {
+        this.speechPitch = speechPitch;
+    }
+
+    public String getAudioScriptHash() {
+        return audioScriptHash;
+    }
+
+    public void setAudioScriptHash(String audioScriptHash) {
+        this.audioScriptHash = audioScriptHash;
+    }
+
+    public LocalDateTime getAudioGeneratedAt() {
+        return audioGeneratedAt;
+    }
+
+    public void setAudioGeneratedAt(LocalDateTime audioGeneratedAt) {
+        this.audioGeneratedAt = audioGeneratedAt;
     }
 
     public LocalDateTime getCreatedAt() {

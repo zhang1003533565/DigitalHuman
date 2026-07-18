@@ -3,9 +3,13 @@ package com.digitalhuman.backend_java.service;
 import com.digitalhuman.backend_java.dto.VoiceScriptImportIssueDto;
 import com.digitalhuman.backend_java.dto.VoiceScriptImportResponse;
 import com.digitalhuman.backend_java.dto.VoiceScriptSceneRequest;
+import com.digitalhuman.backend_java.dto.VoiceScriptSynthesizeRequest;
+import com.digitalhuman.backend_java.dto.TtsRequest;
 import com.digitalhuman.backend_java.model.VoiceScriptScene;
 import com.digitalhuman.backend_java.repository.VoiceScriptSceneRepository;
 import jakarta.transaction.Transactional;
+import org.apache.poi.xwpf.usermodel.BodyElementType;
+import org.apache.poi.xwpf.usermodel.IBodyElement;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
@@ -15,9 +19,15 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.util.UriUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -45,13 +55,17 @@ public class VoiceScriptSceneService {
     );
     private static final Set<String> NON_SPOT_SECTION_TITLES = Set.of(
             "住宿", "餐饮", "交通", "门票", "开放时间", "特色体验", "讲解重点", "实用游览贴士",
-            "个性化游览路线推荐", "核心文化内涵", "游览指南", "总结", "温馨提示", "注意事项"
+            "个性化游览路线推荐", "核心文化内涵", "游览指南", "总结", "温馨提示", "注意事项",
+            "项目", "详细信息", "基本数据", "建造工艺", "佛教意义", "最佳体验", "建筑规模",
+            "核心艺术", "文化地位", "表演内容", "建筑风格", "内部艺术", "历史遗存", "佛教活动"
     );
 
     private final VoiceScriptSceneRepository repository;
+    private final TtsService ttsService;
 
-    public VoiceScriptSceneService(VoiceScriptSceneRepository repository) {
+    public VoiceScriptSceneService(VoiceScriptSceneRepository repository, TtsService ttsService) {
         this.repository = repository;
+        this.ttsService = ttsService;
     }
 
     public List<VoiceScriptScene> listAll() {
@@ -66,20 +80,33 @@ public class VoiceScriptSceneService {
     @Transactional
     public VoiceScriptScene create(VoiceScriptSceneRequest request) {
         validateRequestEnums(request);
-        validateUniqueKey(request, null);
 
         VoiceScriptScene entity = new VoiceScriptScene();
         applyRequest(entity, request);
+        int nextVersion = repository.findTopBySpotIdAndSceneTypeAndStyleOrderByVersionNoDesc(
+                        entity.getSpotId(), entity.getSceneType(), entity.getStyle())
+                .map(VoiceScriptScene::getVersionNo)
+                .orElse(0) + 1;
+        entity.setVersionNo(nextVersion);
+        entity.setStatus("draft");
+        initializeManualDraft(entity);
         return repository.save(entity);
     }
 
     @Transactional
     public VoiceScriptScene update(Long id, VoiceScriptSceneRequest request) {
         VoiceScriptScene entity = getById(id);
+        if (!"draft".equalsIgnoreCase(normalize(entity.getStatus()))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "已发布或已归档版本不可直接修改，请先回滚为新草稿");
+        }
         validateRequestEnums(request);
         validateUniqueKey(request, id);
 
+        String oldScriptText = entity.getScriptText();
         applyRequest(entity, request);
+        if (!normalize(oldScriptText).equals(normalize(entity.getScriptText())) && hasAudioAsset(entity)) {
+            entity.setAudioStatus("stale");
+        }
         return repository.save(entity);
     }
 
@@ -94,6 +121,9 @@ public class VoiceScriptSceneService {
     @Transactional
     public VoiceScriptScene publish(Long id) {
         VoiceScriptScene entity = getById(id);
+        if (!hasCurrentReadyAudio(entity)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "发布前必须先为当前口播文本合成有效音频");
+        }
         String spotId = normalize(entity.getSpotId());
         String sceneType = normalize(entity.getSceneType()).toLowerCase(Locale.ROOT);
         String style = normalize(entity.getStyle()).toLowerCase(Locale.ROOT);
@@ -110,6 +140,78 @@ public class VoiceScriptSceneService {
 
         entity.setStatus("published");
         return repository.save(entity);
+    }
+
+    @Transactional
+    public VoiceScriptScene rollback(Long id) {
+        VoiceScriptScene source = getById(id);
+        int nextVersion = repository.findTopBySpotIdAndSceneTypeAndStyleOrderByVersionNoDesc(
+                        source.getSpotId(), source.getSceneType(), source.getStyle())
+                .map(VoiceScriptScene::getVersionNo)
+                .orElse(0) + 1;
+
+        VoiceScriptScene draft = copyContent(source);
+        draft.setVersionNo(nextVersion);
+        draft.setStatus("draft");
+        draft.setGenerationMode("manual");
+        clearAudio(draft);
+        return repository.save(draft);
+    }
+
+    public VoiceScriptScene synthesize(Long id, VoiceScriptSynthesizeRequest request) {
+        VoiceScriptScene entity = getById(id);
+        String voiceId = normalize(request.getVoiceId());
+        String rate = defaultIfBlank(request.getSpeechRate(), "+0%");
+        String volume = defaultIfBlank(request.getSpeechVolume(), "+0%");
+        String pitch = defaultIfBlank(request.getSpeechPitch(), "+0Hz");
+        TtsRequest ttsRequest = TtsRequest.builder()
+                .text(entity.getScriptText())
+                .voice(voiceId)
+                .rate(rate)
+                .volume(volume)
+                .pitch(pitch)
+                .outputFileName("voice-script-" + id + "-v" + entity.getVersionNo() + ".mp3")
+                .build();
+
+        try {
+            String audioPath = ttsService.synthesize(ttsRequest);
+            String audioFileName = Path.of(audioPath).getFileName().toString();
+            entity.setAudioStatus("ready");
+            entity.setAudioUrl("/api/tts/audio/" + UriUtils.encodePathSegment(audioFileName, StandardCharsets.UTF_8));
+            entity.setAudioFileName(audioFileName);
+            entity.setVoiceId(voiceId);
+            entity.setSpeechRate(rate);
+            entity.setSpeechVolume(volume);
+            entity.setSpeechPitch(pitch);
+            entity.setAudioScriptHash(scriptHash(entity.getScriptText()));
+            entity.setAudioGeneratedAt(LocalDateTime.now());
+            return repository.save(entity);
+        } catch (Exception exception) {
+            entity.setAudioStatus("failed");
+            repository.save(entity);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "语音合成失败：" + exception.getMessage(), exception);
+        }
+    }
+
+    public List<VoiceScriptScene> listPublished(String spotId) {
+        String normalizedSpotId = normalize(spotId);
+        if (normalizedSpotId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "景点ID不能为空");
+        }
+        return repository.findBySpotIdAndStatusIgnoreCaseOrderByVersionNoDesc(normalizedSpotId, "published")
+                .stream()
+                .filter(this::hasCurrentReadyAudio)
+                .toList();
+    }
+
+    public static String scriptHash(String scriptText) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest((scriptText == null ? "" : scriptText).getBytes(StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is not available", exception);
+        }
     }
 
     @Transactional
@@ -155,7 +257,7 @@ public class VoiceScriptSceneService {
                 return importFromStructuredTables(structuredTables, normalizedScenicName, normalizedStyle, versionNo, originalFilename);
             }
 
-            List<String> paragraphs = extractParagraphs(document);
+            List<String> paragraphs = extractDocumentTexts(document);
             if (paragraphs.isEmpty()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "文档内容为空");
             }
@@ -164,26 +266,21 @@ public class VoiceScriptSceneService {
             }
 
             String overviewText = mergeTexts(paragraphs.subList(0, Math.min(paragraphs.size(), 4)));
-            if (overviewText.length() >= 100) {
-                VoiceScriptScene overview = new VoiceScriptScene();
-                overview.setScenicName(normalizedScenicName);
-                overview.setSpotId("overview");
-                overview.setSpotName(normalizedScenicName + "总览");
-                overview.setSceneType("overview");
-                overview.setStyle(normalizedStyle);
-                overview.setTitle(normalizedScenicName + "总览讲解");
-                overview.setScriptText(limitText(overviewText, 1150));
-                overview.setSsmlText(toSimpleSsml(overview.getScriptText()));
-                overview.setDurationSec(estimateDurationSec(overview.getScriptText()));
-                overview.setVersionNo(versionNo);
-                overview.setStatus("draft");
-                overview.setSourceFile(originalFilename);
-                saveReplacingIfExists(overview);
-                importedCount++;
-            } else {
-                skippedCount++;
-                issues.add(new VoiceScriptImportIssueDto(1, "总览段落不足100字，已跳过"));
-            }
+            VoiceScriptScene overview = new VoiceScriptScene();
+            overview.setScenicName(normalizedScenicName);
+            overview.setSpotId("overview");
+            overview.setSpotName(normalizedScenicName + "总览");
+            overview.setSceneType("overview");
+            overview.setStyle(normalizedStyle);
+            overview.setTitle(normalizedScenicName + "总览讲解");
+            overview.setScriptText(limitText(nonBlankOrFallback(overviewText, normalizedScenicName + "总览讲解草稿"), 1150));
+            overview.setSsmlText(toSimpleSsml(overview.getScriptText()));
+            overview.setDurationSec(estimateDurationSec(overview.getScriptText()));
+            overview.setVersionNo(versionNo);
+            overview.setStatus("draft");
+            overview.setSourceFile(originalFilename);
+            saveReplacingIfExists(overview);
+            importedCount++;
 
             int rowNum = 2;
             Set<String> inDocSpotIds = new HashSet<>();
@@ -206,13 +303,7 @@ public class VoiceScriptSceneService {
                     j++;
                 }
 
-                String scriptText = normalize(block.toString());
-                if (scriptText.length() < 100) {
-                    skippedCount++;
-                    issues.add(new VoiceScriptImportIssueDto(rowNum, "景点《" + title + "》正文不足100字，已跳过"));
-                    rowNum++;
-                    continue;
-                }
+                String scriptText = nonBlankOrFallback(block.toString(), title + "讲解草稿");
 
                 String spotId = buildSpotId(title);
                 if (inDocSpotIds.contains(spotId)) {
@@ -282,12 +373,7 @@ public class VoiceScriptSceneService {
                     continue;
                 }
 
-                String scriptText = buildStructuredScriptText(draft);
-                if (scriptText.length() < 100) {
-                    skippedCount++;
-                    issues.add(new VoiceScriptImportIssueDto(logicalRowNumber, "景点《" + draft.spotName() + "》可生成口播内容不足100字，已跳过"));
-                    continue;
-                }
+                String scriptText = nonBlankOrFallback(buildStructuredScriptText(draft), draft.spotName() + "讲解草稿");
 
                 inDocSpotIds.add(draft.spotId());
                 VoiceScriptScene scene = new VoiceScriptScene();
@@ -325,6 +411,59 @@ public class VoiceScriptSceneService {
         entity.setVersionNo(request.getVersionNo());
         entity.setStatus(normalize(request.getStatus()).toLowerCase(Locale.ROOT));
         entity.setSourceFile(normalize(request.getSourceFile()));
+    }
+
+    private void initializeManualDraft(VoiceScriptScene entity) {
+        entity.setGenerationMode("manual");
+        entity.setTargetDurationSec(entity.getDurationSec());
+        entity.setAudioStatus("missing");
+    }
+
+    private VoiceScriptScene copyContent(VoiceScriptScene source) {
+        VoiceScriptScene copy = new VoiceScriptScene();
+        copy.setScenicName(source.getScenicName());
+        copy.setSpotId(source.getSpotId());
+        copy.setSpotName(source.getSpotName());
+        copy.setSceneType(source.getSceneType());
+        copy.setStyle(source.getStyle());
+        copy.setTitle(source.getTitle());
+        copy.setScriptText(source.getScriptText());
+        copy.setSsmlText(source.getSsmlText());
+        copy.setDurationSec(source.getDurationSec());
+        copy.setTargetDurationSec(source.getTargetDurationSec());
+        copy.setSourceFile(source.getSourceFile());
+        copy.setSourceRefsJson(source.getSourceRefsJson());
+        return copy;
+    }
+
+    private void clearAudio(VoiceScriptScene entity) {
+        entity.setAudioStatus("missing");
+        entity.setAudioUrl(null);
+        entity.setAudioFileName(null);
+        entity.setVoiceId(null);
+        entity.setSpeechRate(null);
+        entity.setSpeechVolume(null);
+        entity.setSpeechPitch(null);
+        entity.setAudioScriptHash(null);
+        entity.setAudioGeneratedAt(null);
+    }
+
+    private boolean hasAudioAsset(VoiceScriptScene entity) {
+        return "ready".equalsIgnoreCase(normalize(entity.getAudioStatus()))
+                || "stale".equalsIgnoreCase(normalize(entity.getAudioStatus()))
+                || !normalize(entity.getAudioUrl()).isBlank()
+                || !normalize(entity.getAudioScriptHash()).isBlank();
+    }
+
+    private boolean hasCurrentReadyAudio(VoiceScriptScene entity) {
+        return "ready".equalsIgnoreCase(normalize(entity.getAudioStatus()))
+                && scriptHash(entity.getScriptText()).equals(normalize(entity.getAudioScriptHash()))
+                && !normalize(entity.getAudioUrl()).isBlank();
+    }
+
+    private String defaultIfBlank(String value, String fallback) {
+        String normalized = normalize(value);
+        return normalized.isBlank() ? fallback : normalized;
     }
 
     private void validateRequestEnums(VoiceScriptSceneRequest request) {
@@ -366,19 +505,42 @@ public class VoiceScriptSceneService {
         repository.save(newRow);
     }
 
-    private List<String> extractParagraphs(XWPFDocument document) {
+    private List<String> extractDocumentTexts(XWPFDocument document) {
         List<String> rows = new ArrayList<>();
-        for (XWPFParagraph paragraph : document.getParagraphs()) {
-            String text = normalize(paragraph.getText());
-            if (text.isBlank()) {
-                continue;
+        for (IBodyElement element : document.getBodyElements()) {
+            if (element.getElementType() == BodyElementType.PARAGRAPH && element instanceof XWPFParagraph paragraph) {
+                addDocumentText(rows, paragraph.getText());
+            } else if (element.getElementType() == BodyElementType.TABLE && element instanceof XWPFTable table) {
+                rows.addAll(tableTexts(table));
             }
-            if (text.startsWith("<w:")) {
-                continue;
-            }
-            rows.add(text);
         }
         return rows;
+    }
+
+    private List<String> tableTexts(XWPFTable table) {
+        List<String> rows = new ArrayList<>();
+        for (XWPFTableRow row : table.getRows()) {
+            List<XWPFTableCell> cells = row.getTableCells();
+            if (cells.size() >= 2) {
+                String key = normalize(cells.get(0).getText());
+                String value = normalize(cells.get(1).getText());
+                if (!key.isBlank() && !value.isBlank() && !"项目".equals(key) && !"详细信息".equals(value)) {
+                    addDocumentText(rows, key + "：" + value);
+                }
+                continue;
+            }
+            String rowText = normalize(row.getTableCells().stream().map(XWPFTableCell::getText).reduce("", (left, right) -> left + " " + right));
+            addDocumentText(rows, rowText);
+        }
+        return rows;
+    }
+
+    private void addDocumentText(List<String> rows, String value) {
+        String text = normalize(value);
+        if (text.isBlank() || text.startsWith("<w:")) {
+            return;
+        }
+        rows.add(text);
     }
 
     private List<XWPFTable> findStructuredTables(XWPFDocument document) {
@@ -465,6 +627,9 @@ public class VoiceScriptSceneService {
         if (text.length() < 3 || text.length() > 30) {
             return false;
         }
+        if (isTopHeading(text) || text.contains("游览指南")) {
+            return false;
+        }
         String normalized = text.replace("：", ":");
         String beforeColon = normalized.contains(":") ? normalized.substring(0, normalized.indexOf(':')).trim() : normalized;
         if (NON_SPOT_SECTION_TITLES.contains(beforeColon)) {
@@ -511,6 +676,11 @@ public class VoiceScriptSceneService {
             return normalized;
         }
         return normalized.substring(0, max);
+    }
+
+    private String nonBlankOrFallback(String value, String fallback) {
+        String normalized = normalize(value);
+        return normalized.isBlank() ? normalize(fallback) : normalized;
     }
 
     private String normalize(String value) {

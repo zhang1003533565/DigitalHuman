@@ -1,9 +1,12 @@
 package com.digitalhuman.backend_java.controller;
 
 import com.digitalhuman.backend_java.dto.VoiceScriptImportResponse;
+import com.digitalhuman.backend_java.dto.VoiceScriptGenerateRequest;
 import com.digitalhuman.backend_java.dto.VoiceScriptSceneRequest;
+import com.digitalhuman.backend_java.dto.VoiceScriptSynthesizeRequest;
 import com.digitalhuman.backend_java.model.VoiceScriptScene;
 import com.digitalhuman.backend_java.service.VoiceScriptSceneService;
+import com.digitalhuman.backend_java.service.VoiceScriptGenerationService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,14 +26,21 @@ import java.util.List;
 public class AdminVoiceScriptController {
 
     private final VoiceScriptSceneService service;
+    private final VoiceScriptGenerationService generationService;
 
-    public AdminVoiceScriptController(VoiceScriptSceneService service) {
+    public AdminVoiceScriptController(VoiceScriptSceneService service, VoiceScriptGenerationService generationService) {
         this.service = service;
+        this.generationService = generationService;
     }
 
     @GetMapping("/records")
     public List<VoiceScriptScene> listRecords() {
         return service.listAll();
+    }
+
+    @PostMapping("/generate")
+    public VoiceScriptScene generate(@Valid @RequestBody VoiceScriptGenerateRequest request) {
+        return generationService.generate(request);
     }
 
     @GetMapping("/records/{id}")
@@ -56,6 +66,23 @@ public class AdminVoiceScriptController {
     @PostMapping("/records/{id}/publish")
     public VoiceScriptScene publishRecord(@PathVariable Long id) {
         return service.publish(id);
+    }
+
+    @PostMapping("/records/{id}/rollback")
+    public VoiceScriptScene rollbackRecord(@PathVariable Long id) {
+        return service.rollback(id);
+    }
+
+    @PostMapping("/records/{id}/synthesize")
+    public VoiceScriptScene synthesizeRecord(
+            @PathVariable Long id,
+            @Valid @RequestBody VoiceScriptSynthesizeRequest request) {
+        return service.synthesize(id, request);
+    }
+
+    @GetMapping("/published")
+    public List<VoiceScriptScene> listPublished(@RequestParam("spotId") String spotId) {
+        return service.listPublished(spotId);
     }
 
     @PostMapping("/import-docx")

@@ -40,6 +40,9 @@ maxkb:
   workspace-id: ${MAXKB_WORKSPACE_ID:default}
   default-knowledge-id: ${MAXKB_DEFAULT_KNOWLEDGE_ID:}
 
+scenic:
+  media-dir: ${SCENIC_MEDIA_DIR:${user.dir}/media/scenic}
+
 knowledge:
   maxkb:
     timeout-seconds: ${KNOWLEDGE_MAXKB_TIMEOUT_SECONDS:30}

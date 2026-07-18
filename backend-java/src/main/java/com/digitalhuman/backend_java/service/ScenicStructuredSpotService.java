@@ -4,7 +4,9 @@ import com.digitalhuman.backend_java.dto.ScenicStructuredImportIssueDto;
 import com.digitalhuman.backend_java.dto.ScenicStructuredImportResult;
 import com.digitalhuman.backend_java.dto.ScenicStructuredSpotRecordRequest;
 import com.digitalhuman.backend_java.model.ScenicStructuredSpotRecord;
+import com.digitalhuman.backend_java.model.VoiceScriptScene;
 import com.digitalhuman.backend_java.repository.ScenicStructuredSpotRecordRepository;
+import com.digitalhuman.backend_java.repository.VoiceScriptSceneRepository;
 import jakarta.transaction.Transactional;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
@@ -41,9 +43,14 @@ public class ScenicStructuredSpotService {
     );
 
     private final ScenicStructuredSpotRecordRepository repository;
+    private final VoiceScriptSceneRepository voiceScriptRepository;
 
-    public ScenicStructuredSpotService(ScenicStructuredSpotRecordRepository repository) {
+    public ScenicStructuredSpotService(
+            ScenicStructuredSpotRecordRepository repository,
+            VoiceScriptSceneRepository voiceScriptRepository
+    ) {
         this.repository = repository;
+        this.voiceScriptRepository = voiceScriptRepository;
     }
 
     public List<ScenicStructuredSpotRecord> listAll() {
@@ -65,6 +72,7 @@ public class ScenicStructuredSpotService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "景点ID已存在");
         }
 
+        validateVisitorExperience(request);
         ScenicStructuredSpotRecord entity = new ScenicStructuredSpotRecord();
         applyRequest(entity, request);
         return repository.save(entity);
@@ -81,6 +89,7 @@ public class ScenicStructuredSpotService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "景点ID已存在");
         }
 
+        validateVisitorExperience(request);
         applyRequest(entity, request);
         return repository.save(entity);
     }
@@ -254,6 +263,14 @@ public class ScenicStructuredSpotService {
         entity.setHighlights(highlights);
         entity.setPerformance_open_info(performanceOpenInfo);
         entity.setRemark(remark);
+        entity.setAudio_enabled(false);
+        entity.setLive_enabled(false);
+        entity.setDefault_experience(null);
+        entity.setBound_voice_script_id(null);
+        entity.setLive_source_type(null);
+        entity.setLive_video_url(null);
+        entity.setLive_stream_url(null);
+        entity.setCamera_stream_key(null);
         return ParseRowResult.entity(entity);
     }
 
@@ -269,6 +286,89 @@ public class ScenicStructuredSpotService {
         entity.setHighlights(normalize(request.getHighlights()));
         entity.setPerformance_open_info(normalize(request.getPerformance_open_info()));
         entity.setRemark(normalize(request.getRemark()));
+        boolean audioEnabled = Boolean.TRUE.equals(request.getAudio_enabled());
+        boolean liveEnabled = Boolean.TRUE.equals(request.getLive_enabled());
+        entity.setAudio_enabled(audioEnabled);
+        entity.setLive_enabled(liveEnabled);
+        entity.setDefault_experience(resolveDefaultExperience(request, audioEnabled, liveEnabled));
+        entity.setBound_voice_script_id(request.getBound_voice_script_id());
+        entity.setLive_source_type(normalizeNullable(request.getLive_source_type()));
+        entity.setLive_video_url(normalizeNullable(request.getLive_video_url()));
+        entity.setLive_stream_url(normalizeNullable(request.getLive_stream_url()));
+        entity.setCamera_stream_key(normalizeNullable(request.getCamera_stream_key()));
+    }
+
+    private void validateVisitorExperience(ScenicStructuredSpotRecordRequest request) {
+        boolean audioEnabled = Boolean.TRUE.equals(request.getAudio_enabled());
+        boolean liveEnabled = Boolean.TRUE.equals(request.getLive_enabled());
+
+        if (audioEnabled) {
+            validateBoundVoiceScript(request.getBound_voice_script_id(), request.getSpot_id());
+        }
+        if (liveEnabled) {
+            validateLiveSource(request);
+        }
+        if (audioEnabled && liveEnabled) {
+            String defaultExperience = normalize(request.getDefault_experience()).toLowerCase();
+            if (!Set.of("audio", "live").contains(defaultExperience)) {
+                throw badRequest("同时启用语音和直播时，默认入口必须为 audio 或 live");
+            }
+        }
+    }
+
+    private void validateBoundVoiceScript(Long voiceScriptId, String spotId) {
+        if (voiceScriptId == null) {
+            throw badRequest("启用语音时必须绑定口播");
+        }
+        VoiceScriptScene voiceScript = voiceScriptRepository.findById(voiceScriptId)
+                .orElseThrow(() -> badRequest("绑定的口播不存在"));
+        if (!normalize(spotId).equalsIgnoreCase(normalize(voiceScript.getSpotId()))) {
+            throw badRequest("绑定口播必须属于当前景点");
+        }
+        if (!"published".equalsIgnoreCase(normalize(voiceScript.getStatus()))) {
+            throw badRequest("只能绑定已发布的口播");
+        }
+        if (!"ready".equalsIgnoreCase(normalize(voiceScript.getAudioStatus()))) {
+            throw badRequest("只能绑定音频已就绪的口播");
+        }
+    }
+
+    private void validateLiveSource(ScenicStructuredSpotRecordRequest request) {
+        String sourceType = normalize(request.getLive_source_type()).toLowerCase();
+        switch (sourceType) {
+            case "video" -> requireConfigured(request.getLive_video_url(), "视频直播必须配置视频地址");
+            case "stream" -> requireConfigured(request.getLive_stream_url(), "流直播必须配置播放流地址");
+            case "camera" -> requireConfigured(request.getCamera_stream_key(), "摄像头直播必须配置推流通道");
+            case "" -> throw badRequest("启用直播时必须选择直播源类型");
+            default -> throw badRequest("直播源类型必须为 video、stream 或 camera");
+        }
+    }
+
+    private void requireConfigured(String value, String message) {
+        if (normalize(value).isBlank()) {
+            throw badRequest(message);
+        }
+    }
+
+    private String resolveDefaultExperience(
+            ScenicStructuredSpotRecordRequest request,
+            boolean audioEnabled,
+            boolean liveEnabled
+    ) {
+        if (audioEnabled && liveEnabled) {
+            return normalize(request.getDefault_experience()).toLowerCase();
+        }
+        if (audioEnabled) {
+            return "audio";
+        }
+        if (liveEnabled) {
+            return "live";
+        }
+        return null;
+    }
+
+    private ResponseStatusException badRequest(String reason) {
+        return new ResponseStatusException(HttpStatus.BAD_REQUEST, reason);
     }
 
     private String getCellText(XWPFTableRow row, int cellIndex) {
@@ -282,6 +382,11 @@ public class ScenicStructuredSpotService {
 
     private String normalize(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private String normalizeNullable(String value) {
+        String normalized = normalize(value);
+        return normalized.isBlank() ? null : normalized;
     }
 
     private boolean isEntireRowEmpty(List<String> values) {

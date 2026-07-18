@@ -1,5 +1,9 @@
 import axios from 'axios'
 
+export type VoiceScriptStatus = 'draft' | 'published' | 'archived'
+export type VoiceScriptAudioStatus = 'missing' | 'ready' | 'stale' | 'failed'
+export type VoiceScriptGenerationMode = 'manual' | 'ai' | 'knowledge' | 'docx'
+
 export type VoiceScriptScene = {
   id: number
   scenicName: string
@@ -9,49 +13,67 @@ export type VoiceScriptScene = {
   style: 'culture' | 'family' | 'light'
   title: string
   scriptText: string
-  ssmlText: string
+  ssmlText?: string
   durationSec: number
   versionNo: number
-  status: 'draft' | 'published' | 'archived'
-  sourceFile: string
+  status: VoiceScriptStatus
+  sourceFile?: string
+  generationMode?: VoiceScriptGenerationMode
+  targetDurationSec?: number
+  sourceRefsJson?: string
+  audioStatus?: VoiceScriptAudioStatus
+  audioUrl?: string
+  audioFileName?: string
+  voiceId?: string
+  speechRate?: string
+  speechVolume?: string
+  speechPitch?: string
+  audioScriptHash?: string
+  audioGeneratedAt?: string
   createdAt: string
   updatedAt: string
 }
 
-export type VoiceScriptScenePayload = Omit<
+export type VoiceScriptScenePayload = Pick<
   VoiceScriptScene,
-  'id' | 'createdAt' | 'updatedAt'
+  | 'scenicName'
+  | 'spotId'
+  | 'spotName'
+  | 'sceneType'
+  | 'style'
+  | 'title'
+  | 'scriptText'
+  | 'ssmlText'
+  | 'durationSec'
+  | 'versionNo'
+  | 'status'
+  | 'sourceFile'
 >
 
-export type VoiceScriptImportIssue = {
-  rowNumber: number
-  reason: string
+export type VoiceScriptKnowledgeSource = {
+  knowledgeId: string
+  knowledgeName: string
+  documentIds: string[]
 }
 
-export type VoiceScriptImportResponse = {
-  importedCount: number
-  totalCount: number
-  skippedCount: number
-  issues: VoiceScriptImportIssue[]
+export type VoiceScriptGeneratePayload = {
+  accountId: number
+  spotId: string
+  style: VoiceScriptScene['style']
+  targetDurationSec: number
+  additionalRequirements?: string
+  knowledgeSources: VoiceScriptKnowledgeSource[]
+}
+
+export type VoiceScriptSynthesizePayload = {
+  voiceId: string
+  speechRate: string
+  speechVolume: string
+  speechPitch: string
 }
 
 export async function getVoiceScriptRecords() {
   const response = await axios.get<VoiceScriptScene[]>('/api/admin/voice-scripts/records')
-  return response.data
-}
-
-export async function importVoiceScriptDocx(file: File, scenicName: string, style: string, versionNo: number, replaceAll: boolean) {
-  const formData = new FormData()
-  formData.append('file', file)
-  formData.append('scenicName', scenicName)
-  formData.append('style', style)
-  formData.append('versionNo', String(versionNo))
-  formData.append('replaceAll', String(replaceAll))
-  const response = await axios.post<VoiceScriptImportResponse>('/api/admin/voice-scripts/import-docx', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  })
   return response.data
 }
 
@@ -67,6 +89,21 @@ export async function updateVoiceScriptRecord(id: number, payload: VoiceScriptSc
 
 export async function deleteVoiceScriptRecord(id: number) {
   await axios.delete(`/api/admin/voice-scripts/records/${id}`)
+}
+
+export async function generateVoiceScript(payload: VoiceScriptGeneratePayload) {
+  const response = await axios.post<VoiceScriptScene>('/api/admin/voice-scripts/generate', payload)
+  return response.data
+}
+
+export async function synthesizeVoiceScriptRecord(id: number, payload: VoiceScriptSynthesizePayload) {
+  const response = await axios.post<VoiceScriptScene>(`/api/admin/voice-scripts/records/${id}/synthesize`, payload)
+  return response.data
+}
+
+export async function rollbackVoiceScriptRecord(id: number) {
+  const response = await axios.post<VoiceScriptScene>(`/api/admin/voice-scripts/records/${id}/rollback`)
+  return response.data
 }
 
 export async function publishVoiceScriptRecord(id: number) {

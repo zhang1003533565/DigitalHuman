@@ -21,4 +21,12 @@ public interface VoiceScriptSceneRepository extends JpaRepository<VoiceScriptSce
     );
 
     List<VoiceScriptScene> findBySpotIdAndSceneTypeAndStyleAndStatusIgnoreCase(String spotId, String sceneType, String style, String status);
+
+    Optional<VoiceScriptScene> findTopBySpotIdAndSceneTypeAndStyleOrderByVersionNoDesc(
+            String spotId,
+            String sceneType,
+            String style
+    );
+
+    List<VoiceScriptScene> findBySpotIdAndStatusIgnoreCaseOrderByVersionNoDesc(String spotId, String status);
 }

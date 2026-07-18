@@ -52,6 +52,30 @@ public class ScenicStructuredSpotRecord {
     @Column(name = "remark", columnDefinition = "LONGTEXT")
     private String remark;
 
+    @Column(name = "audio_enabled", nullable = false)
+    private Boolean audio_enabled = false;
+
+    @Column(name = "live_enabled", nullable = false)
+    private Boolean live_enabled = false;
+
+    @Column(name = "default_experience", length = 20)
+    private String default_experience;
+
+    @Column(name = "bound_voice_script_id")
+    private Long bound_voice_script_id;
+
+    @Column(name = "live_source_type", length = 20)
+    private String live_source_type;
+
+    @Column(name = "live_video_url", length = 1000)
+    private String live_video_url;
+
+    @Column(name = "live_stream_url", length = 1000)
+    private String live_stream_url;
+
+    @Column(name = "camera_stream_key", length = 255)
+    private String camera_stream_key;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
@@ -166,6 +190,70 @@ public class ScenicStructuredSpotRecord {
 
     public void setRemark(String remark) {
         this.remark = remark;
+    }
+
+    public Boolean getAudio_enabled() {
+        return audio_enabled;
+    }
+
+    public void setAudio_enabled(Boolean audio_enabled) {
+        this.audio_enabled = audio_enabled;
+    }
+
+    public Boolean getLive_enabled() {
+        return live_enabled;
+    }
+
+    public void setLive_enabled(Boolean live_enabled) {
+        this.live_enabled = live_enabled;
+    }
+
+    public String getDefault_experience() {
+        return default_experience;
+    }
+
+    public void setDefault_experience(String default_experience) {
+        this.default_experience = default_experience;
+    }
+
+    public Long getBound_voice_script_id() {
+        return bound_voice_script_id;
+    }
+
+    public void setBound_voice_script_id(Long bound_voice_script_id) {
+        this.bound_voice_script_id = bound_voice_script_id;
+    }
+
+    public String getLive_source_type() {
+        return live_source_type;
+    }
+
+    public void setLive_source_type(String live_source_type) {
+        this.live_source_type = live_source_type;
+    }
+
+    public String getLive_video_url() {
+        return live_video_url;
+    }
+
+    public void setLive_video_url(String live_video_url) {
+        this.live_video_url = live_video_url;
+    }
+
+    public String getLive_stream_url() {
+        return live_stream_url;
+    }
+
+    public void setLive_stream_url(String live_stream_url) {
+        this.live_stream_url = live_stream_url;
+    }
+
+    public String getCamera_stream_key() {
+        return camera_stream_key;
+    }
+
+    public void setCamera_stream_key(String camera_stream_key) {
+        this.camera_stream_key = camera_stream_key;
     }
 
     public LocalDateTime getCreatedAt() {
