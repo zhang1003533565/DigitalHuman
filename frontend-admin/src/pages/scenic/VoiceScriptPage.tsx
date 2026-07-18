@@ -52,6 +52,13 @@ import {
   type VoiceScriptScenePayload,
   type VoiceScriptSynthesizePayload,
 } from '../../api/voiceScripts'
+import {
+  defaultVoiceSynthesisValues,
+  speechPitchOptions,
+  speechRateOptions,
+  speechVolumeOptions,
+  voiceOptions,
+} from './voiceSynthesisOptions'
 
 type Row = VoiceScriptScene & { key: string }
 type SelectOption = { value: string; label: string }
@@ -90,31 +97,6 @@ const durationOptions: Array<{ value: DurationPreset; label: string }> = [
   { value: 90, label: '90秒' },
   { value: 120, label: '120秒' },
   { value: 'custom', label: '自定义' },
-]
-
-const voiceOptions = [
-  { value: 'zh-CN-XiaoxiaoNeural', label: '晓晓（自然亲和）' },
-  { value: 'zh-CN-YunxiNeural', label: '云希（成熟稳重）' },
-  { value: 'zh-CN-XiaoyiNeural', label: '晓伊（温柔清晰）' },
-  { value: 'zh-CN-YunjianNeural', label: '云健（沉稳有力）' },
-]
-
-const speechRateOptions = [
-  { value: '-20%', label: '慢速（-20%）' },
-  { value: '+0%', label: '标准（+0%）' },
-  { value: '+20%', label: '快速（+20%）' },
-]
-
-const speechVolumeOptions = [
-  { value: '-20%', label: '较轻（-20%）' },
-  { value: '+0%', label: '标准（+0%）' },
-  { value: '+20%', label: '较响（+20%）' },
-]
-
-const speechPitchOptions = [
-  { value: '-10Hz', label: '偏低（-10Hz）' },
-  { value: '+0Hz', label: '标准（+0Hz）' },
-  { value: '+10Hz', label: '偏高（+10Hz）' },
 ]
 
 function voiceScriptErrorMessage(error: unknown, fallback: string) {
@@ -214,10 +196,10 @@ function toEditorValues(record: VoiceScriptScene): EditorFormValues {
     generationMode: record.generationMode,
     sourceFile: record.sourceFile,
     sourceRefsJson: record.sourceRefsJson,
-    voiceId: record.voiceId || 'zh-CN-XiaoxiaoNeural',
-    speechRate: record.speechRate || '+0%',
-    speechVolume: record.speechVolume || '+0%',
-    speechPitch: record.speechPitch || '+0Hz',
+    voiceId: record.voiceId || defaultVoiceSynthesisValues.voiceId,
+    speechRate: record.speechRate || defaultVoiceSynthesisValues.speechRate,
+    speechVolume: record.speechVolume || defaultVoiceSynthesisValues.speechVolume,
+    speechPitch: record.speechPitch || defaultVoiceSynthesisValues.speechPitch,
   }
 }
 
