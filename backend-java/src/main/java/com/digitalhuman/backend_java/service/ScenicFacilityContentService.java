@@ -18,6 +18,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -75,7 +76,12 @@ public class ScenicFacilityContentService {
             voiceScriptRepository.findBySpotIdOrderByUpdatedAtDescIdDesc(facility.getSpotCode())
                     .forEach(scene -> rows.putIfAbsent(scene.getId(), scene));
         }
-        return List.copyOf(rows.values());
+        return rows.values().stream()
+                .sorted(Comparator.comparing(
+                                VoiceScriptScene::getUpdatedAt,
+                                Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(VoiceScriptScene::getId, Comparator.nullsLast(Comparator.reverseOrder())))
+                .toList();
     }
 
     public VisitorFacilityLiveConfigDto getVisitorLiveConfig(Long facilityId) {

@@ -153,6 +153,11 @@ export async function getScenicFacilityVoiceScripts(id: number) {
   return response.data
 }
 
+export async function getScenicFacilityVoiceScriptCandidates(id: number) {
+  const response = await axios.get<ScenicFacilityVoiceScript[]>(`/api/admin/scenic/facilities/${id}/voice-script-candidates`)
+  return response.data
+}
+
 export async function uploadScenicLiveVideo(file: File) {
   const formData = new FormData()
   formData.append('file', file)

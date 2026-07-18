@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.List;
 
@@ -178,18 +179,19 @@ class ScenicFacilityContentServiceTests {
     }
 
     @Test
-    void listsAllFacilityVoiceScriptVersionsForManagement() {
+    void listsAllFacilityVoiceScriptVersionsForManagementWithGlobalUpdatedAtSortingAndDeduplication() {
         Fixtures fixtures = fixtures();
-        VoiceScriptScene draft = voice(61L, 12L, "LS-001", "draft", "missing");
-        VoiceScriptScene published = voice(62L, 12L, "LS-001", "published", "ready");
-        VoiceScriptScene legacy = voice(63L, null, "LS-001", "archived", "stale");
+        VoiceScriptScene olderDirect = voice(61L, 12L, "LS-001", "draft", "missing", LocalDateTime.of(2026, 7, 17, 9, 0));
+        VoiceScriptScene duplicateDirect = voice(62L, 12L, "LS-001", "published", "ready", LocalDateTime.of(2026, 7, 17, 10, 0));
+        VoiceScriptScene newerLegacy = voice(63L, null, "LS-001", "archived", "stale", LocalDateTime.of(2026, 7, 18, 8, 0));
+        VoiceScriptScene duplicateLegacy = voice(62L, null, "LS-001", "published", "ready", LocalDateTime.of(2026, 7, 18, 7, 0));
         when(fixtures.voiceRepository.findByFacilityIdOrderByUpdatedAtDescIdDesc(12L))
-                .thenReturn(List.of(published, draft));
+                .thenReturn(List.of(duplicateDirect, olderDirect));
         when(fixtures.voiceRepository.findBySpotIdOrderByUpdatedAtDescIdDesc("LS-001"))
-                .thenReturn(List.of(published, legacy));
+                .thenReturn(List.of(newerLegacy, duplicateLegacy));
 
         assertEquals(
-                List.of(62L, 61L, 63L),
+                List.of(63L, 62L, 61L),
                 fixtures.service.listVoiceScriptsForManagement(12L).stream().map(VoiceScriptScene::getId).toList());
     }
 
@@ -229,12 +231,23 @@ class ScenicFacilityContentServiceTests {
     }
 
     private VoiceScriptScene voice(Long id, Long facilityId, String spotId, String status, String audioStatus) {
+        return voice(id, facilityId, spotId, status, audioStatus, null);
+    }
+
+    private VoiceScriptScene voice(
+            Long id,
+            Long facilityId,
+            String spotId,
+            String status,
+            String audioStatus,
+            LocalDateTime updatedAt) {
         VoiceScriptScene scene = new VoiceScriptScene();
         scene.setId(id);
         scene.setFacilityId(facilityId);
         scene.setSpotId(spotId);
         scene.setStatus(status);
         scene.setAudioStatus(audioStatus);
+        scene.setUpdatedAt(updatedAt);
         return scene;
     }
 

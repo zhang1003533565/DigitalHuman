@@ -115,6 +115,11 @@ public class AdminScenicController {
 
     @GetMapping("/facilities/{id}/voice-scripts")
     public List<VoiceScriptScene> getBindableVoiceScripts(@PathVariable Long id) {
+        return scenicFacilityContentService.listBindableVoiceScripts(id);
+    }
+
+    @GetMapping("/facilities/{id}/voice-script-candidates")
+    public List<VoiceScriptScene> getVoiceScriptCandidatesForManagement(@PathVariable Long id) {
         return scenicFacilityContentService.listVoiceScriptsForManagement(id);
     }
 
