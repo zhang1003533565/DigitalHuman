@@ -12,6 +12,8 @@ public interface TravelAnalyticsRecordRepository extends JpaRepository<TravelAna
 
     List<TravelAnalyticsRecord> findAllByOrderByIdAsc();
 
+    List<TravelAnalyticsRecord> findAllByOrderByUpdatedAtAscIdAsc();
+
     @Query("SELECT r FROM TravelAnalyticsRecord r WHERE LOWER(r.tourist_id) = LOWER(:touristId)")
     Optional<TravelAnalyticsRecord> findByTourist_idIgnoreCase(@Param("touristId") String touristId);
 
