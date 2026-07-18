@@ -1,63 +1,80 @@
 # Task 4 Report
 
-Date: 2026-07-16
-Task: MaxKB-style two-step upload workbench
+Date: 2026-07-18
+Task: Safe travel analytics Task 4 - bounded 60-second metric cache and invalidation
 
 ## Files
 
-- `frontend-admin/src/pages/knowledge-openapi/MaxKbDocumentUploadWorkbench.tsx`
-- `frontend-admin/src/pages/knowledge-openapi/maxkb-document-upload-workbench.test.mjs`
+- `backend-java/src/main/java/com/digitalhuman/backend_java/service/TravelAnalyticsMetricCache.java`
+- `backend-java/src/main/java/com/digitalhuman/backend_java/service/TravelAnalyticsMetricService.java`
+- `backend-java/src/main/java/com/digitalhuman/backend_java/service/TravelAnalyticsService.java`
+- `backend-java/src/main/java/com/digitalhuman/backend_java/service/TravelAnalyticsAiConfigService.java`
+- `backend-java/src/test/java/com/digitalhuman/backend_java/service/TravelAnalyticsMetricCacheTests.java`
+- `backend-java/src/test/java/com/digitalhuman/backend_java/service/TravelAnalyticsServiceTests.java`
+- `backend-java/src/test/java/com/digitalhuman/backend_java/service/TravelAnalyticsMetricServiceTests.java`
+- `backend-java/src/test/java/com/digitalhuman/backend_java/service/TravelAnalyticsAiConfigServiceTests.java`
 
 ## RED
 
-1. Added `frontend-admin/src/pages/knowledge-openapi/maxkb-document-upload-workbench.test.mjs`.
+1. Added failing tests for:
+   - cache invalidation and 60-second TTL
+   - `TravelAnalyticsService` create/update/delete/import success-path invalidation
+   - `TravelAnalyticsAiConfigService.updateConfig` invalidation
+   - `TravelAnalyticsMetricService.queryMetric` cache reuse
 2. Ran:
-   - `cd /Users/zzs/Desktop/zzs/github/DigitalHuman/frontend-admin && node src/pages/knowledge-openapi/maxkb-document-upload-workbench.test.mjs`
-3. Observed expected failure:
-   - `ENOENT` for `frontend-admin/src/pages/knowledge-openapi/MaxKbDocumentUploadWorkbench.tsx`
+   - `cd /Users/zzs/Desktop/zzs/github/DigitalHuman/.worktrees/hybrid-ai-data-access/backend-java && mvn -q -Dtest=TravelAnalyticsMetricCacheTests,TravelAnalyticsServiceTests,TravelAnalyticsAiConfigServiceTests,TravelAnalyticsMetricServiceTests test`
+3. Observed expected failure before implementation:
+   - compiler errors for missing `TravelAnalyticsMetricCache`
+   - missing cache wiring in `TravelAnalyticsService` / `TravelAnalyticsAiConfigService`
+   - missing `setEntityManagerForTests(...)` test hook for import verification
+4. After the first implementation pass, reran the same focused suite and observed a real test-shape mistake:
+   - `TravelAnalyticsMetricCacheTests.cacheEvictsOldestEntryWhenCapacityExceedsTen` failed because the production key-space is only `2 audiences x 5 metrics = 10`, so an 11th valid key is impossible
+5. Adjusted the design and tests to match the real invariant:
+   - removed unreachable eviction logic
+   - asserted bounded size never exceeds 10
+   - kept TTL and explicit invalidation behavior
+6. Full-suite regression caught during GREEN verification:
+   - `mvn -q test` initially failed with Spring context startup error
+   - root cause: `TravelAnalyticsService` gained multiple constructors and needed explicit constructor selection for dependency injection
+   - fix: add `@Autowired` to the public service constructors
 
 ## GREEN
 
-Implemented a focused workbench component that:
+Implemented a focused in-process metric cache that:
 
-- preserves the MaxKB two-step flow: file selection first, rules/preview second
-- keeps four strategy cards: `智能分段` / `高级分段` / `模型分段` / `视觉模型分段`
-- loads real grouped `LLM` and `IMAGE` model options
-- validates file count, size, extension, empties, and duplicates
-- creates preview tasks with `autoApply=false`
-- normalizes task object payloads before reading `task_id` / `status` / `progress`
-- polls only `QUEUED` / `PROCESSING` / `APPLYING`
-- stops polling on `PREVIEW_READY` / `COMPLETED` / `FAILED` / `CANCELLED`
-- clears timers on unmount / context remount
-- loads preview records via `extractRecords`
-- keeps task history in a `Collapse` section with restore / confirm / cancel / delete actions
+- caches `TravelAnalyticsMetricService.queryMetric(...)` by `audience + metric`
+- retains entries for 60 seconds
+- stays bounded by the real 10-key domain space
+- invalidates on successful `TravelAnalyticsService` create/update/delete/import
+- invalidates once after a successful import completes
+- invalidates immediately on `TravelAnalyticsAiConfigService.updateConfig(...)` so `minimumSampleSize` changes cannot leak stale public results
+- preserves the existing public metric gate and prior metric/controller behavior
 
 ## Exact Verification
 
-Ran successfully on 2026-07-16:
+Ran successfully on 2026-07-18:
 
-1. `cd /Users/zzs/Desktop/zzs/github/DigitalHuman/frontend-admin && node src/pages/knowledge-openapi/maxkb-document-upload-workbench.test.mjs`
-2. `cd /Users/zzs/Desktop/zzs/github/DigitalHuman/frontend-admin && npm run lint`
-3. `cd /Users/zzs/Desktop/zzs/github/DigitalHuman/frontend-admin && npm run build`
+1. `cd /Users/zzs/Desktop/zzs/github/DigitalHuman/.worktrees/hybrid-ai-data-access/backend-java && mvn -q -Dtest=TravelAnalyticsMetricCacheTests,TravelAnalyticsServiceTests,TravelAnalyticsAiConfigServiceTests,TravelAnalyticsMetricServiceTests test`
+2. `cd /Users/zzs/Desktop/zzs/github/DigitalHuman/.worktrees/hybrid-ai-data-access/backend-java && mvn -q test`
 
-Build note:
+Verification notes:
 
-- Vite still reports the existing large-chunk warning for `dist/assets/index-*.js`, but the build exits successfully.
+- The focused suite passed after replacing the impossible 11th-key eviction test with the actual bounded-size invariant.
+- The full backend suite passed after restoring explicit Spring constructor selection with `@Autowired`.
+- Maven still prints existing Byte Buddy dynamic-agent warnings during test startup, but the test runs complete successfully.
 
 ## Self-Review
 
-- Kept the change scoped to the allowed component and its colocated test.
-- Used executable helper tests instead of brittle React runtime mocking.
-- Reset behavior is handled by remounting the keyed inner session and clearing timers on cleanup.
-- Reused existing upload/task APIs and `extractRecords` instead of inventing new wrappers.
+- Kept the change scoped to the allowed travel analytics services and their tests.
+- Removed dead eviction logic once it was clear the valid cache key-space is fixed at 10.
+- Verified that config updates invalidate public metric cache even when only the privacy threshold changes.
+- Preserved existing package-private constructors so older unit tests and direct instantiations continue to work.
 
 ## Concerns
 
-- This task intentionally does not integrate the workbench into `KnowledgeOpenApiPage.tsx`, so end-to-end page wiring remains for a later task.
-- Preview rendering is generic record grouping; final visual parity can still be refined after integration against live payload samples.
-- The history panel keeps the existing operational actions, but UX polish will depend on how the parent page hosts this component.
+- The cache is intentionally process-local; multi-instance cache coherence remains out of scope.
+- `invalidateAll()` is coarse-grained but correct for the small key-space and avoids stale-public-data risk.
 
 ## Commit
 
-- Implementation: `83e5849 fix: 避免文档在未确认预览时直接入库`
-- Report alignment: current HEAD docs commit for this report
+- Pending local commit after final review

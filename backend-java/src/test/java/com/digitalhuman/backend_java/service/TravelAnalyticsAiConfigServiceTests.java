@@ -35,9 +35,10 @@ class TravelAnalyticsAiConfigServiceTests {
     @Test
     void updatePersistsDefaultIdWhenRowIsMissing() {
         TravelAnalyticsAiConfigRepository repository = mock(TravelAnalyticsAiConfigRepository.class);
+        TravelAnalyticsMetricCache cache = mock(TravelAnalyticsMetricCache.class);
         when(repository.findById("default")).thenReturn(Optional.empty());
         when(repository.save(any(TravelAnalyticsAiConfig.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        TravelAnalyticsAiConfigService service = new TravelAnalyticsAiConfigService(repository);
+        TravelAnalyticsAiConfigService service = new TravelAnalyticsAiConfigService(repository, cache);
 
         TravelAnalyticsAiConfig updated = service.updateConfig(false, 25);
 
@@ -45,5 +46,6 @@ class TravelAnalyticsAiConfigServiceTests {
         assertEquals(false, updated.getPublicEnabled());
         assertEquals(25, updated.getMinimumSampleSize());
         verify(repository).save(any(TravelAnalyticsAiConfig.class));
+        verify(cache).invalidateAll();
     }
 }

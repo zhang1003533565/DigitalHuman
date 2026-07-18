@@ -11,6 +11,7 @@ import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
@@ -58,12 +59,21 @@ public class TravelAnalyticsService {
     );
 
     private final TravelAnalyticsRecordRepository recordRepository;
+    private final TravelAnalyticsMetricCache metricCache;
 
     @PersistenceContext
     private EntityManager entityManager;
 
-    public TravelAnalyticsService(TravelAnalyticsRecordRepository recordRepository) {
+    @Autowired
+    public TravelAnalyticsService(
+            TravelAnalyticsRecordRepository recordRepository,
+            TravelAnalyticsMetricCache metricCache) {
         this.recordRepository = recordRepository;
+        this.metricCache = metricCache;
+    }
+
+    TravelAnalyticsService(TravelAnalyticsRecordRepository recordRepository) {
+        this(recordRepository, new TravelAnalyticsMetricCache());
     }
 
     public List<TravelAnalyticsRecord> listAll() {
@@ -96,7 +106,9 @@ public class TravelAnalyticsService {
         }
         TravelAnalyticsRecord entity = new TravelAnalyticsRecord();
         applyRequest(entity, request);
-        return recordRepository.save(entity);
+        TravelAnalyticsRecord saved = recordRepository.save(entity);
+        metricCache.invalidateAll();
+        return saved;
     }
 
     @Transactional
@@ -110,7 +122,9 @@ public class TravelAnalyticsService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "tourist_id 已存在");
         }
         applyRequest(entity, request);
-        return recordRepository.save(entity);
+        TravelAnalyticsRecord saved = recordRepository.save(entity);
+        metricCache.invalidateAll();
+        return saved;
     }
 
     @Transactional
@@ -119,6 +133,7 @@ public class TravelAnalyticsService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "记录不存在");
         }
         recordRepository.deleteById(id);
+        metricCache.invalidateAll();
     }
 
     public byte[] buildTemplateFile() {
@@ -202,6 +217,7 @@ public class TravelAnalyticsService {
             if (!batch.isEmpty()) {
                 importedCount += saveImportBatch(batch);
             }
+            metricCache.invalidateAll();
             return new TravelAnalyticsImportResult(importedCount, skippedEmptyCount, skippedDuplicateCount, issues);
         } catch (IOException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "读取 Excel 失败：" + exception.getMessage());
@@ -285,6 +301,10 @@ public class TravelAnalyticsService {
         entityManager.clear();
         batch.clear();
         return size;
+    }
+
+    void setEntityManagerForTests(EntityManager entityManager) {
+        this.entityManager = entityManager;
     }
 
     private void addIssue(List<TravelAnalyticsImportIssueDto> issues, int rowNumber, String reason) {

@@ -2,6 +2,7 @@ package com.digitalhuman.backend_java.service;
 
 import com.digitalhuman.backend_java.model.TravelAnalyticsAiConfig;
 import com.digitalhuman.backend_java.repository.TravelAnalyticsAiConfigRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -16,9 +17,18 @@ public class TravelAnalyticsAiConfigService {
     private static final int DEFAULT_MINIMUM_SAMPLE_SIZE = 10;
 
     private final TravelAnalyticsAiConfigRepository repository;
+    private final TravelAnalyticsMetricCache metricCache;
 
-    public TravelAnalyticsAiConfigService(TravelAnalyticsAiConfigRepository repository) {
+    @Autowired
+    public TravelAnalyticsAiConfigService(
+            TravelAnalyticsAiConfigRepository repository,
+            TravelAnalyticsMetricCache metricCache) {
         this.repository = repository;
+        this.metricCache = metricCache;
+    }
+
+    TravelAnalyticsAiConfigService(TravelAnalyticsAiConfigRepository repository) {
+        this(repository, new TravelAnalyticsMetricCache());
     }
 
     public TravelAnalyticsAiConfig getConfig() {
@@ -38,7 +48,9 @@ public class TravelAnalyticsAiConfigService {
         config.setPublicEnabled(publicEnabled);
         config.setMinimumSampleSize(minimumSampleSize);
         config.setUpdatedAt(LocalDateTime.now());
-        return repository.save(config);
+        TravelAnalyticsAiConfig saved = repository.save(config);
+        metricCache.invalidateAll();
+        return saved;
     }
 
     private TravelAnalyticsAiConfig buildDefaultConfig() {

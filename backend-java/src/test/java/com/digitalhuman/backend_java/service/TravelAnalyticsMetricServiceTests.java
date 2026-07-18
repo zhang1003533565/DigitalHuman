@@ -19,8 +19,11 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -104,13 +107,30 @@ class TravelAnalyticsMetricServiceTests {
         TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(
                 repository,
                 new TravelAnalyticsValueParser(),
-                publicConfigService(25));
+                publicConfigService(25),
+                new TravelAnalyticsMetricCache());
 
         TravelAnalyticsMetricResponse response = service.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.POPULAR_ATTRACTIONS);
 
         assertEquals(12, response.validSamples());
         assertTrue(response.items().isEmpty());
         assertEquals("样本不足", response.warning());
+    }
+
+    @Test
+    void queryMetricReusesCachedResponseForSameAudienceAndMetric() {
+        TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
+        when(repository.findAllByOrderByUpdatedAtAscIdAsc()).thenReturn(averageSpendRecords());
+        TravelAnalyticsMetricService service = new TravelAnalyticsMetricService(
+                repository,
+                new TravelAnalyticsValueParser(),
+                new TravelAnalyticsMetricCache());
+
+        TravelAnalyticsMetricResponse first = service.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.AVERAGE_SPEND);
+        TravelAnalyticsMetricResponse second = service.queryMetric(TravelAnalyticsAudience.PUBLIC, TravelAnalyticsMetric.AVERAGE_SPEND);
+
+        assertSame(first, second);
+        verify(repository, times(1)).findAllByOrderByUpdatedAtAscIdAsc();
     }
 
     @Test

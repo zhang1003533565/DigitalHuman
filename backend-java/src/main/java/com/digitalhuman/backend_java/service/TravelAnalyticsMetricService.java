@@ -42,27 +42,43 @@ public class TravelAnalyticsMetricService {
     private final TravelAnalyticsRecordRepository recordRepository;
     private final TravelAnalyticsValueParser valueParser;
     private final TravelAnalyticsAiConfigService aiConfigService;
+    private final TravelAnalyticsMetricCache metricCache;
     private final Clock clock;
 
     @Autowired
     public TravelAnalyticsMetricService(
             TravelAnalyticsRecordRepository recordRepository,
             TravelAnalyticsValueParser valueParser,
-            TravelAnalyticsAiConfigService aiConfigService) {
-        this(recordRepository, valueParser, aiConfigService, Clock.systemDefaultZone());
+            TravelAnalyticsAiConfigService aiConfigService,
+            TravelAnalyticsMetricCache metricCache) {
+        this(recordRepository, valueParser, aiConfigService, metricCache, Clock.systemDefaultZone());
     }
 
     TravelAnalyticsMetricService(
             TravelAnalyticsRecordRepository recordRepository,
             TravelAnalyticsValueParser valueParser) {
-        this(recordRepository, valueParser, null, Clock.systemDefaultZone());
+        this(recordRepository, valueParser, null, new TravelAnalyticsMetricCache(), Clock.systemDefaultZone());
     }
 
     TravelAnalyticsMetricService(
             TravelAnalyticsRecordRepository recordRepository,
             TravelAnalyticsValueParser valueParser,
             Clock clock) {
-        this(recordRepository, valueParser, null, clock);
+        this(recordRepository, valueParser, null, new TravelAnalyticsMetricCache(clock), clock);
+    }
+
+    TravelAnalyticsMetricService(
+            TravelAnalyticsRecordRepository recordRepository,
+            TravelAnalyticsValueParser valueParser,
+            TravelAnalyticsAiConfigService aiConfigService) {
+        this(recordRepository, valueParser, aiConfigService, new TravelAnalyticsMetricCache(), Clock.systemDefaultZone());
+    }
+
+    TravelAnalyticsMetricService(
+            TravelAnalyticsRecordRepository recordRepository,
+            TravelAnalyticsValueParser valueParser,
+            TravelAnalyticsMetricCache metricCache) {
+        this(recordRepository, valueParser, null, metricCache, Clock.systemDefaultZone());
     }
 
     TravelAnalyticsMetricService(
@@ -70,9 +86,19 @@ public class TravelAnalyticsMetricService {
             TravelAnalyticsValueParser valueParser,
             TravelAnalyticsAiConfigService aiConfigService,
             Clock clock) {
+        this(recordRepository, valueParser, aiConfigService, new TravelAnalyticsMetricCache(clock), clock);
+    }
+
+    TravelAnalyticsMetricService(
+            TravelAnalyticsRecordRepository recordRepository,
+            TravelAnalyticsValueParser valueParser,
+            TravelAnalyticsAiConfigService aiConfigService,
+            TravelAnalyticsMetricCache metricCache,
+            Clock clock) {
         this.recordRepository = recordRepository;
         this.valueParser = valueParser;
         this.aiConfigService = aiConfigService;
+        this.metricCache = metricCache;
         this.clock = clock;
     }
 
@@ -81,6 +107,10 @@ public class TravelAnalyticsMetricService {
             throw new IllegalArgumentException("Unsupported public travel analytics metric: " + metric);
         }
 
+        return metricCache.getOrCompute(audience, metric, () -> computeMetric(audience, metric));
+    }
+
+    private TravelAnalyticsMetricResponse computeMetric(TravelAnalyticsAudience audience, TravelAnalyticsMetric metric) {
         List<TravelAnalyticsRecord> records = recordRepository.findAllByOrderByUpdatedAtAscIdAsc();
         int publicMinimumSampleSize = audience == TravelAnalyticsAudience.PUBLIC && isBreakdownMetric(metric)
                 ? publicMinimumSampleSize()
