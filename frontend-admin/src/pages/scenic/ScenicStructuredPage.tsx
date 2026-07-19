@@ -22,15 +22,18 @@ import {
   applyScenicStructuredRecord,
   createScenicStructuredRecord,
   deleteScenicStructuredRecord,
+  getScenicKnowledgePublicationStatus,
   getScenicStructuredRecords,
   importScenicStructuredDocx,
   matchScenicStructuredRecord,
   previewScenicStructuredApply,
   updateScenicStructuredRecord,
+  type ScenicKnowledgePublication,
   type ScenicStructuredApplyPreview,
   type ScenicStructuredRecord,
   type ScenicStructuredRecordPayload,
 } from '../../api/scenicStructured'
+import ScenicKnowledgePublishDrawer from './ScenicKnowledgePublishDrawer'
 
 const fields = [
   ['scenic_name', '景区名称'],
@@ -49,6 +52,15 @@ const fields = [
 type TextField = (typeof fields)[number][0]
 type EditValues = Record<TextField, string>
 type ApplyMode = 'fill_empty' | 'selected' | 'overwrite_all'
+const SESSION_STORAGE_KEY = 'digitalhuman.admin.user'
+
+const publicationStatusMeta: Record<NonNullable<ScenicKnowledgePublication['status']>, { color: string; text: string }> = {
+  publishing: { color: 'processing', text: '发布中' },
+  published: { color: 'success', text: '已发布' },
+  outdated: { color: 'warning', text: '待重发' },
+  failed: { color: 'error', text: '发布失败' },
+  withdrawn: { color: 'default', text: '已撤回' },
+}
 
 function emptyValues(): EditValues {
   return Object.fromEntries(fields.map(([key]) => [key, ''])) as EditValues
@@ -58,19 +70,34 @@ function normalizePayload(values: EditValues): ScenicStructuredRecordPayload {
   return Object.fromEntries(fields.map(([key]) => [key, String(values[key] ?? '').trim()])) as unknown as ScenicStructuredRecordPayload
 }
 
+function readCurrentRole() {
+  if (typeof window === 'undefined') return 'OBSERVER'
+  const rawValue = window.sessionStorage.getItem(SESSION_STORAGE_KEY)
+  if (!rawValue) return 'OBSERVER'
+  try {
+    const parsed = JSON.parse(rawValue) as { role?: string }
+    return parsed.role === 'ADMIN' ? 'ADMIN' : 'OBSERVER'
+  } catch {
+    return 'OBSERVER'
+  }
+}
+
 export default function ScenicStructuredPage() {
   const [rows, setRows] = useState<ScenicStructuredRecord[]>([])
   const [facilities, setFacilities] = useState<ScenicFacility[]>([])
+  const [publicationStatuses, setPublicationStatuses] = useState<Record<number, ScenicKnowledgePublication | null>>({})
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [editing, setEditing] = useState<ScenicStructuredRecord | null | undefined>(undefined)
   const [applyingRecord, setApplyingRecord] = useState<ScenicStructuredRecord | null>(null)
+  const [publishingRecord, setPublishingRecord] = useState<ScenicStructuredRecord | null>(null)
   const [facilityId, setFacilityId] = useState<number | undefined>()
   const [mode, setMode] = useState<ApplyMode>('fill_empty')
   const [preview, setPreview] = useState<ScenicStructuredApplyPreview | null>(null)
   const [selectedFields, setSelectedFields] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [editForm] = Form.useForm<EditValues>()
+  const [role] = useState<'ADMIN' | 'OBSERVER'>(() => readCurrentRole())
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -81,6 +108,17 @@ export default function ScenicStructuredPage() {
       ])
       setRows(records)
       setFacilities(officialFacilities)
+      const appliedFacilityIds = [...new Set(records
+        .filter((item) => item.applyStatus === 'applied' && item.matchedFacilityId)
+        .map((item) => item.matchedFacilityId as number))]
+      const statusEntries = await Promise.all(appliedFacilityIds.map(async (appliedFacilityId) => {
+        try {
+          return [appliedFacilityId, await getScenicKnowledgePublicationStatus(appliedFacilityId)] as const
+        } catch {
+          return [appliedFacilityId, null] as const
+        }
+      }))
+      setPublicationStatuses(Object.fromEntries(statusEntries))
     } catch {
       message.error('加载景点导入数据失败')
     } finally {
@@ -179,10 +217,25 @@ export default function ScenicStructuredPage() {
         : record.matchedFacilityId ? <Tag color="processing">待应用</Tag> : <Tag>待匹配</Tag>,
     },
     {
-      title: '操作', width: 260, fixed: 'right',
+      title: '知识发布', width: 150,
+      render: (_, record) => {
+        const facilityPublication = record.matchedFacilityId ? publicationStatuses[record.matchedFacilityId] : null
+        if (record.applyStatus === 'applied' && facilityPublication?.status) {
+          const meta = publicationStatusMeta[facilityPublication.status]
+          return <Tag color={meta.color}>{meta.text}</Tag>
+        }
+        if (record.applyStatus === 'applied') return <Tag>未发布</Tag>
+        return <span className="structured-import__empty">请先应用到正式景点</span>
+      },
+    },
+    {
+      title: '操作', width: 360, fixed: 'right',
       render: (_, record) => (
         <Space>
           <Button type="link" icon={<LinkOutlined />} onClick={() => openApply(record)}>匹配正式景点</Button>
+          {record.applyStatus === 'applied' ? (
+            <Button type="link" onClick={() => setPublishingRecord(record)}>发布到知识库</Button>
+          ) : null}
           <Button type="link" icon={<EditOutlined />} onClick={() => {
             editForm.setFieldsValue(Object.fromEntries(fields.map(([key]) => [key, record[key] ?? ''])) as EditValues)
             setEditing(record)
@@ -286,6 +339,15 @@ export default function ScenicStructuredPage() {
           ) : <div className="structured-import__placeholder">选择正式景点后查看字段差异</div>}
         </div>
       </Drawer>
+
+      <ScenicKnowledgePublishDrawer
+        open={Boolean(publishingRecord)}
+        role={role}
+        record={publishingRecord}
+        facility={publishingRecord?.matchedFacilityId ? facilities.find((item) => item.id === publishingRecord.matchedFacilityId) ?? null : null}
+        onClose={() => setPublishingRecord(null)}
+        onUpdated={loadData}
+      />
     </div>
   )
 }
