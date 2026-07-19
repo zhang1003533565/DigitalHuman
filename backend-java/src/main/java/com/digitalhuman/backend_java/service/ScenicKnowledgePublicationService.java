@@ -14,6 +14,7 @@ import com.digitalhuman.backend_java.repository.ScenicKnowledgePublicationReposi
 import com.digitalhuman.backend_java.repository.ScenicStructuredSpotRecordRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -24,6 +25,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -33,6 +35,9 @@ import java.util.regex.Pattern;
 public class ScenicKnowledgePublicationService {
 
     private static final int MAX_UPLOAD_TASK_POLLS = 8;
+    private static final List<String> ACTIVE_REMOTE_STATUSES = List.of(
+            ScenicKnowledgePublication.STATUS_PUBLISHED,
+            ScenicKnowledgePublication.STATUS_OUTDATED);
     private static final Pattern AUTHORIZATION_PATTERN = Pattern.compile("(?i)authorization\\s*:\\s*bearer\\s+\\S+");
     private static final Pattern BEARER_PATTERN = Pattern.compile("(?i)bearer\\s+\\S+");
     private static final Pattern TOKEN_PATTERN = Pattern.compile("(?i)token\\s*=\\s*[^\\s,&]+");
@@ -84,19 +89,15 @@ public class ScenicKnowledgePublicationService {
         ScenicFacilityDetail detail = detailRepository.findByFacilityId(facility.getId()).orElse(null);
         ScenicKnowledgeDocumentRenderer.RenderedDocument rendered = renderer.render(facility, detail);
         PublishTarget target = normalizeTarget(request);
+        ScenicKnowledgePublication active = findActivePublication(facility.getId(), target.accountId(), target.knowledgeId()).orElse(null);
         ScenicKnowledgePublication latest = publicationRepository
                 .findFirstByFacilityIdAndAccountIdAndKnowledgeIdOrderByVersionDesc(facility.getId(), target.accountId(), target.knowledgeId())
                 .orElse(null);
-        if (latest != null && ScenicKnowledgePublication.STATUS_PUBLISHING.equals(latest.getStatus())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "当前景点已有发布任务正在进行中");
-        }
-        if (latest != null
-                && rendered.sha256().equals(latest.getContentHash())
-                && latest.getDocumentId() != null
-                && !latest.getDocumentId().isBlank()
-                && (ScenicKnowledgePublication.STATUS_PUBLISHED.equals(latest.getStatus())
-                || ScenicKnowledgePublication.STATUS_OUTDATED.equals(latest.getStatus()))) {
-            return toDto(latest);
+        if (active != null
+                && rendered.sha256().equals(active.getContentHash())
+                && active.getDocumentId() != null
+                && !active.getDocumentId().isBlank()) {
+            return toDto(active);
         }
 
         ScenicKnowledgePublication publication = new ScenicKnowledgePublication();
@@ -108,9 +109,10 @@ public class ScenicKnowledgePublicationService {
         publication.setContentHash(rendered.sha256());
         publication.setVersion(latest == null || latest.getVersion() == null ? 1 : latest.getVersion() + 1);
         publication.setStatus(ScenicKnowledgePublication.STATUS_PUBLISHING);
+        publication.setPublishSlot(ScenicKnowledgePublication.PUBLISH_SLOT_ACTIVE_REMOTE);
         publication.setPublishedBy(publisherName(actor));
         publication.setPublishedAt(LocalDateTime.now());
-        publicationRepository.save(publication);
+        reservePublishingSlot(publication);
 
         try {
             String taskId = extractRequiredTaskId(maxKbKnowledgeService.uploadDocuments(
@@ -137,50 +139,30 @@ public class ScenicKnowledgePublicationService {
             publication.setDocumentId(task.documentId());
             publication.setLastError(null);
             publication.setPublishedAt(LocalDateTime.now());
-            if (latest != null
-                    && latest.getDocumentId() != null
-                    && !latest.getDocumentId().isBlank()
-                    && !latest.getDocumentId().equals(task.documentId())) {
-                try {
-                    maxKbKnowledgeService.deleteDocument(target.accountId(), target.knowledgeId(), latest.getDocumentId());
-                } catch (RuntimeException exception) {
-                    publication.setLastError(sanitizeError(exception));
-                }
-            }
             ScenicKnowledgeDocumentRenderer.RenderedDocument current = renderer.render(
                     findFacility(facility.getId()),
                     detailRepository.findByFacilityId(facility.getId()).orElse(null));
-            publication.setStatus(rendered.sha256().equals(current.sha256())
+            replaceActivePublicationOrRollback(publication, active);
+            finalizePublication(publication, rendered.sha256().equals(current.sha256())
                     ? ScenicKnowledgePublication.STATUS_PUBLISHED
                     : ScenicKnowledgePublication.STATUS_OUTDATED);
-            publicationRepository.save(publication);
             return toDto(publication);
         } catch (RuntimeException exception) {
-            publication.setStatus(ScenicKnowledgePublication.STATUS_FAILED);
-            publication.setLastError(sanitizeError(exception));
-            publicationRepository.save(publication);
+            finalizeFailure(publication, exception);
             throw exception;
         }
     }
 
     public ScenicKnowledgePublicationDto getStatus(Long facilityId) {
-        return publicationRepository.findFirstByFacilityIdOrderByUpdatedAtDescIdDesc(facilityId)
+        return findActivePublication(facilityId)
+                .or(() -> publicationRepository.findFirstByFacilityIdOrderByUpdatedAtDescIdDesc(facilityId))
                 .map(this::toDto)
                 .orElse(null);
     }
 
     public ScenicKnowledgePublicationDto withdraw(Long facilityId, AuthSession actor) {
-        ScenicKnowledgePublication publication = publicationRepository.findFirstByFacilityIdOrderByUpdatedAtDescIdDesc(facilityId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "知识发布记录不存在"));
-        if (ScenicKnowledgePublication.STATUS_PUBLISHING.equals(publication.getStatus())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "当前景点已有发布任务正在进行中");
-        }
-        if (ScenicKnowledgePublication.STATUS_WITHDRAWN.equals(publication.getStatus())) {
-            return toDto(publication);
-        }
-        if (publication.getDocumentId() == null || publication.getDocumentId().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "当前发布记录没有可撤回的远端文档");
-        }
+        ScenicKnowledgePublication publication = findActivePublication(facilityId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "当前没有可撤回的线上知识"));
         try {
             maxKbKnowledgeService.deleteDocument(publication.getAccountId(), publication.getKnowledgeId(), publication.getDocumentId());
         } catch (RuntimeException exception) {
@@ -189,24 +171,80 @@ public class ScenicKnowledgePublicationService {
             throw exception;
         }
         publication.setStatus(ScenicKnowledgePublication.STATUS_WITHDRAWN);
+        publication.setPublishSlot(null);
         publication.setLastError(null);
-        publication.setPublishedBy(publisherName(actor));
-        publication.setPublishedAt(LocalDateTime.now());
         publicationRepository.save(publication);
         return toDto(publication);
     }
 
     public void markOutdated(Long facilityId) {
-        Optional<ScenicKnowledgePublication> latest = publicationRepository.findFirstByFacilityIdOrderByUpdatedAtDescIdDesc(facilityId);
-        if (latest.isEmpty()) {
+        Optional<ScenicKnowledgePublication> active = findActivePublication(facilityId);
+        if (active.isEmpty()) {
             return;
         }
-        ScenicKnowledgePublication publication = latest.get();
+        ScenicKnowledgePublication publication = active.get();
         if (!ScenicKnowledgePublication.STATUS_PUBLISHED.equals(publication.getStatus())) {
             return;
         }
         publication.setStatus(ScenicKnowledgePublication.STATUS_OUTDATED);
         publicationRepository.save(publication);
+    }
+
+    private void reservePublishingSlot(ScenicKnowledgePublication publication) {
+        try {
+            publicationRepository.saveAndFlush(publication);
+        } catch (DataIntegrityViolationException exception) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "当前景点已有发布任务正在进行中");
+        }
+    }
+
+    private void finalizePublication(ScenicKnowledgePublication publication, String terminalStatus) {
+        publication.setStatus(terminalStatus);
+        publication.setPublishSlot(null);
+        publicationRepository.save(publication);
+    }
+
+    private void finalizeFailure(ScenicKnowledgePublication publication, RuntimeException exception) {
+        publication.setStatus(ScenicKnowledgePublication.STATUS_FAILED);
+        publication.setPublishSlot(null);
+        publication.setLastError(sanitizeError(exception));
+        publicationRepository.save(publication);
+    }
+
+    private void replaceActivePublicationOrRollback(
+            ScenicKnowledgePublication publication,
+            ScenicKnowledgePublication active) {
+        if (active == null
+                || active.getDocumentId() == null
+                || active.getDocumentId().isBlank()
+                || active.getDocumentId().equals(publication.getDocumentId())) {
+            return;
+        }
+        try {
+            maxKbKnowledgeService.deleteDocument(active.getAccountId(), active.getKnowledgeId(), active.getDocumentId());
+        } catch (RuntimeException exception) {
+            rollbackNewDocument(publication, exception);
+        }
+        active.setStatus(ScenicKnowledgePublication.STATUS_WITHDRAWN);
+        active.setPublishSlot(null);
+        active.setLastError(null);
+        publicationRepository.save(active);
+    }
+
+    private void rollbackNewDocument(ScenicKnowledgePublication publication, RuntimeException replaceFailure) {
+        StringBuilder message = new StringBuilder(sanitizeError(replaceFailure));
+        if (publication.getDocumentId() != null && !publication.getDocumentId().isBlank()) {
+            try {
+                maxKbKnowledgeService.deleteDocument(
+                        publication.getAccountId(),
+                        publication.getKnowledgeId(),
+                        publication.getDocumentId());
+                publication.setDocumentId(null);
+            } catch (RuntimeException rollbackFailure) {
+                message.append("；回滚新文档失败：").append(sanitizeError(rollbackFailure));
+            }
+        }
+        throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, message.toString());
     }
 
     private ScenicStructuredSpotRecord requireAppliedRecord(Long recordId) {
@@ -232,6 +270,24 @@ public class ScenicKnowledgePublicationService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "知识库 ID 不能为空");
         }
         return new PublishTarget(request.getAccountId(), knowledgeId, normalize(request.getKnowledgeName()));
+    }
+
+    private Optional<ScenicKnowledgePublication> findActivePublication(Long facilityId, Long accountId, String knowledgeId) {
+        return publicationRepository
+                .findFirstByFacilityIdAndAccountIdAndKnowledgeIdAndStatusInAndDocumentIdIsNotNullAndDocumentIdNotOrderByUpdatedAtDescIdDesc(
+                        facilityId,
+                        accountId,
+                        knowledgeId,
+                        ACTIVE_REMOTE_STATUSES,
+                        "");
+    }
+
+    private Optional<ScenicKnowledgePublication> findActivePublication(Long facilityId) {
+        return publicationRepository
+                .findFirstByFacilityIdAndStatusInAndDocumentIdIsNotNullAndDocumentIdNotOrderByUpdatedAtDescIdDesc(
+                        facilityId,
+                        ACTIVE_REMOTE_STATUSES,
+                        "");
     }
 
     private String extractRequiredTaskId(Object source) {

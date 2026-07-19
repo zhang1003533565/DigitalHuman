@@ -59,3 +59,17 @@
 - Polling is bounded to avoid indefinite waits.
 - `PREVIEW_READY`, `QUEUED`, `PROCESSING`, `PARSING`, `APPLYING`, `COMPLETED`, `FAILED`, and `CANCELLED/CANCELED` task shapes are normalized through flexible status parsing.
 - The current implementation assumes the latest facility-level publication record is the authoritative status returned to the admin UI, matching the current single-target product scope.
+
+## Takeover Fixes
+
+- Added a DB-enforced publish reservation slot on `(facility_id, account_id, knowledge_id, publish_slot)` so concurrent publish attempts conflict before remote upload starts.
+- `publish()` now resolves the current active remote publication separately from the latest local attempt, so failed republish rows do not hide the still-live document.
+- Successful replacement now retires the old active row after deleting its remote document, preventing later withdraw/status logic from falling back to a deleted document.
+- If deleting the old remote document fails after the new upload finishes, the service now attempts to delete the new document, records the new attempt as `failed`, preserves the old active publication, and rethrows a sanitized error.
+
+## Takeover Verification
+
+- `cd backend-java && ./mvnw -q -Dtest=ScenicKnowledgePublicationServiceTests test`
+  - Passed: 13 tests, 0 failures, 0 errors.
+- `cd backend-java && ./mvnw -q test`
+  - Passed: 214 tests, 0 failures, 0 errors.
