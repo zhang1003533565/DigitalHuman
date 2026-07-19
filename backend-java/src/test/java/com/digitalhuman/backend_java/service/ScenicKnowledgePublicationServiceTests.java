@@ -227,6 +227,13 @@ class ScenicKnowledgePublicationServiceTests {
 
         assertEquals(HttpStatus.BAD_GATEWAY, error.getStatusCode());
         assertFalse(error.getReason().contains("Bearer secret"));
+        assertTrue(fixtures.savedPublications.stream().anyMatch(saved ->
+                "doc-old".equals(saved.getDocumentId())
+                        && ScenicKnowledgePublication.STATUS_PUBLISHED.equals(saved.getStatus())));
+        assertTrue(fixtures.savedPublications.stream().anyMatch(saved ->
+                "doc-new".equals(saved.getDocumentId())
+                        && ScenicKnowledgePublication.STATUS_FAILED.equals(saved.getStatus())
+                        && saved.getPublishSlot() == null));
         verify(fixtures.maxKbKnowledgeService).deleteDocument(3L, "kb-1", "doc-new");
         assertEquals(ScenicKnowledgePublication.STATUS_PUBLISHED, active.getStatus());
         ScenicKnowledgePublication failed = fixtures.savedPublications.get(fixtures.savedPublications.size() - 1);
@@ -263,10 +270,60 @@ class ScenicKnowledgePublicationServiceTests {
         assertEquals(HttpStatus.BAD_GATEWAY, error.getStatusCode());
         assertFalse(error.getReason().contains("Bearer secret"));
         assertFalse(error.getReason().contains("token=abc"));
+        assertEquals(ScenicKnowledgePublication.STATUS_PUBLISHED, active.getStatus());
         ScenicKnowledgePublication latestSaved = fixtures.savedPublications.get(fixtures.savedPublications.size() - 1);
-        assertEquals(ScenicKnowledgePublication.STATUS_PUBLISHED, latestSaved.getStatus());
+        assertEquals(ScenicKnowledgePublication.STATUS_FAILED, latestSaved.getStatus());
         assertEquals("doc-new", latestSaved.getDocumentId());
         assertNotNull(latestSaved.getLastError());
+    }
+
+    @Test
+    void publishLeavesCommittedNewActiveWhenCompensationTransactionFails() {
+        Fixtures fixtures = fixtures();
+        ScenicKnowledgePublication active = publication(12L, 3L, "kb-1", "灵山知识库", "doc-old", "old-hash", 2, ScenicKnowledgePublication.STATUS_PUBLISHED);
+        AtomicBoolean failCompensationSave = new AtomicBoolean(true);
+        when(fixtures.publicationRepository.findFirstByFacilityIdAndAccountIdAndKnowledgeIdOrderByVersionDesc(12L, 3L, "kb-1"))
+                .thenReturn(Optional.of(active));
+        when(fixtures.publicationRepository.findFirstByFacilityIdAndAccountIdAndKnowledgeIdAndStatusInAndDocumentIdIsNotNullAndDocumentIdNotOrderByUpdatedAtDescIdDesc(
+                12L, 3L, "kb-1", List.of(ScenicKnowledgePublication.STATUS_PUBLISHED, ScenicKnowledgePublication.STATUS_OUTDATED), ""))
+                .thenReturn(Optional.of(active));
+        when(fixtures.publicationRepository.save(any(ScenicKnowledgePublication.class))).thenAnswer(invocation -> {
+            ScenicKnowledgePublication publication = invocation.getArgument(0);
+            if (failCompensationSave.get()
+                    && "doc-old".equals(publication.getDocumentId())
+                    && ScenicKnowledgePublication.STATUS_PUBLISHED.equals(publication.getStatus())) {
+                failCompensationSave.set(false);
+                throw new IllegalStateException("compensation transaction failed");
+            }
+            return fixtures.capture(publication);
+        });
+        when(fixtures.maxKbKnowledgeService.uploadDocuments(
+                eq(3L), eq("kb-1"), anyList(), eq(null), eq(null), eq(null), eq(null), eq(null),
+                eq(null), eq(null), eq(null), eq(null), eq(false), anyString()))
+                .thenReturn(Map.of("task_id", "task-1"));
+        when(fixtures.maxKbKnowledgeService.applyUploadTask(3L, "kb-1", "task-1")).thenReturn(Map.of("status", "accepted"));
+        when(fixtures.maxKbKnowledgeService.getUploadTask(3L, "kb-1", "task-1"))
+                .thenReturn(Map.of("status", "PREVIEW_READY"))
+                .thenReturn(Map.of("status", "COMPLETED", "document_id", "doc-new"));
+        when(fixtures.maxKbKnowledgeService.deleteDocument(3L, "kb-1", "doc-old"))
+                .thenThrow(new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Bearer secret 删除旧文档失败"));
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> fixtures.service.publish(8L, publishRequest(), admin()));
+
+        assertEquals(HttpStatus.BAD_GATEWAY, error.getStatusCode());
+        assertFalse(error.getReason().contains("Bearer secret"));
+        verify(fixtures.maxKbKnowledgeService, never()).deleteDocument(3L, "kb-1", "doc-new");
+        long activeRows = fixtures.latestSavedPublications().stream()
+                .filter(saved -> List.of(
+                                ScenicKnowledgePublication.STATUS_PUBLISHED,
+                                ScenicKnowledgePublication.STATUS_OUTDATED)
+                        .contains(saved.getStatus()))
+                .count();
+        assertEquals(1L, activeRows);
+        ScenicKnowledgePublication latestSaved = fixtures.savedPublications.get(fixtures.savedPublications.size() - 1);
+        assertEquals(ScenicKnowledgePublication.STATUS_WITHDRAWN, latestSaved.getStatus());
     }
 
     @Test
@@ -600,6 +657,18 @@ class ScenicKnowledgePublicationServiceTests {
             publication.setUpdatedAt(LocalDateTime.now());
             savedPublications.add(copy(publication));
             return publication;
+        }
+
+        private List<ScenicKnowledgePublication> latestSavedPublications() {
+            return savedPublications.stream()
+                    .collect(java.util.stream.Collectors.toMap(
+                            ScenicKnowledgePublication::getId,
+                            publication -> publication,
+                            (left, right) -> right,
+                            java.util.LinkedHashMap::new))
+                    .values()
+                    .stream()
+                    .toList();
         }
     }
 }

@@ -270,34 +270,29 @@ public class ScenicKnowledgePublicationService {
             String terminalStatus,
             RuntimeException cleanupFailure) {
         String message = sanitizeError(cleanupFailure);
-        if (canDeleteRemote(publication)) {
-            try {
-                maxKbKnowledgeService.deleteDocument(
-                        publication.getAccountId(),
-                        publication.getKnowledgeId(),
-                        publication.getDocumentId());
-                publication.setDocumentId(null);
-                String restoredStatus = terminalStatusForRestore(active, terminalStatus);
-                try {
-                    restorePreviousActiveAndMarkNewFailed(publication, active, restoredStatus, message);
-                } catch (RuntimeException restoreFailure) {
-                    recoverPreviousActive(active, restoredStatus);
-                    throw new ResponseStatusException(
-                            HttpStatus.BAD_GATEWAY,
-                            appendCleanupError(message, restoreFailure));
-                }
-                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, message);
-            } catch (RuntimeException rollbackFailure) {
-                if (rollbackFailure instanceof ResponseStatusException responseStatusException
-                        && HttpStatus.BAD_GATEWAY.equals(responseStatusException.getStatusCode())
-                        && message.equals(responseStatusException.getReason())) {
-                    throw rollbackFailure;
-                }
-                message = appendCleanupError(message, rollbackFailure);
-            }
+        String restoredStatus = terminalStatusForRestore(active, terminalStatus);
+        try {
+            restorePreviousActiveAndMarkNewFailed(publication, active, restoredStatus, message);
+        } catch (RuntimeException compensationFailure) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    appendCleanupError(message, compensationFailure));
         }
-        publicationStateService.recordCleanupFailureOnActivePublication(publication, message);
-        throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, message);
+        if (!canDeleteRemote(publication)) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, message);
+        }
+        try {
+            maxKbKnowledgeService.deleteDocument(
+                    publication.getAccountId(),
+                    publication.getKnowledgeId(),
+                    publication.getDocumentId());
+            clearFailedPublicationDocument(publication, message);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, message);
+        } catch (RuntimeException rollbackFailure) {
+            String cleanupMessage = appendCleanupError(message, rollbackFailure);
+            updateFailedPublicationAfterCleanupFailure(publication, cleanupMessage);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, cleanupMessage);
+        }
     }
 
     private boolean canDeleteRemote(ScenicKnowledgePublication publication) {
@@ -327,15 +322,22 @@ public class ScenicKnowledgePublicationService {
         });
     }
 
-    private void recoverPreviousActive(ScenicKnowledgePublication previousActive, String restoredStatus) {
+    private void clearFailedPublicationDocument(
+            ScenicKnowledgePublication publication,
+            String sanitizedError) {
         handoffTransaction.executeWithoutResult(ignored -> {
-            if (previousActive == null) {
-                return;
-            }
-            previousActive.setStatus(restoredStatus);
-            previousActive.setPublishSlot(null);
-            previousActive.setLastError(null);
-            publicationRepository.save(previousActive);
+            publication.setDocumentId(null);
+            publication.setLastError(sanitizedError);
+            publicationRepository.save(publication);
+        });
+    }
+
+    private void updateFailedPublicationAfterCleanupFailure(
+            ScenicKnowledgePublication publication,
+            String sanitizedError) {
+        handoffTransaction.executeWithoutResult(ignored -> {
+            publication.setLastError(sanitizedError);
+            publicationRepository.save(publication);
         });
     }
 
