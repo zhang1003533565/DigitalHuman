@@ -68,7 +68,10 @@
 - `publish()` now resolves the current active remote publication separately from the latest local attempt, so failed republish rows do not hide the still-live document.
 - Successful replacement now uses an explicit local `TransactionTemplate` handoff that atomically marks the new row `published/outdated` and the old active row `withdrawn` before any old remote delete starts.
 - If that local handoff transaction fails, the service deletes the just-created new remote document first and only then marks the publish attempt `failed`, so the old live document remains untouched.
-- If deleting the old remote document fails after the handoff commits, the service now tries to delete the new remote document, atomically restores the old active row and marks the new row `failed` when compensation succeeds, and preserves a truthful active new row with sanitized cleanup error when compensation also fails.
+- If deleting the old remote document fails after the handoff commits, the service now first runs one atomic local compensation transaction that restores the old active row and demotes the new row to `failed`, then deletes the new remote document.
+- The original old-active terminal status is now captured before the handoff transaction and passed through compensation explicitly, so restore never derives from a row already mutated to `withdrawn` or from the new publication's terminal status.
+- If that compensation transaction itself fails, the service does not delete either remote document and leaves the already-committed new active row in place so local truth still matches the still-live remote document.
+- If compensation succeeds but deleting the new remote document fails, the service keeps the old row restored as active and keeps the new failed row's `documentId` plus sanitized cleanup error for later recovery.
 - Preview polling now rejects a `COMPLETED` MaxKB task that still omits `documentId`, returns `502`, and clears the publishing slot locally.
 - Added a real H2/JPA regression test proving slot `1` is unique per `(facility, account, knowledge)` while multiple terminal rows with `publish_slot = null` remain valid.
 

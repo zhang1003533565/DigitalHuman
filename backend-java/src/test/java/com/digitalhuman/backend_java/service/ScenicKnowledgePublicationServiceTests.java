@@ -242,6 +242,37 @@ class ScenicKnowledgePublicationServiceTests {
     }
 
     @Test
+    void publishRestoresOriginalOutdatedStatusWhenCompensationSucceeds() {
+        Fixtures fixtures = fixtures();
+        ScenicKnowledgePublication active = publication(12L, 3L, "kb-1", "灵山知识库", "doc-old", "old-hash", 2, ScenicKnowledgePublication.STATUS_OUTDATED);
+        fixtures.detail.setRemark("保持原内容");
+        when(fixtures.publicationRepository.findFirstByFacilityIdAndAccountIdAndKnowledgeIdOrderByVersionDesc(12L, 3L, "kb-1"))
+                .thenReturn(Optional.of(active));
+        when(fixtures.publicationRepository.findFirstByFacilityIdAndAccountIdAndKnowledgeIdAndStatusInAndDocumentIdIsNotNullAndDocumentIdNotOrderByUpdatedAtDescIdDesc(
+                12L, 3L, "kb-1", List.of(ScenicKnowledgePublication.STATUS_PUBLISHED, ScenicKnowledgePublication.STATUS_OUTDATED), ""))
+                .thenReturn(Optional.of(active));
+        when(fixtures.maxKbKnowledgeService.uploadDocuments(
+                eq(3L), eq("kb-1"), anyList(), eq(null), eq(null), eq(null), eq(null), eq(null),
+                eq(null), eq(null), eq(null), eq(null), eq(false), anyString()))
+                .thenReturn(Map.of("task_id", "task-1"));
+        when(fixtures.maxKbKnowledgeService.applyUploadTask(3L, "kb-1", "task-1")).thenReturn(Map.of("status", "accepted"));
+        when(fixtures.maxKbKnowledgeService.getUploadTask(3L, "kb-1", "task-1"))
+                .thenReturn(Map.of("status", "PREVIEW_READY"))
+                .thenReturn(Map.of("status", "COMPLETED", "document_id", "doc-new"));
+        when(fixtures.maxKbKnowledgeService.deleteDocument(3L, "kb-1", "doc-old"))
+                .thenThrow(new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Bearer secret 删除旧文档失败"));
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> fixtures.service.publish(8L, publishRequest(), admin()));
+
+        assertEquals(HttpStatus.BAD_GATEWAY, error.getStatusCode());
+        assertTrue(fixtures.savedPublications.stream().anyMatch(saved ->
+                "doc-old".equals(saved.getDocumentId())
+                        && ScenicKnowledgePublication.STATUS_OUTDATED.equals(saved.getStatus())));
+    }
+
+    @Test
     void publishKeepsNewActiveWhenDeletingOldAndNewRemoteBothFail() {
         Fixtures fixtures = fixtures();
         ScenicKnowledgePublication active = publication(12L, 3L, "kb-1", "灵山知识库", "doc-old", "old-hash", 2, ScenicKnowledgePublication.STATUS_PUBLISHED);

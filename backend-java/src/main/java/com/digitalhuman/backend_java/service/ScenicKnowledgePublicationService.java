@@ -99,6 +99,7 @@ public class ScenicKnowledgePublicationService {
         ScenicKnowledgeDocumentRenderer.RenderedDocument rendered = renderer.render(facility, detail);
         PublishTarget target = normalizeTarget(request);
         ScenicKnowledgePublication active = findActivePublication(facility.getId(), target.accountId(), target.knowledgeId()).orElse(null);
+        String previousActiveStatus = originalActiveStatus(active);
         ScenicKnowledgePublication latest = publicationRepository
                 .findFirstByFacilityIdAndAccountIdAndKnowledgeIdOrderByVersionDesc(facility.getId(), target.accountId(), target.knowledgeId())
                 .orElse(null);
@@ -155,7 +156,7 @@ public class ScenicKnowledgePublicationService {
                     ? ScenicKnowledgePublication.STATUS_PUBLISHED
                     : ScenicKnowledgePublication.STATUS_OUTDATED;
             persistHandoffOrRollback(publication, active, terminalStatus);
-            cleanupPreviousRemoteDocumentOrCompensate(publication, active, terminalStatus);
+            cleanupPreviousRemoteDocumentOrCompensate(publication, active, previousActiveStatus);
             return toDto(publication);
         } catch (RuntimeException exception) {
             if (ScenicKnowledgePublication.STATUS_PUBLISHING.equals(publication.getStatus())) {
@@ -232,7 +233,7 @@ public class ScenicKnowledgePublicationService {
     private void cleanupPreviousRemoteDocumentOrCompensate(
             ScenicKnowledgePublication publication,
             ScenicKnowledgePublication active,
-            String terminalStatus) {
+            String previousActiveStatus) {
         if (active == null
                 || active.getDocumentId() == null
                 || active.getDocumentId().isBlank()
@@ -242,7 +243,7 @@ public class ScenicKnowledgePublicationService {
         try {
             maxKbKnowledgeService.deleteDocument(active.getAccountId(), active.getKnowledgeId(), active.getDocumentId());
         } catch (RuntimeException exception) {
-            compensateRemoteCleanupFailure(publication, active, terminalStatus, exception);
+            compensateRemoteCleanupFailure(publication, active, previousActiveStatus, exception);
         }
     }
 
@@ -267,12 +268,11 @@ public class ScenicKnowledgePublicationService {
     private void compensateRemoteCleanupFailure(
             ScenicKnowledgePublication publication,
             ScenicKnowledgePublication active,
-            String terminalStatus,
+            String previousActiveStatus,
             RuntimeException cleanupFailure) {
         String message = sanitizeError(cleanupFailure);
-        String restoredStatus = terminalStatusForRestore(active, terminalStatus);
         try {
-            restorePreviousActiveAndMarkNewFailed(publication, active, restoredStatus, message);
+            restorePreviousActiveAndMarkNewFailed(publication, active, previousActiveStatus, message);
         } catch (RuntimeException compensationFailure) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_GATEWAY,
@@ -301,6 +301,18 @@ public class ScenicKnowledgePublicationService {
 
     private String appendCleanupError(String message, RuntimeException cleanupFailure) {
         return message + "；回滚新文档失败：" + sanitizeError(cleanupFailure);
+    }
+
+    private String originalActiveStatus(ScenicKnowledgePublication active) {
+        if (active == null) {
+            return null;
+        }
+        String normalized = normalize(active.getStatus());
+        if (ScenicKnowledgePublication.STATUS_PUBLISHED.equals(normalized)
+                || ScenicKnowledgePublication.STATUS_OUTDATED.equals(normalized)) {
+            return normalized;
+        }
+        return null;
     }
 
     private void restorePreviousActiveAndMarkNewFailed(
@@ -339,15 +351,6 @@ public class ScenicKnowledgePublicationService {
             publication.setLastError(sanitizedError);
             publicationRepository.save(publication);
         });
-    }
-
-    private String terminalStatusForRestore(ScenicKnowledgePublication active, String fallbackStatus) {
-        String activeStatus = normalize(active.getStatus());
-        if (ScenicKnowledgePublication.STATUS_PUBLISHED.equals(activeStatus)
-                || ScenicKnowledgePublication.STATUS_OUTDATED.equals(activeStatus)) {
-            return activeStatus;
-        }
-        return fallbackStatus;
     }
 
     private boolean shouldRetire(ScenicKnowledgePublication previousActive, ScenicKnowledgePublication publication) {
