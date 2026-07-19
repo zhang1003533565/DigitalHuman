@@ -20,6 +20,7 @@ import { DeleteOutlined, EditOutlined, LinkOutlined, PlusOutlined, ReloadOutline
 import { getScenicFacilities, type ScenicFacility } from '../../api/scenic'
 import {
   applyScenicStructuredRecord,
+  type ScenicKnowledgePublication,
   createScenicStructuredRecord,
   deleteScenicStructuredRecord,
   getScenicKnowledgePublicationStatus,
@@ -28,12 +29,16 @@ import {
   matchScenicStructuredRecord,
   previewScenicStructuredApply,
   updateScenicStructuredRecord,
-  type ScenicKnowledgePublication,
   type ScenicStructuredApplyPreview,
   type ScenicStructuredRecord,
   type ScenicStructuredRecordPayload,
 } from '../../api/scenicStructured'
 import ScenicKnowledgePublishDrawer from './ScenicKnowledgePublishDrawer'
+import {
+  classifyPublicationStatusLoadFailure,
+  getScenicKnowledgePrimaryAction,
+  getScenicKnowledgeStatusPresentation,
+} from './scenicKnowledgePublishState'
 
 const fields = [
   ['scenic_name', '景区名称'],
@@ -86,6 +91,7 @@ export default function ScenicStructuredPage() {
   const [rows, setRows] = useState<ScenicStructuredRecord[]>([])
   const [facilities, setFacilities] = useState<ScenicFacility[]>([])
   const [publicationStatuses, setPublicationStatuses] = useState<Record<number, ScenicKnowledgePublication | null>>({})
+  const [publicationStatusErrors, setPublicationStatusErrors] = useState<Record<number, string | null>>({})
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [editing, setEditing] = useState<ScenicStructuredRecord | null | undefined>(undefined)
@@ -113,12 +119,36 @@ export default function ScenicStructuredPage() {
         .map((item) => item.matchedFacilityId as number))]
       const statusEntries = await Promise.all(appliedFacilityIds.map(async (appliedFacilityId) => {
         try {
-          return [appliedFacilityId, await getScenicKnowledgePublicationStatus(appliedFacilityId)] as const
-        } catch {
-          return [appliedFacilityId, null] as const
+          return { facilityId: appliedFacilityId, publication: await getScenicKnowledgePublicationStatus(appliedFacilityId), error: null }
+        } catch (error) {
+          const failure = classifyPublicationStatusLoadFailure({
+            status: error && typeof error === 'object' && 'response' in (error as Record<string, unknown>)
+              ? ((error as { response?: { status?: number } }).response?.status ?? null)
+              : null,
+            message: error instanceof Error ? error.message : '状态加载失败',
+          })
+          return { facilityId: appliedFacilityId, publication: failure.kind === 'unpublished' ? null : undefined, error: failure.kind === 'error' ? failure.message : null }
         }
       }))
-      setPublicationStatuses(Object.fromEntries(statusEntries))
+      setPublicationStatuses((current) => {
+        const next = { ...current }
+        for (const entry of statusEntries) {
+          if (entry.publication !== undefined) {
+            next[entry.facilityId] = entry.publication
+          }
+        }
+        return next
+      })
+      setPublicationStatusErrors((current) => {
+        const next = { ...current }
+        for (const appliedFacilityId of appliedFacilityIds) {
+          if (!(appliedFacilityId in next)) next[appliedFacilityId] = null
+        }
+        for (const entry of statusEntries) {
+          next[entry.facilityId] = entry.error
+        }
+        return next
+      })
     } catch {
       message.error('加载景点导入数据失败')
     } finally {
@@ -220,31 +250,44 @@ export default function ScenicStructuredPage() {
       title: '知识发布', width: 150,
       render: (_, record) => {
         const facilityPublication = record.matchedFacilityId ? publicationStatuses[record.matchedFacilityId] : null
-        if (record.applyStatus === 'applied' && facilityPublication?.status) {
+        const statusLoadError = record.matchedFacilityId ? publicationStatusErrors[record.matchedFacilityId] : null
+        const presentation = getScenicKnowledgeStatusPresentation({
+          applyStatus: record.applyStatus,
+          publication: facilityPublication,
+          statusLoadError,
+        })
+        if (presentation.kind === 'publication' && facilityPublication?.status) {
           const meta = publicationStatusMeta[facilityPublication.status]
           return <Tag color={meta.color}>{meta.text}</Tag>
         }
-        if (record.applyStatus === 'applied') return <Tag>未发布</Tag>
-        return <span className="structured-import__empty">请先应用到正式景点</span>
+        if (presentation.kind === 'error') return <Tag color="warning" title={presentation.detail}>状态加载失败</Tag>
+        if (presentation.kind === 'unpublished') return <Tag>未发布</Tag>
+        return <span className="structured-import__empty">{presentation.text}</span>
       },
     },
     {
       title: '操作', width: 360, fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button type="link" icon={<LinkOutlined />} onClick={() => openApply(record)}>匹配正式景点</Button>
-          {record.applyStatus === 'applied' ? (
-            <Button type="link" onClick={() => setPublishingRecord(record)}>发布到知识库</Button>
-          ) : null}
-          <Button type="link" icon={<EditOutlined />} onClick={() => {
-            editForm.setFieldsValue(Object.fromEntries(fields.map(([key]) => [key, record[key] ?? ''])) as EditValues)
-            setEditing(record)
-          }}>编辑</Button>
-          <Popconfirm title="确认删除该导入记录吗？" onConfirm={async () => { await deleteScenicStructuredRecord(record.id); await loadData() }}>
-            <Button type="link" danger icon={<DeleteOutlined />} aria-label="删除导入记录" />
-          </Popconfirm>
-        </Space>
-      ),
+      render: (_, record) => {
+        const publicationAction = getScenicKnowledgePrimaryAction(record.applyStatus, role)
+        return (
+          <Space>
+            <Button type="link" icon={<LinkOutlined />} onClick={() => openApply(record)}>匹配正式景点</Button>
+            {publicationAction === 'publish' ? (
+              <Button type="link" onClick={() => setPublishingRecord(record)}>发布到知识库</Button>
+            ) : null}
+            {publicationAction === 'view' ? (
+              <Button type="link" onClick={() => setPublishingRecord(record)}>查看知识状态</Button>
+            ) : null}
+            <Button type="link" icon={<EditOutlined />} onClick={() => {
+              editForm.setFieldsValue(Object.fromEntries(fields.map(([key]) => [key, record[key] ?? ''])) as EditValues)
+              setEditing(record)
+            }}>编辑</Button>
+            <Popconfirm title="确认删除该导入记录吗？" onConfirm={async () => { await deleteScenicStructuredRecord(record.id); await loadData() }}>
+              <Button type="link" danger icon={<DeleteOutlined />} aria-label="删除导入记录" />
+            </Popconfirm>
+          </Space>
+        )
+      },
     },
   ]
 
@@ -341,6 +384,7 @@ export default function ScenicStructuredPage() {
       </Drawer>
 
       <ScenicKnowledgePublishDrawer
+        key={`${publishingRecord?.id ?? 'none'}:${publishingRecord?.matchedFacilityId ?? 'none'}:${Boolean(publishingRecord)}`}
         open={Boolean(publishingRecord)}
         role={role}
         record={publishingRecord}

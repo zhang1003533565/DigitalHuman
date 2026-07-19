@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Button,
@@ -31,6 +31,13 @@ import {
   type ScenicStructuredRecord,
 } from '../../api/scenicStructured'
 import type { ScenicFacility } from '../../api/scenic'
+import {
+  canPublishScenicKnowledge,
+  classifyPublicationStatusLoadFailure,
+  isCurrentScenicKnowledgePreview,
+  nextScenicKnowledgeRequestGeneration,
+  shouldApplyScenicKnowledgeResponse,
+} from './scenicKnowledgePublishState'
 
 type ScenicKnowledgePublishDrawerProps = {
   open: boolean
@@ -65,6 +72,7 @@ function safeErrorMessage(error: unknown, fallback: string) {
       }
     }
   }
+  if (error instanceof Error && error.message.trim()) return error.message.trim()
   return fallback
 }
 
@@ -97,14 +105,20 @@ export default function ScenicKnowledgePublishDrawer({
   const [loadingKnowledges, setLoadingKnowledges] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [withdrawing, setWithdrawing] = useState(false)
+  const loadGenerationRef = useRef(0)
+  const knowledgeGenerationRef = useRef(0)
 
   const currentStatus = publication?.status
   const currentStatusMeta = currentStatus ? STATUS_META[currentStatus] : null
+  const previewMatchesCurrent = isCurrentScenicKnowledgePreview(preview, record?.id, facility?.id)
 
   const loadKnowledges = useCallback(async (nextAccountId: number, preferredKnowledgeId?: string) => {
+    const generation = nextScenicKnowledgeRequestGeneration(knowledgeGenerationRef.current)
+    knowledgeGenerationRef.current = generation
     setLoadingKnowledges(true)
     try {
       const payload = await getKnowledges(nextAccountId, { page: 1, size: 200 })
+      if (!shouldApplyScenicKnowledgeResponse(knowledgeGenerationRef.current, generation)) return
       const options = extractRecords(payload)
         .map((item) => knowledgeOptionOf(item))
         .filter((item): item is KnowledgeOption => Boolean(item))
@@ -118,27 +132,37 @@ export default function ScenicKnowledgePublishDrawer({
         setKnowledgeName(undefined)
       }
     } catch (error) {
+      if (!shouldApplyScenicKnowledgeResponse(knowledgeGenerationRef.current, generation)) return
       setKnowledgeOptions([])
       setKnowledgeId(undefined)
       setKnowledgeName(undefined)
       message.error(`加载知识库失败：${safeErrorMessage(error, '请稍后重试')}`)
     } finally {
-      setLoadingKnowledges(false)
+      if (shouldApplyScenicKnowledgeResponse(knowledgeGenerationRef.current, generation)) {
+        setLoadingKnowledges(false)
+      }
     }
   }, [])
 
   const loadDrawer = useCallback(async () => {
     if (!open || !record || !facility) return
+    const generation = nextScenicKnowledgeRequestGeneration(loadGenerationRef.current)
+    loadGenerationRef.current = generation
     setLoading(true)
     try {
       const [nextPreview, accountPage, nextPublication] = await Promise.all([
         previewScenicKnowledgePublication(record.id),
         listKnowledgeAccounts({ current: 1, size: 100, status: 1 }),
         getScenicKnowledgePublicationStatus(facility.id).catch((error) => {
-          if (axios.isAxiosError(error) && error.response?.status === 404) return null
-          throw error
+          const failure = classifyPublicationStatusLoadFailure({
+            status: axios.isAxiosError(error) ? error.response?.status : null,
+            message: safeErrorMessage(error, '状态加载失败'),
+          })
+          if (failure.kind === 'unpublished') return null
+          throw new Error(failure.message ?? '状态加载失败')
         }),
       ])
+      if (!shouldApplyScenicKnowledgeResponse(loadGenerationRef.current, generation)) return
       setPreview(nextPreview)
       setPublication(nextPublication)
       const rows = accountPage.records ?? []
@@ -151,9 +175,12 @@ export default function ScenicKnowledgePublishDrawer({
         setKnowledgeOptions([])
       }
     } catch (error) {
+      if (!shouldApplyScenicKnowledgeResponse(loadGenerationRef.current, generation)) return
       message.error(`加载知识发布工作台失败：${safeErrorMessage(error, '请检查后端服务')}`)
     } finally {
-      setLoading(false)
+      if (shouldApplyScenicKnowledgeResponse(loadGenerationRef.current, generation)) {
+        setLoading(false)
+      }
     }
   }, [facility, loadKnowledges, open, record])
 
@@ -163,25 +190,35 @@ export default function ScenicKnowledgePublishDrawer({
       void loadDrawer()
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [loadDrawer, open])
+  }, [facility?.id, loadDrawer, open, record?.id])
 
   const accountOptions = useMemo(() => accounts.map((item) => ({
     value: item.id,
     label: `${item.accountName} · ${item.environmentText ?? item.environment}`,
   })), [accounts])
 
-  const canPublish = !isObserver && !!record && !!facility && !!preview && !!accountId && !!knowledgeId && !!knowledgeName
+  const canPublish = canPublishScenicKnowledge({
+    role,
+    publishing,
+    recordId: record?.id,
+    facilityId: facility?.id,
+    preview,
+    accountId,
+    knowledgeId,
+    knowledgeName,
+  })
   const publishLabel = currentStatus === 'published' || currentStatus === 'outdated' || currentStatus === 'failed' ? '重新发布' : '发布到知识库'
 
   const handleAccountChange = async (value: number) => {
     setAccountId(value)
     setKnowledgeId(undefined)
     setKnowledgeName(undefined)
+    setKnowledgeOptions([])
     await loadKnowledges(value)
   }
 
   const handlePublish = async () => {
-    if (!record || !accountId || !knowledgeId || !knowledgeName) return
+    if (isObserver || publishing || !record || !facility || !accountId || !knowledgeId || !knowledgeName || !canPublish || !previewMatchesCurrent) return
     setPublishing(true)
     try {
       const nextPublication = await publishScenicKnowledge(record.id, { accountId, knowledgeId, knowledgeName })
@@ -197,7 +234,7 @@ export default function ScenicKnowledgePublishDrawer({
   }
 
   const handleWithdraw = async () => {
-    if (!facility) return
+    if (isObserver || withdrawing || !facility) return
     setWithdrawing(true)
     try {
       const nextPublication = await withdrawScenicKnowledge(facility.id)
@@ -218,7 +255,7 @@ export default function ScenicKnowledgePublishDrawer({
       open={open}
       width={860}
       onClose={onClose}
-      extra={(
+      extra={!isObserver ? (
         <Space>
           {publication?.documentId ? (
             <Popconfirm
@@ -241,7 +278,7 @@ export default function ScenicKnowledgePublishDrawer({
             {publishLabel}
           </Button>
         </Space>
-      )}
+      ) : null}
     >
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
         <Alert
@@ -268,7 +305,7 @@ export default function ScenicKnowledgePublishDrawer({
               options={accountOptions}
               loading={loading}
               onChange={(value) => void handleAccountChange(value)}
-              disabled={loading || !accounts.length}
+              disabled={isObserver || loading || !accounts.length}
               optionFilterProp="label"
               showSearch
             />
@@ -285,7 +322,7 @@ export default function ScenicKnowledgePublishDrawer({
                 const matched = knowledgeOptions.find((item) => item.value === value)
                 setKnowledgeName(matched?.label)
               }}
-              disabled={!accountId || loadingKnowledges}
+              disabled={isObserver || !accountId || loadingKnowledges}
               optionFilterProp="label"
               showSearch
             />
