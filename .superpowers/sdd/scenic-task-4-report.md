@@ -15,7 +15,9 @@
 - `backend-java/src/main/java/com/digitalhuman/backend_java/repository/ScenicKnowledgePublicationRepository.java`
 - `backend-java/src/main/java/com/digitalhuman/backend_java/service/ScenicFacilityContentService.java`
 - `backend-java/src/main/java/com/digitalhuman/backend_java/service/AdminScenicFacilityService.java`
+- `backend-java/src/main/java/com/digitalhuman/backend_java/service/ScenicKnowledgePublicationStateService.java`
 - `backend-java/src/test/java/com/digitalhuman/backend_java/service/ScenicKnowledgePublicationServiceTests.java`
+- `backend-java/src/test/java/com/digitalhuman/backend_java/service/ScenicKnowledgePublicationPersistenceTests.java`
 - `backend-java/src/test/java/com/digitalhuman/backend_java/controller/AdminScenicKnowledgePublicationControllerTests.java`
 - `backend-java/src/test/java/com/digitalhuman/backend_java/service/ScenicFacilityContentServiceTests.java`
 - `backend-java/src/test/java/com/digitalhuman/backend_java/service/AdminScenicFacilityServiceTests.java`
@@ -64,12 +66,19 @@
 
 - Added a DB-enforced publish reservation slot on `(facility_id, account_id, knowledge_id, publish_slot)` so concurrent publish attempts conflict before remote upload starts.
 - `publish()` now resolves the current active remote publication separately from the latest local attempt, so failed republish rows do not hide the still-live document.
-- Successful replacement now retires the old active row after deleting its remote document, preventing later withdraw/status logic from falling back to a deleted document.
-- If deleting the old remote document fails after the new upload finishes, the service now attempts to delete the new document, records the new attempt as `failed`, preserves the old active publication, and rethrows a sanitized error.
+- Successful replacement now uses an explicit local `TransactionTemplate` handoff that atomically marks the new row `published/outdated` and the old active row `withdrawn` before any old remote delete starts.
+- If that local handoff transaction fails, the service deletes the just-created new remote document first and only then marks the publish attempt `failed`, so the old live document remains untouched.
+- If deleting the old remote document fails after the handoff commits, the service now tries to delete the new remote document, atomically restores the old active row and marks the new row `failed` when compensation succeeds, and preserves a truthful active new row with sanitized cleanup error when compensation also fails.
+- Preview polling now rejects a `COMPLETED` MaxKB task that still omits `documentId`, returns `502`, and clears the publishing slot locally.
+- Added a real H2/JPA regression test proving slot `1` is unique per `(facility, account, knowledge)` while multiple terminal rows with `publish_slot = null` remain valid.
 
 ## Takeover Verification
 
-- `cd backend-java && ./mvnw -q -Dtest=ScenicKnowledgePublicationServiceTests test`
-  - Passed: 13 tests, 0 failures, 0 errors.
+- `cd backend-java && ./mvnw -q -Dtest=ScenicKnowledgePublicationServiceTests,ScenicKnowledgePublicationPersistenceTests test`
+  - Passed.
+- `cd backend-java && ./mvnw -q -Dtest=ScenicKnowledgePublicationServiceTests,ScenicKnowledgePublicationPersistenceTests,AdminScenicKnowledgePublicationControllerTests,ScenicFacilityContentServiceTests,AdminScenicFacilityServiceTests,ScenicStructuredApplicationServiceTests test`
+  - Passed.
 - `cd backend-java && ./mvnw -q test`
-  - Passed: 214 tests, 0 failures, 0 errors.
+  - Passed.
+- `git diff --check`
+  - Passed.

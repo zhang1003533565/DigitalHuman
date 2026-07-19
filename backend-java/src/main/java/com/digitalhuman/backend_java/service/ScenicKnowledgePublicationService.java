@@ -14,9 +14,11 @@ import com.digitalhuman.backend_java.repository.ScenicKnowledgePublicationReposi
 import com.digitalhuman.backend_java.repository.ScenicStructuredSpotRecordRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -49,7 +51,9 @@ public class ScenicKnowledgePublicationService {
     private final ScenicKnowledgePublicationRepository publicationRepository;
     private final ScenicKnowledgeDocumentRenderer renderer;
     private final MaxKbKnowledgeService maxKbKnowledgeService;
+    private final ScenicKnowledgePublicationStateService publicationStateService;
     private final ObjectMapper objectMapper;
+    private final TransactionTemplate handoffTransaction;
 
     public ScenicKnowledgePublicationService(
             ScenicStructuredSpotRecordRepository recordRepository,
@@ -58,6 +62,8 @@ public class ScenicKnowledgePublicationService {
             ScenicKnowledgePublicationRepository publicationRepository,
             ScenicKnowledgeDocumentRenderer renderer,
             MaxKbKnowledgeService maxKbKnowledgeService,
+            ScenicKnowledgePublicationStateService publicationStateService,
+            PlatformTransactionManager transactionManager,
             ObjectMapper objectMapper) {
         this.recordRepository = recordRepository;
         this.facilityRepository = facilityRepository;
@@ -65,7 +71,10 @@ public class ScenicKnowledgePublicationService {
         this.publicationRepository = publicationRepository;
         this.renderer = renderer;
         this.maxKbKnowledgeService = maxKbKnowledgeService;
+        this.publicationStateService = publicationStateService;
         this.objectMapper = objectMapper;
+        this.handoffTransaction = new TransactionTemplate(transactionManager);
+        this.handoffTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     public ScenicKnowledgePreviewDto preview(Long recordId) {
@@ -112,7 +121,7 @@ public class ScenicKnowledgePublicationService {
         publication.setPublishSlot(ScenicKnowledgePublication.PUBLISH_SLOT_ACTIVE_REMOTE);
         publication.setPublishedBy(publisherName(actor));
         publication.setPublishedAt(LocalDateTime.now());
-        reservePublishingSlot(publication);
+        publicationStateService.reservePublishingSlot(publication);
 
         try {
             String taskId = extractRequiredTaskId(maxKbKnowledgeService.uploadDocuments(
@@ -142,13 +151,16 @@ public class ScenicKnowledgePublicationService {
             ScenicKnowledgeDocumentRenderer.RenderedDocument current = renderer.render(
                     findFacility(facility.getId()),
                     detailRepository.findByFacilityId(facility.getId()).orElse(null));
-            replaceActivePublicationOrRollback(publication, active);
-            finalizePublication(publication, rendered.sha256().equals(current.sha256())
+            String terminalStatus = rendered.sha256().equals(current.sha256())
                     ? ScenicKnowledgePublication.STATUS_PUBLISHED
-                    : ScenicKnowledgePublication.STATUS_OUTDATED);
+                    : ScenicKnowledgePublication.STATUS_OUTDATED;
+            persistHandoffOrRollback(publication, active, terminalStatus);
+            cleanupPreviousRemoteDocumentOrCompensate(publication, active, terminalStatus);
             return toDto(publication);
         } catch (RuntimeException exception) {
-            finalizeFailure(publication, exception);
+            if (ScenicKnowledgePublication.STATUS_PUBLISHING.equals(publication.getStatus())) {
+                finalizeFailure(publication, exception);
+            }
             throw exception;
         }
     }
@@ -190,30 +202,37 @@ public class ScenicKnowledgePublicationService {
         publicationRepository.save(publication);
     }
 
-    private void reservePublishingSlot(ScenicKnowledgePublication publication) {
+    private void finalizeFailure(ScenicKnowledgePublication publication, RuntimeException exception) {
+        publicationStateService.markFailed(publication, sanitizeError(exception));
+    }
+
+    private void persistHandoffOrRollback(
+            ScenicKnowledgePublication publication,
+            ScenicKnowledgePublication active,
+            String terminalStatus) {
         try {
-            publicationRepository.saveAndFlush(publication);
-        } catch (DataIntegrityViolationException exception) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "当前景点已有发布任务正在进行中");
+            handoffTransaction.executeWithoutResult(ignored -> {
+                publication.setStatus(terminalStatus);
+                publication.setPublishSlot(null);
+                publication.setLastError(null);
+                publicationRepository.save(publication);
+                if (shouldRetire(active, publication)) {
+                    active.setStatus(ScenicKnowledgePublication.STATUS_WITHDRAWN);
+                    active.setPublishSlot(null);
+                    active.setLastError(null);
+                    publicationRepository.save(active);
+                }
+            });
+        } catch (RuntimeException exception) {
+            compensateLocalHandoffFailure(publication, exception);
+            throw exception;
         }
     }
 
-    private void finalizePublication(ScenicKnowledgePublication publication, String terminalStatus) {
-        publication.setStatus(terminalStatus);
-        publication.setPublishSlot(null);
-        publicationRepository.save(publication);
-    }
-
-    private void finalizeFailure(ScenicKnowledgePublication publication, RuntimeException exception) {
-        publication.setStatus(ScenicKnowledgePublication.STATUS_FAILED);
-        publication.setPublishSlot(null);
-        publication.setLastError(sanitizeError(exception));
-        publicationRepository.save(publication);
-    }
-
-    private void replaceActivePublicationOrRollback(
+    private void cleanupPreviousRemoteDocumentOrCompensate(
             ScenicKnowledgePublication publication,
-            ScenicKnowledgePublication active) {
+            ScenicKnowledgePublication active,
+            String terminalStatus) {
         if (active == null
                 || active.getDocumentId() == null
                 || active.getDocumentId().isBlank()
@@ -223,28 +242,117 @@ public class ScenicKnowledgePublicationService {
         try {
             maxKbKnowledgeService.deleteDocument(active.getAccountId(), active.getKnowledgeId(), active.getDocumentId());
         } catch (RuntimeException exception) {
-            rollbackNewDocument(publication, exception);
+            compensateRemoteCleanupFailure(publication, active, terminalStatus, exception);
         }
-        active.setStatus(ScenicKnowledgePublication.STATUS_WITHDRAWN);
-        active.setPublishSlot(null);
-        active.setLastError(null);
-        publicationRepository.save(active);
     }
 
-    private void rollbackNewDocument(ScenicKnowledgePublication publication, RuntimeException replaceFailure) {
-        StringBuilder message = new StringBuilder(sanitizeError(replaceFailure));
-        if (publication.getDocumentId() != null && !publication.getDocumentId().isBlank()) {
+    private void compensateLocalHandoffFailure(
+            ScenicKnowledgePublication publication,
+            RuntimeException handoffFailure) {
+        String message = sanitizeError(handoffFailure);
+        if (canDeleteRemote(publication)) {
             try {
                 maxKbKnowledgeService.deleteDocument(
                         publication.getAccountId(),
                         publication.getKnowledgeId(),
                         publication.getDocumentId());
                 publication.setDocumentId(null);
-            } catch (RuntimeException rollbackFailure) {
-                message.append("；回滚新文档失败：").append(sanitizeError(rollbackFailure));
+            } catch (RuntimeException cleanupFailure) {
+                message = appendCleanupError(message, cleanupFailure);
             }
         }
-        throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, message.toString());
+        publicationStateService.markFailed(publication, message);
+    }
+
+    private void compensateRemoteCleanupFailure(
+            ScenicKnowledgePublication publication,
+            ScenicKnowledgePublication active,
+            String terminalStatus,
+            RuntimeException cleanupFailure) {
+        String message = sanitizeError(cleanupFailure);
+        if (canDeleteRemote(publication)) {
+            try {
+                maxKbKnowledgeService.deleteDocument(
+                        publication.getAccountId(),
+                        publication.getKnowledgeId(),
+                        publication.getDocumentId());
+                publication.setDocumentId(null);
+                String restoredStatus = terminalStatusForRestore(active, terminalStatus);
+                try {
+                    restorePreviousActiveAndMarkNewFailed(publication, active, restoredStatus, message);
+                } catch (RuntimeException restoreFailure) {
+                    recoverPreviousActive(active, restoredStatus);
+                    throw new ResponseStatusException(
+                            HttpStatus.BAD_GATEWAY,
+                            appendCleanupError(message, restoreFailure));
+                }
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, message);
+            } catch (RuntimeException rollbackFailure) {
+                if (rollbackFailure instanceof ResponseStatusException responseStatusException
+                        && HttpStatus.BAD_GATEWAY.equals(responseStatusException.getStatusCode())
+                        && message.equals(responseStatusException.getReason())) {
+                    throw rollbackFailure;
+                }
+                message = appendCleanupError(message, rollbackFailure);
+            }
+        }
+        publicationStateService.recordCleanupFailureOnActivePublication(publication, message);
+        throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, message);
+    }
+
+    private boolean canDeleteRemote(ScenicKnowledgePublication publication) {
+        return publication.getDocumentId() != null && !publication.getDocumentId().isBlank();
+    }
+
+    private String appendCleanupError(String message, RuntimeException cleanupFailure) {
+        return message + "；回滚新文档失败：" + sanitizeError(cleanupFailure);
+    }
+
+    private void restorePreviousActiveAndMarkNewFailed(
+            ScenicKnowledgePublication publication,
+            ScenicKnowledgePublication previousActive,
+            String restoredStatus,
+            String sanitizedError) {
+        handoffTransaction.executeWithoutResult(ignored -> {
+            if (previousActive != null) {
+                previousActive.setStatus(restoredStatus);
+                previousActive.setPublishSlot(null);
+                previousActive.setLastError(null);
+                publicationRepository.save(previousActive);
+            }
+            publication.setStatus(ScenicKnowledgePublication.STATUS_FAILED);
+            publication.setPublishSlot(null);
+            publication.setLastError(sanitizedError);
+            publicationRepository.save(publication);
+        });
+    }
+
+    private void recoverPreviousActive(ScenicKnowledgePublication previousActive, String restoredStatus) {
+        handoffTransaction.executeWithoutResult(ignored -> {
+            if (previousActive == null) {
+                return;
+            }
+            previousActive.setStatus(restoredStatus);
+            previousActive.setPublishSlot(null);
+            previousActive.setLastError(null);
+            publicationRepository.save(previousActive);
+        });
+    }
+
+    private String terminalStatusForRestore(ScenicKnowledgePublication active, String fallbackStatus) {
+        String activeStatus = normalize(active.getStatus());
+        if (ScenicKnowledgePublication.STATUS_PUBLISHED.equals(activeStatus)
+                || ScenicKnowledgePublication.STATUS_OUTDATED.equals(activeStatus)) {
+            return activeStatus;
+        }
+        return fallbackStatus;
+    }
+
+    private boolean shouldRetire(ScenicKnowledgePublication previousActive, ScenicKnowledgePublication publication) {
+        return previousActive != null
+                && previousActive.getDocumentId() != null
+                && !previousActive.getDocumentId().isBlank()
+                && !previousActive.getDocumentId().equals(publication.getDocumentId());
     }
 
     private ScenicStructuredSpotRecord requireAppliedRecord(Long recordId) {
@@ -303,7 +411,11 @@ public class ScenicKnowledgePublicationService {
             Object payload = maxKbKnowledgeService.getUploadTask(accountId, knowledgeId, taskId);
             String normalizedStatus = normalizeStatus(payload);
             if ("PREVIEW_READY".equals(normalizedStatus) || "COMPLETED".equals(normalizedStatus)) {
-                return new TaskSnapshot(normalizedStatus, text(payload, "document_id", "documentId"));
+                String documentId = text(payload, "document_id", "documentId");
+                if ("COMPLETED".equals(normalizedStatus) && documentId == null) {
+                    throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "MaxKB 上传任务完成但缺少文档 ID");
+                }
+                return new TaskSnapshot(normalizedStatus, documentId);
             }
             if (isFailedStatus(normalizedStatus)) {
                 throw new ResponseStatusException(
