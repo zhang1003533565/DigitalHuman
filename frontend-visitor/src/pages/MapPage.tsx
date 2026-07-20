@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/set-state-in-effect -- AMap SDK is untyped and this legacy page synchronizes imperative map state in effects. */
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import axios from 'axios'
 import { useLocation, useNavigate } from 'react-router-dom'
 import './MapPage.css'
@@ -7,7 +7,7 @@ import { DIGITAL_HUMAN_ROUTE } from '../digitalHuman/shared'
 import { parseNavigationContext } from './navigationContext'
 import { loadMapConfig } from '../api/mapConfig'
 import { useVisitorTheme } from '../theme/VisitorThemeProvider'
-import { getVisitorMapStyle } from '../theme/visitorMapTheme'
+import { createVisitorMapThemeController } from '../theme/visitorMapTheme'
 import {
   createMobileMapSearchDerivedSelection,
   createMobileMapSearchGenerationGate,
@@ -187,6 +187,14 @@ export function MapPage() {
   const initialUserPositionRef = useRef<[number, number] | null>(null)
   const searchGenerationGateRef = useRef(createMobileMapSearchGenerationGate())
   const searchDerivedSelectionRef = useRef(createMobileMapSearchDerivedSelection())
+  const mapThemeControllerRef = useRef(createVisitorMapThemeController<any>(
+    effectiveTheme,
+    (error) => console.warn('sync visitor map theme failed', error),
+  ))
+
+  useLayoutEffect(() => {
+    mapThemeControllerRef.current.setTheme(effectiveTheme)
+  }, [effectiveTheme])
 
   const updateSelectedCardPosition = (facility: ScenicFacility | null) => {
     const map = mapInstanceRef.current
@@ -344,17 +352,18 @@ export function MapPage() {
   useEffect(() => {
     let cancelled = false
     const searchGenerationGate = searchGenerationGateRef.current
+    const mapThemeController = mapThemeControllerRef.current
 
     loadAMap()
       .then((AMap) => {
         if (cancelled || !mapContainerRef.current || mapInstanceRef.current) return
 
-        const map = new AMap.Map(mapContainerRef.current, {
+        const map = mapThemeController.ensureMap((mapStyle) => new AMap.Map(mapContainerRef.current, {
           zoom: 15,
           center: LINGSHAN_CENTER,
           viewMode: '2D',
-          mapStyle: getVisitorMapStyle(effectiveTheme),
-        })
+          mapStyle,
+        }))
         mapInstanceRef.current = map
         setMapReady(true)
         requestAnimationFrame(() => {
@@ -406,21 +415,17 @@ export function MapPage() {
         mapInstanceRef.current.destroy?.()
         mapInstanceRef.current = null
       }
+      mapThemeController.detachMap()
       placeSearchRef.current = null
       scenicCenterMarkerRef.current = null
       facilityMarkersRef.current = []
       searchMarkersRef.current = []
       searchGenerationGate.invalidate()
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- theme changes must not recreate the existing map instance.
   }, [])
 
   useEffect(() => {
-    try {
-      mapInstanceRef.current?.setMapStyle?.(getVisitorMapStyle(effectiveTheme))
-    } catch (error) {
-      console.warn('sync visitor map theme failed', error)
-    }
+    mapThemeControllerRef.current.syncMapStyle()
   }, [effectiveTheme])
 
   useEffect(() => {

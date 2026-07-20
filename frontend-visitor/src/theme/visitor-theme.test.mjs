@@ -6,7 +6,7 @@ import {
   isVisitorThemeMode,
   resolveVisitorTheme,
 } from './visitorTheme.ts'
-import { getVisitorMapStyle } from './visitorMapTheme.ts'
+import { createVisitorMapThemeController, getVisitorMapStyle } from './visitorMapTheme.ts'
 
 const provider = readFileSync(new URL('./VisitorThemeProvider.tsx', import.meta.url), 'utf8')
 const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8')
@@ -128,6 +128,72 @@ test('visitor theme is isolated from the admin theme', () => {
 test('visitor map theme maps effective theme to the agreed AMap styles', () => {
   assert.equal(getVisitorMapStyle('dark'), 'amap://styles/darkblue')
   assert.equal(getVisitorMapStyle('light'), 'amap://styles/normal')
+})
+
+test('visitor map theme controller uses the latest theme when deferred map creation resolves', async () => {
+  let resolveAMap
+  const styleErrors = []
+  const controller = createVisitorMapThemeController('light', (error) => styleErrors.push(error))
+  const state = {
+    overlays: ['existing-overlay'],
+    selectedFacility: { id: 'facility-1' },
+  }
+  const createdMaps = []
+  const loadAMap = new Promise((resolve) => {
+    resolveAMap = resolve
+  })
+
+  const creation = loadAMap.then((AMap) => controller.ensureMap((mapStyle) => {
+    const map = new AMap.Map('map-container', { mapStyle, zoom: 15 })
+    createdMaps.push(map)
+    return map
+  }))
+
+  controller.setTheme('dark')
+  resolveAMap({
+    Map: class FakeMap {
+      constructor(container, options) {
+        this.container = container
+        this.options = { ...options }
+        this.setMapStyleCalls = []
+        this.destroyCalls = 0
+      }
+
+      setMapStyle(style) {
+        this.setMapStyleCalls.push(style)
+        this.options.mapStyle = style
+      }
+
+      destroy() {
+        this.destroyCalls += 1
+      }
+    },
+  })
+
+  const map = await creation
+  assert.equal(createdMaps.length, 1)
+  assert.equal(map.options.mapStyle, 'amap://styles/darkblue')
+  assert.deepEqual(map.setMapStyleCalls, ['amap://styles/darkblue'])
+  assert.equal(map.destroyCalls, 0)
+  assert.deepEqual(state, {
+    overlays: ['existing-overlay'],
+    selectedFacility: { id: 'facility-1' },
+  })
+
+  controller.setTheme('light')
+  controller.syncMapStyle()
+
+  assert.equal(controller.ensureMap(() => {
+    throw new Error('theme sync must not recreate the map instance')
+  }), map)
+  assert.equal(createdMaps.length, 1)
+  assert.equal(map.destroyCalls, 0)
+  assert.deepEqual(map.setMapStyleCalls, ['amap://styles/darkblue', 'amap://styles/normal'])
+  assert.deepEqual(state, {
+    overlays: ['existing-overlay'],
+    selectedFacility: { id: 'facility-1' },
+  })
+  assert.deepEqual(styleErrors, [])
 })
 
 test('visitor semantic tokens define complete dark and light themes', () => {

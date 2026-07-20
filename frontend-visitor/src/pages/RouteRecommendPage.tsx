@@ -1,11 +1,11 @@
 /* eslint-disable react-hooks/set-state-in-effect -- selected route mirrors asynchronously loaded route options. */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import axios from 'axios'
 import { useLocation, useNavigate } from 'react-router-dom'
 import './RouteRecommendPage.css'
 import { loadMapConfig } from '../api/mapConfig'
 import { useVisitorTheme } from '../theme/VisitorThemeProvider'
-import { getVisitorMapStyle } from '../theme/visitorMapTheme'
+import { createVisitorMapThemeController } from '../theme/visitorMapTheme'
 import { readTripPlan, resolveRouteId } from './navigationContext'
 import {
   buildRouteRecommendations,
@@ -94,6 +94,14 @@ export function RouteRecommendPage() {
   const mapInstanceRef = useRef<any>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapOverlaysRef = useRef<any[]>([])
+  const mapThemeControllerRef = useRef(createVisitorMapThemeController(
+    effectiveTheme,
+    (error) => console.warn('sync route recommendation map theme failed', error),
+  ))
+
+  useLayoutEffect(() => {
+    mapThemeControllerRef.current.setTheme(effectiveTheme)
+  }, [effectiveTheme])
 
   useEffect(() => {
     setSelectedRouteId(resolveRouteId(location.search, window.sessionStorage.getItem('digitalhuman.tripPlan')))
@@ -125,6 +133,7 @@ export function RouteRecommendPage() {
 
   useEffect(() => {
     let cancelled = false
+    const mapThemeController = mapThemeControllerRef.current
 
     loadAMap()
       .then((AMap) => {
@@ -147,6 +156,7 @@ export function RouteRecommendPage() {
         mapInstanceRef.current.destroy?.()
         mapInstanceRef.current = null
       }
+      mapThemeController.detachMap()
       mapOverlaysRef.current = []
     }
   }, [])
@@ -178,25 +188,20 @@ export function RouteRecommendPage() {
   useEffect(() => {
     if (!amapApi || !selectedRoute || !mapContainerRef.current || mapInstanceRef.current) return
 
-    mapInstanceRef.current = new amapApi.Map(mapContainerRef.current, {
+    mapInstanceRef.current = mapThemeControllerRef.current.ensureMap((mapStyle) => new amapApi.Map(mapContainerRef.current, {
       zoom: 14,
       center: LINGSHAN_CENTER,
       viewMode: '2D',
-      mapStyle: getVisitorMapStyle(effectiveTheme),
-    })
+      mapStyle,
+    }))
 
     requestAnimationFrame(() => {
       mapInstanceRef.current?.resize?.()
     })
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- theme changes must not recreate the existing map instance.
   }, [amapApi, selectedRoute])
 
   useEffect(() => {
-    try {
-      mapInstanceRef.current?.setMapStyle?.(getVisitorMapStyle(effectiveTheme))
-    } catch (error) {
-      console.warn('sync route recommendation map theme failed', error)
-    }
+    mapThemeControllerRef.current.syncMapStyle()
   }, [effectiveTheme])
 
   useEffect(() => {
