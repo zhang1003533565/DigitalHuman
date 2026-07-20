@@ -52,6 +52,14 @@ export type RouteRecommendation = ScenicRoute & {
   highlights: string[]
 }
 
+export type VisitorRouteSummary = {
+  badge: '推荐' | '备选'
+  audience: string
+  description: string
+  majorStops: string[]
+  travelTip: string
+}
+
 function textIncludes(value: string, expected: string) {
   return Boolean(expected) && value.includes(expected)
 }
@@ -118,6 +126,29 @@ function buildHighlights(route: ScenicRoute) {
     : `建议按 ${route.bestTime} 开始游览`
 
   return [...firstNodes, facilityHighlight].slice(0, 4)
+}
+
+export function buildVisitorRouteSummary(
+  route: RouteRecommendation,
+  index: number,
+): VisitorRouteSummary {
+  const deepTrip = route.intensity.includes('深度')
+  const easyTrip = route.intensity.includes('轻松') || route.suitableFor.includes('亲子')
+
+  return {
+    badge: index === 0 ? '推荐' : '备选',
+    audience: route.suitableFor.replace(/\s*·\s*/g, '，'),
+    description: route.reason,
+    majorStops: (route.nodes ?? [])
+      .filter((node) => node.required)
+      .slice(0, 3)
+      .map((node) => node.name),
+    travelTip: deepTrip
+      ? '行程较长，建议穿舒适的鞋并预留充足体力。'
+      : easyTrip
+        ? '节奏轻松，适合安排途中休息。'
+        : '建议按景点开放时间灵活调整停留顺序。',
+  }
 }
 
 export function buildRouteRecommendations(

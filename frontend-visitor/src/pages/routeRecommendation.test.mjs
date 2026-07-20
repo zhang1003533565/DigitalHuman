@@ -26,7 +26,7 @@ function route(overrides) {
 }
 
 test('route recommendations explain rank, fit, tradeoff, and route highlights', async () => {
-  const { buildRouteRecommendations } = await import(compiledModule.href)
+  const { buildRouteRecommendations, buildVisitorRouteSummary } = await import(compiledModule.href)
   const recommendations = buildRouteRecommendations([
     route({
       id: 'culture',
@@ -74,6 +74,22 @@ test('route recommendations explain rank, fit, tradeoff, and route highlights', 
   assert.ok(recommendations[0].highlights.length >= 3)
   assert.match(recommendations[0].highlights.join(' '), /灵山大佛|梵宫/)
   assert.equal(recommendations[1].rankLabel, '备选 1')
+
+  const summary = buildVisitorRouteSummary(recommendations[0], 0)
+  assert.deepEqual(Object.keys(summary), [
+    'badge',
+    'audience',
+    'description',
+    'majorStops',
+    'travelTip',
+  ])
+  assert.equal(summary.badge, '推荐')
+  assert.equal(summary.description, recommendations[0].reason)
+  assert.equal(summary.audience, '历史文化，深度探索')
+  assert.deepEqual(summary.majorStops, ['南门入园', '灵山大佛', '梵宫'])
+  assert.match(summary.audience, /历史文化|深度探索/)
+  assert.match(summary.travelTip, /舒适的鞋|体力|时间/)
+  assert.doesNotMatch(JSON.stringify(summary), /78|分匹配|选择取舍|Route Value/)
 })
 
 test('route page renders recommendation-first decision hooks', async () => {
