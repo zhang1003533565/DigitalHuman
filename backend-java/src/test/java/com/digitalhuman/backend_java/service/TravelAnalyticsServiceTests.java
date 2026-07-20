@@ -129,6 +129,66 @@ class TravelAnalyticsServiceTests {
     }
 
     @Test
+    void appendImportWithOnlySkippedRowsDoesNotMarkDataChanged() throws Exception {
+        TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
+        TravelAnalyticsSourceStateService sourceStateService = mock(TravelAnalyticsSourceStateService.class);
+        TravelAnalyticsSourceState lockedState = new TravelAnalyticsSourceState();
+        when(sourceStateService.lockState()).thenReturn(lockedState);
+        TravelAnalyticsService service = new TravelAnalyticsService(repository, sourceStateService);
+        service.setEntityManagerForTests(mock(EntityManager.class));
+
+        var result = service.importFromExcel(importFileWithOnlySkippedRows(), false);
+
+        assertEquals(0, result.getImportedCount());
+        verify(sourceStateService).lockState();
+        verify(repository, never()).saveAll(any());
+        verify(repository, never()).deleteAllInBatch();
+        verify(sourceStateService, never()).markDataChanged(any());
+    }
+
+    @Test
+    void replaceImportWithExistingRowsMarksDataChangedOnceEvenWhenNoRowsAreImported() throws Exception {
+        TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
+        TravelAnalyticsSourceStateService sourceStateService = mock(TravelAnalyticsSourceStateService.class);
+        TravelAnalyticsSourceState lockedState = new TravelAnalyticsSourceState();
+        when(sourceStateService.lockState()).thenReturn(lockedState);
+        when(repository.count()).thenReturn(3L);
+        EntityManager entityManager = mock(EntityManager.class);
+        TravelAnalyticsService service = new TravelAnalyticsService(repository, sourceStateService);
+        service.setEntityManagerForTests(entityManager);
+
+        var result = service.importFromExcel(importFileWithOnlySkippedRows(), true);
+
+        assertEquals(0, result.getImportedCount());
+        var order = inOrder(sourceStateService, repository);
+        order.verify(sourceStateService).lockState();
+        order.verify(repository).count();
+        order.verify(repository).deleteAllInBatch();
+        order.verify(sourceStateService).markDataChanged(lockedState);
+        verify(sourceStateService, times(1)).markDataChanged(lockedState);
+    }
+
+    @Test
+    void replaceImportWithEmptySourceAndNoImportedRowsDoesNotMarkDataChanged() throws Exception {
+        TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
+        TravelAnalyticsSourceStateService sourceStateService = mock(TravelAnalyticsSourceStateService.class);
+        TravelAnalyticsSourceState lockedState = new TravelAnalyticsSourceState();
+        when(sourceStateService.lockState()).thenReturn(lockedState);
+        when(repository.count()).thenReturn(0L);
+        TravelAnalyticsService service = new TravelAnalyticsService(repository, sourceStateService);
+        service.setEntityManagerForTests(mock(EntityManager.class));
+
+        var result = service.importFromExcel(importFileWithOnlySkippedRows(), true);
+
+        assertEquals(0, result.getImportedCount());
+        var order = inOrder(sourceStateService, repository);
+        order.verify(sourceStateService).lockState();
+        order.verify(repository).count();
+        order.verify(repository).deleteAllInBatch();
+        verify(sourceStateService, never()).markDataChanged(any());
+    }
+
+    @Test
     void rejectedCreateDoesNotLockOrIncrementVersion() {
         TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
         TravelAnalyticsSourceStateService sourceStateService = mock(TravelAnalyticsSourceStateService.class);
@@ -191,6 +251,31 @@ class TravelAnalyticsServiceTests {
             return new MockMultipartFile(
                     "file",
                     "travel-analytics.xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    outputStream.toByteArray()
+            );
+        }
+    }
+
+    private MockMultipartFile importFileWithOnlySkippedRows() throws IOException {
+        try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            var sheet = workbook.createSheet("travel_analytics_template");
+            var header = sheet.createRow(0);
+            String[] headers = {
+                    "tourist_id", "user_nickname", "age", "gender", "attraction_name", "attraction_content",
+                    "attraction_type", "visit_date", "stay_duration", "ticket_cost", "food_cost",
+                    "shopping_cost", "transport_cost", "entertainment_cost", "total_cost", "group_size",
+                    "satisfaction"
+            };
+            for (int index = 0; index < headers.length; index++) {
+                header.createCell(index).setCellValue(headers[index]);
+            }
+            sheet.createRow(1);
+            sheet.createRow(2).createCell(1).setCellValue("缺少游客编号");
+            workbook.write(outputStream);
+            return new MockMultipartFile(
+                    "file",
+                    "travel-analytics-skipped.xlsx",
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     outputStream.toByteArray()
             );

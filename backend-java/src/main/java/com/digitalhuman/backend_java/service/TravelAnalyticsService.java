@@ -169,8 +169,10 @@ public class TravelAnalyticsService {
             }
             validateHeaders(headerRow);
             TravelAnalyticsSourceState state = sourceStateService.lockState();
+            boolean sourceMutated = false;
 
             if (replaceAll) {
+                sourceMutated = recordRepository.count() > 0;
                 recordRepository.deleteAllInBatch();
                 entityManager.flush();
                 entityManager.clear();
@@ -218,7 +220,10 @@ public class TravelAnalyticsService {
             if (!batch.isEmpty()) {
                 importedCount += saveImportBatch(batch);
             }
-            sourceStateService.markDataChanged(state);
+            sourceMutated = sourceMutated || importedCount > 0;
+            if (sourceMutated) {
+                sourceStateService.markDataChanged(state);
+            }
             return new TravelAnalyticsImportResult(importedCount, skippedEmptyCount, skippedDuplicateCount, issues);
         } catch (IOException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "读取 Excel 失败：" + exception.getMessage());
