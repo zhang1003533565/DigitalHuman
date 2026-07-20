@@ -24,6 +24,18 @@ class TravelAnalyticsManualSnapshotMigrationContractTests {
                 "migration must create metric-snapshot table");
         assertTrue(sql.contains("UNIQUE (batch_id, scope, metric)"),
                 "migration must enforce one scope/metric row per batch");
+        assertTrue(sql.contains("total_samples BIGINT NOT NULL"),
+                "migration must preserve total sample count outside items JSON");
+        assertTrue(sql.contains("valid_samples BIGINT NOT NULL"),
+                "migration must preserve valid sample count outside items JSON");
+        assertTrue(sql.contains("as_of DATETIME NOT NULL"),
+                "migration must preserve metric as-of time");
+        assertTrue(sql.contains("methodology LONGTEXT NOT NULL"),
+                "migration must preserve methodology outside items JSON");
+        assertTrue(sql.contains("warning LONGTEXT NULL"),
+                "migration must preserve nullable warning outside items JSON");
+        assertTrue(!sql.contains("computed_at"),
+                "migration must use as_of instead of the obsolete computed_at column");
         assertTrue(sql.contains("INSERT INTO travel_analytics_source_state (id, data_version, metric_config_version, updated_at)"),
                 "migration must seed source-state id=1");
         assertTrue(sql.contains("VALUES (1, 0, 0, NOW())"),

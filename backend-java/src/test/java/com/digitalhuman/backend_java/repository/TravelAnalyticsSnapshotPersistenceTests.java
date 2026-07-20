@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @DataJpaTest(properties = "spring.jpa.hibernate.ddl-auto=create-drop")
@@ -35,7 +36,19 @@ class TravelAnalyticsSnapshotPersistenceTests {
 
         snapshots.saveAllAndFlush(allTenSnapshots(batch));
 
-        assertEquals(10, snapshots.findByBatchIdOrderByScopeAscMetricAsc(batch.getId()).size());
+        List<TravelAnalyticsMetricSnapshot> persisted =
+                snapshots.findByBatchIdOrderByScopeAscMetricAsc(batch.getId());
+        assertEquals(10, persisted.size());
+        TravelAnalyticsMetricSnapshot averageSpend = persisted.stream()
+                .filter(snapshot -> snapshot.getScope() == TravelAnalyticsAudience.ADMIN)
+                .filter(snapshot -> snapshot.getMetric() == TravelAnalyticsMetric.AVERAGE_SPEND)
+                .findFirst()
+                .orElseThrow();
+        assertEquals(12L, averageSpend.getTotalSamples());
+        assertEquals(10L, averageSpend.getValidSamples());
+        assertEquals(LocalDateTime.of(2026, 7, 20, 9, 30), averageSpend.getAsOf());
+        assertEquals("items only", averageSpend.getMethodology());
+        assertNull(averageSpend.getWarning());
         assertThrows(
                 DataIntegrityViolationException.class,
                 () -> snapshots.saveAndFlush(snapshot(batch, TravelAnalyticsAudience.ADMIN, TravelAnalyticsMetric.AVERAGE_SPEND)));
@@ -90,7 +103,11 @@ class TravelAnalyticsSnapshotPersistenceTests {
         snapshot.setScope(scope);
         snapshot.setMetric(metric);
         snapshot.setItemsJson("[]");
-        snapshot.setComputedAt(LocalDateTime.now());
+        snapshot.setTotalSamples(12L);
+        snapshot.setValidSamples(10L);
+        snapshot.setAsOf(LocalDateTime.of(2026, 7, 20, 9, 30));
+        snapshot.setMethodology("items only");
+        snapshot.setWarning(null);
         return snapshot;
     }
 }

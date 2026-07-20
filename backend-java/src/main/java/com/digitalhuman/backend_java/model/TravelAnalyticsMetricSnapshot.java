@@ -44,8 +44,20 @@ public class TravelAnalyticsMetricSnapshot {
     @Column(name = "items_json", nullable = false, columnDefinition = "LONGTEXT")
     private String itemsJson;
 
-    @Column(name = "computed_at", nullable = false)
-    private LocalDateTime computedAt;
+    @Column(name = "total_samples", nullable = false)
+    private Long totalSamples;
+
+    @Column(name = "valid_samples", nullable = false)
+    private Long validSamples;
+
+    @Column(name = "as_of", nullable = false)
+    private LocalDateTime asOf;
+
+    @Column(name = "methodology", nullable = false, columnDefinition = "LONGTEXT")
+    private String methodology;
+
+    @Column(name = "warning", columnDefinition = "LONGTEXT")
+    private String warning;
 
     public Long getId() {
         return id;
@@ -87,11 +99,43 @@ public class TravelAnalyticsMetricSnapshot {
         this.itemsJson = itemsJson;
     }
 
-    public LocalDateTime getComputedAt() {
-        return computedAt;
+    public Long getTotalSamples() {
+        return totalSamples;
     }
 
-    public void setComputedAt(LocalDateTime computedAt) {
-        this.computedAt = computedAt;
+    public void setTotalSamples(Long totalSamples) {
+        this.totalSamples = totalSamples;
+    }
+
+    public Long getValidSamples() {
+        return validSamples;
+    }
+
+    public void setValidSamples(Long validSamples) {
+        this.validSamples = validSamples;
+    }
+
+    public LocalDateTime getAsOf() {
+        return asOf;
+    }
+
+    public void setAsOf(LocalDateTime asOf) {
+        this.asOf = asOf;
+    }
+
+    public String getMethodology() {
+        return methodology;
+    }
+
+    public void setMethodology(String methodology) {
+        this.methodology = methodology;
+    }
+
+    public String getWarning() {
+        return warning;
+    }
+
+    public void setWarning(String warning) {
+        this.warning = warning;
     }
 }

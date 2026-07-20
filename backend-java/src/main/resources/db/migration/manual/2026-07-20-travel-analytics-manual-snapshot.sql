@@ -27,7 +27,11 @@ CREATE TABLE IF NOT EXISTS travel_analytics_metric_snapshot (
     scope VARCHAR(32) NOT NULL,
     metric VARCHAR(64) NOT NULL,
     items_json LONGTEXT NOT NULL,
-    computed_at DATETIME NOT NULL,
+    total_samples BIGINT NOT NULL,
+    valid_samples BIGINT NOT NULL,
+    as_of DATETIME NOT NULL,
+    methodology LONGTEXT NOT NULL,
+    warning LONGTEXT NULL,
     CONSTRAINT uk_travel_analytics_snapshot_metric UNIQUE (batch_id, scope, metric),
     CONSTRAINT fk_travel_analytics_metric_snapshot_batch
         FOREIGN KEY (batch_id) REFERENCES travel_analytics_snapshot_batch (id)
