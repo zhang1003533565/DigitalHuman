@@ -24,6 +24,8 @@
 /* ---------- 左侧：地图区 ---------- */
 .map-page__main {
   position: relative;
+  height: 100%;
+  min-height: 0;
   border-radius: 20px;
   overflow: hidden;
   border: 1px solid rgba(122, 196, 255, 0.22);
@@ -223,6 +225,18 @@
   box-shadow: 0 10px 24px rgba(31, 111, 255, 0.34);
 }
 
+.map-spot-card__actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.map-spot-card__actions .map-spot-card__action {
+  min-width: 0;
+  padding-inline: 8px;
+  white-space: nowrap;
+}
+
 /* 分类竖向侧边栏 */
 .map-sidebar {
   position: absolute;
@@ -255,11 +269,26 @@
   transition: background 0.18s ease, color 0.18s ease;
 }
 
-.map-sidebar__item span:last-child {
+.map-sidebar__label {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.map-sidebar__count {
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  color: rgba(235, 246, 255, 0.9);
+  font-size: 10px;
+  line-height: 16px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.map-sidebar__item--active .map-sidebar__count {
+  color: #08121a;
+  background: rgba(8, 18, 26, 0.14);
 }
 
 .map-sidebar__item:hover {
@@ -327,6 +356,21 @@
   font-size: 14px;
 }
 
+.map-category-result {
+  position: absolute;
+  top: 76px;
+  left: 96px;
+  z-index: 4;
+  padding: 8px 12px;
+  border: 1px solid rgba(98, 233, 255, 0.42);
+  border-radius: 8px;
+  color: #e9f8ff;
+  font-size: 12px;
+  background: rgba(8, 22, 38, 0.9);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(12px);
+}
+
 /* 推荐路线浮卡（已移除），仅保留其他区块复用的 .map-route-card__more 样式 */
 .map-route-card__more {
   color: #8ed0ff;
@@ -339,7 +383,7 @@
 /* 右侧浮动控件 */
 .map-controls {
   position: absolute;
-  right: calc(var(--map-services-width) + 32px);
+  right: 32px;
   bottom: 100px;
   z-index: 4;
   display: flex;
@@ -403,7 +447,7 @@
 
 .map-scale {
   position: absolute;
-  right: calc(var(--map-services-width) + 102px);
+  right: 102px;
   bottom: 76px;
   z-index: 4;
   display: flex;
@@ -971,8 +1015,7 @@
 }
 
 .map-mobile-toolbar,
-.map-mobile-context-actions,
-.map-mobile-drawer {
+.map-mobile-context-actions {
   display: none;
 }
 
@@ -1003,7 +1046,6 @@
   }
 
   .map-page {
-    --map-mobile-drawer-peek-height: 64px;
     --map-mobile-edge: 12px;
     --map-mobile-bottom-offset: calc(var(--mobile-nav-height) + var(--safe-bottom));
     position: relative;
@@ -1023,18 +1065,12 @@
 
   .map-sidebar,
   .map-search,
-  .map-actions,
-  .map-side {
+  .map-actions {
     display: none;
   }
 
-  .map-side {
-    overflow: visible;
-  }
-
   .map-mobile-toolbar,
-  .map-mobile-context-actions,
-  .map-mobile-drawer {
+  .map-mobile-context-actions {
     display: flex;
   }
 
@@ -1049,16 +1085,14 @@
   }
 
   .map-mobile-toolbar button,
-  .map-mobile-context-actions button,
-  .map-mobile-drawer > button {
+  .map-mobile-context-actions button {
     min-height: var(--touch-target);
     white-space: nowrap;
   }
 
   .map-mobile-category-trigger,
   .map-mobile-search-slot,
-  .map-mobile-context-actions,
-  .map-mobile-drawer > button {
+  .map-mobile-context-actions {
     border: var(--tech-border);
     background: rgba(8, 22, 38, 0.9);
     box-shadow: var(--tech-glow);
@@ -1120,6 +1154,10 @@
   }
 
   .map-mobile-category-panel button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
     min-width: 0;
     min-height: var(--touch-target);
     border: 0;
@@ -1129,9 +1167,32 @@
     white-space: nowrap;
   }
 
+  .map-mobile-category-panel .map-sidebar__count {
+    flex: 0 0 auto;
+  }
+
+  .map-category-result {
+    top: calc(var(--map-mobile-edge) + var(--touch-target) + 8px);
+    left: 50%;
+    z-index: 18;
+    max-width: calc(100% - 24px);
+    transform: translateX(-50%);
+    white-space: nowrap;
+  }
+
+  .map-route-context {
+    top: calc(var(--map-mobile-edge) + var(--touch-target) + 10px);
+    max-width: calc(100% - 24px);
+    padding: 7px 12px;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   .map-controls {
     right: var(--map-mobile-edge);
-    bottom: calc(var(--map-mobile-drawer-peek-height) + 24px);
+    bottom: 16px;
   }
 
   .map-ctrl-btn {
@@ -1143,7 +1204,7 @@
   .map-mobile-context-actions {
     position: absolute;
     left: var(--map-mobile-edge);
-    bottom: calc(var(--map-mobile-drawer-peek-height) + 24px);
+    bottom: 16px;
     z-index: 20;
     gap: 8px;
     padding: 4px;
@@ -1163,11 +1224,15 @@
     top: auto;
     right: 12px;
     z-index: 40;
-    bottom: calc(var(--map-mobile-bottom-offset) + var(--map-mobile-drawer-peek-height) + 20px);
+    bottom: 16px;
     left: 12px;
     width: auto;
     max-height: min(45vh, 420px);
     overflow-y: auto;
+  }
+
+  .map-spot-card__actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .map-mobile-drawer {

@@ -20,8 +20,26 @@ public class ScenicMediaService {
     private static final Set<String> VIDEO_EXTENSIONS = Set.of(".mp4", ".webm", ".mov", ".m4v");
     private final Path mediaRoot;
 
-    public ScenicMediaService(@Value("${scenic.media-dir:${user.dir}/media/scenic}") String mediaDir) {
-        this.mediaRoot = Path.of(mediaDir).toAbsolutePath().normalize();
+    public ScenicMediaService(@Value("${scenic.media-dir:}") String mediaDir) {
+        this.mediaRoot = resolveMediaRoot(mediaDir, Path.of("").toAbsolutePath());
+    }
+
+    public String resourceLocation() {
+        return mediaRoot.toUri().toString();
+    }
+
+    static Path resolveMediaRoot(String configuredMediaDir, Path workingDirectory) {
+        if (configuredMediaDir != null && !configuredMediaDir.isBlank()) {
+            return Path.of(configuredMediaDir).toAbsolutePath().normalize();
+        }
+        Path current = workingDirectory.toAbsolutePath().normalize();
+        if (Files.isDirectory(current.resolve("src/main"))) {
+            return current.resolve("media/scenic");
+        }
+        if (Files.isDirectory(current.resolve("backend-java"))) {
+            return current.resolve("backend-java/media/scenic");
+        }
+        return current.resolve("media/scenic");
     }
 
     public ScenicMediaUploadResponse uploadVideo(MultipartFile file) {

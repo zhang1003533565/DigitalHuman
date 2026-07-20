@@ -53,4 +53,31 @@ class ScenicMediaServiceTests {
 
         assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
     }
+
+    @Test
+    void resolvesDefaultMediaDirectoryFromRepositoryRoot() throws Exception {
+        Files.createDirectories(tempDir.resolve("backend-java"));
+
+        Path resolved = ScenicMediaService.resolveMediaRoot("", tempDir);
+
+        assertEquals(tempDir.resolve("backend-java/media/scenic"), resolved);
+    }
+
+    @Test
+    void resolvesDefaultMediaDirectoryFromBackendModule() throws Exception {
+        Files.createDirectories(tempDir.resolve("src/main/java"));
+
+        Path resolved = ScenicMediaService.resolveMediaRoot("", tempDir);
+
+        assertEquals(tempDir.resolve("media/scenic"), resolved);
+    }
+
+    @Test
+    void keepsExplicitMediaDirectory() {
+        Path configured = tempDir.resolve("configured-media");
+
+        Path resolved = ScenicMediaService.resolveMediaRoot(configured.toString(), tempDir.resolve("ignored"));
+
+        assertEquals(configured, resolved);
+    }
 }

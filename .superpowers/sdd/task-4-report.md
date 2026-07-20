@@ -1,123 +1,168 @@
-# Task 4 Report
+# Task 4 Report: bounded live messages and facility narration scheduler
 
-Date: 2026-07-18
-Task: Safe travel analytics Task 4 - bounded 60-second metric cache and invalidation
+## Status
 
-## Files
+- Completed implementation and verification on July 18, 2026.
+- Commit: `05e6237` `让景点直播语音与问答共享单一播放通道`，由主执行环境在完整验证后提交。
+- Owned implementation/test files prepared:
+  - `frontend-visitor/src/live/liveChat.ts`
+  - `frontend-visitor/src/live/liveChat.test.mjs`
+  - `frontend-visitor/src/live/facilityNarrationController.ts`
+  - `frontend-visitor/src/live/facilityNarrationController.test.mjs`
+  - `frontend-visitor/src/pages/LiveBroadcastPage.tsx`
+  - `frontend-visitor/src/pages/LiveBroadcastPage.test.mjs`
 
-- `backend-java/src/main/java/com/digitalhuman/backend_java/service/TravelAnalyticsMetricCache.java`
-- `backend-java/src/main/java/com/digitalhuman/backend_java/service/TravelAnalyticsMetricService.java`
-- `backend-java/src/main/java/com/digitalhuman/backend_java/service/TravelAnalyticsService.java`
-- `backend-java/src/main/java/com/digitalhuman/backend_java/service/TravelAnalyticsAiConfigService.java`
-- `backend-java/src/test/java/com/digitalhuman/backend_java/service/TravelAnalyticsMetricCacheTests.java`
-- `backend-java/src/test/java/com/digitalhuman/backend_java/service/TravelAnalyticsServiceTests.java`
-- `backend-java/src/test/java/com/digitalhuman/backend_java/service/TravelAnalyticsMetricServiceTests.java`
-- `backend-java/src/test/java/com/digitalhuman/backend_java/service/TravelAnalyticsAiConfigServiceTests.java`
+## Scope Delivered
 
-## RED
+- Added immutable bounded live-chat message model with `viewer | host | system` roles and `sending | streaming | sent | failed` statuses.
+- Added `appendLiveMessage(messages, message, limit = 100)` and `updateLiveMessage(messages, id, patch)`.
+- Added `createNarrationController({ speakAudio, stopAudio, delayMs: 2000 })` with `start(url)`, `interrupt()`, `resume()`, and `destroy()`.
+- Integrated `LiveBroadcastPage` with `liveConfig.narration.audioUrl`, the narration controller, unified bounded messages, SSE streaming host-message updates, TTS/`speak` lip sync, question interrupt, and delayed narration resume.
+- Removed page-level global `/api/user/live/status` timeline playback usage from `LiveBroadcastPage`; background video and configured digital-human model selection are preserved.
+- Did not edit Task 5 CSS or add dependencies.
 
-1. Added failing tests for:
-   - cache invalidation and 60-second TTL
-   - `TravelAnalyticsService` create/update/delete/import success-path invalidation
-   - `TravelAnalyticsAiConfigService.updateConfig` invalidation
-   - `TravelAnalyticsMetricService.queryMetric` cache reuse
-2. Ran:
-   - `cd /Users/zzs/Desktop/zzs/github/DigitalHuman/.worktrees/hybrid-ai-data-access/backend-java && mvn -q -Dtest=TravelAnalyticsMetricCacheTests,TravelAnalyticsServiceTests,TravelAnalyticsAiConfigServiceTests,TravelAnalyticsMetricServiceTests test`
-3. Observed expected failure before implementation:
-   - compiler errors for missing `TravelAnalyticsMetricCache`
-   - missing cache wiring in `TravelAnalyticsService` / `TravelAnalyticsAiConfigService`
-   - missing `setEntityManagerForTests(...)` test hook for import verification
-4. After the first implementation pass, reran the same focused suite and observed a real test-shape mistake:
-   - `TravelAnalyticsMetricCacheTests.cacheEvictsOldestEntryWhenCapacityExceedsTen` failed because the production key-space is only `2 audiences x 5 metrics = 10`, so an 11th valid key is impossible
-5. Adjusted the design and tests to match the real invariant:
-   - removed unreachable eviction logic
-   - asserted bounded size never exceeds 10
-   - kept TTL and explicit invalidation behavior
-6. Full-suite regression caught during GREEN verification:
-   - `mvn -q test` initially failed with Spring context startup error
-   - root cause: `TravelAnalyticsService` gained multiple constructors and needed explicit constructor selection for dependency injection
-   - fix: add `@Autowired` to the public service constructors
+## Exact RED Evidence
 
-## GREEN
+### Message model RED
 
-Implemented a focused in-process metric cache that:
+```bash
+cd frontend-visitor && node src/live/liveChat.test.mjs
+```
 
-- caches `TravelAnalyticsMetricService.queryMetric(...)` by `audience + metric`
-- retains entries for 60 seconds
-- stays bounded by the real 10-key domain space
-- invalidates on successful `TravelAnalyticsService` create/update/delete/import
-- invalidates once after a successful import completes
-- invalidates immediately on `TravelAnalyticsAiConfigService.updateConfig(...)` so `minimumSampleSize` changes cannot leak stale public results
-- preserves the existing public metric gate and prior metric/controller behavior
+```text
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module '.../frontend-visitor/src/live/liveChat.ts'
+```
 
-## Exact Verification
+### Narration controller RED
 
-Ran successfully on 2026-07-18:
+```bash
+cd frontend-visitor && node src/live/facilityNarrationController.test.mjs
+```
 
-1. `cd /Users/zzs/Desktop/zzs/github/DigitalHuman/.worktrees/hybrid-ai-data-access/backend-java && mvn -q -Dtest=TravelAnalyticsMetricCacheTests,TravelAnalyticsServiceTests,TravelAnalyticsAiConfigServiceTests,TravelAnalyticsMetricServiceTests test`
-2. `cd /Users/zzs/Desktop/zzs/github/DigitalHuman/.worktrees/hybrid-ai-data-access/backend-java && mvn -q test`
+```text
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module '.../frontend-visitor/src/live/facilityNarrationController.ts'
+```
 
-Verification notes:
+### Narration rejection regression RED
 
-- The focused suite passed after replacing the impossible 11th-key eviction test with the actual bounded-size invariant.
-- The full backend suite passed after restoring explicit Spring constructor selection with `@Autowired`.
-- Maven still prints existing Byte Buddy dynamic-agent warnings during test startup, but the test runs complete successfully.
+```bash
+cd frontend-visitor && node src/live/facilityNarrationController.test.mjs
+```
 
-## Self-Review
+```text
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+0 !== 1
+```
 
-- Kept the change scoped to the allowed travel analytics services and their tests.
-- Removed dead eviction logic once it was clear the valid cache key-space is fixed at 10.
-- Verified that config updates invalidate public metric cache even when only the privacy threshold changes.
-- Preserved existing package-private constructors so older unit tests and direct instantiations continue to work.
+### Page integration RED
 
-## Concerns
+```bash
+cd frontend-visitor && node src/pages/LiveBroadcastPage.test.mjs
+```
 
-- The cache is intentionally process-local; multi-instance cache coherence remains out of scope.
-- `invalidateAll()` is coarse-grained but correct for the small key-space and avoids stale-public-data risk.
+```text
+AssertionError [ERR_ASSERTION]: The input did not match the regular expression /createNarrationController/
+```
 
-## Commit
+### No-narration resume guard RED
 
-- Pending local commit after final review
+```bash
+cd frontend-visitor && node src/pages/LiveBroadcastPage.test.mjs
+```
 
-## Follow-up Race Fix
+```text
+AssertionError [ERR_ASSERTION]: The input did not match the regular expression /if \(liveConfig\?\.narration\?\.audioUrl\) \{[\s\S]*setPhase\('resume-wait'\)/
+```
 
-Review feedback identified a transaction race in the original Task 4 implementation: invalidating the metric cache before transaction commit allowed a concurrent read to repopulate the cache from pre-commit database state and keep stale results after commit.
+## Exact GREEN Evidence
 
-### Follow-up RED
+Final command:
 
-1. Added `backend-java/src/main/java/com/digitalhuman/backend_java/service/TravelAnalyticsMetricCacheInvalidator.java`.
-2. Added `backend-java/src/test/java/com/digitalhuman/backend_java/service/TravelAnalyticsMetricCacheInvalidatorTests.java`.
-3. Reworked service/config tests to assert scheduled invalidation timing rather than eager clearing.
-4. First focused run failed on:
-   - duplicate helper-aware constructor signatures in `TravelAnalyticsService` and `TravelAnalyticsAiConfigService`
-   - use of `List.getFirst()` in the new synchronization tests
+```bash
+cd frontend-visitor && node src/live/liveChat.test.mjs && node src/live/facilityNarrationController.test.mjs && node src/pages/LiveBroadcastPage.test.mjs && npm run lint && npm run build
+```
 
-### Follow-up GREEN
+Final output summary:
 
-Implemented a focused after-commit invalidation helper that:
+```text
+live chat model tests passed
+facility narration controller tests passed
+live broadcast page contract passed
 
-- registers `TransactionSynchronization.afterCommit()` when synchronization is active
-- invalidates immediately when no transaction synchronization is active
-- leaves cache intact on rollback / completion without `afterCommit`
-- clears once after commit
+> frontend-visitor@0.0.0 lint
+> eslint .
 
-Replaced direct `metricCache.invalidateAll()` calls in:
+> frontend-visitor@0.0.0 build
+> tsc -b && vite build
+...
+✓ 130 modules transformed.
+✓ built in 362ms
+```
 
-- `TravelAnalyticsService.createRecord`
-- `TravelAnalyticsService.updateRecord`
-- `TravelAnalyticsService.deleteRecord`
-- `TravelAnalyticsService.importFromExcel`
-- `TravelAnalyticsAiConfigService.updateConfig`
+## Review Evidence
 
-### Follow-up Exact Verification
+- First code review: Critical 0, Important 2, Minor 1.
+  - Fixed silent narration retry by surfacing `onError` and stopping rejected loops.
+  - Removed Task 5 CSS/layout assertions from the Task 4 page contract test.
+  - Added delayed resume cleanup for the `resume-wait` state.
+- Focused re-review: **APPROVE**, Critical 0, Important 0, Minor 1.
+  - Fixed the remaining minor no-narration `resume-wait` branch by only scheduling resume when `liveConfig.narration.audioUrl` exists.
 
-Ran successfully on 2026-07-18:
+## Commit Evidence
 
-1. `cd /Users/zzs/Desktop/zzs/github/DigitalHuman/.worktrees/hybrid-ai-data-access/backend-java && mvn -q -Dtest=TravelAnalyticsMetricCacheInvalidatorTests,TravelAnalyticsMetricCacheTests,TravelAnalyticsServiceTests,TravelAnalyticsAiConfigServiceTests,TravelAnalyticsMetricServiceTests test`
-2. `cd /Users/zzs/Desktop/zzs/github/DigitalHuman/.worktrees/hybrid-ai-data-access/backend-java && mvn -q test`
+OMX 子执行环境无法写入 `.git`，返回主执行环境后仅暂存本任务六个生产/测试文件并成功提交：
 
-### Follow-up Self-Review
+```text
+[main 05e6237] 让景点直播语音与问答共享单一播放通道
+6 files changed, 543 insertions(+), 267 deletions(-)
+```
 
-- Kept the race fix scoped to cache invalidation timing; metric computation and keying behavior did not change.
-- The synchronization tests are deterministic and do not depend on database concurrency timing.
-- Import still schedules invalidation exactly once, but now at commit time instead of pre-commit.
+### Sub-executor limitation
+
+Attempted staging only owned Task 4 production/test files:
+
+```bash
+git add frontend-visitor/src/live/liveChat.ts \
+  frontend-visitor/src/live/liveChat.test.mjs \
+  frontend-visitor/src/live/facilityNarrationController.ts \
+  frontend-visitor/src/live/facilityNarrationController.test.mjs \
+  frontend-visitor/src/pages/LiveBroadcastPage.tsx \
+  frontend-visitor/src/pages/LiveBroadcastPage.test.mjs
+```
+
+Result:
+
+```text
+fatal: Unable to create '/Users/zzs/Desktop/zzs/github/DigitalHuman/.git/index.lock': Operation not permitted
+```
+
+Confirmed `.git` is not writable in this execution environment:
+
+```text
+touch: .git/omx-write-test: Operation not permitted
+touch: .git/objects/omx-write-test: Operation not permitted
+touch: .git/refs/heads/omx-write-test: Operation not permitted
+```
+
+## Commit Message
+
+```text
+让游客直播语音与问答共享单一播放通道
+
+Constraint: Task 4 only; no dependencies, no Task 5 CSS, and unrelated dirty files must remain unstaged.
+Rejected: retaining /api/user/live/status timeline playback | it conflicts with facility-bound narration audio and can overlap speech.
+Rejected: retrying rejected narration playback silently | it masks autoplay/network failures and hides recovery evidence.
+Confidence: high
+Scope-risk: moderate
+Directive: keep future live-room audio sources behind the narration controller or explicit interrupt/resume boundaries to avoid overlapping voices.
+Tested: cd frontend-visitor && node src/live/liveChat.test.mjs && node src/live/facilityNarrationController.test.mjs && node src/pages/LiveBroadcastPage.test.mjs && npm run lint && npm run build
+Not-tested: real browser autoplay permission flow and live backend SSE/TTS media playback.
+
+Co-authored-by: OmX <omx@oh-my-codex.dev>
+```
+
+## Remaining Risks
+
+- Real browser autoplay permission behavior and live backend SSE/TTS media playback were not manually exercised.
+- `LiveBroadcastPage.tsx` already had uncommitted visitor-live config/video/digital-human changes in the workspace before Task 4; those were preserved and are incorporated by the current working tree page implementation.
+- 真实浏览器自动播放策略与在线 SSE/TTS 仍留待最终浏览器验证任务覆盖。

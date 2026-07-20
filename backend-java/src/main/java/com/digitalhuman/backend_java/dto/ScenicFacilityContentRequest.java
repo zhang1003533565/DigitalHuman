@@ -18,6 +18,7 @@ public class ScenicFacilityContentRequest {
     private String liveVideoUrl;
     private String liveStreamUrl;
     private String cameraStreamKey;
+    private Long liveDigitalHumanModelId;
 
     public String getArchitectureLandscapeParams() { return architectureLandscapeParams; }
     public void setArchitectureLandscapeParams(String value) { this.architectureLandscapeParams = value; }
@@ -53,4 +54,6 @@ public class ScenicFacilityContentRequest {
     public void setLiveStreamUrl(String value) { this.liveStreamUrl = value; }
     public String getCameraStreamKey() { return cameraStreamKey; }
     public void setCameraStreamKey(String value) { this.cameraStreamKey = value; }
+    public Long getLiveDigitalHumanModelId() { return liveDigitalHumanModelId; }
+    public void setLiveDigitalHumanModelId(Long value) { this.liveDigitalHumanModelId = value; }
 }

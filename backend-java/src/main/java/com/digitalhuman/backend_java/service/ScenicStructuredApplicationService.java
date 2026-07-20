@@ -146,6 +146,7 @@ public class ScenicStructuredApplicationService {
         next.setLiveVideoUrl(current.getLiveVideoUrl());
         next.setLiveStreamUrl(current.getLiveStreamUrl());
         next.setCameraStreamKey(current.getCameraStreamKey());
+        next.setLiveDigitalHumanModelId(current.getLiveDigitalHumanModelId());
         return next;
     }
 

@@ -7,6 +7,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -38,6 +40,9 @@ public class ScenicFacilityPresentation {
     private String liveStreamUrl;
     @Column(name = "camera_stream_key", length = 255)
     private String cameraStreamKey;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "live_digital_human_model_id")
+    private DigitalHumanModel liveDigitalHumanModel;
     @Column(nullable = false)
     private LocalDateTime createdAt;
     @Column(nullable = false)
@@ -67,4 +72,6 @@ public class ScenicFacilityPresentation {
     public void setLiveStreamUrl(String value) { this.liveStreamUrl = value; }
     public String getCameraStreamKey() { return cameraStreamKey; }
     public void setCameraStreamKey(String value) { this.cameraStreamKey = value; }
+    public DigitalHumanModel getLiveDigitalHumanModel() { return liveDigitalHumanModel; }
+    public void setLiveDigitalHumanModel(DigitalHumanModel value) { this.liveDigitalHumanModel = value; }
 }

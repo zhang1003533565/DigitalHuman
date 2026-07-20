@@ -4,7 +4,6 @@ import com.digitalhuman.backend_java.dto.TravelAnalyticsMetric;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
@@ -14,16 +13,17 @@ import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+import com.digitalhuman.backend_java.service.ScenicMediaService;
+
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
 
     private final AuthInterceptor authInterceptor;
+    private final ScenicMediaService scenicMediaService;
 
-    @Value("${scenic.media-dir:${user.dir}/media/scenic}")
-    private String scenicMediaDir;
-
-    public WebConfig(AuthInterceptor authInterceptor) {
+    public WebConfig(AuthInterceptor authInterceptor, ScenicMediaService scenicMediaService) {
         this.authInterceptor = authInterceptor;
+        this.scenicMediaService = scenicMediaService;
     }
 
     @Override
@@ -61,7 +61,7 @@ public class WebConfig implements WebMvcConfigurer {
         registry.addResourceHandler("/api/tts/audio/**")
                 .addResourceLocations("file:tts/");
         registry.addResourceHandler("/api/scenic-media/**")
-                .addResourceLocations(Path.of(scenicMediaDir).toAbsolutePath().normalize().toUri().toString());
+                .addResourceLocations(scenicMediaService.resourceLocation());
         Path live2dRoot = resolveLive2dRoot();
         if (Files.isDirectory(live2dRoot)) {
             registry.addResourceHandler("/live2d/**")
