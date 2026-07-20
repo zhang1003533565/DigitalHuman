@@ -6,6 +6,8 @@ import './MapPage.css'
 import { DIGITAL_HUMAN_ROUTE } from '../digitalHuman/shared'
 import { parseNavigationContext } from './navigationContext'
 import { loadMapConfig } from '../api/mapConfig'
+import { useVisitorTheme } from '../theme/VisitorThemeProvider'
+import { getVisitorMapStyle } from '../theme/visitorMapTheme'
 import {
   createMobileMapSearchDerivedSelection,
   createMobileMapSearchGenerationGate,
@@ -156,6 +158,7 @@ function buildFallbackCategories(facilities: ScenicFacility[]): ScenicCategory[]
 }
 
 export function MapPage() {
+  const { effectiveTheme } = useVisitorTheme()
   const navigate = useNavigate()
   const location = useLocation()
   const context = useMemo(() => parseNavigationContext(location.search), [location.search])
@@ -350,6 +353,7 @@ export function MapPage() {
           zoom: 15,
           center: LINGSHAN_CENTER,
           viewMode: '2D',
+          mapStyle: getVisitorMapStyle(effectiveTheme),
         })
         mapInstanceRef.current = map
         setMapReady(true)
@@ -408,7 +412,16 @@ export function MapPage() {
       searchMarkersRef.current = []
       searchGenerationGate.invalidate()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- theme changes must not recreate the existing map instance.
   }, [])
+
+  useEffect(() => {
+    try {
+      mapInstanceRef.current?.setMapStyle?.(getVisitorMapStyle(effectiveTheme))
+    } catch (error) {
+      console.warn('sync visitor map theme failed', error)
+    }
+  }, [effectiveTheme])
 
   useEffect(() => {
     const map = mapInstanceRef.current

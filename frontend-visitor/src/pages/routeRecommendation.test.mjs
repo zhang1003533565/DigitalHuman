@@ -91,6 +91,9 @@ test('route page renders recommendation-first decision hooks', async () => {
   }
 
   assert.doesNotMatch(source, /Selected Route/)
+  assert.match(source, /useVisitorTheme\(\)/)
+  assert.match(source, /mapStyle:\s*getVisitorMapStyle\(effectiveTheme\)/)
+  assert.match(source, /mapInstanceRef\.current\?\.setMapStyle\?\.\(getVisitorMapStyle\(effectiveTheme\)\)/)
 })
 
 test('route map initializes after async route content mounts when AMap is already cached', async () => {

@@ -6,6 +6,7 @@ import {
   isVisitorThemeMode,
   resolveVisitorTheme,
 } from './visitorTheme.ts'
+import { getVisitorMapStyle } from './visitorMapTheme.ts'
 
 const provider = readFileSync(new URL('./VisitorThemeProvider.tsx', import.meta.url), 'utf8')
 const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8')
@@ -122,6 +123,11 @@ test('visitor theme is isolated from the admin theme', () => {
   assert.match(provider, /dataset\.visitorTheme = effectiveTheme/)
   assert.match(provider, /dataset\.visitorThemeMode = mode/)
   assert.match(app, /<VisitorThemeProvider>[\s\S]*<VisitorTopNav[\s\S]*<Outlet \/>/)
+})
+
+test('visitor map theme maps effective theme to the agreed AMap styles', () => {
+  assert.equal(getVisitorMapStyle('dark'), 'amap://styles/darkblue')
+  assert.equal(getVisitorMapStyle('light'), 'amap://styles/normal')
 })
 
 test('visitor semantic tokens define complete dark and light themes', () => {

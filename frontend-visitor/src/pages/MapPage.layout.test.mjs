@@ -17,4 +17,16 @@ assert.match(
   'AMap must remeasure after the bounded desktop layout has been painted',
 )
 
+assert.match(page, /useVisitorTheme\(\)/, 'MapPage must consume the visitor effective theme')
+assert.match(
+  page,
+  /mapStyle:\s*getVisitorMapStyle\(effectiveTheme\)/,
+  'MapPage must initialize AMap with the visitor map style',
+)
+assert.match(
+  page,
+  /mapInstanceRef\.current\?\.setMapStyle\?\.\(getVisitorMapStyle\(effectiveTheme\)\)/,
+  'MapPage must update the existing map style without recreating the map instance',
+)
+
 console.log('MapPage desktop layout contract passed')

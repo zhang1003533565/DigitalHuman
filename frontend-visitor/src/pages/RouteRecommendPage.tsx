@@ -4,6 +4,8 @@ import axios from 'axios'
 import { useLocation, useNavigate } from 'react-router-dom'
 import './RouteRecommendPage.css'
 import { loadMapConfig } from '../api/mapConfig'
+import { useVisitorTheme } from '../theme/VisitorThemeProvider'
+import { getVisitorMapStyle } from '../theme/visitorMapTheme'
 import { readTripPlan, resolveRouteId } from './navigationContext'
 import {
   buildRouteRecommendations,
@@ -69,6 +71,7 @@ function getFacilityLabel(category: string) {
 }
 
 export function RouteRecommendPage() {
+  const { effectiveTheme } = useVisitorTheme()
   const location = useLocation()
   const navigate = useNavigate()
   const cachedPlan = useMemo(() => readTripPlan(window.sessionStorage.getItem('digitalhuman.tripPlan')), [])
@@ -179,12 +182,22 @@ export function RouteRecommendPage() {
       zoom: 14,
       center: LINGSHAN_CENTER,
       viewMode: '2D',
+      mapStyle: getVisitorMapStyle(effectiveTheme),
     })
 
     requestAnimationFrame(() => {
       mapInstanceRef.current?.resize?.()
     })
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- theme changes must not recreate the existing map instance.
   }, [amapApi, selectedRoute])
+
+  useEffect(() => {
+    try {
+      mapInstanceRef.current?.setMapStyle?.(getVisitorMapStyle(effectiveTheme))
+    } catch (error) {
+      console.warn('sync route recommendation map theme failed', error)
+    }
+  }, [effectiveTheme])
 
   useEffect(() => {
     const map = mapInstanceRef.current
