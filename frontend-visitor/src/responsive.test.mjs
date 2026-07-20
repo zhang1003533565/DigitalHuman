@@ -137,7 +137,7 @@ const readMobileRepresentativeWidths = (styles) => {
 }
 
 const readComputedOverflow = (declarations) => {
-  if (!declarations) return { overflowX: 'visible', overflowY: 'visible' }
+  assert.ok(declarations, 'overflow contract selector must exist before evaluation')
   let overflowX = declarations.get('overflow-x')?.replace(/\s*!important\s*$/, '') ?? 'visible'
   let overflowY = declarations.get('overflow-y')?.replace(/\s*!important\s*$/, '') ?? 'visible'
   const xIsVisibleOrClip = overflowX === 'visible' || overflowX === 'clip'
@@ -258,7 +258,7 @@ assert.match(mapMobile, /\.map-mobile-search-slot input\s*\{[^}]*min-width:\s*0/
 assert.match(mapMobile, /\.map-mobile-toolbar button,[\s\S]*\.map-mobile-context-actions button\s*\{[^}]*white-space:\s*nowrap/s, 'mobile map operation labels never become vertical text')
 assert.match(mapMobile, /\.map-page\s*\{[^}]*--map-mobile-bottom-offset:\s*calc\(var\(--mobile-nav-height\)\s*\+\s*var\(--safe-bottom\)\)/s, 'portrait map geometry includes the real mobile navigation and safe area')
 assert.doesNotMatch(mapPage, /map-mobile-drawer/, 'removed mobile service drawer must not return to the rendered workbench')
-assert.match(mapMobile, /\.map-spot-card\s*\{[^}]*z-index:\s*40[^}]*bottom:\s*16px/s, 'selected spot card uses the compact workbench bottom edge')
+assert.match(mapMobile, /\.map-spot-card\s*\{[^}]*z-index:\s*40[^}]*bottom:\s*calc\(var\(--map-mobile-bottom-offset\)\s*\+\s*16px\)/s, 'selected spot card clears mobile navigation and the safe area')
 assert.match(mapMobile, /\.map-controls\s*\{[^}]*right:\s*var\(--map-mobile-edge\)[^}]*bottom:\s*16px/s, 'map controls align to the compact workbench bottom edge')
 assert.match(mapMobile, /\.map-mobile-context-actions\s*\{[^}]*left:\s*var\(--map-mobile-edge\)[^}]*bottom:\s*16px/s, 'compact context actions share the workbench bottom edge')
 assert.doesNotMatch(mapMobile, /(?:height|min-height):\s*calc\(100dvh[^}]*(?:mobile-nav-height|56px)/s, 'map shell must not subtract navigation twice')
@@ -419,6 +419,11 @@ assert.equal(isVerticalScroller(longhandOverride), true, 'computed overflow-y be
 const fullyVisibleOverflow = readEffectiveRulesAtWidth('.content { overflow: visible; }', 768)
   .find((rule) => rule.selector === '.content')?.declarations
 assert.equal(isVerticalScroller(fullyVisibleOverflow), false, 'overflow visible on both axes closes the scroll container')
+assert.throws(
+  () => readComputedOverflow(undefined),
+  /overflow contract selector must exist/,
+  'a missing selector must fail overflow contracts instead of defaulting to visible',
+)
 const twoValueOverflow = readEffectiveRulesAtWidth('.content { overflow: auto visible; }', 768)
   .find((rule) => rule.selector === '.content')?.declarations
 assert.equal(isVerticalScroller(twoValueOverflow), true, 'overflow auto visible computes its vertical axis to auto')
@@ -454,6 +459,7 @@ for (const [name, css, selector] of BOUNDED_LOCAL_SCROLL_ALLOWLIST) {
   for (const width of mobileRepresentativeWidths) {
     const declarations = readEffectiveRulesAtWidth(css, width)
       .find((rule) => rule.selector === selector)?.declarations
+    assert.ok(declarations, `${name} selector must exist at ${width}px`)
     assert.ok(isVerticalScroller(declarations), `${name} must remain vertically scrollable at ${width}px`)
     assert.ok(hasFiniteMaxHeight(declarations?.get('max-height')), `${name} must remain finitely bounded at ${width}px`)
   }

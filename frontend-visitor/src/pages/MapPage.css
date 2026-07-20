@@ -1218,7 +1218,7 @@
     top: auto;
     right: 12px;
     z-index: 40;
-    bottom: 16px;
+    bottom: calc(var(--map-mobile-bottom-offset) + 16px);
     left: 12px;
     width: auto;
     max-height: min(45vh, 420px);

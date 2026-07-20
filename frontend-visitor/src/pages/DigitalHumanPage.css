@@ -543,8 +543,8 @@
   min-height: 24px;
   padding: 3px 8px;
   border-radius: 999px;
-  background: rgba(84, 200, 255, 0.13);
-  color: rgba(230, 246, 255, 0.88);
+  background: var(--visitor-accent-soft);
+  color: var(--visitor-text-secondary);
   font-size: 12px;
 }
 
@@ -558,13 +558,13 @@
   display: grid;
   gap: 7px;
   padding: 10px;
-  border: 1px solid rgba(118, 203, 255, 0.18);
+  border: 1px solid var(--visitor-border);
   border-radius: 12px;
-  background: rgba(8, 31, 63, 0.28);
+  background: var(--visitor-surface);
 }
 
 .guide-result-card strong {
-  color: rgba(227, 244, 255, 0.9);
+  color: var(--visitor-text);
   font-size: 12px;
 }
 
@@ -577,26 +577,26 @@
 .guide-result-card__actions button {
   min-height: 28px;
   padding: 4px 9px;
-  border: 1px solid rgba(90, 188, 255, 0.28);
+  border: 1px solid var(--visitor-border-strong);
   border-radius: 999px;
-  color: rgba(230, 246, 255, 0.92);
-  background: rgba(58, 164, 255, 0.12);
+  color: var(--visitor-accent);
+  background: var(--visitor-accent-soft);
   cursor: pointer;
 }
 
 .guide-result-card__actions button:hover {
-  background: rgba(58, 164, 255, 0.24);
+  background: var(--visitor-surface-strong);
 }
 
 .guide-result-card__actions--suggestions button {
-  border-color: rgba(255, 211, 106, 0.3);
-  color: rgba(255, 229, 159, 0.96);
-  background: rgba(255, 211, 106, 0.1);
+  border-color: var(--visitor-border-strong);
+  color: var(--visitor-accent);
+  background: var(--visitor-accent-soft);
 }
 
 .digital-human-answer__sources span {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(214, 233, 255, 0.72);
+  background: var(--visitor-surface-muted);
+  color: var(--visitor-text-secondary);
 }
 
 @media (max-width: 720px) {
@@ -830,7 +830,7 @@
     min-width: var(--touch-target);
     min-height: var(--touch-target);
     padding: 0 12px;
-    color: #fff;
+    color: var(--visitor-text);
     font: inherit;
     font-size: 13px;
     font-weight: 700;
