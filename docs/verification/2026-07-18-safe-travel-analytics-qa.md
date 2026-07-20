@@ -16,7 +16,7 @@ npm run lint
 npm run build
 ```
 
-结果：后端 221/221 通过；前端 Node 34/34 通过；ESLint、TypeScript 与 Vite production build 均通过。
+结果：后端 224/224 通过；前端 Node 34/34 通过；ESLint、TypeScript 与 Vite production build 均通过。
 
 自动化覆盖包括：固定枚举解析、五类聚合口径、最小样本量、响应 DTO 隔离、未知指标 400、游客开关关闭、Observer 写入拒绝、个人数据意图识别、普通/快速/流式拒绝、模型上下文脱敏、60 秒缓存和所有写路径失效。
 

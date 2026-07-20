@@ -18,7 +18,7 @@ class ScenicKnowledgePublicationPersistenceTests {
     private ScenicKnowledgePublicationRepository publicationRepository;
 
     @Test
-    void duplicateActivePublishSlotForSameTargetIsRejectedByJpaConstraint() {
+    void duplicatePublishingSlotForSameFacilityAndTargetIsRejectedByJpaConstraint() {
         publicationRepository.saveAndFlush(publication(12L, 3L, "kb-1", ScenicKnowledgePublication.PUBLISH_SLOT_ACTIVE_REMOTE));
 
         assertThrows(
@@ -27,6 +27,19 @@ class ScenicKnowledgePublicationPersistenceTests {
                         12L,
                         3L,
                         "kb-1",
+                        ScenicKnowledgePublication.PUBLISH_SLOT_ACTIVE_REMOTE)));
+    }
+
+    @Test
+    void concurrentPublishingSlotsForSameFacilityAcrossDifferentTargetsAreRejected() {
+        publicationRepository.saveAndFlush(publication(12L, 3L, "kb-1", ScenicKnowledgePublication.PUBLISH_SLOT_ACTIVE_REMOTE));
+
+        assertThrows(
+                DataIntegrityViolationException.class,
+                () -> publicationRepository.saveAndFlush(publication(
+                        12L,
+                        4L,
+                        "kb-2",
                         ScenicKnowledgePublication.PUBLISH_SLOT_ACTIVE_REMOTE)));
     }
 

@@ -13,13 +13,6 @@ public interface ScenicKnowledgePublicationRepository extends JpaRepository<Scen
             Long accountId,
             String knowledgeId);
 
-    Optional<ScenicKnowledgePublication> findFirstByFacilityIdAndAccountIdAndKnowledgeIdAndStatusInAndDocumentIdIsNotNullAndDocumentIdNotOrderByUpdatedAtDescIdDesc(
-            Long facilityId,
-            Long accountId,
-            String knowledgeId,
-            Collection<String> statuses,
-            String blankDocumentId);
-
     Optional<ScenicKnowledgePublication> findFirstByFacilityIdAndStatusInAndDocumentIdIsNotNullAndDocumentIdNotOrderByUpdatedAtDescIdDesc(
             Long facilityId,
             Collection<String> statuses,

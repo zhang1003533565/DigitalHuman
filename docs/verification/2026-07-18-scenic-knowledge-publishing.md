@@ -13,14 +13,24 @@ cd backend-java
 mvn test
 ```
 
-结果：退出码 0；221 项测试，0 failures，0 errors，0 skipped；`BUILD SUCCESS`。
+结果：退出码 0；224 项测试，0 failures，0 errors，0 skipped；`BUILD SUCCESS`。
 
 覆盖包括：
 
 - 正式景点快照到白名单 Markdown 的渲染与内容哈希。
 - 首发、同目标重发、切换目标、远端删除失败补偿、失败审计、撤回和 outdated 状态。
-- 数据库发布槽唯一约束与并发冲突。
+- 数据库按景点全局唯一的发布槽约束；跨账号或知识库的并发发布同样冲突。
+- 即使内容哈希相同，改选目标也会完成新目标发布、撤回旧记录并删除旧目标文档。
+- 生产迁移先输出并阻断历史双活或跨目标预留槽，要求按运行手册完成远端和本地对账后才能修改索引。
 - DigitalHuman 到 MaxKB 的文档删除代理及账号、知识库、文档参数编码。
+
+### MySQL 迁移实测
+
+- 迁移前索引列：`facility_id,account_id,knowledge_id,publish_slot`。
+- 双活文档和并行预留槽预检：零行。
+- 在本地 MySQL 开发库执行手工迁移：退出码 0。
+- 迁移后 `information_schema.STATISTICS`：`facility_id,publish_slot`。
+- 冲突处理、远端清理、状态对账和回滚步骤见 `docs/operations/scenic-knowledge-single-target-migration.md`。
 
 ### 管理端
 
@@ -59,6 +69,7 @@ uv run python apps/manage.py test knowledge.test_open_api_document_import
 - 发布正文只读取正式景点和正式详情，不读取导入暂存文本。
 - 未选择账号、知识库或预览已过期时，前端发布门禁保持关闭；后端仍执行权限和状态校验。
 - Observer 不请求管理员专属的 MaxKB 账号/知识库发现接口，避免暴露连接配置。
+- 同一景点不允许跨多个 MaxKB 目标并存；改选目标使用带补偿的安全切换流程。
 - 验证记录不包含 OpenAPI Key、登录令牌或其他认证信息。
 
 ## 未执行的外部写入验证

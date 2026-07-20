@@ -18,7 +18,7 @@ import java.util.Set;
         name = "scenic_knowledge_publication",
         uniqueConstraints = @UniqueConstraint(
                 name = "uk_scenic_knowledge_publication_active_slot",
-                columnNames = {"facility_id", "account_id", "knowledge_id", "publish_slot"}))
+                columnNames = {"facility_id", "publish_slot"}))
 public class ScenicKnowledgePublication {
     public static final Integer PUBLISH_SLOT_ACTIVE_REMOTE = 1;
     public static final String STATUS_PUBLISHING = "publishing";

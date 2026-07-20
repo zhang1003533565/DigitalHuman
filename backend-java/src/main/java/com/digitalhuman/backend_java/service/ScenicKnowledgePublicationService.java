@@ -98,12 +98,14 @@ public class ScenicKnowledgePublicationService {
         ScenicFacilityDetail detail = detailRepository.findByFacilityId(facility.getId()).orElse(null);
         ScenicKnowledgeDocumentRenderer.RenderedDocument rendered = renderer.render(facility, detail);
         PublishTarget target = normalizeTarget(request);
-        ScenicKnowledgePublication active = findActivePublication(facility.getId(), target.accountId(), target.knowledgeId()).orElse(null);
+        ScenicKnowledgePublication active = findActivePublication(facility.getId()).orElse(null);
         String previousActiveStatus = originalActiveStatus(active);
         ScenicKnowledgePublication latest = publicationRepository
                 .findFirstByFacilityIdAndAccountIdAndKnowledgeIdOrderByVersionDesc(facility.getId(), target.accountId(), target.knowledgeId())
                 .orElse(null);
         if (active != null
+                && active.getAccountId().equals(target.accountId())
+                && active.getKnowledgeId().equals(target.knowledgeId())
                 && rendered.sha256().equals(active.getContentHash())
                 && active.getDocumentId() != null
                 && !active.getDocumentId().isBlank()) {
@@ -383,16 +385,6 @@ public class ScenicKnowledgePublicationService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "知识库 ID 不能为空");
         }
         return new PublishTarget(request.getAccountId(), knowledgeId, normalize(request.getKnowledgeName()));
-    }
-
-    private Optional<ScenicKnowledgePublication> findActivePublication(Long facilityId, Long accountId, String knowledgeId) {
-        return publicationRepository
-                .findFirstByFacilityIdAndAccountIdAndKnowledgeIdAndStatusInAndDocumentIdIsNotNullAndDocumentIdNotOrderByUpdatedAtDescIdDesc(
-                        facilityId,
-                        accountId,
-                        knowledgeId,
-                        ACTIVE_REMOTE_STATUSES,
-                        "");
     }
 
     private Optional<ScenicKnowledgePublication> findActivePublication(Long facilityId) {

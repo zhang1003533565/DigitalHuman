@@ -60,11 +60,11 @@
 
 - Polling is bounded to avoid indefinite waits.
 - `PREVIEW_READY`, `QUEUED`, `PROCESSING`, `PARSING`, `APPLYING`, `COMPLETED`, `FAILED`, and `CANCELLED/CANCELED` task shapes are normalized through flexible status parsing.
-- The current implementation assumes the latest facility-level publication record is the authoritative status returned to the admin UI, matching the current single-target product scope.
+- The latest facility-level publication record is authoritative. Selecting a different account or knowledge base performs a compensated handoff and retires the previous remote document, preserving the single-target product scope.
 
 ## Takeover Fixes
 
-- Added a DB-enforced publish reservation slot on `(facility_id, account_id, knowledge_id, publish_slot)` so concurrent publish attempts conflict before remote upload starts.
+- Added a DB-enforced publish reservation slot on `(facility_id, publish_slot)` so concurrent publish attempts conflict before remote upload starts, including attempts aimed at different accounts or knowledge bases.
 - `publish()` now resolves the current active remote publication separately from the latest local attempt, so failed republish rows do not hide the still-live document.
 - Successful replacement now uses an explicit local `TransactionTemplate` handoff that atomically marks the new row `published/outdated` and the old active row `withdrawn` before any old remote delete starts.
 - If that local handoff transaction fails, the service deletes the just-created new remote document first and only then marks the publish attempt `failed`, so the old live document remains untouched.
@@ -73,7 +73,9 @@
 - If that compensation transaction itself fails, the service does not delete either remote document and leaves the already-committed new active row in place so local truth still matches the still-live remote document.
 - If compensation succeeds but deleting the new remote document fails, the service keeps the old row restored as active and keeps the new failed row's `documentId` plus sanitized cleanup error for later recovery.
 - Preview polling now rejects a `COMPLETED` MaxKB task that still omits `documentId`, returns `502`, and clears the publishing slot locally.
-- Added a real H2/JPA regression test proving slot `1` is unique per `(facility, account, knowledge)` while multiple terminal rows with `publish_slot = null` remain valid.
+- Added real H2/JPA regression tests proving slot `1` is unique per facility across all targets while multiple terminal rows with `publish_slot = null` remain valid.
+- Added a fail-closed manual MySQL migration that reports legacy double-active documents or cross-target reservations before replacing the former target-scoped unique index with the facility-scoped reservation index.
+- Added an operator runbook for stopping writes, deleting each duplicate through its own MaxKB target, reconciling local rows, verifying the new index, and rolling the index back if required.
 
 ## Takeover Verification
 
