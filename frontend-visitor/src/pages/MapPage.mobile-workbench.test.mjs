@@ -36,7 +36,7 @@ assert.match(mapMobile, /\.map-mobile-toolbar\s*\{[^}]*top:\s*var\(--map-mobile-
 assert.match(mapMobile, /\.map-route-context\s*\{[^}]*top:\s*calc\(var\(--map-mobile-edge\)\s*\+\s*var\(--touch-target\)\s*\+\s*10px\)/s)
 assert.match(mapMobile, /\.map-controls\s*\{[^}]*right:\s*var\(--map-mobile-edge\)[^}]*bottom:\s*16px/s)
 assert.match(mapMobile, /\.map-mobile-context-actions\s*\{[^}]*bottom:\s*16px/s)
-assert.match(mapMobile, /\.map-spot-card\s*\{[^}]*bottom:\s*16px/s)
+assert.match(mapMobile, /\.map-spot-card\s*\{[^}]*bottom:\s*calc\(var\(--map-mobile-bottom-offset\)\s*\+\s*16px\)/s)
 assert.match(mapMobile, /\.map-spot-card__actions\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/s)
 
 console.log('MapPage single-entry mobile workbench contract passed')
