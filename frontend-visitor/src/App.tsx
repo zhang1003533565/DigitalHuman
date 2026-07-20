@@ -11,6 +11,7 @@ import {
 import { DIGITAL_HUMAN_ROUTE } from './digitalHuman/shared'
 import { MobileBottomNav } from './components/MobileBottomNav'
 import { VisitorTopNav } from './components/VisitorTopNav'
+import { VisitorThemeProvider } from './theme/VisitorThemeProvider'
 
 const HomePage = lazy(() => import('./pages/HomePage').then((module) => ({ default: module.HomePage })))
 const LoginPage = lazy(() => import('./pages/LoginPage').then((module) => ({ default: module.LoginPage })))
@@ -34,13 +35,15 @@ function ProtectedRoute({ user, onLogout }: { user: SessionUser | null; onLogout
   }
 
   return (
-    <div className="authenticated-app">
-      <VisitorTopNav onLogout={onLogout} />
-      <div className="authenticated-app__content">
-        <Outlet />
+    <VisitorThemeProvider>
+      <div className="authenticated-app">
+        <VisitorTopNav onLogout={onLogout} />
+        <div className="authenticated-app__content">
+          <Outlet />
+        </div>
+        <MobileBottomNav />
       </div>
-      <MobileBottomNav />
-    </div>
+    </VisitorThemeProvider>
   )
 }
 
