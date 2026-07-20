@@ -296,12 +296,41 @@ for (const [width, height] of [[844, 390], [932, 430]]) {
   const controlsTop = mapCanvasHeight - (64 + 24) - controlsHeight
   assert.ok(controlsTop > toolbarBottom, `${width}x${height} keeps the complete controls bounding box below the toolbar`)
 }
+const routeMobile768 = readEffectiveRulesAtWidth(routeCss, 768)
+const routeMobile640 = readEffectiveRulesAtWidth(routeCss, 640)
 const routeMobile = routeCss.slice(routeCss.lastIndexOf('@media (max-width: 768px)'))
-assert.doesNotMatch(routeMobile, /\.route-shell\s*\{[^}]*overflow-y:\s*auto/s, 'mobile route page must defer vertical scrolling to the app shell')
-assert.match(routeMobile, /\.route-detail\s*\{[^}]*display:\s*flex[^}]*flex-direction:\s*column/s, 'route detail stacks map and content')
-assert.match(routeMobile, /\.route-detail__content\s*\{[^}]*position:\s*relative[^}]*overflow:\s*visible/s, 'route summary and timeline remain in flow')
-assert.doesNotMatch(routeMobile, /\.route-node:not\(:last-child\)::after\s*\{[^}]*bottom:\s*-\d+px/s, 'timeline connector must not escape its node')
-assert.match(routeMobile, /\.route-filter select\s*\{[^}]*min-height:\s*var\(--touch-target\)/s, 'route filters expose mobile touch targets')
+assert.notEqual(
+  routeMobile768.find((rule) => rule.selector === '.route-page')?.declarations.get('overflow-y'),
+  'auto',
+  'mobile route page must defer vertical scrolling to the app shell',
+)
+assert.notEqual(
+  routeMobile768.find((rule) => rule.selector === '.route-page')?.declarations.get('overflow-y'),
+  'scroll',
+  'mobile route page must not add its own scrolling viewport',
+)
+assert.equal(
+  routeMobile768.find((rule) => rule.selector === '.route-trip__layout')?.declarations.get('grid-template-columns'),
+  '1fr',
+  'route detail layout stacks on mobile',
+)
+assert.equal(
+  routeMobile640.find((rule) => rule.selector === '.route-map-panel__frame')?.declarations.get('min-height'),
+  '300px',
+  'mobile route map keeps the minimum visible map height',
+)
+for (const selector of ['.route-chip', '.route-facility-toggle']) {
+  const declarations = routeMobile640.find((rule) => rule.selector === selector)?.declarations
+  assert.equal(declarations?.get('width'), '100%', `${selector} expands to a full-width mobile control`)
+  assert.equal(declarations?.get('justify-content'), 'center', `${selector} centers its compact label on mobile`)
+}
+for (const selector of ['.route-map-link', '.route-reset-button', '.route-reload-button']) {
+  assert.equal(
+    routeMobile768.find((rule) => rule.selector === selector)?.declarations.get('width'),
+    '100%',
+    `${selector} stretches to a stable mobile tap target`,
+  )
+}
 assert.match(loginCss, /@media\s*\(max-width:\s*768px\)[\s\S]*\.auth-stage,[\s\S]*\.auth-form\s*\{[^}]*grid-template-columns:\s*1fr/s, 'login form is single-column')
 assert.match(loginCss, /@media \(max-width: 768px\), \(max-height: 520px\) and \(pointer: coarse\) \{/)
 assert.match(loginCss, /@media \(max-width: 768px\) and \(max-height: 520px\), \(max-height: 520px\) and \(pointer: coarse\) \{/)
@@ -349,7 +378,7 @@ for (const [name, css] of [
 ]) {
   assert.doesNotMatch(
     css,
-    /\.(?:page-content|hp-scroll|tips-scroll-area|route-planner|route-detail__content|route-timeline)\s*\{[^}]*(?:overflow(?:-y)?:\s*(?:auto|scroll)|overscroll-behavior:\s*contain|touch-action:\s*none)/s,
+    /\.(?:page-content|hp-scroll|tips-scroll-area|route-page|route-trip__layout|route-map-panel__frame|route-facility-controls|route-itinerary)\s*\{[^}]*(?:overflow(?:-y)?:\s*(?:auto|scroll)|overscroll-behavior:\s*contain|touch-action:\s*none)/s,
     `${name} must not own mobile page scrolling`,
   )
 }

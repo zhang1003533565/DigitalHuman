@@ -17,6 +17,11 @@ import {
 
 type FilterState = RouteFilters
 type FacilityGroup = 'food' | 'wc' | 'service'
+type RouteSelectionResolution = {
+  visibleRouteIds: string[]
+  currentSelectedRouteId: string
+  cachedRouteId: string
+}
 
 const LINGSHAN_CENTER: [number, number] = [120.1009, 31.4259]
 const FACILITY_GROUP_CATEGORIES: Record<FacilityGroup, string[]> = {
@@ -30,6 +35,7 @@ const FILTER_OPTIONS = {
   duration: ['4', '5', '6'],
   intensity: ['轻松', '舒缓', '深度'],
 } as const
+const ROUTE_LOAD_ERROR_MESSAGE = '路线加载失败了，筛选已保留，可以重新加载路线后再试。'
 
 declare global {
   interface Window {
@@ -89,6 +95,37 @@ function getFacilityLabel(category: string) {
   return labels[category] ?? category
 }
 
+const reconcileSelectedRouteId = ({
+  visibleRouteIds,
+  currentSelectedRouteId,
+  cachedRouteId,
+}: RouteSelectionResolution) => {
+  if (currentSelectedRouteId && visibleRouteIds.includes(currentSelectedRouteId)) {
+    return currentSelectedRouteId
+  }
+  if (!visibleRouteIds.length) {
+    return currentSelectedRouteId
+  }
+  if (cachedRouteId && visibleRouteIds.includes(cachedRouteId)) {
+    return cachedRouteId
+  }
+  return visibleRouteIds[0]
+}
+
+const createRouteRequestGate = () => {
+  let latestRequestId = 0
+
+  return {
+    begin() {
+      latestRequestId += 1
+      return latestRequestId
+    },
+    isCurrent(requestId: number) {
+      return requestId === latestRequestId
+    },
+  }
+}
+
 export function RouteRecommendPage() {
   const { effectiveTheme } = useVisitorTheme()
   const location = useLocation()
@@ -114,7 +151,10 @@ export function RouteRecommendPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapInstanceRef = useRef<any>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mapOverlaysRef = useRef<any[]>([])
+  const routeOverlaysRef = useRef<any[]>([])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const facilityOverlaysRef = useRef<any[]>([])
+  const routeRequestGateRef = useRef(createRouteRequestGate())
   const mapThemeControllerRef = useRef(createVisitorMapThemeController(
     effectiveTheme,
     (error) => console.warn('sync route recommendation map theme failed', error),
@@ -129,20 +169,29 @@ export function RouteRecommendPage() {
   }, [location.search])
 
   useEffect(() => {
+    const controller = new AbortController()
+
     async function loadRoutes() {
+      const requestId = routeRequestGateRef.current.begin()
       setLoadError('')
       try {
         const response = await axios.get<ScenicRoute[]>('/api/user/scenic/routes/recommend', {
           params: filters.interest ? { interest: filters.interest } : {},
+          signal: controller.signal,
         })
+        if (!routeRequestGateRef.current.isCurrent(requestId)) return
         setRoutes(response.data)
       } catch (error) {
+        if (controller.signal.aborted || !routeRequestGateRef.current.isCurrent(requestId)) return
         console.error(error)
-        setLoadError('路线加载失败了，筛选已保留，可以重新加载路线后再试。')
+        setLoadError(ROUTE_LOAD_ERROR_MESSAGE)
       }
     }
 
     void loadRoutes()
+    return () => {
+      controller.abort()
+    }
   }, [filters.interest, routeRequestVersion])
 
   useEffect(() => {
@@ -171,7 +220,8 @@ export function RouteRecommendPage() {
         mapInstanceRef.current = null
       }
       mapThemeController.detachMap()
-      mapOverlaysRef.current = []
+      routeOverlaysRef.current = []
+      facilityOverlaysRef.current = []
     }
   }, [])
 
@@ -188,14 +238,14 @@ export function RouteRecommendPage() {
   const visibleRoutes = useMemo(() => recommendedRoutes.slice(0, 3), [recommendedRoutes])
 
   useEffect(() => {
-    if (!visibleRoutes.length) {
-      if (selectedRouteId) setSelectedRouteId('')
-      return
+    const nextRouteId = reconcileSelectedRouteId({
+      visibleRouteIds: visibleRoutes.map((route) => route.id),
+      currentSelectedRouteId: selectedRouteId,
+      cachedRouteId: cachedPlan?.route?.id ?? '',
+    })
+    if (nextRouteId !== selectedRouteId) {
+      setSelectedRouteId(nextRouteId)
     }
-    if (selectedRouteId && visibleRoutes.some((route) => route.id === selectedRouteId)) return
-    const cachedId = cachedPlan?.route?.id ?? ''
-    const nextRoute = visibleRoutes.find((route) => route.id === cachedId) ?? visibleRoutes[0]
-    setSelectedRouteId(nextRoute.id)
   }, [cachedPlan?.route?.id, selectedRouteId, visibleRoutes])
 
   const selectedRoute = useMemo(
@@ -237,9 +287,13 @@ export function RouteRecommendPage() {
     const AMap = amapApi
     if (!map || !AMap) return
 
-    if (mapOverlaysRef.current.length) {
-      map.remove?.(mapOverlaysRef.current)
-      mapOverlaysRef.current = []
+    if (routeOverlaysRef.current.length) {
+      map.remove?.(routeOverlaysRef.current)
+      routeOverlaysRef.current = []
+    }
+    if (facilityOverlaysRef.current.length) {
+      map.remove?.(facilityOverlaysRef.current)
+      facilityOverlaysRef.current = []
     }
 
     if (!selectedRoute) {
@@ -264,7 +318,7 @@ export function RouteRecommendPage() {
         lineCap: 'round',
       })
       map.add(polyline)
-      mapOverlaysRef.current.push(polyline)
+      routeOverlaysRef.current.push(polyline)
     }
 
     routeNodes.forEach((node, index) => {
@@ -277,8 +331,27 @@ export function RouteRecommendPage() {
         },
       })
       map.add(marker)
-      mapOverlaysRef.current.push(marker)
+      routeOverlaysRef.current.push(marker)
     })
+
+    if (path.length > 1) {
+      map.setFitView?.(routeOverlaysRef.current, false, [82, 82, 82, 82], 14)
+    } else {
+      map.setZoomAndCenter?.(14, LINGSHAN_CENTER)
+    }
+  }, [amapApi, selectedRoute])
+
+  useEffect(() => {
+    const map = mapInstanceRef.current
+    const AMap = amapApi
+    if (!map || !AMap) return
+
+    if (facilityOverlaysRef.current.length) {
+      map.remove?.(facilityOverlaysRef.current)
+      facilityOverlaysRef.current = []
+    }
+
+    if (!selectedRoute) return
 
     visibleFacilities.forEach((facility) => {
       const marker = new AMap.Marker({
@@ -290,14 +363,8 @@ export function RouteRecommendPage() {
         },
       })
       map.add(marker)
-      mapOverlaysRef.current.push(marker)
+      facilityOverlaysRef.current.push(marker)
     })
-
-    if (path.length > 1) {
-      map.setFitView?.(mapOverlaysRef.current, false, [82, 82, 82, 82], 14)
-    } else {
-      map.setZoomAndCenter?.(14, LINGSHAN_CENTER)
-    }
   }, [amapApi, selectedRoute, visibleFacilityGroups, visibleFacilities])
 
   function handleFilterChange(name: keyof FilterState, value: string) {

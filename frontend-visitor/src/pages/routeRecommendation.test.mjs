@@ -5,6 +5,29 @@ import test from 'node:test'
 const compiledModule = new URL('../../node_modules/.tmp/route-recommendation-test/routeRecommendation.js', import.meta.url)
 const pageSourceUrl = new URL('./RouteRecommendPage.tsx', import.meta.url)
 
+const readExportedConst = async (name) => {
+  const source = await readFile(pageSourceUrl, 'utf8')
+  const start = source.indexOf(`const ${name} =`)
+  assert.notEqual(start, -1, `${name} helper must exist in RouteRecommendPage.tsx`)
+  const afterStart = source.slice(start)
+  const boundaries = ['\n\nconst ', '\n\nfunction ', '\n\nexport ', '\n\nexport function ']
+    .map((token) => afterStart.indexOf(token))
+    .filter((index) => index > 0)
+  const finalEnd = boundaries.length ? Math.min(...boundaries) : afterStart.length
+  return afterStart.slice(0, finalEnd).trim()
+}
+
+const instantiateExportedConst = async (name, dependencies = {}) => {
+  const helperSource = await readExportedConst(name)
+  const expression = helperSource
+    .replace(new RegExp(`^const ${name} =\\s*`), '')
+    .replace(/\}\s*:\s*[A-Za-z0-9_<>{}\[\]\s|,]+\)\s*=>/g, '}) =>')
+    .replace(/\(([A-Za-z0-9_]+)\s*:\s*[A-Za-z0-9_<>{}\[\]\s|,]+/g, '($1')
+  const dependencyNames = Object.keys(dependencies)
+  const factory = new Function(...dependencyNames, `return (${expression})`)
+  return factory(...dependencyNames.map((key) => dependencies[key]))
+}
+
 const baseCoordinate = { longitude: 120.1, latitude: 31.4 }
 
 function route(overrides) {
@@ -288,6 +311,58 @@ test('route page renders visitor-first route selection flow', async () => {
   assert.match(source, /useLayoutEffect\(\(\) => \{\s*mapThemeControllerRef\.current\.setTheme\(effectiveTheme\)/)
   assert.match(source, /createVisitorMapThemeController/)
   assert.match(source, /mapThemeControllerRef\.current\.syncMapStyle\(\)/)
+})
+
+test('selection helper keeps the previous route id through empty results and restores it when available again', async () => {
+  const reconcileSelectedRouteId = await instantiateExportedConst('reconcileSelectedRouteId')
+
+  assert.equal(
+    reconcileSelectedRouteId({
+      visibleRouteIds: [],
+      currentSelectedRouteId: 'route-b',
+      cachedRouteId: 'route-a',
+    }),
+    'route-b',
+  )
+  assert.equal(
+    reconcileSelectedRouteId({
+      visibleRouteIds: ['route-a', 'route-b'],
+      currentSelectedRouteId: 'route-b',
+      cachedRouteId: 'route-a',
+    }),
+    'route-b',
+  )
+  assert.equal(
+    reconcileSelectedRouteId({
+      visibleRouteIds: ['route-a', 'route-c'],
+      currentSelectedRouteId: 'route-b',
+      cachedRouteId: 'route-c',
+    }),
+    'route-c',
+  )
+  assert.equal(
+    reconcileSelectedRouteId({
+      visibleRouteIds: ['route-a', 'route-c'],
+      currentSelectedRouteId: 'route-b',
+      cachedRouteId: 'missing',
+    }),
+    'route-a',
+  )
+})
+
+test('request gate ignores stale route successes and stale route failures', async () => {
+  const createRouteRequestGate = await instantiateExportedConst('createRouteRequestGate')
+  const gate = createRouteRequestGate()
+
+  const firstRequestId = gate.begin()
+  const secondRequestId = gate.begin()
+
+  assert.equal(gate.isCurrent(firstRequestId), false, 'older success payloads must be ignored after a newer request begins')
+  assert.equal(gate.isCurrent(secondRequestId), true, 'latest success payload may update the page')
+
+  const thirdRequestId = gate.begin()
+  assert.equal(gate.isCurrent(secondRequestId), false, 'older errors must be ignored after retry starts a newer request')
+  assert.equal(gate.isCurrent(thirdRequestId), true, 'latest retry result remains eligible to update the page')
 })
 
 test('route map initializes after async route content mounts when AMap is already cached', async () => {
