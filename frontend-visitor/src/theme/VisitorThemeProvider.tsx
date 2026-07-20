@@ -63,6 +63,7 @@ export function VisitorThemeProvider({ children }: PropsWithChildren) {
   return <VisitorThemeContext.Provider value={value}>{children}</VisitorThemeContext.Provider>
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- Hook must share the provider's private context.
 export function useVisitorTheme() {
   const context = useContext(VisitorThemeContext)
   if (!context) throw new Error('useVisitorTheme must be used inside VisitorThemeProvider')
