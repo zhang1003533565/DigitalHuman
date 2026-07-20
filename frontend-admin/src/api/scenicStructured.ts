@@ -41,6 +41,46 @@ export type ScenicStructuredApplyPayload = {
   fields: string[]
 }
 
+export type ScenicKnowledgePreview = {
+  recordId: number
+  facilityId: number
+  fileName: string
+  markdown: string
+  sha256: string
+  contentVersion: number
+}
+
+export type ScenicKnowledgePublicationStatus =
+  | 'publishing'
+  | 'published'
+  | 'outdated'
+  | 'failed'
+  | 'withdrawn'
+
+export type ScenicKnowledgePublication = {
+  id: number
+  facilityId: number
+  accountId: number
+  knowledgeId: string
+  knowledgeName: string
+  documentId: string | null
+  logicalKey: string
+  contentHash: string
+  version: number
+  status: ScenicKnowledgePublicationStatus
+  lastError: string | null
+  publishedBy: string | null
+  publishedAt: string | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+export type ScenicKnowledgePublishPayload = {
+  accountId: number
+  knowledgeId: string
+  knowledgeName: string
+}
+
 export type ScenicStructuredImportIssue = {
   rowNumber: number
   reason: string
@@ -64,6 +104,26 @@ export async function previewScenicStructuredApply(recordId: number, facilityId:
     `/api/admin/scenic-structured/records/${recordId}/apply-preview`,
     { params: { facilityId } },
   )
+  return response.data
+}
+
+export async function previewScenicKnowledgePublication(recordId: number) {
+  const response = await axios.get<ScenicKnowledgePreview>(`/api/admin/scenic-knowledge/records/${recordId}/preview`)
+  return response.data
+}
+
+export async function publishScenicKnowledge(recordId: number, payload: ScenicKnowledgePublishPayload) {
+  const response = await axios.post<ScenicKnowledgePublication>(`/api/admin/scenic-knowledge/records/${recordId}/publish`, payload)
+  return response.data
+}
+
+export async function getScenicKnowledgePublicationStatus(facilityId: number) {
+  const response = await axios.get<ScenicKnowledgePublication>(`/api/admin/scenic-knowledge/facilities/${facilityId}/status`)
+  return response.data
+}
+
+export async function withdrawScenicKnowledge(facilityId: number) {
+  const response = await axios.post<ScenicKnowledgePublication>(`/api/admin/scenic-knowledge/facilities/${facilityId}/withdraw`)
   return response.data
 }
 

@@ -26,14 +26,17 @@ public class AdminScenicFacilityService {
     private final ScenicFacilityRepository scenicFacilityRepository;
     private final FacilityCategoryRepository facilityCategoryRepository;
     private final ObjectMapper objectMapper;
+    private final ScenicKnowledgePublicationService publicationService;
 
     public AdminScenicFacilityService(
             ScenicFacilityRepository scenicFacilityRepository,
             FacilityCategoryRepository facilityCategoryRepository,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            ScenicKnowledgePublicationService publicationService) {
         this.scenicFacilityRepository = scenicFacilityRepository;
         this.facilityCategoryRepository = facilityCategoryRepository;
         this.objectMapper = objectMapper;
+        this.publicationService = publicationService;
     }
 
     public List<ScenicFacilityDto> getFacilities() {
@@ -63,7 +66,9 @@ public class AdminScenicFacilityService {
     public ScenicFacilityDto updateFacility(Long id, ScenicFacilityRequestDto request) {
         ScenicFacility facility = findFacility(id);
         applyFacilityRequest(facility, request, id);
-        return toFacilityDto(scenicFacilityRepository.save(facility));
+        ScenicFacility saved = scenicFacilityRepository.save(facility);
+        publicationService.markOutdated(saved.getId());
+        return toFacilityDto(saved);
     }
 
     @Transactional
@@ -71,6 +76,7 @@ public class AdminScenicFacilityService {
         ScenicFacility facility = findFacility(id);
         facility.setDeletedAt(LocalDateTime.now());
         scenicFacilityRepository.save(facility);
+        publicationService.markOutdated(id);
     }
 
     public List<FacilityCategoryDto> getCategories() {

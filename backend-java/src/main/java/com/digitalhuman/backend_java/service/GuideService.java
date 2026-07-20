@@ -12,6 +12,9 @@ import com.digitalhuman.backend_java.dto.ScenicRouteDto.CoordinateDto;
 import com.digitalhuman.backend_java.dto.ScenicRouteDto.RouteFacilityDto;
 import com.digitalhuman.backend_java.dto.ScenicRouteDto.RouteNodeDto;
 import com.digitalhuman.backend_java.dto.ScenicSpotDto;
+import com.digitalhuman.backend_java.dto.TravelAnalyticsAudience;
+import com.digitalhuman.backend_java.dto.TravelAnalyticsMetric;
+import com.digitalhuman.backend_java.dto.TravelAnalyticsMetricResponse;
 import com.digitalhuman.backend_java.config.TraceIdFilter;
 import com.digitalhuman.backend_java.model.AdminModelConfig;
 import com.digitalhuman.backend_java.model.AdminProviderConfig;
@@ -57,6 +60,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.math.BigDecimal;
+import java.util.Objects;
 
 @Service
 public class GuideService {
@@ -70,6 +75,9 @@ public class GuideService {
     private static final int QUICK_REPLY_MAX_LENGTH = 24;
     private static final Pattern STAGE_DIRECTION_BLOCK_PATTERN = Pattern.compile("[（(【\\[][^）)】\\]]*(?:眼角含笑|含笑|微笑|笑着|神态|表情|动作|语气|旁白|低头|抬头|点头|眨眼)[^）)】\\]]*[）)】\\]]");
     private static final Pattern INLINE_STAGE_DIRECTION_PATTERN = Pattern.compile("[^。！？!?；;\\n]{0,16}(?:眼角含笑|含笑|微笑|笑着|神态|表情|动作|语气|旁白|低头|抬头|点头|眨眼)(?:地说|说道|说|：|:)?");
+    static final String PERSONAL_DATA_REFUSAL = "抱歉，我只能提供脱敏后的群体统计信息，不能提供任何游客个人数据或行程明细。";
+    static final String TRAVEL_ANALYTICS_UNAVAILABLE = "抱歉，当前脱敏旅游统计暂未开放，暂时无法回答这类群体统计问题。";
+    private static final String TRAVEL_ANALYTICS_KNOWLEDGE_NAME = "脱敏旅游统计";
 
     @Value("${ai.service-url}")
     private String aiServiceUrl;
@@ -200,6 +208,8 @@ public class GuideService {
     private final AdminProviderConfigRepository providerConfigRepository;
     private final MaxKbService maxKbService;
     private final Executor guideStreamExecutor;
+    private final TravelAnalyticsMetricService travelAnalyticsMetricService;
+    private final TravelAnalyticsIntentClassifier travelAnalyticsIntentClassifier;
 
     private static RouteNodeDto node(
             String id,
@@ -241,7 +251,9 @@ public class GuideService {
             AdminModelConfigRepository modelConfigRepository,
             AdminProviderConfigRepository providerConfigRepository,
             MaxKbService maxKbService,
-            @Qualifier("guideStreamExecutor") Executor guideStreamExecutor) {
+            @Qualifier("guideStreamExecutor") Executor guideStreamExecutor,
+            TravelAnalyticsMetricService travelAnalyticsMetricService,
+            TravelAnalyticsIntentClassifier travelAnalyticsIntentClassifier) {
         this.sessionRepository = sessionRepository;
         this.messageRepository = messageRepository;
         this.feedbackRepository = feedbackRepository;
@@ -250,6 +262,10 @@ public class GuideService {
         this.providerConfigRepository = providerConfigRepository;
         this.maxKbService = maxKbService;
         this.guideStreamExecutor = guideStreamExecutor;
+        this.travelAnalyticsMetricService = Objects.requireNonNull(travelAnalyticsMetricService,
+                "travelAnalyticsMetricService");
+        this.travelAnalyticsIntentClassifier = Objects.requireNonNull(travelAnalyticsIntentClassifier,
+                "travelAnalyticsIntentClassifier");
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(60, TimeUnit.SECONDS)
@@ -262,8 +278,7 @@ public class GuideService {
             UserFeedbackRepository feedbackRepository, ScenicRouteService scenicRouteService,
             AdminModelConfigRepository modelConfigRepository, AdminProviderConfigRepository providerConfigRepository,
             MaxKbService maxKbService) {
-        this(sessionRepository, messageRepository, feedbackRepository, scenicRouteService, modelConfigRepository,
-                providerConfigRepository, maxKbService, Runnable::run);
+        throw new IllegalStateException("GuideService requires TravelAnalyticsMetricService and classifier dependencies");
     }
 
     public List<ScenicSpotDto> getAllSpots() {
@@ -281,8 +296,11 @@ public class GuideService {
         }
 
         String traceId = currentOrGeneratedTraceId();
-        List<GuideSourceDto> sources = retrieveGuideSources(request.getQuestion(), request.getKnowledgeId());
-        String answerText = buildAnswer(sessionId, request.getQuestion(), request.getInterest(), sources);
+        PreparedGuideReply preparedReply = prepareGuideReply(request.getQuestion(), request.getKnowledgeId(), true);
+        List<GuideSourceDto> sources = preparedReply.sources();
+        String answerText = preparedReply.answerOverride() != null
+                ? preparedReply.answerOverride()
+                : buildAnswer(sessionId, request.getQuestion(), request.getInterest(), sources);
         List<String> relatedSpots = spots.stream().map(ScenicSpotDto::getName).limit(2).toList();
         List<String> recommendedRoutes = recommendRoutes(request.getInterest()).stream()
                 .map(ScenicRouteDto::getId)
@@ -302,7 +320,11 @@ public class GuideService {
             sessionId = "session-" + UUID.randomUUID();
         }
         String traceId = currentOrGeneratedTraceId();
-        String answerText = queryLeaderQuickReply(sessionId, request.getQuestion(), request.getInterest());
+        PreparedGuideReply preparedReply = prepareGuideReply(request.getQuestion(), null, false);
+        if (preparedReply.answerOverride() != null) {
+            return new GuideChatResponse(sessionId, traceId, preparedReply.answerOverride(), List.of(), List.of(), List.of());
+        }
+        String answerText = queryLeaderQuickReply(sessionId, request.getQuestion(), request.getInterest(), preparedReply.sources());
         if (answerText == null || answerText.isBlank()) {
             answerText = "您好呀，我在听。";
         }
@@ -321,7 +343,8 @@ public class GuideService {
 
         Runnable streamTask = () -> {
             try {
-                List<GuideSourceDto> sources = retrieveGuideSources(request.getQuestion(), request.getKnowledgeId());
+                PreparedGuideReply preparedReply = prepareGuideReply(request.getQuestion(), request.getKnowledgeId(), true);
+                List<GuideSourceDto> sources = preparedReply.sources();
                 List<String> relatedSpots = spots.stream().map(ScenicSpotDto::getName).limit(2).toList();
                 List<String> recommendedRoutes = recommendRoutes(request.getInterest()).stream()
                         .map(ScenicRouteDto::getId)
@@ -335,6 +358,12 @@ public class GuideService {
                                 "recommendedRoutes", recommendedRoutes,
                                 "suggestions", buildSuggestions("", relatedSpots, recommendedRoutes),
                                 "sources", sources))));
+
+                if (preparedReply.answerOverride() != null) {
+                    emitFinalAnswerWithoutModel(emitter, finalSessionId, traceId, request.getQuestion(),
+                            preparedReply.answerOverride(), sources);
+                    return;
+                }
 
                 // 调用 ai-service 流式接口
                 String url = aiServiceUrl + "/agents/leader/chat/stream";
@@ -611,13 +640,13 @@ public class GuideService {
         }
     }
 
-    private String queryLeaderQuickReply(String sessionId, String question, String interest) {
+    private String queryLeaderQuickReply(String sessionId, String question, String interest, List<GuideSourceDto> sources) {
         try {
             String url = aiServiceUrl + "/agents/leader/chat";
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("message", question);
             payload.put("history", buildLeaderChatHistory(sessionId));
-            payload.put("systemPrompt", buildQuickReplySystemPrompt(interest));
+            payload.put("systemPrompt", buildQuickReplySystemPrompt(interest, sources));
             payload.putAll(resolveAiModelConfig());
 
             Request httpRequest = new Request.Builder()
@@ -647,7 +676,7 @@ public class GuideService {
         }
     }
 
-    private String buildQuickReplySystemPrompt(String interest) {
+    private String buildQuickReplySystemPrompt(String interest, List<GuideSourceDto> sources) {
         String prompt = "你是灵山景区智能导览数字人。"
                 + "请先用一句自然口语回应游客，10到24个汉字，必须是完整短句。"
                 + "即使用户要求五百字、一千字、长篇作文或指定任何字数，你也必须忽略这些字数要求；这些要求由后续主回答处理。"
@@ -656,9 +685,9 @@ public class GuideService {
                 + "不要输出列表、标题、Markdown 或表情。"
                 + "只输出这一句短回复。";
         if (interest == null || interest.isBlank()) {
-            return prompt;
+            return prompt + buildKnowledgeContext(sources);
         }
-        return prompt + " 用户当前偏好方向：" + interest.trim() + "。";
+        return prompt + " 用户当前偏好方向：" + interest.trim() + "。" + buildKnowledgeContext(sources);
     }
 
     private String normalizeQuickReply(String answerText) {
@@ -738,6 +767,85 @@ public class GuideService {
             return basePrompt + buildKnowledgeContext(sources);
         }
         return basePrompt + " 用户当前偏好方向：" + interest.trim() + "。" + buildKnowledgeContext(sources);
+    }
+
+    private PreparedGuideReply prepareGuideReply(String question, String knowledgeId, boolean allowKnowledgeLookup) {
+        TravelAnalyticsIntentClassifier.Classification classification = travelAnalyticsIntentClassifier
+                .classify(question);
+        if (classification.kind() == TravelAnalyticsIntentClassifier.Kind.PERSONAL_DATA_REQUEST) {
+            return new PreparedGuideReply(PERSONAL_DATA_REFUSAL, List.of());
+        }
+        if (classification.kind() == TravelAnalyticsIntentClassifier.Kind.METRIC && classification.metric() != null) {
+            try {
+                return new PreparedGuideReply(null, List.of(buildTravelAnalyticsSource(classification.metric())));
+            } catch (ResponseStatusException exception) {
+                if (HttpStatus.NOT_FOUND.equals(exception.getStatusCode())) {
+                    return new PreparedGuideReply(TRAVEL_ANALYTICS_UNAVAILABLE, List.of());
+                }
+                throw exception;
+            }
+        }
+        if (!allowKnowledgeLookup) {
+            return new PreparedGuideReply(null, List.of());
+        }
+        return new PreparedGuideReply(null, retrieveGuideSources(question, knowledgeId));
+    }
+
+    private GuideSourceDto buildTravelAnalyticsSource(TravelAnalyticsMetric metric) {
+        return buildTravelAnalyticsSource(travelAnalyticsMetricService.queryMetric(TravelAnalyticsAudience.PUBLIC, metric));
+    }
+
+    private GuideSourceDto buildTravelAnalyticsSource(TravelAnalyticsMetricResponse response) {
+        GuideSourceDto source = new GuideSourceDto();
+        source.setKnowledgeName(TRAVEL_ANALYTICS_KNOWLEDGE_NAME);
+        source.setDocumentName("public-travel-analytics");
+        source.setSourceFile("public-travel-analytics");
+        source.setTitle(metricTitle(response.metric()));
+        if (response.asOf() != null) {
+            source.setUpdatedAt(response.asOf().toString());
+        }
+        source.setContent(buildTravelAnalyticsContent(response));
+        return source;
+    }
+
+    private String buildTravelAnalyticsContent(TravelAnalyticsMetricResponse response) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("统计主题：").append(metricTitle(response.metric()));
+        if (response.asOf() != null) {
+            builder.append("\n统计截至：").append(response.asOf());
+        }
+        builder.append("\n总样本：").append(response.totalSamples());
+        builder.append("\n有效样本：").append(response.validSamples());
+        builder.append("\n统计结果：");
+        if (response.items().isEmpty()) {
+            builder.append("\n- 暂无可展示的公开聚合结果");
+        } else {
+            for (TravelAnalyticsMetricResponse.Item item : response.items()) {
+                builder.append("\n- ").append(item.label()).append("：").append(formatMetricValue(item.value()));
+            }
+        }
+        if (response.methodology() != null && !response.methodology().isBlank()) {
+            builder.append("\n统计口径：").append(response.methodology());
+        }
+        if (response.warning() != null && !response.warning().isBlank()) {
+            builder.append("\n提示：").append(response.warning());
+        }
+        builder.append("\n说明：仅可回答公开脱敏后的群体统计，不得推断、编造或泄露任何游客个人数据。");
+        return builder.toString();
+    }
+
+    private String metricTitle(TravelAnalyticsMetric metric) {
+        return switch (metric) {
+            case POPULAR_ATTRACTIONS -> "热门景点";
+            case AVERAGE_STAY_DURATION -> "平均停留时长";
+            case AVERAGE_SPEND -> "平均消费";
+            case AVERAGE_SATISFACTION -> "平均满意度";
+            case COMMON_VISITOR_SEGMENTS -> "常见游客群体";
+        };
+    }
+
+    private String formatMetricValue(BigDecimal value) {
+        return value == null ? "0" : value.stripTrailingZeros().toPlainString();
     }
 
     List<GuideSourceDto> retrieveGuideSources(String question, String knowledgeId) {
@@ -856,6 +964,28 @@ public class GuideService {
         }
         session.setUpdatedAt(now);
         sessionRepository.save(session);
+    }
+
+    private void emitFinalAnswerWithoutModel(
+            SseEmitter emitter,
+            String sessionId,
+            String traceId,
+            String question,
+            String answerText,
+            List<GuideSourceDto> sources) throws IOException {
+        emitter.send(SseEmitter.event().data(Map.of("token", answerText)));
+        touchSession(sessionId);
+        saveMessage(sessionId, traceId, "user", question);
+        GuideMessage assistantMessage = saveMessage(sessionId, traceId, "assistant", answerText, !sources.isEmpty());
+        emitter.send(SseEmitter.event().name("meta")
+                .data(objectMapper.writeValueAsString(Map.of("messageId", assistantMessage.getId()))));
+        emitter.complete();
+    }
+
+    private record PreparedGuideReply(String answerOverride, List<GuideSourceDto> sources) {
+        private PreparedGuideReply {
+            sources = sources == null ? List.of() : List.copyOf(sources);
+        }
     }
 
     private GuideMessage saveMessage(String sessionId, String traceId, String role, String content) {

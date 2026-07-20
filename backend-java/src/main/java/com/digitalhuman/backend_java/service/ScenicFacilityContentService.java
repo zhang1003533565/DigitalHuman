@@ -30,18 +30,21 @@ public class ScenicFacilityContentService {
     private final ScenicFacilityPresentationRepository presentationRepository;
     private final VoiceScriptSceneRepository voiceScriptRepository;
     private final DigitalHumanModelRepository digitalHumanModelRepository;
+    private final ScenicKnowledgePublicationService publicationService;
 
     public ScenicFacilityContentService(
             ScenicFacilityRepository facilityRepository,
             ScenicFacilityDetailRepository detailRepository,
             ScenicFacilityPresentationRepository presentationRepository,
             VoiceScriptSceneRepository voiceScriptRepository,
-            DigitalHumanModelRepository digitalHumanModelRepository) {
+            DigitalHumanModelRepository digitalHumanModelRepository,
+            ScenicKnowledgePublicationService publicationService) {
         this.facilityRepository = facilityRepository;
         this.detailRepository = detailRepository;
         this.presentationRepository = presentationRepository;
         this.voiceScriptRepository = voiceScriptRepository;
         this.digitalHumanModelRepository = digitalHumanModelRepository;
+        this.publicationService = publicationService;
     }
 
     public ScenicFacilityContentResponse getContent(Long facilityId) {
@@ -132,6 +135,7 @@ public class ScenicFacilityContentService {
         applyPresentation(presentation, request, liveDigitalHumanModel);
         detailRepository.save(detail);
         presentationRepository.save(presentation);
+        publicationService.markOutdated(facilityId);
         return toResponse(facility, detail, presentation);
     }
 

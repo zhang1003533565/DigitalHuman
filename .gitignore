@@ -27,3 +27,4 @@ backend-java/.m2/
 
 # Local brainstorming companion sessions
 .superpowers/brainstorm/
+.superpowers/sdd/
