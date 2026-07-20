@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { getStoredUser, type SessionUser } from '../auth/session'
 import { DIGITAL_HUMAN_ROUTE } from '../digitalHuman/shared'
+import { VisitorThemeSwitch } from './VisitorThemeSwitch'
 import './VisitorTopNav.css'
 
 type VisitorTopNavProps = { onLogout: () => void }
@@ -163,7 +164,9 @@ export function VisitorTopNav({ onLogout }: VisitorTopNavProps) {
           </NavLink>
         ))}
       </nav>
-      <div className="visitor-user-menu" onMouseEnter={openDropdown} onMouseLeave={closeDropdown}>
+      <div className="visitor-topbar__actions">
+        <VisitorThemeSwitch placement="header" />
+        <div className="visitor-user-menu" onMouseEnter={openDropdown} onMouseLeave={closeDropdown}>
         <button
           ref={avatarRef}
           className="visitor-user-menu__avatar"
@@ -199,6 +202,7 @@ export function VisitorTopNav({ onLogout }: VisitorTopNavProps) {
                   <span className="visitor-user-menu__role">{user?.role === 'ADMIN' ? '管理员' : '游客'}</span>
                 </div>
               </div>
+              <VisitorThemeSwitch placement="menu" />
               <button
                 ref={profileActionRef}
                 className="visitor-user-menu__item"
@@ -248,6 +252,7 @@ export function VisitorTopNav({ onLogout }: VisitorTopNavProps) {
             </div>,
             document.body,
           )}
+        </div>
       </div>
     </header>
   )
