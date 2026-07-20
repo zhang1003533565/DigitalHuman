@@ -27,6 +27,7 @@ import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -45,6 +46,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -82,6 +84,9 @@ class TravelAnalyticsSnapshotServiceTests {
     @Autowired
     private TravelAnalyticsSourceStateRepository sourceStates;
 
+    @SpyBean
+    private TravelAnalyticsSourceStateService sourceStateService;
+
     @MockBean
     private TravelAnalyticsMetricCalculator calculator;
 
@@ -105,7 +110,7 @@ class TravelAnalyticsSnapshotServiceTests {
         config.setId("default");
         config.setPublicEnabled(true);
         config.setMinimumSampleSize(10);
-        reset(calculator, configService);
+        reset(calculator, configService, sourceStateService);
         when(configService.getConfig()).thenReturn(config);
         stubCompleteCalculations();
     }
@@ -220,6 +225,21 @@ class TravelAnalyticsSnapshotServiceTests {
         assertEquals(409, exception.getStatusCode().value());
         assertEquals("统计快照正在生成", exception.getReason());
         assertEquals(1, batches.findAll().size());
+        verifyNoInteractions(calculator);
+    }
+
+    @Test
+    void refreshMapsSourceStateLockContentionToConflictWithoutCreatingBatch() {
+        doThrow(new CannotAcquireLockException("lock busy"))
+                .when(sourceStateService).lockState();
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.refresh(admin()));
+
+        assertEquals(409, exception.getStatusCode().value());
+        assertEquals("统计快照正在生成", exception.getReason());
+        assertTrue(batches.findAll().isEmpty());
         verifyNoInteractions(calculator);
     }
 
