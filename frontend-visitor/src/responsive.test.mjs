@@ -215,15 +215,13 @@ assert.match(digitalMobile, /\.live2d-page--presentation\s*\{[^}]*touch-action:\
 assert.match(digitalMobile, /\.live2d-canvas\s*\{[^}]*touch-action:\s*none/s, 'only the interactive digital-human canvas keeps exclusive touch handling')
 assert.match(digitalMobile, /\.digital-human-chat\s*\{[^}]*display:\s*none/s, 'mobile hides the desktop chat card')
 assert.match(digitalMobile, /\.digital-human-mobile-live\s*\{[^}]*display:\s*block/s, 'mobile shows the live comment experience')
-assert.match(digitalMobile, /\.digital-mobile-comment-feed\s*\{[^}]*position:\s*fixed[^}]*bottom:\s*var\(--digital-mobile-comment-bottom\)[^}]*overflow:\s*hidden/s, 'live comments share the fixed viewport stack without visible overflow')
-assert.match(digitalMobile, /\.digital-mobile-quick-questions\s*\{[^}]*overflow-x:\s*auto[^}]*overflow-y:\s*hidden/s, 'quick questions keep horizontal-only scrolling')
-assert.match(digitalMobile, /\.digital-mobile-quick-questions\s*\{[^}]*position:\s*fixed[^}]*bottom:\s*var\(--digital-mobile-quick-bottom\)/s, 'quick questions share the fixed viewport stack')
+assert.match(digitalMobile, /\.digital-mobile-comment-feed\s*\{[^}]*position:\s*fixed[^}]*bottom:\s*var\(--digital-mobile-comment-bottom\)[^}]*overflow-x:\s*hidden[^}]*overflow-y:\s*auto/s, 'live comments remain fully readable in a bounded vertical scroller')
+assert.doesNotMatch(digitalMobile, /\.digital-mobile-quick-questions\s*\{/s, 'ordinary mobile conversation does not render fallback quick questions')
 assert.match(digitalMobile, /\.digital-mobile-composer\s*\{[^}]*position:\s*fixed[^}]*bottom:\s*var\(--digital-mobile-composer-bottom\)/s, 'mobile composer consumes the shared visual viewport bottom')
 assert.match(digitalMobile, /--digital-mobile-composer-bottom:\s*max\([^;]*var\(--mobile-nav-height\)[^;]*var\(--safe-bottom\)[^;]*var\(--digital-mobile-viewport-bottom-inset,\s*0px\)/s, 'composer chooses navigation or visual viewport bottom inset')
-assert.match(digitalMobile, /--digital-mobile-quick-bottom:\s*calc\(\s*var\(--digital-mobile-composer-bottom\)[^;]*var\(--digital-mobile-composer-height\)[^;]*var\(--digital-mobile-stack-gap\)/s, 'quick questions stack above the composer')
-assert.match(digitalMobile, /--digital-mobile-comment-bottom:\s*calc\(\s*var\(--digital-mobile-quick-bottom\)[^;]*var\(--digital-mobile-quick-height\)[^;]*var\(--digital-mobile-stack-gap\)/s, 'comments stack above quick questions')
+assert.match(digitalMobile, /--digital-mobile-comment-bottom:\s*calc\(\s*var\(--digital-mobile-composer-bottom\)[^;]*var\(--digital-mobile-composer-height\)[^;]*var\(--digital-mobile-stack-gap\)/s, 'comments stack directly above the composer')
 assert.match(digitalMobile, /max-height:\s*clamp\(\s*0px,\s*calc\(var\(--digital-mobile-viewport-height,\s*100dvh\)[^;]*\),\s*460px\s*\)/s, 'comment height is bounded by the visual viewport')
-assert.match(digitalMobile, /@media\s*\(max-width:\s*768px\)\s*and\s*\(max-height:\s*700px\)[\s\S]*\.digital-mobile-comment\[data-mobile-hidden-on-short='true'\][\s\S]*display:\s*none/s, 'short mobile viewports hide only comments explicitly marked as older than the latest three')
+assert.doesNotMatch(digitalMobile, /data-mobile-hidden-on-short/s, 'short mobile viewports keep every retained comment available')
 assert.doesNotMatch(digitalMobile, /\.digital-mobile-comment:nth-of-type\(-n\+2\)/s, 'short mobile viewports must not hide an initial two-comment feed by position alone')
 assert.match(digitalMobile, /\.digital-mobile-history__body,[\s\S]*\.digital-mobile-settings__body\s*\{[^}]*max-height:[^;}]+;[^}]*overflow-y:\s*auto/s, 'mobile sheets keep bounded local scrolling')
 assert.match(digitalMobile, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.digital-mobile-comment/s, 'comment motion respects reduced-motion preferences')
@@ -481,6 +479,7 @@ for (const invalidBoundary of ['auto', 'max-content', 'fit-content', '50%']) {
 const MOBILE_VERTICAL_SCROLL_ALLOWLIST = new Set([
   'App.css::.authenticated-app__content',
   'DigitalHumanPage.css::.digital-chat-select__menu',
+  'DigitalHumanPage.css::.digital-mobile-comment-feed',
   'DigitalHumanPage.css::.digital-mobile-history__body',
   'DigitalHumanPage.css::.digital-mobile-settings__body',
   'MapPage.css::.map-spot-card',
@@ -559,7 +558,7 @@ for (const width of [320, 480]) {
 assert.deepEqual(
   readMobileVerticalScrollers(mobileScrollStyles).sort(),
   [...MOBILE_VERTICAL_SCROLL_ALLOWLIST].sort(),
-  'effective mobile vertical scrolling stays exclusive to the page owner and seven bounded local regions',
+  'effective mobile vertical scrolling stays exclusive to the page owner and bounded local regions',
 )
 const effectiveMapSidebar = readEffectiveRulesAtWidth(mapCss, 768).find((rule) => rule.selector === '.map-sidebar')?.declarations
 assert.equal(effectiveMapSidebar?.get('display'), 'none', 'mobile map hides the rendered desktop category sidebar')
@@ -578,11 +577,11 @@ for (const [name, css, width, selector] of [
 }
 for (const width of mobileRepresentativeWidths) {
   const declarations = readEffectiveRulesAtWidth(digitalHumanCss, width)
-    .find((rule) => rule.selector === '.digital-mobile-quick-questions')?.declarations
+    .find((rule) => rule.selector === '.digital-mobile-comment-feed')?.declarations
   assert.deepEqual(
     readComputedOverflow(declarations),
-    { overflowX: 'auto', overflowY: 'hidden' },
-    `digital quick questions keep horizontal-only scrolling at ${width}px`,
+    { overflowX: 'hidden', overflowY: 'auto' },
+    `digital comments remain vertically readable at ${width}px`,
   )
 }
 for (const [name, css, selector] of [
@@ -632,7 +631,6 @@ assert.equal(shortCommentHeight, 232, '375x667 reads the short-viewport comment 
 const mobileNavHeight = readPixelValue(globalTokens?.get('--mobile-nav-height'), 'mobile nav height')
 const mobileEdgeGap = readPixelValue(mobileStackTokens?.get('--digital-mobile-edge-gap'), 'mobile stack edge gap')
 const shortComposerHeight = readPixelValue(mobileStackTokens?.get('--digital-mobile-composer-height'), 'composer height')
-const shortQuickHeight = readPixelValue(mobileStackTokens?.get('--digital-mobile-quick-height'), 'quick-question height')
 const shortStackGap = readPixelValue(mobileStackTokens?.get('--digital-mobile-stack-gap'), 'mobile stack gap')
 const mobileCommentClearance = readPixelValue(mobileStackTokens?.get('--digital-mobile-comment-clearance'), 'comment clearance')
 
@@ -642,12 +640,10 @@ const calculateMobileStack = ({ layoutHeight, visualHeight, safeBottom, viewport
     viewportBottomInset + mobileEdgeGap,
   )
   const composerTop = layoutHeight - composerBottom - shortComposerHeight
-  const quickBottomEdge = layoutHeight - (composerBottom + shortComposerHeight + shortStackGap)
-  const quickTop = quickBottomEdge - shortQuickHeight
-  const commentBottomEdge = quickTop - shortStackGap
+  const commentBottomEdge = composerTop - shortStackGap
   const commentHeight = Math.min(shortCommentHeight, Math.max(0, visualHeight - mobileCommentClearance))
   const commentTop = commentBottomEdge - commentHeight
-  return { composerTop, quickBottomEdge, quickTop, commentBottomEdge, commentTop }
+  return { composerTop, commentBottomEdge, commentTop }
 }
 
 for (const scenario of [
@@ -656,8 +652,7 @@ for (const scenario of [
   { label: 'visual viewport keyboard inset', layoutHeight: 667, visualHeight: 387, safeBottom: 34, viewportBottomInset: 280 },
 ]) {
   const stack = calculateMobileStack(scenario)
-  assert.ok(stack.commentBottomEdge <= stack.quickTop, `${scenario.label}: comments stay above quick questions`)
-  assert.ok(stack.quickBottomEdge <= stack.composerTop, `${scenario.label}: quick questions stay above the composer`)
+  assert.ok(stack.commentBottomEdge <= stack.composerTop, `${scenario.label}: comments stay above the composer`)
   assert.ok(stack.commentTop >= 0, `${scenario.label}: fixed interaction stack stays inside the layout viewport`)
 }
 

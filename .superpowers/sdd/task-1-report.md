@@ -1,64 +1,65 @@
-status: DONE_WITH_CONCERNS
+# Task 1: Visitor Theme Domain And Authenticated Provider
 
-files changed:
-- backend-java/src/main/java/com/digitalhuman/backend_java/repository/VoiceScriptSceneRepository.java
-- backend-java/src/main/java/com/digitalhuman/backend_java/service/ScenicFacilityContentService.java
-- backend-java/src/main/java/com/digitalhuman/backend_java/controller/AdminScenicController.java
-- backend-java/src/test/java/com/digitalhuman/backend_java/service/ScenicFacilityContentServiceTests.java
-- frontend-admin/src/api/scenic.ts
+## Status
 
-exact test commands and outcomes:
-- `cd /Users/zzs/Desktop/zzs/github/DigitalHuman/backend-java && mvn -q -Dtest=ScenicFacilityContentServiceTests test`
-  outcome: FAIL as required by TDD red phase. Compiler errors reported missing `VoiceScriptSceneRepository.findByFacilityIdOrderByUpdatedAtDescIdDesc`, missing `VoiceScriptSceneRepository.findBySpotIdOrderByUpdatedAtDescIdDesc`, and missing `ScenicFacilityContentService.listVoiceScriptsForManagement`.
-- `cd /Users/zzs/Desktop/zzs/github/DigitalHuman/backend-java && mvn -q -Dtest=ScenicFacilityContentServiceTests test`
-  outcome: PASS (exit code 0). Maven completed with only JVM dynamic-agent warnings and no test failures.
-- `cd /Users/zzs/Desktop/zzs/github/DigitalHuman/frontend-admin && node src/pages/scenic/FacilityContentPage.test.mjs`
-  outcome: PASS. Output was `official facility content configuration contract passed`.
+Completed and committed as `e83a61f feat: 隔离访客端认证壳主题状态`.
 
-commit hash(es):
-- `ab82e20e443ed6e84a4417c6347c2533e0f402d9` (`fix: 让设施后台能查看全部口播版本`)
+## TDD evidence
 
-self-review findings:
-- No blocking implementation findings in Task 1 scope after focused verification.
-- The backend route `/api/admin/scenic/facilities/{id}/voice-scripts` now returns the management list instead of the bindable-only published/ready subset.
-- The new service method preserves direct `facilityId` results first, appends legacy `spotId` matches second, and deduplicates by record ID with `LinkedHashMap`.
-- I staged and committed only the five Task 1 ownership files. Other existing working-tree edits remained unstaged and untouched.
+### RED
 
-concerns:
-- `ScenicFacilityContentService.java` and `ScenicFacilityContentServiceTests.java` were already carrying required in-progress live/media edits before this task. The Task 1 commit intentionally included the current staged state of those task-owned files and did not attempt to separate unrelated hunks inside the same files.
-- Frontend work in this task was limited to the API type contract in `frontend-admin/src/api/scenic.ts`; no admin UI rendering/assertion for the full version-management list was added in Task 1.
+Command, from `frontend-visitor`:
 
----
+```text
+node --test src/theme/visitor-theme.test.mjs
+```
 
-## 2026-07-18 Task 1 review fix report
+Result: failed as expected with `ERR_MODULE_NOT_FOUND` for
+`src/theme/visitorTheme.ts`. The test was added before the theme domain or
+provider existed.
 
-status: FIXED
+### GREEN
 
-files changed:
-- backend-java/src/main/java/com/digitalhuman/backend_java/controller/AdminScenicController.java
-- backend-java/src/main/java/com/digitalhuman/backend_java/service/ScenicFacilityContentService.java
-- backend-java/src/test/java/com/digitalhuman/backend_java/service/ScenicFacilityContentServiceTests.java
-- frontend-admin/src/api/scenic.ts
-- frontend-admin/src/pages/scenic/FacilityContentPage.test.mjs
+Command, from `frontend-visitor`:
 
-fix summary:
-- Restored `GET /api/admin/scenic/facilities/{id}/voice-scripts` to the published+ready bindable list.
-- Added `GET /api/admin/scenic/facilities/{id}/voice-script-candidates` for Task 3 management candidates and added the matching frontend-admin API helper.
-- Re-sorted merged management rows globally by `updatedAt` desc then `id` desc after deduplicating direct `facilityId` and legacy `spotId` rows.
-- Added a regression test proving a newer legacy row sorts ahead of an older direct row while duplicate IDs still appear only once.
+```text
+node --test src/theme/visitor-theme.test.mjs && npm run build
+```
 
-exact test commands and pass outputs:
-- `cd /Users/zzs/Desktop/zzs/github/DigitalHuman/backend-java && mvn -q -Dtest=ScenicFacilityContentServiceTests test`
-  output:
-  `WARNING: A Java agent has been loaded dynamically (/Users/zzs/.m2/repository/net/bytebuddy/byte-buddy-agent/1.14.16/byte-buddy-agent-1.14.16.jar)`
-  `WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning`
-  `WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information`
-  `WARNING: Dynamic loading of agents will be disallowed by default in a future release`
-  result: PASS (exit code 0)
-- `cd /Users/zzs/Desktop/zzs/github/DigitalHuman/frontend-admin && node src/pages/scenic/FacilityContentPage.test.mjs`
-  output:
-  `official facility content configuration contract passed`
-  result: PASS (exit code 0)
+Result: both visitor-theme subtests passed (2/2); TypeScript and the Vite
+production build completed successfully.
 
-concerns:
-- The focused frontend-admin contract test covers the API surface and drawer contract only; Task 3 still needs to consume the new candidates endpoint in UI behavior.
+## Files
+
+- `frontend-visitor/src/theme/visitorTheme.ts` — isolated visitor theme types,
+  storage key, mode guard, and 07:00–18:59 auto-mode resolver.
+- `frontend-visitor/src/theme/VisitorThemeProvider.tsx` — authenticated-shell
+  context provider with safe localStorage persistence, minute clock refresh,
+  root data attributes, color-scheme management, and cleanup.
+- `frontend-visitor/src/theme/visitor-theme.test.mjs` — pure-domain and source
+  contracts.
+- `frontend-visitor/src/App.tsx` — wraps only the authenticated application
+  shell in `VisitorThemeProvider`.
+
+## Self-review
+
+- Confirmed no admin theme storage key or identifier is used by the provider.
+- Confirmed the provider is instantiated only after `ProtectedRoute` verifies a
+  user; the login route remains outside it.
+- Confirmed document attributes and the `color-scheme` inline style are removed
+  on provider cleanup.
+- Confirmed `git diff --cached --check` passed before the commit.
+
+## Commit
+
+`e83a61f feat: 隔离访客端认证壳主题状态`
+
+The commit includes the required Chinese Lore decision record and
+`Co-authored-by: OmX <omx@oh-my-codex.dev>` trailer.
+
+## Concerns
+
+- No browser-driven manual check was run for unavailable localStorage; the
+  provider explicitly retains the in-memory choice in that case.
+- The authorized pre-existing stale map-contract failures were not changed or
+  run as part of this focused Task 1 validation.

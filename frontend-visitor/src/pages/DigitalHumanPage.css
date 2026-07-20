@@ -766,17 +766,13 @@
     --digital-mobile-edge-gap: 8px;
     --digital-mobile-stack-gap: 8px;
     --digital-mobile-composer-height: 58px;
-    --digital-mobile-quick-height: 46px;
-    --digital-mobile-comment-clearance: 196px;
+    --digital-mobile-comment-clearance: 142px;
     --digital-mobile-composer-bottom: max(
       calc(var(--mobile-nav-height) + var(--safe-bottom) + var(--digital-mobile-edge-gap)),
       calc(var(--digital-mobile-viewport-bottom-inset, 0px) + var(--digital-mobile-edge-gap))
     );
-    --digital-mobile-quick-bottom: calc(
-      var(--digital-mobile-composer-bottom) + var(--digital-mobile-composer-height) + var(--digital-mobile-stack-gap)
-    );
     --digital-mobile-comment-bottom: calc(
-      var(--digital-mobile-quick-bottom) + var(--digital-mobile-quick-height) + var(--digital-mobile-stack-gap)
+      var(--digital-mobile-composer-bottom) + var(--digital-mobile-composer-height) + var(--digital-mobile-stack-gap)
     );
     display: block;
     height: auto;
@@ -858,7 +854,10 @@
       460px
     );
     padding: 0;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
     color: #fff;
     text-align: left;
     border: 0;
@@ -899,21 +898,21 @@
     opacity: 0.82;
   }
 
+  .digital-mobile-comment-feed::-webkit-scrollbar {
+    display: none;
+  }
+
   .digital-mobile-comment > span {
-    display: -webkit-box;
-    overflow: hidden;
     line-height: 1.45;
+    white-space: normal;
     overflow-wrap: anywhere;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
   }
 
   .digital-mobile-comment > button {
     grid-column: 2;
   }
 
-  .digital-mobile-comment-feed button,
-  .digital-mobile-quick-questions button {
+  .digital-mobile-comment-feed button {
     min-height: var(--touch-target);
     padding: 8px 12px;
     color: var(--visitor-text);
@@ -924,37 +923,6 @@
     border-radius: 999px;
     background: var(--visitor-overlay);
     cursor: pointer;
-  }
-
-  .digital-mobile-comment-feed__open {
-    align-self: flex-start;
-    flex: 0 0 auto;
-  }
-
-  .digital-mobile-quick-questions {
-    position: fixed;
-    right: 12px;
-    bottom: var(--digital-mobile-quick-bottom);
-    left: 12px;
-    z-index: 890;
-    display: flex;
-    gap: 8px;
-    height: var(--digital-mobile-quick-height);
-    padding-bottom: 2px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
-    pointer-events: auto;
-  }
-
-  .digital-mobile-quick-questions::-webkit-scrollbar {
-    display: none;
-  }
-
-  .digital-mobile-quick-questions button {
-    flex: 0 0 auto;
-    white-space: nowrap;
   }
 
   .digital-mobile-composer {
@@ -1001,8 +969,7 @@
     cursor: pointer;
   }
 
-  .digital-mobile-composer button:disabled,
-  .digital-mobile-quick-questions button:disabled {
+  .digital-mobile-composer button:disabled {
     cursor: not-allowed;
     opacity: 0.5;
   }
@@ -1144,13 +1111,6 @@
     );
   }
 
-  .digital-mobile-comment[data-mobile-hidden-on-short='true'] {
-    display: none;
-  }
-
-  .digital-mobile-comment > span {
-    -webkit-line-clamp: 2;
-  }
 }
 
 @keyframes digital-mobile-comment-in {

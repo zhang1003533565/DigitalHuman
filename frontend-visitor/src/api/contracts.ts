@@ -69,6 +69,10 @@ export function normalizeGuideChatResult(input: Partial<GuideChatResult>): Guide
   }
 }
 
+export function hasGuideRecommendations(result: Pick<GuideChatResult, 'relatedSpots' | 'recommendedRoutes'>) {
+  return result.relatedSpots.length > 0 || result.recommendedRoutes.length > 0
+}
+
 export function buildGuideNavigationSearchParams(
   result: Pick<GuideChatResult, 'sessionId' | 'traceId' | 'messageId'>,
   target: { routeId?: string; spotName?: string },

@@ -19,6 +19,7 @@ import { createNarrationController, type FacilityNarrationController } from '../
 import { appendLiveMessage, updateLiveMessage, type LiveChatMessage } from '../live/liveChat'
 import { parseLiveGuideStreamData } from '../live/liveBroadcastRuntime'
 import { disposeLive2dResources, releaseLive2dRefs } from '../live/live2dCleanup'
+import { resolveLive2dStageLayout } from '../live/live2dStageLayout'
 import { LiveChatFeed } from './components/LiveChatFeed'
 import './LiveBroadcastPage.css'
 
@@ -239,6 +240,7 @@ export function LiveBroadcastPage() {
 
   useEffect(() => {
     let cancelled = false
+    let resizeObserver: ResizeObserver | null = null
     const canvas = canvasRef.current
     const digitalHuman = liveConfig?.available ? liveConfig.digitalHuman : null
     if (!canvas || !digitalHuman?.modelPath) return
@@ -255,10 +257,26 @@ export function LiveBroadcastPage() {
         return
       }
       const modelDisplay = MODEL_OPTIONS.find((option) => option.id === digitalHuman.modelKey)
-      model.scale.set(0.24 * (modelDisplay?.scaleMultiplier ?? 1))
-      model.position.x = canvas.clientWidth * (0.5 + (modelDisplay?.xOffsetRatio ?? 0))
-      model.position.y = canvas.clientHeight * (0.08 + (modelDisplay?.yOffsetRatio ?? 0))
+      const modelWidth = model.width
+      const modelHeight = model.height
+      const applyModelLayout = () => {
+        const layout = resolveLive2dStageLayout({
+          stageWidth: canvas.clientWidth,
+          stageHeight: canvas.clientHeight,
+          modelWidth,
+          modelHeight,
+          scaleMultiplier: modelDisplay?.scaleMultiplier,
+          xOffsetRatio: modelDisplay?.xOffsetRatio,
+          yOffsetRatio: modelDisplay?.yOffsetRatio,
+        })
+        model.scale.set(layout.scale)
+        model.position.x = layout.x
+        model.position.y = layout.y
+      }
+      applyModelLayout()
       app.stage.addChild(model)
+      resizeObserver = new ResizeObserver(applyModelLayout)
+      resizeObserver.observe(canvas)
       pixiRef.current = app
       modelRef.current = model
       setModelReady(true)
@@ -270,6 +288,7 @@ export function LiveBroadcastPage() {
     })
     return () => {
       cancelled = true
+      resizeObserver?.disconnect()
       setModelReady(false)
       releaseLive2dRefs({
         modelRef,

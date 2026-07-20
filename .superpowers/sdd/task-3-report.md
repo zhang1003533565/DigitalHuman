@@ -1,139 +1,93 @@
-# Task 3 Report
+# Task 3 Report: Semantic Visitor Tokens And Authenticated Page Coverage
 
-## Commands
+## Status
 
-### RED
+DONE_WITH_CONCERNS
 
-Command:
+Commit: `448a6d3 feat: 让认证游客页面共享可切换的语义主题`
 
-```bash
-cd backend-java && mvn -q -Dtest=TravelAnalyticsMetricControllerTests test
-```
-
-Output:
-
-```text
-[ERROR] 找不到符号
-- TravelAnalyticsAiConfig
-- TravelAnalyticsAiConfigService
-```
-
-### GREEN
+## RED Evidence
 
 Command:
 
 ```bash
-cd backend-java && mvn -q -Dtest=TravelAnalyticsMetricControllerTests test
+cd frontend-visitor
+node --test src/theme/visitor-theme.test.mjs
 ```
 
-Output:
+Observed before production edits:
 
-```text
-Process exited with code 0
-Surefire: com.digitalhuman.backend_java.controller.TravelAnalyticsMetricControllerTests
-Tests run: 6, Failures: 0, Errors: 0, Skipped: 0
-```
+- Exit code: `1`
+- Existing theme-domain tests: `2` passed.
+- New semantic-theme tests: `3` failed for the intended missing behavior.
+  - `--visitor-bg must have a dark default`
+  - `page-level theme corrections must be loaded`
+  - `HomePage.css must consume visitor tokens or have a scoped page correction`
 
-### Full backend suite
+## GREEN Evidence
 
-Command:
+Fresh final verification after all edits:
 
-```bash
-cd backend-java && mvn -q test
-```
+| Command | Result |
+| --- | --- |
+| `node --test src/theme/visitor-theme.test.mjs` | PASS, 5/5 |
+| `node src/components/VisitorTopNav.test.mjs` | PASS |
+| `node src/responsive.test.mjs` | PASS, 12 routed page styles |
+| `npm run lint` | PASS |
+| `npm run build` | PASS, TypeScript + Vite production build, 136 modules transformed |
+| `git diff --cached --check` | PASS before commit |
 
-Output:
+## Implemented Files
 
-```text
-Process exited with code 0
-Surefire report summaries include:
-- TravelAnalyticsMetricControllerTests: Tests run: 6, Failures: 0, Errors: 0, Skipped: 0
-- TravelAnalyticsMetricServiceTests: Tests run: 13, Failures: 0, Errors: 0, Skipped: 0
-- AuthControllerTests: Tests run: 2, Failures: 0, Errors: 0, Skipped: 0
-- BackendJavaApplicationTests: Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
-- Remaining suite reports under target/surefire-reports also show Failures: 0, Errors: 0
-```
+Shared theme and contracts:
 
-## Changed files
+- `frontend-visitor/src/styles/tokens.css`
+- `frontend-visitor/src/index.css`
+- `frontend-visitor/src/App.css`
+- `frontend-visitor/src/styles/visitor-theme-pages.css`
+- `frontend-visitor/src/main.tsx`
+- `frontend-visitor/src/theme/visitor-theme.test.mjs`
+- `frontend-visitor/src/responsive.test.mjs`
 
-- `backend-java/src/main/java/com/digitalhuman/backend_java/config/WebConfig.java`
-- `backend-java/src/main/java/com/digitalhuman/backend_java/controller/AdminTravelAnalyticsController.java`
-- `backend-java/src/main/java/com/digitalhuman/backend_java/controller/UserTravelAnalyticsController.java`
-- `backend-java/src/main/java/com/digitalhuman/backend_java/model/TravelAnalyticsAiConfig.java`
-- `backend-java/src/main/java/com/digitalhuman/backend_java/repository/TravelAnalyticsAiConfigRepository.java`
-- `backend-java/src/main/java/com/digitalhuman/backend_java/service/TravelAnalyticsAiConfigService.java`
-- `backend-java/src/test/java/com/digitalhuman/backend_java/controller/TravelAnalyticsMetricControllerTests.java`
+Authenticated page styles:
+
+- `frontend-visitor/src/pages/HomePage.css`
+- `frontend-visitor/src/pages/DigitalHumanPage.css`
+- `frontend-visitor/src/pages/LiveBroadcastPage.css`
+- `frontend-visitor/src/pages/MapPage.css`
+- `frontend-visitor/src/pages/FeedbackPage.css`
+- `frontend-visitor/src/pages/HistoryPage.css`
+- `frontend-visitor/src/pages/ProfilePage.css`
+- `frontend-visitor/src/pages/TravelTipsPage.css`
+- `frontend-visitor/src/pages/SpotRecommendPage.css`
+- `frontend-visitor/src/pages/RouteRecommendListPage.css`
+
+`LoginPage.css` remained outside the authenticated provider. `RouteRecommendPage.css` was intentionally not redesigned or migrated because its theme/layout work belongs to Task 6.
+
+## Responsive Baseline Corrections
+
+The responsive source contracts had accumulated assertions for structures no longer rendered by current `MapPage.tsx` and `LiveBroadcastPage.tsx`. With explicit authorization, the following stale contracts were replaced by current behavior:
+
+1. Removed `.map-side` rendering/hiding expectations; assert that the legacy rail is not rendered and that the mobile toolbar plus compact context actions are rendered.
+2. Removed `map-mobile-drawer` label, expansion, panel, peek-offset, short-viewport, overlay, and reduced-motion geometry assertions; assert current toolbar/context label wrapping, selected-card `bottom: 16px`, controls `bottom: 16px`, and context-actions `bottom: 16px`.
+3. Replaced landscape `.map-side`/drawer positioning checks with `.map-sidebar` hiding and compact context-actions positioning.
+4. Excluded inert `.map-side` CSS from rendered mobile-scroller discovery and validate the rendered `.map-sidebar` instead.
+5. Replaced the obsolete live `grid-template-columns: 1fr` requirement with the current single-stage `display: block; height: 100%` contract.
+6. Replaced removed `.live-interaction__answer` scroll coverage with the current bounded `.live-chat__feed`.
+7. Made overflow inspection safely treat a missing selector as non-scrolling so stale selector failures produce actionable assertions instead of a `TypeError`.
+
+No map or live layout implementation was redesigned for these baseline corrections.
 
 ## Self-review
 
-- Added a real MVC formatter so `/average_spend` binds through `TravelAnalyticsMetric.fromValue(...)` instead of relying on Jackson-only annotations.
-- The user endpoint only accepts the fixed path metric enum and does not expose arbitrary query parameters.
-- Observer access rules still come only from the existing `AuthInterceptor`; the new tests prove observer `PUT` remains forbidden.
-- The AI config persists a single `default` row and exposes only the intended admin GET/PUT surface plus the admin metric test endpoint.
+- All required dark and light semantic variables use the exact Task 3 values.
+- Shared authenticated shell, cards, loading state, mobile navigation, focus visibility, and reduced motion consume global semantic tokens.
+- Every in-scope authenticated page stylesheet directly consumes `--visitor-*` variables.
+- Semantic live/error colors, media/hero shading, Live2D/video canvases, and map marker palettes were preserved.
+- No dependencies, assets, API behavior, route business logic, or layout structure were added.
+- Only Task 3 files were staged and committed; `.superpowers/sdd/*` was not staged.
 
 ## Concerns
 
-- `minimumSampleSize` is now persisted and editable, but the aggregation service still uses the previously reviewed in-service threshold logic from Task 2. This task keeps the reviewed `queryMetric(audience, metric)` interface unchanged.
-
-## Review fix round
-
-### RED
-
-Command:
-
-```bash
-cd backend-java && mvn -q -Dtest=TravelAnalyticsMetricServiceTests,TravelAnalyticsAiConfigServiceTests,TravelAnalyticsMetricControllerTests test
-```
-
-Output:
-
-```text
-[ERROR] TravelAnalyticsMetricServiceTests.publicDetailedMetricUsesConfiguredMinimumSampleSize
-expected: <样本不足> but was: <null>
-```
-
-### GREEN
-
-Command:
-
-```bash
-cd backend-java && mvn -q -Dtest=TravelAnalyticsMetricServiceTests,TravelAnalyticsAiConfigServiceTests,TravelAnalyticsMetricControllerTests test
-```
-
-Output:
-
-```text
-Process exited with code 0
-Surefire:
-- TravelAnalyticsMetricServiceTests: Tests run: 14, Failures: 0, Errors: 0, Skipped: 0
-- TravelAnalyticsAiConfigServiceTests: Tests run: 2, Failures: 0, Errors: 0, Skipped: 0
-- TravelAnalyticsMetricControllerTests: Tests run: 6, Failures: 0, Errors: 0, Skipped: 0
-```
-
-### Full backend suite after review fixes
-
-Command:
-
-```bash
-cd backend-java && mvn -q test
-```
-
-Output:
-
-```text
-Process exited with code 0
-Surefire report summaries include:
-- TravelAnalyticsMetricServiceTests: Tests run: 14, Failures: 0, Errors: 0, Skipped: 0
-- TravelAnalyticsAiConfigServiceTests: Tests run: 2, Failures: 0, Errors: 0, Skipped: 0
-- TravelAnalyticsMetricControllerTests: Tests run: 6, Failures: 0, Errors: 0, Skipped: 0
-- AuthControllerTests: Tests run: 2, Failures: 0, Errors: 0, Skipped: 0
-- BackendJavaApplicationTests: Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
-- Remaining suite reports under target/surefire-reports also show Failures: 0, Errors: 0
-```
-
-### Fix summary
-
-- `TravelAnalyticsMetricService` now reads the configured `minimumSampleSize` only for PUBLIC breakdown suppression while keeping `queryMetric(audience, metric)` unchanged.
-- ADMIN breakdown responses still bypass PUBLIC suppression and do not consult the AI config threshold.
-- `TravelAnalyticsAiConfigService.getConfig()` is now read-only for missing rows and returns an in-memory `default` config instead of inserting on first read.
-- Explicit admin updates still persist id `default` with last-write-wins semantics; missing-row reads are covered by new service tests.
+- Browser visual inspection of desktop/mobile light and dark modes was not run; validation is contract, lint, typecheck, and production-build based.
+- `MapPage.css` still contains inert legacy `.map-side` and `map-mobile-drawer` CSS even though `MapPage.tsx` no longer renders those structures. It was not deleted because Task 3 is a bounded theme migration, not a map CSS cleanup.

@@ -78,6 +78,9 @@ public class GuideService {
     static final String PERSONAL_DATA_REFUSAL = "抱歉，我只能提供脱敏后的群体统计信息，不能提供任何游客个人数据或行程明细。";
     static final String TRAVEL_ANALYTICS_UNAVAILABLE = "抱歉，当前脱敏旅游统计暂未开放，暂时无法回答这类群体统计问题。";
     private static final String TRAVEL_ANALYTICS_KNOWLEDGE_NAME = "脱敏旅游统计";
+    private static final List<String> RECOMMENDATION_TERMS = List.of(
+            "推荐", "攻略", "怎么玩", "怎么游", "怎么逛", "游览安排", "游玩安排",
+            "规划路线", "路线规划", "安排行程", "规划行程", "recommend");
 
     @Value("${ai.service-url}")
     private String aiServiceUrl;
@@ -301,17 +304,15 @@ public class GuideService {
         String answerText = preparedReply.answerOverride() != null
                 ? preparedReply.answerOverride()
                 : buildAnswer(sessionId, request.getQuestion(), request.getInterest(), sources);
-        List<String> relatedSpots = spots.stream().map(ScenicSpotDto::getName).limit(2).toList();
-        List<String> recommendedRoutes = recommendRoutes(request.getInterest()).stream()
-                .map(ScenicRouteDto::getId)
-                .toList();
+        RecommendationMetadata recommendation = resolveRecommendationMetadata(
+                request.getQuestion(), request.getInterest());
 
         touchSession(sessionId);
         saveMessage(sessionId, traceId, "user", request.getQuestion());
         GuideMessage assistantMessage = saveMessage(sessionId, traceId, "assistant", answerText, !sources.isEmpty());
 
-        return new GuideChatResponse(sessionId, traceId, assistantMessage.getId(), answerText, relatedSpots, recommendedRoutes,
-                buildSuggestions(answerText, relatedSpots, recommendedRoutes), sources);
+        return new GuideChatResponse(sessionId, traceId, assistantMessage.getId(), answerText,
+                recommendation.relatedSpots(), recommendation.recommendedRoutes(), recommendation.suggestions(), sources);
     }
 
     public GuideChatResponse quickChat(GuideChatRequest request) {
@@ -345,18 +346,16 @@ public class GuideService {
             try {
                 PreparedGuideReply preparedReply = prepareGuideReply(request.getQuestion(), request.getKnowledgeId(), true);
                 List<GuideSourceDto> sources = preparedReply.sources();
-                List<String> relatedSpots = spots.stream().map(ScenicSpotDto::getName).limit(2).toList();
-                List<String> recommendedRoutes = recommendRoutes(request.getInterest()).stream()
-                        .map(ScenicRouteDto::getId)
-                        .toList();
+                RecommendationMetadata recommendation = resolveRecommendationMetadata(
+                        request.getQuestion(), request.getInterest());
                 // 先发送 sessionId 等元信息
                 emitter.send(SseEmitter.event().name("meta")
                         .data(objectMapper.writeValueAsString(Map.of(
                                 "sessionId", finalSessionId,
                                 "traceId", traceId,
-                                "relatedSpots", relatedSpots,
-                                "recommendedRoutes", recommendedRoutes,
-                                "suggestions", buildSuggestions("", relatedSpots, recommendedRoutes),
+                                "relatedSpots", recommendation.relatedSpots(),
+                                "recommendedRoutes", recommendation.recommendedRoutes(),
+                                "suggestions", recommendation.suggestions(),
                                 "sources", sources))));
 
                 if (preparedReply.answerOverride() != null) {
@@ -462,19 +461,25 @@ public class GuideService {
         return emitter;
     }
 
-    List<String> buildSuggestions(String answerText, List<String> relatedSpots, List<String> recommendedRoutes) {
-        List<String> suggestions = new ArrayList<>(3);
-        if (relatedSpots != null && !relatedSpots.isEmpty() && relatedSpots.get(0) != null && !relatedSpots.get(0).isBlank()) {
-            suggestions.add("查看" + relatedSpots.get(0).trim() + "位置");
+    private RecommendationMetadata resolveRecommendationMetadata(String question, String interest) {
+        if (!isRecommendationRequest(question)) {
+            return RecommendationMetadata.empty();
         }
-        if (recommendedRoutes != null && !recommendedRoutes.isEmpty()) {
-            suggestions.add("推荐适合我的路线");
+        List<String> recommendedRoutes = recommendRoutes(interest).stream()
+                .map(ScenicRouteDto::getId)
+                .filter(Objects::nonNull)
+                .filter(routeId -> !routeId.isBlank())
+                .distinct()
+                .toList();
+        return new RecommendationMetadata(List.of(), recommendedRoutes, List.of());
+    }
+
+    private boolean isRecommendationRequest(String question) {
+        if (question == null || question.isBlank()) {
+            return false;
         }
-        suggestions.add("还有哪些注意事项");
-        if (suggestions.size() < 3) {
-            suggestions.add("附近还有什么值得去");
-        }
-        return suggestions.stream().filter(suggestion -> !suggestion.isBlank()).distinct().limit(3).toList();
+        String normalized = question.trim().toLowerCase(java.util.Locale.ROOT);
+        return RECOMMENDATION_TERMS.stream().anyMatch(normalized::contains);
     }
 
     private String firstWarningOrDefault(JsonNode chunk, String defaultMessage) {
@@ -985,6 +990,21 @@ public class GuideService {
     private record PreparedGuideReply(String answerOverride, List<GuideSourceDto> sources) {
         private PreparedGuideReply {
             sources = sources == null ? List.of() : List.copyOf(sources);
+        }
+    }
+
+    private record RecommendationMetadata(
+            List<String> relatedSpots,
+            List<String> recommendedRoutes,
+            List<String> suggestions) {
+        private RecommendationMetadata {
+            relatedSpots = relatedSpots == null ? List.of() : List.copyOf(relatedSpots);
+            recommendedRoutes = recommendedRoutes == null ? List.of() : List.copyOf(recommendedRoutes);
+            suggestions = suggestions == null ? List.of() : List.copyOf(suggestions);
+        }
+
+        private static RecommendationMetadata empty() {
+            return new RecommendationMetadata(List.of(), List.of(), List.of());
         }
     }
 

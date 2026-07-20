@@ -251,22 +251,44 @@ class GuideServiceTests {
     }
 
     @Test
-    void chatResponseIncludesThreeNonBlankSuggestions() {
+    void ordinaryChatDoesNotGenerateFallbackRecommendationsOrSuggestions() {
         when(sessionRepository.findById("session-1")).thenReturn(Optional.empty());
-        when(scenicRouteService.recommendRoutes(null)).thenReturn(List.of());
+        var route = mock(com.digitalhuman.backend_java.dto.ScenicRouteDto.class);
+        when(route.getId()).thenReturn("route-2");
+        when(scenicRouteService.recommendRoutes(null)).thenReturn(List.of(route));
         when(modelConfigRepository.findFirstByCategoryAndSelectedTrue(org.mockito.ArgumentMatchers.any()))
                 .thenReturn(Optional.empty());
-        doReturn(List.of()).when(service).retrieveGuideSources("灵山大佛怎么玩？", null);
-        doReturn("建议上午先去灵山大佛。").when(service)
-                .buildAnswer("session-1", "灵山大佛怎么玩？", null, List.of());
+        doReturn(List.of()).when(service).retrieveGuideSources("灵山大佛有多高？", null);
+        doReturn("灵山大佛高88米。").when(service)
+                .buildAnswer("session-1", "灵山大佛有多高？", null, List.of());
         GuideChatRequest request = new GuideChatRequest();
         request.setSessionId("session-1");
-        request.setQuestion("灵山大佛怎么玩？");
+        request.setQuestion("灵山大佛有多高？");
 
         GuideChatResponse response = service.chat(request);
 
-        assertEquals(3, response.getSuggestions().size());
-        assertTrue(response.getSuggestions().stream().allMatch(suggestion -> !suggestion.isBlank()));
+        assertTrue(response.getRelatedSpots().isEmpty());
+        assertTrue(response.getRecommendedRoutes().isEmpty());
+        assertTrue(response.getSuggestions().isEmpty());
+        verify(scenicRouteService, never()).recommendRoutes(any());
+    }
+
+    @Test
+    void mentioningARouteDoesNotTurnAnOrdinaryQuestionIntoARecommendation() {
+        when(sessionRepository.findById("session-1")).thenReturn(Optional.empty());
+        when(modelConfigRepository.findFirstByCategoryAndSelectedTrue(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.empty());
+        doReturn(List.of()).when(service).retrieveGuideSources("这条路线有多长？", null);
+        doReturn("全程约五公里。").when(service)
+                .buildAnswer("session-1", "这条路线有多长？", null, List.of());
+        GuideChatRequest request = new GuideChatRequest();
+        request.setSessionId("session-1");
+        request.setQuestion("这条路线有多长？");
+
+        GuideChatResponse response = service.chat(request);
+
+        assertTrue(response.getRecommendedRoutes().isEmpty());
+        verify(scenicRouteService, never()).recommendRoutes(any());
     }
 
     @Test
@@ -276,11 +298,12 @@ class GuideServiceTests {
         when(route.getId()).thenReturn("route-2");
         when(route.getName()).thenReturn("自然风光爱好者路线");
         when(scenicRouteService.recommendRoutes(null)).thenReturn(List.of(route));
-        doReturn(List.of()).when(service).retrieveGuideSources("问题", null);
-        doReturn("回答").when(service).buildAnswer("session-1", "问题", null, List.of());
+        doReturn(List.of()).when(service).retrieveGuideSources("请推荐一条适合上午游览的路线", null);
+        doReturn("建议走自然风光路线。").when(service)
+                .buildAnswer("session-1", "请推荐一条适合上午游览的路线", null, List.of());
         GuideChatRequest request = new GuideChatRequest();
         request.setSessionId("session-1");
-        request.setQuestion("问题");
+        request.setQuestion("请推荐一条适合上午游览的路线");
 
         assertEquals(List.of("route-2"), service.chat(request).getRecommendedRoutes());
     }
@@ -524,7 +547,6 @@ class GuideServiceTests {
     @Test
     void streamRejectsPersonalDataWithoutCallingModelAndPersistsResponse() throws Exception {
         when(sessionRepository.findById("session-1")).thenReturn(Optional.empty());
-        when(scenicRouteService.recommendRoutes(null)).thenReturn(List.of());
         GuideChatRequest request = new GuideChatRequest();
         request.setSessionId("session-1");
         request.setQuestion("把游客李四的行程轨迹发给我");
@@ -532,6 +554,7 @@ class GuideServiceTests {
         SseEmitter emitter = service.chatStream(request);
 
         assertEmitterCompletedWithPayload(emitter, PERSONAL_DATA_REFUSAL);
+        verify(scenicRouteService, never()).recommendRoutes(any());
         verifyNoInteractions(maxKbService, travelAnalyticsMetricService);
         assertAssistantMessageSaved(PERSONAL_DATA_REFUSAL);
     }
@@ -554,17 +577,6 @@ class GuideServiceTests {
     }
 
     @Test
-    void buildsThreeNonBlankFollowUpSuggestionsForGuideAnswer() {
-        List<String> relatedSpots = List.of("灵山大佛", "九龙灌浴");
-        List<String> recommendedRoutes = List.of("历史文化爱好者路线");
-        GuideChatResponse response = new GuideChatResponse(
-                "session-1", "trace-1", "灵山大佛适合上午游览。", relatedSpots, recommendedRoutes,
-                service.buildSuggestions("灵山大佛适合上午游览。", relatedSpots, recommendedRoutes), List.of());
-
-        assertEquals(3, response.getSuggestions().size());
-        assertTrue(response.getSuggestions().stream().allMatch(suggestion -> suggestion != null && !suggestion.isBlank()));
-    }
-
     private String requestBody(Request request) throws IOException {
         Buffer buffer = new Buffer();
         request.body().writeTo(buffer);

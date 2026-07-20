@@ -1,4 +1,4 @@
-import { type FormEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
+import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import axios from 'axios'
 import './DigitalHumanPage.css'
 import {
@@ -26,12 +26,8 @@ import {
   sanitizeSpeechText,
 } from '../digitalHuman/streamingSpeech'
 import { GuideResultCards } from '../components/GuideResultCards'
-import { normalizeGuideChatResult, type GuideChatResult } from '../api/contracts'
-import {
-  MOBILE_LIVE_QUICK_QUESTIONS,
-  getMobileLiveComments,
-  shouldHideMobileLiveCommentOnShortViewport,
-} from '../digitalHuman/mobileLive'
+import { hasGuideRecommendations, normalizeGuideChatResult, type GuideChatResult } from '../api/contracts'
+import { getMobileLiveComments } from '../digitalHuman/mobileLive'
 import { invalidateSpeechRecognition } from '../digitalHuman/speechRecognitionLifecycle'
 
 type DigitalHumanConfig = {
@@ -205,7 +201,7 @@ function DigitalChatMessageArticle({ message, onSuggestion }: DigitalChatMessage
       {!isOwn ? <span className="digital-chat-message__avatar" aria-hidden>灵</span> : null}
       <div className="digital-chat-message__bubble">
         <div className="digital-chat-message__content">{message.content}</div>
-        {message.result ? (
+        {message.result && hasGuideRecommendations(message.result) ? (
           <GuideResultCards
             result={message.result}
             messageId={message.messageId}
@@ -991,10 +987,6 @@ export function DigitalHumanPage() {
     void sendQuestion(draft)
   }
 
-  function handleMobileQuickQuestion(event: ReactMouseEvent<HTMLButtonElement>) {
-    void sendQuestion(event.currentTarget.dataset.question ?? '')
-  }
-
   function startVoiceQuestion() {
     const SpeechRecognition = (window as typeof window & {
       SpeechRecognition?: SpeechRecognitionConstructor
@@ -1359,15 +1351,14 @@ export function DigitalHumanPage() {
             {mobileLiveAnnouncement}
           </span>
           <section className="digital-mobile-comment-feed" aria-label="最近对话">
-            {mobileLiveComments.map((message, index) => (
+            {mobileLiveComments.map((message) => (
               <article
                 key={message.id}
                 className={`digital-mobile-comment digital-mobile-comment--${message.sender}`}
-                data-mobile-hidden-on-short={shouldHideMobileLiveCommentOnShortViewport(mobileLiveComments.length, index)}
               >
                 <strong>{message.sender === 'guide' ? '灵灵' : '我'}</strong>
                 <span>{message.content}</span>
-                {message.result ? (
+                {message.result && hasGuideRecommendations(message.result) ? (
                   <button
                     type="button"
                     onClick={(event) => openMobileHistory(message.id, event.currentTarget)}
@@ -1377,27 +1368,7 @@ export function DigitalHumanPage() {
                 ) : null}
               </article>
             ))}
-            <button
-              className="digital-mobile-comment-feed__open"
-              type="button"
-              onClick={(event) => openMobileHistory(undefined, event.currentTarget)}
-            >
-              查看全部
-            </button>
           </section>
-          <div className="digital-mobile-quick-questions" aria-label="快捷提问">
-            {MOBILE_LIVE_QUICK_QUESTIONS.map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                disabled={!isReady}
-                data-question={item.question}
-                onClick={handleMobileQuickQuestion}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
           <form className="digital-mobile-composer" onSubmit={handleSend}>
             <textarea
               value={draft}

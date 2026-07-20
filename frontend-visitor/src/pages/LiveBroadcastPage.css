@@ -53,7 +53,7 @@
   .live-chat__feed::-webkit-scrollbar { display: none; }
   .live-chat__message { max-width: 78%; margin: 6px 0 0; padding: 8px 10px; border-radius: 14px; color: #ffffff; background: rgba(15,23,42,.68); backdrop-filter: blur(10px); }
   .live-chat__message--viewer { margin-left: 0; background: rgba(3,105,161,.72); }
-  .live-chat__message p { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+  .live-chat__message p { white-space: normal; overflow-wrap: anywhere; }
   .live-chat__message-meta { font-size: 11px; }
   .live-chat__empty { max-width: 78%; padding: 8px 10px; border-radius: 14px; color: #ffffff; background: rgba(15,23,42,.62); }
   .live-chat__composer { position: absolute; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); left: 10px; display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 8px; margin: 0; padding: 8px; border: 1px solid var(--visitor-border); border-radius: 999px; background: var(--visitor-overlay); backdrop-filter: blur(16px); pointer-events: auto; }

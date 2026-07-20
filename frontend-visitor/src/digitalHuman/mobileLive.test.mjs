@@ -26,12 +26,6 @@ try {
   assert.ok(readFileSync(modulePath, 'utf8').length > 0)
   const mobileLive = await import(pathToFileURL(modulePath))
 
-  assert.equal(mobileLive.MOBILE_LIVE_COMMENT_LIMIT, 5)
-  assert.deepEqual(
-    mobileLive.MOBILE_LIVE_QUICK_QUESTIONS.map((item) => item.label),
-    ['景点讲解', '路线推荐', '附近服务'],
-  )
-
   const messages = Array.from({ length: 8 }, (_, index) => ({
     id: String(index + 1),
     metadata: { position: index + 1 },
@@ -43,32 +37,18 @@ try {
   }
   Object.freeze(messages)
 
-  const recent = mobileLive.getRecentMobileLiveComments(messages)
-  assert.deepEqual(recent.map((item) => item.id), ['4', '5', '6', '7', '8'])
-  assert.deepEqual(messages, snapshot, 'deriving live comments must not mutate message state')
-
   const transient = { id: 'runtime-thinking', metadata: { position: 9 } }
   const merged = mobileLive.getMobileLiveComments(messages, transient)
   assert.deepEqual(
     merged.map((item) => item.id),
-    ['5', '6', '7', '8', 'runtime-thinking'],
-    'a transient runtime comment shares the five-item limit with persisted messages',
+    ['1', '2', '3', '4', '5', '6', '7', '8', 'runtime-thinking'],
+    'a transient runtime comment is appended without hiding earlier ordinary messages',
   )
   assert.deepEqual(messages, snapshot, 'merging a transient comment must not mutate message state')
   assert.deepEqual(
     mobileLive.getMobileLiveComments(messages, null).map((item) => item.id),
-    ['4', '5', '6', '7', '8'],
-    'an absent transient comment preserves the regular recent-message view',
-  )
-  assert.deepEqual(
-    Array.from({ length: 5 }, (_, index) => mobileLive.shouldHideMobileLiveCommentOnShortViewport(5, index)),
-    [true, true, false, false, false],
-    'short viewports hide only comments older than the latest three',
-  )
-  assert.deepEqual(
-    Array.from({ length: 2 }, (_, index) => mobileLive.shouldHideMobileLiveCommentOnShortViewport(2, index)),
-    [false, false],
-    'an initial two-comment feed remains visible on short viewports',
+    ['1', '2', '3', '4', '5', '6', '7', '8'],
+    'an absent transient comment keeps the full ordinary conversation available',
   )
   console.log('mobile digital-human live data contract passed')
 } finally {
