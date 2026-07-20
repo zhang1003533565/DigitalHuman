@@ -24,4 +24,9 @@ assert.doesNotMatch(mapPage, /洗心池有什么特别|灵山大佛多高|附近
 
 const routeRecommendPage = readFileSync(new URL('RouteRecommendPage.tsx', import.meta.url), 'utf8')
 assert.match(routeRecommendPage, /<span>\{mapError\?\.message \|\| '高德地图加载中，先查看下方行程安排。'\}<\/span>/)
-assert.doesNotMatch(routeRecommendPage, /mapError\??\.code === 'sdkLoadError'/)
+assert.match(routeRecommendPage, /const \[mapRequestVersion, setMapRequestVersion\] = useState\(0\)/)
+assert.match(routeRecommendPage, /function handleMapRetry\(\) \{[\s\S]*setMapError\(null\)[\s\S]*resetAMapLoadState\(\)[\s\S]*setMapRequestVersion\(\(current\) => current \+ 1\)/s)
+assert.match(routeRecommendPage, /useEffect\(\(\) => \{[\s\S]*loadAMap\(\)[\s\S]*\}, \[mapRequestVersion\]\)/s)
+assert.match(routeRecommendPage, /mapError\?\.code === 'sdkLoadError'[\s\S]*onClick=\{handleMapRetry\}[\s\S]*重新加载地图/s)
+assert.match(routeRecommendPage, /const AMAP_SCRIPT_SELECTOR = 'script\[data-amap-loader=\"visitor-route-recommend\"\]'/)
+assert.match(routeRecommendPage, /function resetAMapLoadState\(doc = document\) \{[\s\S]*amapLoaderPromise = null[\s\S]*querySelectorAll\(AMAP_SCRIPT_SELECTOR\)\.forEach\(\(script\) => script\.remove\(\)\)/s)

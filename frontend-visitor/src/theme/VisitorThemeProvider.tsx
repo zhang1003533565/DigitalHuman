@@ -1,7 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState, type PropsWithChildren } from 'react'
 import {
   VISITOR_THEME_STORAGE_KEY,
-  isVisitorThemeMode,
+  applyVisitorThemeToRoot,
+  clearVisitorThemeFromRoot,
+  getMillisecondsUntilNextVisitorThemeBoundary,
+  readStoredVisitorThemeMode,
   resolveVisitorTheme,
   type ResolvedVisitorTheme,
   type VisitorThemeMode,
@@ -16,12 +19,7 @@ type VisitorThemeContextValue = {
 const VisitorThemeContext = createContext<VisitorThemeContextValue | null>(null)
 
 function getInitialMode(): VisitorThemeMode {
-  try {
-    const storedMode = localStorage.getItem(VISITOR_THEME_STORAGE_KEY)
-    return isVisitorThemeMode(storedMode) ? storedMode : 'auto'
-  } catch {
-    return 'auto'
-  }
+  return readStoredVisitorThemeMode()
 }
 
 export function VisitorThemeProvider({ children }: PropsWithChildren) {
@@ -35,8 +33,32 @@ export function VisitorThemeProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     if (mode !== 'auto') return undefined
-    const timer = window.setInterval(() => setClock(new Date()), 60_000)
-    return () => window.clearInterval(timer)
+    let cancelled = false
+    let timer: number | null = null
+
+    const scheduleNextBoundary = () => {
+      const timeoutMs = getMillisecondsUntilNextVisitorThemeBoundary(new Date())
+      timer = window.setTimeout(() => {
+        if (cancelled) return
+        setClock(new Date())
+        scheduleNextBoundary()
+      }, timeoutMs)
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return
+      setClock(new Date())
+      if (timer !== null) window.clearTimeout(timer)
+      scheduleNextBoundary()
+    }
+
+    scheduleNextBoundary()
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      cancelled = true
+      if (timer !== null) window.clearTimeout(timer)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
   }, [mode])
 
   useEffect(() => {
@@ -49,13 +71,9 @@ export function VisitorThemeProvider({ children }: PropsWithChildren) {
 
   useLayoutEffect(() => {
     const root = document.documentElement
-    root.dataset.visitorTheme = effectiveTheme
-    root.dataset.visitorThemeMode = mode
-    root.style.colorScheme = effectiveTheme
+    applyVisitorThemeToRoot(root, mode, effectiveTheme)
     return () => {
-      delete root.dataset.visitorTheme
-      delete root.dataset.visitorThemeMode
-      root.style.removeProperty('color-scheme')
+      clearVisitorThemeFromRoot(root)
     }
   }, [effectiveTheme, mode])
 

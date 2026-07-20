@@ -48,6 +48,12 @@ declare global {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let amapLoaderPromise: Promise<any> | null = null
 type MapLoadError = { code: 'configMissing' | 'sdkLoadError'; message: string }
+const AMAP_SCRIPT_SELECTOR = 'script[data-amap-loader="visitor-route-recommend"]'
+
+function resetAMapLoadState(doc = document) {
+  amapLoaderPromise = null
+  doc.querySelectorAll(AMAP_SCRIPT_SELECTOR).forEach((script) => script.remove())
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function loadAMap(): Promise<any> {
@@ -62,11 +68,12 @@ async function loadAMap(): Promise<any> {
   window._AMapSecurityConfig = { securityJsCode: mapConfig.amapSecurityKey }
   amapLoaderPromise = new Promise((resolve, reject) => {
     const script = document.createElement('script')
+    script.dataset.amapLoader = 'visitor-route-recommend'
     script.src = `https://webapi.amap.com/maps?v=2.0&key=${mapConfig.amapKey}`
     script.async = true
     script.onload = () => resolve(window.AMap)
     script.onerror = () => {
-      amapLoaderPromise = null
+      resetAMapLoadState()
       reject({ code: 'sdkLoadError', message: '地图加载失败，请稍后重试' } satisfies MapLoadError)
     }
     document.head.appendChild(script)
@@ -144,6 +151,7 @@ export function RouteRecommendPage() {
   const [routeRequestVersion, setRouteRequestVersion] = useState(0)
   const [loadError, setLoadError] = useState('')
   const [mapError, setMapError] = useState<MapLoadError | null>(null)
+  const [mapRequestVersion, setMapRequestVersion] = useState(0)
   const [visibleFacilityGroups, setVisibleFacilityGroups] = useState<FacilityGroup[]>(ALL_FACILITY_GROUPS)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [amapApi, setAmapApi] = useState<any>(null)
@@ -195,8 +203,8 @@ export function RouteRecommendPage() {
   }, [filters.interest, routeRequestVersion])
 
   useEffect(() => {
+    if (mapInstanceRef.current) return undefined
     let cancelled = false
-    const mapThemeController = mapThemeControllerRef.current
 
     loadAMap()
       .then((AMap) => {
@@ -215,6 +223,12 @@ export function RouteRecommendPage() {
 
     return () => {
       cancelled = true
+    }
+  }, [mapRequestVersion])
+
+  useEffect(() => {
+    const mapThemeController = mapThemeControllerRef.current
+    return () => {
       if (mapInstanceRef.current) {
         mapInstanceRef.current.destroy?.()
         mapInstanceRef.current = null
@@ -386,6 +400,12 @@ export function RouteRecommendPage() {
     setFilters({ interest: '', duration: '', intensity: '' })
   }
 
+  function handleMapRetry() {
+    setMapError(null)
+    resetAMapLoadState()
+    setMapRequestVersion((current) => current + 1)
+  }
+
   return (
     <main className="page-shell route-page">
       <div className="route-page__inner">
@@ -548,6 +568,15 @@ export function RouteRecommendPage() {
                   <div className="route-map-fallback">
                     <strong>{selectedRoute.name}</strong>
                     <span>{mapError?.message || '高德地图加载中，先查看下方行程安排。'}</span>
+                    {mapError?.code === 'sdkLoadError' ? (
+                      <button
+                        type="button"
+                        className="ghost-button route-reload-button"
+                        onClick={handleMapRetry}
+                      >
+                        重新加载地图
+                      </button>
+                    ) : null}
                     <div className="route-map-schematic" aria-label="路线示意">
                       {(selectedRoute.nodes ?? []).slice(0, 6).map((node, index) => (
                         <span key={node.id}>

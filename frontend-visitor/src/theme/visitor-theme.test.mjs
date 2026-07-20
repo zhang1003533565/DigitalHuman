@@ -3,6 +3,8 @@ import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 import {
   VISITOR_THEME_STORAGE_KEY,
+  bootstrapVisitorTheme,
+  getMillisecondsUntilNextVisitorThemeBoundary,
   isVisitorThemeMode,
   resolveVisitorTheme,
 } from './visitorTheme.ts'
@@ -113,6 +115,25 @@ test('visitor auto theme uses the agreed day window', () => {
   assert.equal(resolveVisitorTheme('auto', new Date(2026, 6, 20, 19, 0)), 'dark')
 })
 
+test('visitor auto theme schedules the exact next 07:00/19:00 boundary', () => {
+  assert.equal(
+    getMillisecondsUntilNextVisitorThemeBoundary(new Date(2026, 6, 20, 6, 59, 30)),
+    30_000,
+  )
+  assert.equal(
+    getMillisecondsUntilNextVisitorThemeBoundary(new Date(2026, 6, 20, 18, 59, 30)),
+    30_000,
+  )
+  assert.equal(
+    getMillisecondsUntilNextVisitorThemeBoundary(new Date(2026, 6, 20, 19, 0, 0)),
+    12 * 60 * 60 * 1000,
+  )
+  assert.equal(
+    getMillisecondsUntilNextVisitorThemeBoundary(new Date(2026, 6, 20, 7, 0, 0)),
+    12 * 60 * 60 * 1000,
+  )
+})
+
 test('visitor theme is isolated from the admin theme', () => {
   assert.equal(VISITOR_THEME_STORAGE_KEY, 'digital-human.visitor-theme-mode')
   assert.equal(isVisitorThemeMode('auto'), true)
@@ -120,9 +141,53 @@ test('visitor theme is isolated from the admin theme', () => {
   assert.equal(isVisitorThemeMode('dark'), true)
   assert.equal(isVisitorThemeMode('sepia'), false)
   assert.doesNotMatch(provider, /admin-theme|adminTheme/)
-  assert.match(provider, /dataset\.visitorTheme = effectiveTheme/)
-  assert.match(provider, /dataset\.visitorThemeMode = mode/)
+  assert.match(provider, /applyVisitorThemeToRoot\(root, mode, effectiveTheme\)/)
+  assert.match(provider, /clearVisitorThemeFromRoot\(root\)/)
   assert.match(app, /<VisitorThemeProvider>[\s\S]*<VisitorTopNav[\s\S]*<Outlet \/>/)
+})
+
+test('visitor bootstrap applies the persisted visitor mode before React mounts', () => {
+  const requestedKeys = []
+  const root = {
+    dataset: {},
+    style: {
+      colorScheme: '',
+      removeProperty(name) {
+        if (name === 'color-scheme') this.colorScheme = ''
+      },
+    },
+    classList: {
+      values: new Set(),
+      add(...tokens) {
+        tokens.forEach((token) => this.values.add(token))
+      },
+      remove(...tokens) {
+        tokens.forEach((token) => this.values.delete(token))
+      },
+    },
+  }
+  const storage = {
+    getItem(key) {
+      requestedKeys.push(key)
+      return key === VISITOR_THEME_STORAGE_KEY ? 'light' : 'dark'
+    },
+  }
+
+  const result = bootstrapVisitorTheme({
+    date: new Date(2026, 6, 20, 22, 0, 0),
+    root,
+    storage,
+  })
+
+  assert.deepEqual(requestedKeys, [VISITOR_THEME_STORAGE_KEY])
+  assert.deepEqual(result, { mode: 'light', effectiveTheme: 'light' })
+  assert.equal(root.dataset.visitorTheme, 'light')
+  assert.equal(root.dataset.visitorThemeMode, 'light')
+  assert.equal(root.style.colorScheme, 'light')
+  assert.equal(root.classList.values.has('visitor-theme--light'), true)
+  assert.equal(root.classList.values.has('visitor-theme-mode--light'), true)
+  assert.equal(root.dataset.adminTheme, undefined)
+  assert.equal(root.dataset.adminThemeMode, undefined)
 })
 
 test('visitor map theme maps effective theme to the agreed AMap styles', () => {
@@ -212,12 +277,17 @@ test('visitor semantic tokens define complete dark and light themes', () => {
 })
 
 test('shared authenticated styles consume visitor semantic tokens', () => {
+  assert.match(main, /bootstrapVisitorTheme\(\)\s*[\s\S]*createRoot/, 'main must bootstrap the visitor theme before createRoot')
   assert.match(main, /styles\/visitor-theme-pages\.css/, 'page-level theme corrections must be loaded')
   assert.match(indexCss, /var\(--visitor-(?:bg|text)/, 'global styles must consume visitor background or text tokens')
   assert.match(appCss, /var\(--visitor-surface/, 'shared cards must consume visitor surface tokens')
   assert.match(appCss, /var\(--visitor-overlay/, 'mobile navigation must consume the visitor overlay token')
   assert.match(indexCss, /:focus-visible[\s\S]*var\(--visitor-focus\)/, 'global focus must use the visitor focus token')
   assert.match(indexCss, /prefers-reduced-motion:\s*reduce/, 'global styles must respect reduced motion')
+  assert.doesNotMatch(provider, /setInterval/, 'auto mode must not poll every 60s from mount')
+  assert.match(provider, /getMillisecondsUntilNextVisitorThemeBoundary/, 'provider must schedule the next exact theme boundary')
+  assert.match(provider, /setTimeout/, 'provider must use chained setTimeout for auto mode')
+  assert.match(provider, /visibilitychange/, 'provider must re-check immediately when the tab becomes visible')
 })
 
 test('every authenticated stylesheet exists and is non-empty', () => {
