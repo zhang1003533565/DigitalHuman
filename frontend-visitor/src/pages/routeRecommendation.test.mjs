@@ -92,3 +92,13 @@ test('route page renders recommendation-first decision hooks', async () => {
 
   assert.doesNotMatch(source, /Selected Route/)
 })
+
+test('route map initializes after async route content mounts when AMap is already cached', async () => {
+  const source = await readFile(pageSourceUrl, 'utf8')
+
+  assert.match(
+    source,
+    /useEffect\(\(\) => \{[\s\S]*new amapApi\.Map\(mapContainerRef\.current,[\s\S]*\}, \[amapApi, selectedRoute\]\)/,
+    'map initialization must retry when the selected route renders the map container after the cached SDK resolves',
+  )
+})

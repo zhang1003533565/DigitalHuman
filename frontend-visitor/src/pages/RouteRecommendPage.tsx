@@ -125,18 +125,9 @@ export function RouteRecommendPage() {
 
     loadAMap()
       .then((AMap) => {
-        if (cancelled || !mapContainerRef.current || mapInstanceRef.current) return
-
-        mapInstanceRef.current = new AMap.Map(mapContainerRef.current, {
-          zoom: 14,
-          center: LINGSHAN_CENTER,
-          viewMode: '2D',
-        })
+        if (cancelled) return
+        setMapError(null)
         setAmapApi(AMap)
-
-        requestAnimationFrame(() => {
-          mapInstanceRef.current?.resize?.()
-        })
       })
       .catch((error) => {
         console.error('AMap load failed', error)
@@ -180,6 +171,20 @@ export function RouteRecommendPage() {
       setSelectedRouteId(recommendedRoutes[0].id)
     }
   }, [recommendedRoutes, selectedRoute])
+
+  useEffect(() => {
+    if (!amapApi || !selectedRoute || !mapContainerRef.current || mapInstanceRef.current) return
+
+    mapInstanceRef.current = new amapApi.Map(mapContainerRef.current, {
+      zoom: 14,
+      center: LINGSHAN_CENTER,
+      viewMode: '2D',
+    })
+
+    requestAnimationFrame(() => {
+      mapInstanceRef.current?.resize?.()
+    })
+  }, [amapApi, selectedRoute])
 
   useEffect(() => {
     const map = mapInstanceRef.current
