@@ -4,6 +4,7 @@ import com.digitalhuman.backend_java.dto.TravelAnalyticsAudience;
 import com.digitalhuman.backend_java.dto.TravelAnalyticsMetric;
 import com.digitalhuman.backend_java.dto.TravelAnalyticsMetricResponse;
 import com.digitalhuman.backend_java.model.TravelAnalyticsRecord;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -31,6 +32,7 @@ public class TravelAnalyticsMetricCalculator {
     private final TravelAnalyticsValueParser valueParser;
     private final Clock clock;
 
+    @Autowired
     public TravelAnalyticsMetricCalculator(TravelAnalyticsValueParser valueParser) {
         this(valueParser, Clock.systemDefaultZone());
     }

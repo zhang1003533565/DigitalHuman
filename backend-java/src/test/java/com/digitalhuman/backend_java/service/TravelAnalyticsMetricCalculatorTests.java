@@ -6,6 +6,7 @@ import com.digitalhuman.backend_java.dto.TravelAnalyticsMetricResponse;
 import com.digitalhuman.backend_java.model.TravelAnalyticsRecord;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -16,6 +17,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -23,6 +25,16 @@ class TravelAnalyticsMetricCalculatorTests {
 
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
     private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-07-18T16:00:00Z"), ZoneOffset.UTC);
+
+    @Test
+    void springConstructsCalculatorFromValueParser() {
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.register(TravelAnalyticsValueParser.class, TravelAnalyticsMetricCalculator.class);
+
+            assertDoesNotThrow(context::refresh);
+            assertTrue(context.containsBeanDefinition("travelAnalyticsMetricCalculator"));
+        }
+    }
 
     @Test
     void publicAverageSpendReturnsOnlyAggregateDataAndUsesFallbackMethodology() throws Exception {
