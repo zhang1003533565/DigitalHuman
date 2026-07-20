@@ -258,6 +258,16 @@ assert.match(mapMobile, /\.map-mobile-search-slot input\s*\{[^}]*min-width:\s*0/
 assert.match(mapMobile, /\.map-mobile-toolbar button,[\s\S]*\.map-mobile-context-actions button\s*\{[^}]*white-space:\s*nowrap/s, 'mobile map operation labels never become vertical text')
 assert.match(mapMobile, /\.map-page\s*\{[^}]*--map-mobile-bottom-offset:\s*calc\(var\(--mobile-nav-height\)\s*\+\s*var\(--safe-bottom\)\)/s, 'portrait map geometry includes the real mobile navigation and safe area')
 assert.doesNotMatch(mapPage, /map-mobile-drawer/, 'removed mobile service drawer must not return to the rendered workbench')
+
+const desktopRouteRules = readEffectiveRulesAtWidth(routeCss, 1280)
+const routePageDeclarations = desktopRouteRules.find((rule) => rule.selector === '.route-page')?.declarations
+assert.equal(routePageDeclarations?.get('overflow-y'), 'auto', 'route page root owns the single desktop vertical scroller')
+for (const selector of ['.route-choices', '.route-itinerary', '.route-facility-controls']) {
+  const declarations = desktopRouteRules.find((rule) => rule.selector === selector)?.declarations
+  assert.ok(declarations, `${selector} must exist in route page CSS`)
+  assert.notEqual(declarations.get('overflow'), 'auto', `${selector} must not enable shorthand auto overflow`)
+  assert.notEqual(declarations.get('overflow-y'), 'auto', `${selector} must not become a nested vertical scroller`)
+}
 assert.match(mapMobile, /\.map-spot-card\s*\{[^}]*z-index:\s*40[^}]*bottom:\s*calc\(var\(--map-mobile-bottom-offset\)\s*\+\s*16px\)/s, 'selected spot card clears mobile navigation and the safe area')
 assert.match(mapMobile, /\.map-controls\s*\{[^}]*right:\s*var\(--map-mobile-edge\)[^}]*bottom:\s*16px/s, 'map controls align to the compact workbench bottom edge')
 assert.match(mapMobile, /\.map-mobile-context-actions\s*\{[^}]*left:\s*var\(--map-mobile-edge\)[^}]*bottom:\s*16px/s, 'compact context actions share the workbench bottom edge')

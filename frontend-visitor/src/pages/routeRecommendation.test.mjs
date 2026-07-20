@@ -260,21 +260,30 @@ test('visitor route summary keeps majorStops empty when nodes are missing or not
   assert.doesNotMatch(JSON.stringify(optionalNodesSummary), /59|分匹配|选择取舍|Route Value/)
 })
 
-test('route page renders recommendation-first decision hooks', async () => {
+test('route page renders visitor-first route selection flow', async () => {
   const source = await readFile(pageSourceUrl, 'utf8')
 
   for (const copy of [
-    '为你推荐',
-    '推荐理由',
-    '选择取舍',
-    '路线亮点',
-    'route-map-schematic',
-    'buildRouteRecommendations',
+    '今天想怎么玩？',
+    '查看行程',
+    '在景区地图中打开',
+    '清除筛选',
+    '重新加载路线',
+    '餐饮',
+    '卫生间',
+    '服务点',
   ]) {
     assert.match(source, new RegExp(copy.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
   }
 
-  assert.doesNotMatch(source, /Selected Route/)
+  for (const removedCopy of ['Route Planner', 'Route Value', '分匹配', '推荐理由：', '选择取舍：']) {
+    assert.doesNotMatch(source, new RegExp(removedCopy.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+  }
+
+  assert.match(source, /buildVisitorRouteSummary/)
+  assert.match(source, /aria-pressed=\{selectedRoute\?\.id === route\.id\}/)
+  assert.match(source, /setFilters\(\{ interest: '', duration: '', intensity: '' \}\)/)
+  assert.match(source, /visibleFacilityGroups/)
   assert.match(source, /useVisitorTheme\(\)/)
   assert.match(source, /useLayoutEffect\(\(\) => \{\s*mapThemeControllerRef\.current\.setTheme\(effectiveTheme\)/)
   assert.match(source, /createVisitorMapThemeController/)
