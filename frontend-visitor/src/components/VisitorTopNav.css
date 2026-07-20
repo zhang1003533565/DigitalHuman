@@ -7,6 +7,18 @@
   --visitor-nav-focus: #f1c76f;
   --visitor-nav-control: rgba(36, 52, 75, 0.86);
   --visitor-nav-control-border: rgba(196, 216, 239, 0.36);
+  --visitor-nav-avatar-large-border: rgba(255, 255, 255, 0.18);
+  --visitor-nav-item-hover: rgba(255, 255, 255, 0.07);
+  --visitor-nav-active: #f1c76f;
+  --visitor-nav-active-background: rgba(226, 173, 75, 0.12);
+  --visitor-nav-active-hover: #f7d58d;
+  --visitor-nav-active-hover-background: rgba(226, 173, 75, 0.18);
+  --visitor-nav-danger: rgba(255, 120, 100, 0.84);
+  --visitor-nav-danger-hover: #ff7060;
+  --visitor-nav-danger-background: rgba(255, 70, 50, 0.12);
+}
+
+.visitor-topbar {
   position: relative;
   z-index: 40;
   display: flex;
@@ -27,6 +39,15 @@
   --visitor-nav-focus: #9b6712;
   --visitor-nav-control: #f3f6f9;
   --visitor-nav-control-border: rgba(43, 63, 84, 0.24);
+  --visitor-nav-avatar-large-border: rgba(43, 63, 84, 0.2);
+  --visitor-nav-item-hover: rgba(43, 63, 84, 0.08);
+  --visitor-nav-active: #9b6712;
+  --visitor-nav-active-background: rgba(155, 103, 18, 0.12);
+  --visitor-nav-active-hover: #72490a;
+  --visitor-nav-active-hover-background: rgba(155, 103, 18, 0.2);
+  --visitor-nav-danger: #b53d2f;
+  --visitor-nav-danger-hover: #862b20;
+  --visitor-nav-danger-background: rgba(181, 61, 47, 0.12);
 }
 
 .visitor-topbar__brand {
@@ -168,7 +189,7 @@
 .visitor-user-menu__avatar--lg {
   width: 44px;
   height: 44px;
-  border-color: rgba(255, 255, 255, 0.18);
+  border-color: var(--visitor-nav-avatar-large-border);
   cursor: default;
   font-size: 17px;
 }
@@ -225,26 +246,26 @@
 
 .visitor-user-menu__item:hover {
   color: var(--visitor-nav-text-strong);
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--visitor-nav-item-hover);
 }
 
 .visitor-user-menu__item--active {
-  color: #f1c76f;
-  background: rgba(226, 173, 75, 0.12);
+  color: var(--visitor-nav-active);
+  background: var(--visitor-nav-active-background);
 }
 
 .visitor-user-menu__item--active:hover {
-  color: #f7d58d;
-  background: rgba(226, 173, 75, 0.18);
+  color: var(--visitor-nav-active-hover);
+  background: var(--visitor-nav-active-hover-background);
 }
 
 .visitor-user-menu__item--danger {
-  color: rgba(255, 120, 100, 0.84);
+  color: var(--visitor-nav-danger);
 }
 
 .visitor-user-menu__item--danger:hover {
-  color: #ff7060;
-  background: rgba(255, 70, 50, 0.12);
+  color: var(--visitor-nav-danger-hover);
+  background: var(--visitor-nav-danger-background);
 }
 
 .visitor-theme-switch {
