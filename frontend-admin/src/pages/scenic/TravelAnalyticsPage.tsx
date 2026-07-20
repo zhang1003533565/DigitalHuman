@@ -486,7 +486,7 @@ export default function TravelAnalyticsPage() {
               total: pagination.total,
               showSizeChanger: true,
               pageSizeOptions: ['10', '20', '50'],
-              position: ['bottomLeft'],
+              placement: ['bottomStart'],
               showTotal: (total) => `共 ${total} 条`,
             }}
             onChange={(nextPagination) => {
@@ -498,7 +498,7 @@ export default function TravelAnalyticsPage() {
 
       <Drawer
         title={editingRow ? '编辑旅游行为记录' : '新增旅游行为记录'}
-        width={820}
+        size={820}
         open={drawerOpen}
         onClose={() => {
           setDrawerOpen(false)

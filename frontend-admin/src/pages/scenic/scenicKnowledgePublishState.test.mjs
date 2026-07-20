@@ -9,6 +9,7 @@ import {
   isCurrentScenicKnowledgePreview,
   nextScenicKnowledgeRequestGeneration,
   shouldApplyScenicKnowledgeResponse,
+  shouldLoadScenicKnowledgeTargets,
 } from './scenicKnowledgePublishState.ts'
 
 test('stale preview cannot enable publish', () => {
@@ -57,4 +58,9 @@ test('status load classification treats only 404 as unpublished', () => {
     text: '状态加载失败',
     detail: '服务异常',
   })
+})
+
+test('observer preview does not depend on admin-only MaxKB target discovery', () => {
+  assert.equal(shouldLoadScenicKnowledgeTargets('OBSERVER'), false)
+  assert.equal(shouldLoadScenicKnowledgeTargets('ADMIN'), true)
 })

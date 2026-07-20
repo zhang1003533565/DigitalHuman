@@ -41,6 +41,10 @@ export function shouldApplyScenicKnowledgeResponse(activeGeneration: number, set
   return activeGeneration === settledGeneration
 }
 
+export function shouldLoadScenicKnowledgeTargets(role: 'ADMIN' | 'OBSERVER') {
+  return role === 'ADMIN'
+}
+
 export function getScenicKnowledgePrimaryAction(
   applyStatus: string | null | undefined,
   role: 'ADMIN' | 'OBSERVER',

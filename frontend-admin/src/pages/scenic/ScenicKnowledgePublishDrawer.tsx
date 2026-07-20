@@ -37,6 +37,7 @@ import {
   isCurrentScenicKnowledgePreview,
   nextScenicKnowledgeRequestGeneration,
   shouldApplyScenicKnowledgeResponse,
+  shouldLoadScenicKnowledgeTargets,
 } from './scenicKnowledgePublishState'
 
 type ScenicKnowledgePublishDrawerProps = {
@@ -150,9 +151,10 @@ export default function ScenicKnowledgePublishDrawer({
     loadGenerationRef.current = generation
     setLoading(true)
     try {
+      const loadTargets = shouldLoadScenicKnowledgeTargets(role)
       const [nextPreview, accountPage, nextPublication] = await Promise.all([
         previewScenicKnowledgePublication(record.id),
-        listKnowledgeAccounts({ current: 1, size: 100, status: 1 }),
+        loadTargets ? listKnowledgeAccounts({ current: 1, size: 100, status: 1 }) : Promise.resolve(null),
         getScenicKnowledgePublicationStatus(facility.id).catch((error) => {
           const failure = classifyPublicationStatusLoadFailure({
             status: axios.isAxiosError(error) ? error.response?.status : null,
@@ -165,7 +167,15 @@ export default function ScenicKnowledgePublishDrawer({
       if (!shouldApplyScenicKnowledgeResponse(loadGenerationRef.current, generation)) return
       setPreview(nextPreview)
       setPublication(nextPublication)
-      const rows = accountPage.records ?? []
+      if (!loadTargets) {
+        setAccounts([])
+        setAccountId(nextPublication?.accountId)
+        setKnowledgeId(nextPublication?.knowledgeId ?? undefined)
+        setKnowledgeName(nextPublication?.knowledgeName ?? undefined)
+        setKnowledgeOptions(nextPublication ? [{ value: nextPublication.knowledgeId, label: nextPublication.knowledgeName }] : [])
+        return
+      }
+      const rows = accountPage?.records ?? []
       setAccounts(rows)
       const preferredAccountId = nextPublication?.accountId ?? rows[0]?.id
       setAccountId(preferredAccountId)
@@ -182,7 +192,7 @@ export default function ScenicKnowledgePublishDrawer({
         setLoading(false)
       }
     }
-  }, [facility, loadKnowledges, open, record])
+  }, [facility, loadKnowledges, open, record, role])
 
   useEffect(() => {
     if (!open) return
@@ -253,7 +263,7 @@ export default function ScenicKnowledgePublishDrawer({
     <Drawer
       title={record ? `发布到知识库 · ${record.spot_name}` : '发布到知识库'}
       open={open}
-      width={860}
+      size={860}
       onClose={onClose}
       extra={!isObserver ? (
         <Space>
@@ -280,11 +290,11 @@ export default function ScenicKnowledgePublishDrawer({
         </Space>
       ) : null}
     >
-      <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={16} style={{ width: '100%' }}>
         <Alert
           type={isObserver ? 'warning' : 'info'}
           showIcon
-          message={isObserver ? 'Observer 只读' : '管理员发布工作台'}
+          title={isObserver ? 'Observer 只读' : '管理员发布工作台'}
           description={isObserver
             ? 'Observer 可查看正式 Markdown 预览与发布状态，但不能执行发布、重试或撤回。'
             : '这里只能发布已应用到正式景点的资料，发布正文来自后端正式景点快照，不读取暂存导入文本。'}
@@ -334,13 +344,13 @@ export default function ScenicKnowledgePublishDrawer({
         </Descriptions>
 
         {publication?.lastError ? (
-          <Alert type="error" showIcon message="最近一次发布失败" description={publication.lastError} />
+          <Alert type="error" showIcon title="最近一次发布失败" description={publication.lastError} />
         ) : null}
 
         <div>
           <Typography.Title level={5}>Markdown 预览</Typography.Title>
           {preview ? (
-            <Space direction="vertical" size={12} style={{ width: '100%' }}>
+            <Space orientation="vertical" size={12} style={{ width: '100%' }}>
               <Descriptions bordered size="small" column={2}>
                 <Descriptions.Item label="文件名">{preview.fileName}</Descriptions.Item>
                 <Descriptions.Item label="内容摘要">{preview.sha256}</Descriptions.Item>

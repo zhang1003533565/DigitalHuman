@@ -169,16 +169,16 @@ const TravelAnalyticsAiPanel = forwardRef<TravelAnalyticsAiPanelHandle>(function
         </Space>
       )}
     >
-      <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={16} style={{ width: '100%' }}>
         <Alert
           type="info"
           showIcon
-          message="游客 ID、昵称和单条记录不会提供给模型"
+          title="游客 ID、昵称和单条记录不会提供给模型"
           description="页面只允许五项固定统计指标，测试与游客问答都只能读取脱敏聚合结果，不支持任意查询表达式或原始行。"
         />
 
         <Card size="small" title="游客端开关">
-          <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Space orientation="vertical" size={12} style={{ width: '100%' }}>
             <Space size={12} wrap>
               <Typography.Text strong>启用游客统计问答</Typography.Text>
               <Switch
@@ -203,12 +203,12 @@ const TravelAnalyticsAiPanel = forwardRef<TravelAnalyticsAiPanelHandle>(function
         </Card>
 
         <Card size="small" title="五项白名单指标">
-          <Space direction="vertical" size={10} style={{ width: '100%' }}>
+          <Space orientation="vertical" size={10} style={{ width: '100%' }}>
             {METRIC_OPTIONS.map((metric) => {
               const summary = summaryMetrics.find((item) => item.metric === metric.value)
               return (
                 <Card key={metric.value} size="small">
-                  <Space direction="vertical" size={6} style={{ width: '100%' }}>
+                  <Space orientation="vertical" size={6} style={{ width: '100%' }}>
                     <Space>
                       <BulbOutlined />
                       <Typography.Text strong>{metric.label}</Typography.Text>
@@ -228,7 +228,7 @@ const TravelAnalyticsAiPanel = forwardRef<TravelAnalyticsAiPanelHandle>(function
               <Alert
                 type="warning"
                 showIcon
-                message="观察员不能发起后台模型测试"
+                title="观察员不能发起后台模型测试"
                 description="当前角色只读取 AI 配置；如需查看最新聚合摘要或执行测试，请使用管理员账号。"
               />
             ) : null}
@@ -236,7 +236,7 @@ const TravelAnalyticsAiPanel = forwardRef<TravelAnalyticsAiPanelHandle>(function
         </Card>
 
         <Card size="small" title="测试模型回答">
-          <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Space orientation="vertical" size={12} style={{ width: '100%' }}>
             <Space wrap>
               <Select
                 value={selectedMetric}
@@ -257,7 +257,7 @@ const TravelAnalyticsAiPanel = forwardRef<TravelAnalyticsAiPanelHandle>(function
             </Space>
 
             {testResult ? (
-              <Space direction="vertical" size={12} style={{ width: '100%' }}>
+              <Space orientation="vertical" size={12} style={{ width: '100%' }}>
                 <Descriptions size="small" column={2} bordered>
                   <Descriptions.Item label="指标">{METRIC_OPTIONS.find((item) => item.value === testResult.metric)?.label ?? testResult.metric}</Descriptions.Item>
                   <Descriptions.Item label="作用域">{testResult.scope}</Descriptions.Item>
@@ -266,7 +266,7 @@ const TravelAnalyticsAiPanel = forwardRef<TravelAnalyticsAiPanelHandle>(function
                   <Descriptions.Item label="统计截至">{formatDateTime(testResult.asOf)}</Descriptions.Item>
                   <Descriptions.Item label="统计口径">{testResult.methodology}</Descriptions.Item>
                 </Descriptions>
-                {testResult.warning ? <Alert type="warning" showIcon message={testResult.warning} /> : null}
+                {testResult.warning ? <Alert type="warning" showIcon title={testResult.warning} /> : null}
                 {testResult.items.length ? (
                   <Descriptions size="small" column={1} bordered>
                     {testResult.items.map((item) => (
@@ -291,7 +291,7 @@ const TravelAnalyticsAiPanel = forwardRef<TravelAnalyticsAiPanelHandle>(function
           type="success"
           showIcon
           icon={<LockOutlined />}
-          message="受控访问边界"
+          title="受控访问边界"
           description="页面不会展示原始记录、游客 ID、昵称、任意 SQL、任意筛选器或导入后的明细内容，只允许管理员维护开关并查看脱敏聚合输出。"
         />
       </Space>
