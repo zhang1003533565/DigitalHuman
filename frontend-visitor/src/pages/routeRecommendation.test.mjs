@@ -92,6 +92,174 @@ test('route recommendations explain rank, fit, tradeoff, and route highlights', 
   assert.doesNotMatch(JSON.stringify(summary), /78|分匹配|选择取舍|Route Value/)
 })
 
+test('visitor route summary marks non-primary routes as fallback without leaking internal ranking text', async () => {
+  const { buildRouteRecommendations, buildVisitorRouteSummary } = await import(compiledModule.href)
+  const recommendations = buildRouteRecommendations([
+    route({
+      id: 'culture',
+      name: '历史文化爱好者路线',
+      suitableFor: '历史文化 · 深度探索',
+      duration: '6小时',
+      distance: '约3.8公里',
+      intensity: '深度步行',
+      reason: '覆盖祥符禅寺、灵山大佛、梵宫等核心文化节点。',
+      tags: ['历史文化', '深度讲解'],
+      nodes: [
+        { id: 'a', name: '南门入园', type: 'gate', stay: '5分钟', summary: '完成检票。', required: true, coordinate: baseCoordinate },
+      ],
+      facilities: [],
+    }),
+    route({
+      id: 'balanced',
+      name: '均衡游览路线',
+      suitableFor: '经典打卡 · 从容游览',
+      duration: '5小时',
+      distance: '约3公里',
+      intensity: '标准步行',
+      reason: '串联核心景点与休息区，适合第一次到访。',
+      tags: ['经典路线'],
+      nodes: [
+        { id: 'b', name: '佛手广场', type: 'spot', stay: '20分钟', summary: '适合停留拍照。', required: true, coordinate: baseCoordinate },
+      ],
+      facilities: [],
+    }),
+  ], {
+    interest: '历史文化',
+    duration: '6',
+    intensity: '深度',
+  }, 'culture')
+
+  const summary = buildVisitorRouteSummary(recommendations[1], 1)
+  assert.equal(summary.badge, '备选')
+  assert.doesNotMatch(JSON.stringify(summary), /最推荐|备选 1|score|matchReason|tradeoff|highlights|Route Value/)
+})
+
+test('visitor route summary uses rest-stop travel tip for easy or family-friendly routes', async () => {
+  const { buildVisitorRouteSummary } = await import(compiledModule.href)
+
+  const easySummary = buildVisitorRouteSummary({
+    ...route({
+      id: 'easy',
+      name: '轻松漫游路线',
+      suitableFor: '好友出行 · 轻松游览',
+      duration: '4小时',
+      distance: '约2公里',
+      intensity: '轻松步行',
+      reason: '沿途节奏平缓，补给点较多。',
+      tags: ['轻松'],
+      nodes: [],
+      facilities: [],
+    }),
+    rankLabel: '最推荐',
+    score: 78,
+    matchReason: '匹配你的轻松需求',
+    tradeoff: '减少深度节点',
+    highlights: [],
+  }, 0)
+
+  const familySummary = buildVisitorRouteSummary({
+    ...route({
+      id: 'family',
+      name: '亲子家庭路线',
+      suitableFor: '亲子家庭 · 经典游览',
+      duration: '4小时',
+      distance: '约2.4公里',
+      intensity: '标准步行',
+      reason: '照顾亲子休息与观景节奏。',
+      tags: ['亲子友好'],
+      nodes: [],
+      facilities: [],
+    }),
+    rankLabel: '备选 1',
+    score: 66,
+    matchReason: '匹配你的亲子偏好',
+    tradeoff: '减少部分深度文化节点',
+    highlights: [],
+  }, 1)
+
+  assert.match(easySummary.travelTip, /途中休息/)
+  assert.match(familySummary.travelTip, /途中休息/)
+  assert.doesNotMatch(JSON.stringify(easySummary), /78|分匹配|选择取舍|Route Value/)
+  assert.doesNotMatch(JSON.stringify(familySummary), /66|分匹配|选择取舍|Route Value/)
+})
+
+test('visitor route summary falls back to flexible opening-hours tip for standard intensity routes', async () => {
+  const { buildVisitorRouteSummary } = await import(compiledModule.href)
+  const summary = buildVisitorRouteSummary({
+    ...route({
+      id: 'standard',
+      name: '均衡游览路线',
+      suitableFor: '经典打卡 · 从容游览',
+      duration: '5小时',
+      distance: '约3公里',
+      intensity: '标准步行',
+      reason: '景点节奏均衡，适合首次到访。',
+      tags: ['经典路线'],
+      nodes: [],
+      facilities: [],
+    }),
+    rankLabel: '备选 1',
+    score: 64,
+    matchReason: '匹配你的经典路线偏好',
+    tradeoff: '在观景和参观深度之间折中',
+    highlights: [],
+  }, 1)
+
+  assert.match(summary.travelTip, /开放时间|灵活调整/)
+  assert.doesNotMatch(JSON.stringify(summary), /64|分匹配|选择取舍|Route Value/)
+})
+
+test('visitor route summary keeps majorStops empty when nodes are missing or not required', async () => {
+  const { buildVisitorRouteSummary } = await import(compiledModule.href)
+
+  const missingNodesSummary = buildVisitorRouteSummary({
+    ...route({
+      id: 'missing-nodes',
+      name: '缺省节点路线',
+      suitableFor: '轻松散步',
+      duration: '3小时',
+      distance: '约1.5公里',
+      intensity: '标准步行',
+      reason: '适合临时起意的快速游览。',
+      tags: [],
+      nodes: undefined,
+      facilities: [],
+    }),
+    rankLabel: '备选 1',
+    score: 61,
+    matchReason: '匹配你的临时游览偏好',
+    tradeoff: '减少深度节点',
+    highlights: [],
+  }, 1)
+
+  const optionalNodesSummary = buildVisitorRouteSummary({
+    ...route({
+      id: 'optional-nodes',
+      name: '可选节点路线',
+      suitableFor: '好友出行',
+      duration: '3小时',
+      distance: '约1.8公里',
+      intensity: '标准步行',
+      reason: '适合按当日状态灵活安排。',
+      tags: [],
+      nodes: [
+        { id: 'optional-a', name: '观景平台', type: 'spot', stay: '15分钟', summary: '可短暂停留。', required: false, coordinate: baseCoordinate },
+      ],
+      facilities: [],
+    }),
+    rankLabel: '备选 2',
+    score: 59,
+    matchReason: '匹配你的灵活偏好',
+    tradeoff: '需要自行取舍停留点',
+    highlights: [],
+  }, 2)
+
+  assert.deepEqual(missingNodesSummary.majorStops, [])
+  assert.deepEqual(optionalNodesSummary.majorStops, [])
+  assert.doesNotMatch(JSON.stringify(missingNodesSummary), /61|分匹配|选择取舍|Route Value/)
+  assert.doesNotMatch(JSON.stringify(optionalNodesSummary), /59|分匹配|选择取舍|Route Value/)
+})
+
 test('route page renders recommendation-first decision hooks', async () => {
   const source = await readFile(pageSourceUrl, 'utf8')
 
