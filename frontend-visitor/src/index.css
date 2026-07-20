@@ -1,7 +1,7 @@
 :root {
   font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-  color: #f8fbff;
-  background: #071016;
+  color: var(--visitor-text);
+  background: var(--visitor-bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -28,4 +28,22 @@ body {
   inset: 0;
   min-height: 100vh;
   min-height: 100dvh;
+  color: var(--visitor-text);
+  background: var(--visitor-bg);
+}
+
+:focus-visible {
+  outline: 3px solid var(--visitor-focus) !important;
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }

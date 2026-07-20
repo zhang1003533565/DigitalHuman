@@ -1,0 +1,15 @@
+/* Light native controls need the resolved scheme in addition to custom surfaces. */
+html[data-visitor-theme='light'] :is(
+  .home-page,
+  .module-screen,
+  .live-broadcast-page,
+  .page-shell--map,
+  .feedback-page,
+  .history-page,
+  .profile-page,
+  .travel-tips-page,
+  .spot-page,
+  .route-list-page
+) {
+  color-scheme: light;
+}

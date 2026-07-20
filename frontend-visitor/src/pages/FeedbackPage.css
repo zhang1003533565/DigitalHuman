@@ -38,7 +38,7 @@
   }
 
   .feedback-mobile-summary span {
-    color: #8ed0ff;
+    color: var(--visitor-accent);
     font-size: 12px;
     font-weight: 800;
     letter-spacing: 0.16em;
@@ -46,7 +46,7 @@
 
   .feedback-mobile-summary h1 {
     margin: 2px 0 0;
-    color: #f8fbff;
+    color: var(--visitor-text);
     font-size: 24px;
   }
 
@@ -63,13 +63,13 @@
   }
 
   .feedback-mobile-summary dt {
-    color: rgba(218, 239, 255, 0.62);
+    color: var(--visitor-text-muted);
     font-size: 11px;
   }
 
   .feedback-mobile-summary dd {
     margin: 0;
-    color: #f8fbff;
+    color: var(--visitor-text);
     font-size: 18px;
     font-weight: 800;
   }
@@ -77,10 +77,10 @@
   .feedback-composer,
   .feedback-record {
     padding: 14px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--visitor-border);
     border-radius: 16px;
-    background: rgba(8, 18, 29, 0.68);
-    box-shadow: 0 16px 38px rgba(0, 0, 0, 0.2);
+    background: var(--visitor-surface);
+    box-shadow: var(--visitor-shadow);
   }
 
   .feedback-composer__trigger,
@@ -88,7 +88,7 @@
     width: 100%;
     border: 0;
     background: transparent;
-    color: #f8fbff;
+    color: var(--visitor-text);
     font: inherit;
     cursor: pointer;
   }
@@ -104,7 +104,7 @@
   }
 
   .feedback-composer__trigger span:last-child {
-    color: #8ed0ff;
+    color: var(--visitor-accent);
     font-size: 12px;
   }
 
@@ -112,11 +112,11 @@
     display: grid;
     gap: 10px;
     padding-top: 12px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-top: 1px solid var(--visitor-border);
   }
 
   .feedback-composer__body label {
-    color: rgba(243, 248, 255, 0.74);
+    color: var(--visitor-text-secondary);
     font-size: 13px;
   }
 
@@ -125,17 +125,17 @@
     min-height: 112px;
     resize: vertical;
     padding: 12px;
-    border: 1px solid rgba(142, 208, 255, 0.24);
+    border: 1px solid var(--visitor-border);
     border-radius: 12px;
     outline: none;
-    background: rgba(2, 10, 18, 0.54);
-    color: #f8fbff;
+    background: var(--visitor-surface-strong);
+    color: var(--visitor-text);
     font: inherit;
     line-height: 1.5;
   }
 
   .feedback-composer__body textarea:focus {
-    border-color: rgba(111, 231, 255, 0.72);
+    border-color: var(--visitor-focus);
   }
 
   .feedback-composer__actions {
@@ -147,10 +147,10 @@
   .feedback-state button {
     min-height: var(--touch-target);
     padding: 8px 14px;
-    border: 1px solid rgba(142, 208, 255, 0.34);
+    border: 1px solid var(--visitor-border-strong);
     border-radius: 999px;
-    background: rgba(142, 208, 255, 0.14);
-    color: #dff5ff;
+    background: var(--visitor-accent-soft);
+    color: var(--visitor-accent);
     font: inherit;
     font-size: 13px;
     font-weight: 800;
@@ -159,8 +159,8 @@
 
   .feedback-composer__actions button:first-child {
     border: 0;
-    background: linear-gradient(135deg, #6fe7ff, #7da2ff 52%, #7cffd2);
-    color: #03111d;
+    background: var(--visitor-accent-strong);
+    color: #ffffff;
   }
 
   .feedback-composer__actions button:disabled {
@@ -170,7 +170,7 @@
 
   .feedback-composer__status {
     margin: 8px 0 0;
-    color: #b9e5ff;
+    color: var(--visitor-accent);
     font-size: 13px;
   }
 
@@ -182,10 +182,10 @@
   .feedback-state {
     margin: 0;
     padding: 22px 18px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--visitor-border);
     border-radius: 16px;
-    background: rgba(8, 18, 29, 0.62);
-    color: rgba(243, 248, 255, 0.72);
+    background: var(--visitor-surface);
+    color: var(--visitor-text-secondary);
     text-align: center;
   }
 
@@ -217,8 +217,8 @@
     flex: none;
     padding: 4px 8px;
     border-radius: 999px;
-    background: rgba(142, 208, 255, 0.14);
-    color: #9fd7ff;
+    background: var(--visitor-accent-soft);
+    color: var(--visitor-accent);
     font-size: 11px;
   }
 
@@ -226,7 +226,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 6px 12px;
-    color: rgba(218, 239, 255, 0.62);
+    color: var(--visitor-text-muted);
     font-size: 12px;
   }
 
@@ -235,8 +235,8 @@
     gap: 12px;
     margin-top: 12px;
     padding-top: 12px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    color: rgba(243, 248, 255, 0.78);
+    border-top: 1px solid var(--visitor-border);
+    color: var(--visitor-text-secondary);
     font-size: 13px;
     line-height: 1.6;
     overflow-wrap: anywhere;
@@ -252,7 +252,7 @@
   }
 
   .feedback-record__body span {
-    color: #9fd7ff;
+    color: var(--visitor-accent);
     font-size: 11px;
     font-weight: 800;
     letter-spacing: 0.08em;

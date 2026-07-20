@@ -1,17 +1,14 @@
 /* ---------- 整体布局 ---------- */
 :root {
   /* 统一发光边框 token */
-  --tech-border: 1px solid rgba(33, 119, 153, 0.62);
-  --tech-glow:
-    0 0 0 1px rgba(33, 119, 153, 0.22),
-    inset 0 0 14px rgba(33, 119, 153, 0.18),
-    0 0 18px rgba(33, 119, 153, 0.38),
-    0 8px 24px rgba(0, 0, 0, 0.32);
-  --tech-glow-strong:
-    0 0 0 1px rgba(33, 119, 153, 0.28),
-    inset 0 0 18px rgba(33, 119, 153, 0.22),
-    0 0 26px rgba(33, 119, 153, 0.48),
-    0 18px 40px rgba(0, 0, 0, 0.34);
+  --tech-border: 1px solid var(--visitor-border-strong);
+  --tech-glow: var(--visitor-shadow);
+  --tech-glow-strong: var(--visitor-shadow);
+}
+
+.page-shell--map {
+  color: var(--visitor-text);
+  background: var(--visitor-bg);
 }
 .map-page {
   --map-services-width: 360px;
@@ -28,9 +25,9 @@
   min-height: 0;
   border-radius: 20px;
   overflow: hidden;
-  border: 1px solid rgba(122, 196, 255, 0.22);
+  border: 1px solid var(--visitor-border);
   background: rgba(0, 0, 0, 0.2);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--visitor-shadow);
 }
 
 .map-page__canvas {
@@ -147,12 +144,9 @@
   width: min(260px, calc(100% - 32px));
   overflow: hidden;
   border-radius: 12px;
-  border: 1px solid rgba(102, 189, 255, 0.3);
-  background: linear-gradient(180deg, rgba(11, 32, 52, 0.95), rgba(8, 23, 39, 0.96));
-  box-shadow:
-    0 0 0 1px rgba(33, 119, 153, 0.2),
-    0 18px 40px rgba(0, 0, 0, 0.34),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--visitor-border-strong);
+  background: var(--visitor-surface);
+  box-shadow: var(--visitor-shadow);
   backdrop-filter: blur(16px);
 }
 
@@ -185,7 +179,7 @@
   margin: 0;
   font-size: 17px;
   line-height: 1.2;
-  color: #f7fbff;
+  color: var(--visitor-text);
 }
 
 .map-spot-card__category {
@@ -201,12 +195,12 @@
 .map-spot-card__meta {
   display: grid;
   gap: 3px;
-  color: rgba(219, 236, 255, 0.82);
+  color: var(--visitor-text-secondary);
   font-size: 11px;
 }
 
 .map-spot-card__meta strong {
-  color: #ffffff;
+  color: var(--visitor-text);
   font-size: 12px;
 }
 
@@ -248,7 +242,7 @@
   gap: 4px;
   padding: 10px 6px;
   border-radius: 16px;
-  background: rgba(8, 22, 38, 0.82);
+  background: var(--visitor-surface);
   backdrop-filter: blur(12px);
   border: var(--tech-border);
   box-shadow: var(--tech-glow);
@@ -261,7 +255,7 @@
   width: 54px;
   padding: 8px 4px;
   border-radius: 12px;
-  color: rgba(220, 236, 255, 0.78);
+  color: var(--visitor-text-secondary);
   font-size: 12px;
   background: transparent;
   border: 0;
@@ -280,7 +274,7 @@
   min-width: 18px;
   padding: 1px 5px;
   border-radius: 999px;
-  color: rgba(235, 246, 255, 0.9);
+  color: var(--visitor-text);
   font-size: 10px;
   line-height: 16px;
   background: rgba(255, 255, 255, 0.12);
@@ -292,13 +286,13 @@
 }
 
 .map-sidebar__item:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--visitor-surface-muted);
 }
 
 .map-sidebar__item--active {
-  color: #08121a;
-  background: linear-gradient(135deg, #62e9ff, #4aa6ff);
-  box-shadow: 0 6px 16px rgba(80, 184, 255, 0.42);
+  color: #ffffff;
+  background: var(--visitor-accent-strong);
+  box-shadow: var(--visitor-shadow);
 }
 
 .map-sidebar__icon {
@@ -322,7 +316,7 @@
   gap: 8px;
   width: min(340px, 38%);
   padding: 6px 6px 6px 14px;
-  background: rgba(8, 22, 38, 0.86);
+  background: var(--visitor-surface);
   border-radius: 12px;
   border: var(--tech-border);
   box-shadow: var(--tech-glow);
@@ -334,13 +328,13 @@
   background: transparent;
   border: 0;
   outline: none;
-  color: #f8fbff;
+  color: var(--visitor-text);
   font-size: 14px;
   padding: 6px 0;
 }
 
 .map-search input::placeholder {
-  color: rgba(215, 228, 242, 0.6);
+  color: var(--visitor-text-muted);
 }
 
 .map-search__btn {
@@ -350,8 +344,8 @@
   height: 34px;
   border: 0;
   border-radius: 10px;
-  color: #08121a;
-  background: linear-gradient(135deg, #62e9ff, #4aa6ff);
+  color: #ffffff;
+  background: var(--visitor-accent-strong);
   cursor: pointer;
   font-size: 14px;
 }
@@ -362,18 +356,18 @@
   left: 96px;
   z-index: 4;
   padding: 8px 12px;
-  border: 1px solid rgba(98, 233, 255, 0.42);
+  border: 1px solid var(--visitor-border-strong);
   border-radius: 8px;
-  color: #e9f8ff;
+  color: var(--visitor-text);
   font-size: 12px;
-  background: rgba(8, 22, 38, 0.9);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.24);
+  background: var(--visitor-surface-strong);
+  box-shadow: var(--visitor-shadow);
   backdrop-filter: blur(12px);
 }
 
 /* 推荐路线浮卡（已移除），仅保留其他区块复用的 .map-route-card__more 样式 */
 .map-route-card__more {
-  color: #8ed0ff;
+  color: var(--visitor-accent);
   font-size: 12px;
   cursor: pointer;
   background: transparent;
@@ -398,10 +392,10 @@
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: rgba(8, 22, 38, 0.88);
+  background: var(--visitor-surface);
   border: var(--tech-border);
   box-shadow: var(--tech-glow);
-  color: #f8fbff;
+  color: var(--visitor-text);
   font-size: 11px;
   font-weight: 800;
   line-height: 1.1;
@@ -413,7 +407,7 @@
   flex-direction: column;
   border-radius: 12px;
   overflow: hidden;
-  background: rgba(8, 22, 38, 0.88);
+  background: var(--visitor-surface);
   border: var(--tech-border);
   box-shadow: var(--tech-glow);
   backdrop-filter: blur(12px);
@@ -426,23 +420,23 @@
   place-items: center;
   gap: 2px;
   border: 0;
-  color: #f8fbff;
+  color: var(--visitor-text);
   background: transparent;
   cursor: pointer;
   font-size: 18px;
 }
 
 .map-ctrl-btn + .map-ctrl-btn {
-  border-top: 1px solid rgba(33, 119, 153, 0.45);
+  border-top: 1px solid var(--visitor-border);
 }
 
 .map-ctrl-btn small {
   font-size: 10px;
-  color: rgba(215, 228, 242, 0.72);
+  color: var(--visitor-text-secondary);
 }
 
 .map-ctrl-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--visitor-surface-muted);
 }
 
 .map-scale {
@@ -477,7 +471,7 @@
   gap: 8px;
   padding: 6px;
   border-radius: 14px;
-  background: rgba(8, 22, 38, 0.88);
+  background: var(--visitor-surface);
   border: var(--tech-border);
   box-shadow: var(--tech-glow);
   backdrop-filter: blur(12px);
@@ -491,13 +485,13 @@
   border: 0;
   border-radius: 10px;
   background: transparent;
-  color: #f8fbff;
+  color: var(--visitor-text);
   font-size: 13px;
   cursor: pointer;
 }
 
 .map-actions button:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--visitor-surface-muted);
 }
 
 /* 高德地图 logo 区底色 */
@@ -537,8 +531,8 @@
   padding: 14px 16px;
   border-radius: 18px;
   border: var(--tech-border);
-  background: #000d1f;
-  color: #f8fbff;
+  background: var(--visitor-surface);
+  color: var(--visitor-text);
   backdrop-filter: blur(14px);
   box-shadow: var(--tech-glow-strong);
   overflow: hidden;
@@ -613,7 +607,7 @@
 .ai-guide__text {
   font-size: 13px;
   line-height: 1.6;
-  color: rgba(232, 244, 255, 0.86);
+  color: var(--visitor-text-secondary);
 }
 
 .ai-guide__actions {
@@ -637,13 +631,13 @@
 }
 
 .ai-guide__btn--primary {
-  color: #08121a;
-  background: linear-gradient(90deg, #2ed6ff, #2ca9ff);
+  color: #ffffff;
+  background: var(--visitor-accent-strong);
 }
 
 .ai-guide__btn--ghost {
-  color: #cfe9ff;
-  background: rgba(8, 22, 38, 0.5);
+  color: var(--visitor-text);
+  background: var(--visitor-surface-muted);
   border: var(--tech-border);
   box-shadow: var(--tech-glow);
 }
@@ -668,7 +662,7 @@
 }
 
 .spot-card__fav {
-  color: rgba(215, 228, 242, 0.78);
+  color: var(--visitor-text-secondary);
   font-size: 12px;
   background: transparent;
   border: 0;
@@ -688,7 +682,7 @@
 .spot-card__meta {
   display: grid;
   gap: 6px;
-  color: rgba(232, 244, 255, 0.86);
+  color: var(--visitor-text-secondary);
 }
 
 .spot-card__meta b {
@@ -709,7 +703,7 @@
   margin: 12px 0;
   font-size: 12.5px;
   line-height: 1.6;
-  color: rgba(215, 228, 242, 0.82);
+  color: var(--visitor-text-secondary);
 }
 
 .spot-card__actions {
@@ -727,16 +721,16 @@
   border-radius: 10px;
   border: var(--tech-border);
   box-shadow: var(--tech-glow);
-  color: #cfe9ff;
-  background: rgba(8, 22, 38, 0.5);
+  color: var(--visitor-text);
+  background: var(--visitor-surface-muted);
   font-size: 12px;
   cursor: pointer;
 }
 
 .spot-card__action--primary {
-  color: #08121a;
+  color: #ffffff;
   border: 0;
-  background: linear-gradient(90deg, #2ed6ff, #2ca9ff);
+  background: var(--visitor-accent-strong);
   font-weight: 700;
 }
 
@@ -768,10 +762,10 @@
   min-height: 0;
   padding: 8px 0;
   border-radius: 12px;
-  background: rgba(8, 22, 38, 0.5);
+  background: var(--visitor-surface-muted);
   border: var(--tech-border);
   box-shadow: var(--tech-glow);
-  color: #f8fbff;
+  color: var(--visitor-text);
   font-size: 12px;
   cursor: pointer;
   font: inherit;
@@ -784,8 +778,8 @@
 .nearby__item:hover,
 .nearby__item--active {
   transform: translateY(-1px);
-  border-color: rgba(98, 233, 255, 0.82);
-  background: rgba(26, 84, 116, 0.42);
+  border-color: var(--visitor-accent);
+  background: var(--visitor-accent-soft);
 }
 
 .nearby__empty {
@@ -793,7 +787,7 @@
   flex: 1 1 auto;
   place-items: center;
   margin: 0;
-  color: rgba(232, 244, 255, 0.72);
+  color: var(--visitor-text-secondary);
   font-size: 13px;
   text-align: center;
 }
@@ -1094,7 +1088,7 @@
   .map-mobile-search-slot,
   .map-mobile-context-actions {
     border: var(--tech-border);
-    background: rgba(8, 22, 38, 0.9);
+    background: var(--visitor-surface);
     box-shadow: var(--tech-glow);
     backdrop-filter: blur(12px);
   }
@@ -1103,7 +1097,7 @@
     flex: 0 0 auto;
     padding: 0 14px;
     border-radius: 12px;
-    color: #f8fbff;
+    color: var(--visitor-text);
   }
 
   .map-mobile-search-slot {
@@ -1122,7 +1116,7 @@
     border: 0;
     outline: 0;
     padding: 0 8px;
-    color: #f8fbff;
+    color: var(--visitor-text);
     background: transparent;
   }
 
@@ -1130,8 +1124,8 @@
     width: var(--touch-target);
     border: 0;
     border-radius: 10px;
-    color: #08121a;
-    background: linear-gradient(135deg, #62e9ff, #4aa6ff);
+    color: #ffffff;
+    background: var(--visitor-accent-strong);
   }
 
   .map-mobile-category-panel {
@@ -1144,7 +1138,7 @@
     gap: 8px;
     padding: 10px;
     border-radius: 14px;
-    background: rgba(8, 22, 38, 0.94);
+    background: var(--visitor-surface);
     border: var(--tech-border);
     box-shadow: var(--tech-glow);
   }
@@ -1162,8 +1156,8 @@
     min-height: var(--touch-target);
     border: 0;
     border-radius: 10px;
-    color: #f8fbff;
-    background: rgba(255, 255, 255, 0.06);
+    color: var(--visitor-text);
+    background: var(--visitor-surface-muted);
     white-space: nowrap;
   }
 
@@ -1215,7 +1209,7 @@
     padding: 0 12px;
     border: 0;
     border-radius: 9px;
-    color: #f8fbff;
+    color: var(--visitor-text);
     background: transparent;
   }
 
@@ -1256,7 +1250,7 @@
     height: var(--map-mobile-drawer-peek-height);
     padding: 0 16px;
     border-radius: 16px;
-    color: #f8fbff;
+    color: var(--visitor-text);
     font-weight: 700;
     display: grid;
     grid-template-columns: auto 1fr auto;
@@ -1275,7 +1269,7 @@
   }
 
   .map-mobile-drawer__action-label {
-    color: #75e8ff;
+    color: var(--visitor-accent);
     font-size: 13px;
   }
 
@@ -1286,7 +1280,7 @@
     display: flex;
     align-items: flex-end;
     padding: 12px;
-    background: rgba(2, 10, 20, 0.58);
+    background: var(--visitor-overlay);
     transition: opacity 0.18s ease;
   }
 
@@ -1298,8 +1292,8 @@
     touch-action: pan-y;
     padding: 16px;
     border-radius: 20px;
-    color: #f8fbff;
-    background: #000d1f;
+    color: var(--visitor-text);
+    background: var(--visitor-surface);
     border: var(--tech-border);
     box-shadow: var(--tech-glow-strong);
     transition: transform 0.18s ease;
@@ -1314,7 +1308,7 @@
     gap: 10px;
     padding: 0 8px 8px;
     border: 0;
-    color: #9fd7ff;
+    color: var(--visitor-accent);
     background: transparent;
     touch-action: none;
   }
@@ -1328,7 +1322,7 @@
   }
 
   .map-mobile-drawer__header span {
-    color: #62e9ff;
+    color: var(--visitor-accent);
     font-size: 12px;
   }
 
@@ -1342,8 +1336,8 @@
     min-height: var(--touch-target);
     border: 0;
     border-radius: 50%;
-    color: #f8fbff;
-    background: rgba(255, 255, 255, 0.08);
+    color: var(--visitor-text);
+    background: var(--visitor-surface-muted);
   }
 
   .map-mobile-drawer__panel > .side-card {

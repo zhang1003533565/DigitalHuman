@@ -34,7 +34,7 @@
   }
 
   .history-page .history-mobile-head span {
-    color: #8ed0ff;
+    color: var(--visitor-accent);
     font-size: 12px;
     font-weight: 800;
     letter-spacing: 0.16em;
@@ -42,7 +42,7 @@
 
   .history-page .history-mobile-head h1 {
     margin: 2px 0 0;
-    color: #f8fbff;
+    color: var(--visitor-text);
     font-size: 24px;
   }
 
@@ -50,10 +50,10 @@
   .history-page .history-state button {
     min-height: var(--touch-target);
     padding: 8px 14px;
-    border: 1px solid rgba(142, 208, 255, 0.34);
+    border: 1px solid var(--visitor-border-strong);
     border-radius: 999px;
-    background: rgba(142, 208, 255, 0.12);
-    color: #dff5ff;
+    background: var(--visitor-accent-soft);
+    color: var(--visitor-accent);
     font: inherit;
     font-size: 13px;
     font-weight: 800;
@@ -68,10 +68,10 @@
   .history-page .history-state {
     margin: 0;
     padding: 22px 18px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--visitor-border);
     border-radius: 16px;
-    background: rgba(8, 18, 29, 0.62);
-    color: rgba(243, 248, 255, 0.72);
+    background: var(--visitor-surface);
+    color: var(--visitor-text-secondary);
     text-align: center;
   }
 
@@ -83,14 +83,14 @@
     width: fit-content;
     max-width: 88%;
     padding: 14px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--visitor-border);
     border-radius: 16px;
-    background: rgba(8, 18, 29, 0.68);
+    background: var(--visitor-surface);
   }
 
   .history-page .history-message--user {
     justify-self: end;
-    background: rgba(45, 121, 176, 0.34);
+    background: var(--visitor-accent-soft);
   }
 
   .history-page .history-message--assistant {
@@ -101,18 +101,18 @@
     display: flex;
     justify-content: space-between;
     gap: 18px;
-    color: rgba(218, 239, 255, 0.62);
+    color: var(--visitor-text-muted);
     font-size: 12px;
   }
 
   .history-page .history-message__meta span {
-    color: #9fd7ff;
+    color: var(--visitor-accent);
     font-weight: 800;
   }
 
   .history-page .history-message__body {
     margin: 6px 0 0;
-    color: #f3f8ff;
+    color: var(--visitor-text);
     font-size: 14px;
     line-height: 1.6;
     overflow-wrap: anywhere;

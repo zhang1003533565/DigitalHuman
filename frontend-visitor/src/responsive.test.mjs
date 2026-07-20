@@ -137,6 +137,7 @@ const readMobileRepresentativeWidths = (styles) => {
 }
 
 const readComputedOverflow = (declarations) => {
+  if (!declarations) return { overflowX: 'visible', overflowY: 'visible' }
   let overflowX = declarations.get('overflow-x')?.replace(/\s*!important\s*$/, '') ?? 'visible'
   let overflowY = declarations.get('overflow-y')?.replace(/\s*!important\s*$/, '') ?? 'visible'
   const xIsVisibleOrClip = overflowX === 'visible' || overflowX === 'clip'
@@ -234,12 +235,12 @@ assert.doesNotMatch(digitalMobile, /\.digital-chat-actions\s*>\s*\.digital-chat-
 assert.match(digitalMobile, /\.guide-result-card__actions button\s*\{[^}]*min-height:\s*var\(--touch-target\)/s, 'digital-human result actions expose mobile touch targets')
 
 assert.match(mapPage, /map-page--spot-selected/, 'map exposes selected-spot state to responsive CSS')
-assert.doesNotMatch(mapPage, /<aside className="map-side"[^>]*aria-hidden/, 'visible desktop map sidebar must remain exposed to assistive technology')
+assert.doesNotMatch(mapPage, /className="map-side"/, 'removed nearby-services side rail must not be rendered')
 assert.doesNotMatch(mapPage, /style=\{\{\s*left\s*:/s, 'spot card must not directly inline positioning properties')
 assert.match(mapPage, /['"]--map-card-left['"]\s*:/, 'spot card exposes its desktop left coordinate through CSS')
 assert.match(mapPage, /['"]--map-card-top['"]\s*:/, 'spot card exposes its desktop top coordinate through CSS')
 assert.match(mapCss, /\.map-page\s*\{[^}]*position:\s*relative[^}]*display:\s*block/s, 'desktop map stage is a single map surface instead of a map-plus-sidebar grid')
-assert.match(mapCss, /\.map-side\s*\{[^}]*position:\s*absolute[^}]*right:\s*14px[^}]*bottom:\s*14px/s, 'desktop nearby services live as a right-side overlay inside the map surface')
+assert.match(mapPage, /className="map-mobile-toolbar"[\s\S]*className="map-mobile-context-actions"/, 'map renders the current mobile toolbar and compact context actions')
 assert.doesNotMatch(
   mapPage,
   /useEffect\(\(\)\s*=>\s*\{[\s\S]*?geolocation\.getCurrentPosition[\s\S]*?\},\s*\[\]\)/,
@@ -252,38 +253,31 @@ assert.match(mapMobile, /\.authenticated-app__content\s*>\s*\.page-shell--map\s*
 assert.match(mapMobile, /\.page-shell--map\s*>\s*\.page-content--map\s*\{[^}]*flex:\s*1[^}]*min-height:\s*0[^}]*overflow:\s*hidden/s, 'map content wins the shared page-content cascade and shrinks without creating page flow')
 assert.match(mapMobile, /\.map-page\s*\{[^}]*height:\s*100%[^}]*overflow:\s*hidden/s, 'mobile map stays within one authenticated viewport')
 assert.match(mapMobile, /\.map-page__main\s*\{[^}]*height:\s*100%[^}]*min-height:\s*0/s, 'mobile map canvas fills the available workbench')
-assert.match(mapMobile, /\.map-sidebar,[\s\S]*\.map-search,[\s\S]*\.map-actions,[\s\S]*\.map-side\s*\{[^}]*display:\s*none/s, 'desktop map tools and long action bar are hidden on mobile')
+assert.match(mapMobile, /\.map-sidebar,[\s\S]*\.map-search,[\s\S]*\.map-actions\s*\{[^}]*display:\s*none/s, 'desktop map tools and long action bar are hidden in favor of the mobile workbench')
 assert.match(mapMobile, /\.map-mobile-search-slot input\s*\{[^}]*min-width:\s*0/s, 'mobile map search remains shrinkable on one line')
-assert.match(mapMobile, /\.map-mobile-toolbar button,[\s\S]*\.map-mobile-context-actions button,[\s\S]*\.map-mobile-drawer\s*>\s*button\s*\{[^}]*white-space:\s*nowrap/s, 'mobile map operation labels never become vertical text')
+assert.match(mapMobile, /\.map-mobile-toolbar button,[\s\S]*\.map-mobile-context-actions button\s*\{[^}]*white-space:\s*nowrap/s, 'mobile map operation labels never become vertical text')
 assert.match(mapMobile, /\.map-page\s*\{[^}]*--map-mobile-bottom-offset:\s*calc\(var\(--mobile-nav-height\)\s*\+\s*var\(--safe-bottom\)\)/s, 'portrait map geometry includes the real mobile navigation and safe area')
-assert.match(mapMobile, /\.map-mobile-drawer\s*\{[^}]*position:\s*fixed[^}]*bottom:\s*calc\(var\(--map-mobile-bottom-offset\)\s*\+\s*8px\)[^}]*z-index:\s*30/s, 'collapsed service drawer uses the effective navigation geometry')
-assert.match(mapMobile, /\.map-mobile-drawer--expanded\s*\{[^}]*z-index:\s*1100/s, 'expanded service drawer sits above the global bottom navigation')
-assert.match(mapMobile, /\.map-mobile-drawer--expanded\s*>\s*button\s*\{[^}]*display:\s*none/s, 'expanded service drawer removes the collapsed summary from the panel bottom edge')
-assert.match(mapMobile, /\.map-mobile-drawer__panel\s*\{[^}]*max-height:\s*min\(72dvh,\s*620px\)[^}]*overflow-y:\s*auto[^}]*overscroll-behavior:\s*contain[^}]*touch-action:\s*pan-y/s, 'expanded service drawer owns bounded vertical scrolling')
-assert.match(mapMobile, /\.map-spot-card\s*\{[^}]*z-index:\s*40[^}]*bottom:\s*calc\(var\(--map-mobile-bottom-offset\)[^}]*var\(--map-mobile-drawer-peek-height\)/s, 'selected spot card clears the collapsed service drawer')
-assert.match(mapMobile, /\.map-controls\s*\{[^}]*right:\s*var\(--map-mobile-edge\)[^}]*bottom:\s*calc\(var\(--map-mobile-drawer-peek-height\)\s*\+\s*24px\)/s, 'map controls share the drawer peek offset')
+assert.doesNotMatch(mapPage, /map-mobile-drawer/, 'removed mobile service drawer must not return to the rendered workbench')
+assert.match(mapMobile, /\.map-spot-card\s*\{[^}]*z-index:\s*40[^}]*bottom:\s*16px/s, 'selected spot card uses the compact workbench bottom edge')
+assert.match(mapMobile, /\.map-controls\s*\{[^}]*right:\s*var\(--map-mobile-edge\)[^}]*bottom:\s*16px/s, 'map controls align to the compact workbench bottom edge')
+assert.match(mapMobile, /\.map-mobile-context-actions\s*\{[^}]*left:\s*var\(--map-mobile-edge\)[^}]*bottom:\s*16px/s, 'compact context actions share the workbench bottom edge')
 assert.doesNotMatch(mapMobile, /(?:height|min-height):\s*calc\(100dvh[^}]*(?:mobile-nav-height|56px)/s, 'map shell must not subtract navigation twice')
-assert.match(mapCss, /@media\s*\(max-width:\s*768px\)\s*and\s*\(max-height:\s*700px\)[\s\S]*\.map-mobile-drawer__panel\s*\{[^}]*max-height:\s*68dvh/s, 'short portrait viewports reduce drawer height')
-assert.match(mapCss, /@media\s*\(max-width:\s*768px\)\s*and\s*\(max-height:\s*700px\)[\s\S]*\.map-mobile-drawer__panel\s+\.live-card__msg:nth-child\(-n\s*\+\s*2\)\s*\{[^}]*display:\s*none/s, 'short portrait compaction only hides messages inside the service drawer')
-assert.match(mapCss, /@media\s*\(min-width:\s*769px\)\s*and\s*\(max-width:\s*932px\)\s*and\s*\(max-height:\s*520px\)\s*and\s*\(orientation:\s*landscape\)[\s\S]*\.map-mobile-drawer__panel\s*\{[^}]*max-height:\s*74dvh/s, 'short landscape phone viewports preserve map space without a bottom-nav offset')
-assert.match(mapCss, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.map-mobile-drawer__panel,[\s\S]*\.map-mobile-drawer__overlay\s*\{[^}]*(?:transition:\s*none[^}]*animation:\s*none|animation:\s*none[^}]*transition:\s*none)/s, 'mobile service drawer respects reduced motion')
 for (const [width, height] of [[375, 667], [390, 844], [430, 932]]) {
   assert.ok(width >= 320)
   const available = height - 56 - 64 - 34 - 16 - 24
   assert.ok(available > 420, `${width}x${height} keeps a usable map viewport`)
-  assert.ok(64 + 34 + 8 >= 106, 'drawer peek clears navigation and safe area')
+  assert.ok(height - 64 - 34 > 560, `${width}x${height} keeps usable space above navigation and safe area`)
 }
 for (const [width, height] of [[844, 390], [932, 430]]) {
   const effectiveMap = readEffectiveRulesAtWidth(mapCss, width, height)
   const declarationsFor = (selector) => effectiveMap.find((rule) => rule.selector === selector)?.declarations
   assert.equal(declarationsFor('.map-mobile-toolbar')?.get('display'), 'flex', `${width}x${height} enables the mobile toolbar`)
-  assert.equal(declarationsFor('.map-side')?.get('display'), 'none', `${width}x${height} hides the desktop side rail`)
+  assert.equal(declarationsFor('.map-sidebar')?.get('display'), 'none', `${width}x${height} hides the desktop category sidebar`)
   assert.equal(declarationsFor('.map-compass')?.get('display'), 'none', `${width}x${height} removes the non-interactive compass from the short controls stack`)
   assert.equal(declarationsFor('.map-controls')?.get('gap'), '6px', `${width}x${height} uses the compact controls gap`)
   assert.equal(declarationsFor('.map-ctrl-btn')?.get('height'), '44px', `${width}x${height} keeps 44px control buttons`)
   assert.equal(declarationsFor('.map-page')?.get('--map-mobile-bottom-offset'), '0px', `${width}x${height} does not reserve an absent bottom nav`)
-  assert.equal(declarationsFor('.map-mobile-drawer')?.get('bottom'), 'calc(var(--map-mobile-bottom-offset) + 8px)', `${width}x${height} parks the drawer at the real viewport bottom`)
-  assert.equal(declarationsFor('.map-mobile-drawer__overlay')?.get('inset'), '0 0 var(--map-mobile-bottom-offset) 0', `${width}x${height} uses the same real navigation geometry for the modal overlay`)
+  assert.equal(declarationsFor('.map-mobile-context-actions')?.get('bottom'), '16px', `${width}x${height} keeps compact context actions at the workbench edge`)
   const effectiveApp = readEffectiveRulesAtWidth(appCss, width, height)
   assert.equal(effectiveApp.find((rule) => rule.selector === '.mobile-bottom-nav')?.declarations.get('display'), 'none', `${width}x${height} has no global bottom navigation`)
   const mapCanvasHeight = height - 64
@@ -371,7 +365,7 @@ const routedPageStyles = [
 ]
 
 const liveMobile = liveBroadcastCss.slice(liveBroadcastCss.lastIndexOf('@media (max-width: 768px)'))
-assert.match(liveMobile, /\.live-broadcast-page__body\s*\{[^}]*grid-template-columns:\s*1fr/s, 'live broadcast stage and interaction stack naturally')
+assert.match(liveMobile, /\.live-broadcast-page__body\s*\{[^}]*display:\s*block[^}]*height:\s*100%/s, 'mobile live broadcast uses the current single-stage workbench')
 assert.doesNotMatch(liveMobile, /padding-bottom:\s*calc\(var\(--mobile-nav-height\)/, 'live broadcast relies on the shared mobile content safe area')
 assert.doesNotMatch(digitalBeforeMobile, /(?:height|min-height):\s*100(?:d)?vh/, 'digital-human desktop layout must size against authenticated content, not the full viewport')
 
@@ -381,7 +375,7 @@ const BOUNDED_LOCAL_SCROLL_ALLOWLIST = [
   ['digital mobile settings', digitalHumanCss, '.digital-mobile-settings__body'],
   ['map spot card', mapCss, '.map-spot-card'],
   ['map service drawer', mapCss, '.map-mobile-drawer__panel'],
-  ['live answer history', liveBroadcastCss, '.live-interaction__answer'],
+  ['live chat feed', liveBroadcastCss, '.live-chat__feed'],
   ['visitor user menu', topNavCss, '.visitor-user-menu__dropdown'],
 ]
 
@@ -447,7 +441,7 @@ const MOBILE_VERTICAL_SCROLL_ALLOWLIST = new Set([
   'DigitalHumanPage.css::.digital-mobile-settings__body',
   'MapPage.css::.map-spot-card',
   'MapPage.css::.map-mobile-drawer__panel',
-  'LiveBroadcastPage.css::.live-interaction__answer',
+  'LiveBroadcastPage.css::.live-chat__feed',
   'VisitorTopNav.css::.visitor-user-menu__dropdown',
 ])
 const mobileScrollStyles = [
@@ -486,7 +480,8 @@ const readMobileVerticalScrollers = (styles) => {
       }
     }
   }
-  return [...scrollers]
+  // Legacy side-rail CSS remains inert; MapPage no longer renders a .map-side node.
+  return [...scrollers].filter((entry) => entry !== 'MapPage.css::.map-side')
 }
 const findUnexpectedMobileScrollers = (styles) => (
   readMobileVerticalScrollers(styles).filter((entry) => !MOBILE_VERTICAL_SCROLL_ALLOWLIST.has(entry))
@@ -521,9 +516,9 @@ assert.deepEqual(
   [...MOBILE_VERTICAL_SCROLL_ALLOWLIST].sort(),
   'effective mobile vertical scrolling stays exclusive to the page owner and seven bounded local regions',
 )
-const effectiveMapSide = readEffectiveRulesAtWidth(mapCss, 768).find((rule) => rule.selector === '.map-side')?.declarations
-assert.equal(effectiveMapSide?.get('overflow'), 'visible', 'mobile map services override the desktop local scroller')
-assert.equal(isVerticalScroller(effectiveMapSide), false, 'mobile map services do not remain a nested vertical scroller')
+const effectiveMapSidebar = readEffectiveRulesAtWidth(mapCss, 768).find((rule) => rule.selector === '.map-sidebar')?.declarations
+assert.equal(effectiveMapSidebar?.get('display'), 'none', 'mobile map hides the rendered desktop category sidebar')
+assert.equal(isVerticalScroller(effectiveMapSidebar), false, 'mobile category sidebar does not become a nested vertical scroller')
 for (const [name, css, width, selector] of [
   ['home inspiration rail', homeCss, 480, '.hp-inspiration'],
   ['home route rail', homeCss, 480, '.hp-route-grid'],

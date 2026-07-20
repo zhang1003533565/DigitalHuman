@@ -1,5 +1,7 @@
 .route-list-page {
   padding-bottom: 40px;
+  color: var(--visitor-text);
+  background: var(--visitor-bg);
 }
 
 .route-list-page__header {
@@ -10,9 +12,9 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: rgba(60, 140, 255, 0.12);
-  border: 1px solid rgba(100, 180, 255, 0.25);
-  color: rgba(180, 220, 255, 0.95);
+  background: var(--visitor-accent-soft);
+  border: 1px solid var(--visitor-border-strong);
+  color: var(--visitor-accent);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -23,8 +25,8 @@
 }
 
 .route-list-page__back:hover {
-  background: rgba(60, 140, 255, 0.22);
-  border-color: rgba(100, 180, 255, 0.45);
+  background: var(--visitor-surface-strong);
+  border-color: var(--visitor-accent);
   transform: translateX(-2px);
 }
 
@@ -36,7 +38,7 @@
 
 .route-list-page__header p {
   margin: 0;
-  color: rgba(243, 248, 255, 0.55);
+  color: var(--visitor-text-secondary);
   font-size: 14px;
 }
 
@@ -49,15 +51,15 @@
 .route-list-page__card {
   border-radius: 14px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--visitor-surface);
+  border: 1px solid var(--visitor-border);
   transition: all 0.25s;
 }
 
 .route-list-page__card:hover {
   transform: translateY(-3px);
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  background: var(--visitor-surface-strong);
+  box-shadow: var(--visitor-shadow);
 }
 
 .route-list-page__card img {
@@ -81,13 +83,13 @@
   margin: 0;
   font-size: 13px;
   line-height: 1.6;
-  color: rgba(243, 248, 255, 0.6);
+  color: var(--visitor-text-secondary);
 }
 
 .route-list-page__empty {
   text-align: center;
   padding: 60px 0;
-  color: rgba(243, 248, 255, 0.4);
+  color: var(--visitor-text-muted);
   font-size: 15px;
 }
 @media (max-width: 768px) {

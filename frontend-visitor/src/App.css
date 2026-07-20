@@ -18,6 +18,8 @@
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
+  color: var(--visitor-text);
+  background: var(--visitor-bg);
 }
 
 .authenticated-app__content {
@@ -35,8 +37,8 @@
   min-height: 100vh;
   min-height: 100dvh;
   place-items: center;
-  color: rgba(244, 248, 255, 0.86);
-  background: #06111f;
+  color: var(--visitor-text-secondary);
+  background: var(--visitor-bg);
   font-size: 15px;
 }
 
@@ -48,11 +50,8 @@
 .home-screen,
 .page-shell {
   padding: 32px;
-  background:
-    radial-gradient(circle at top left, rgba(0, 231, 255, 0.18), transparent 24rem),
-    radial-gradient(circle at 78% 22%, rgba(84, 118, 255, 0.18), transparent 22rem),
-    radial-gradient(circle at 22% 78%, rgba(44, 255, 196, 0.12), transparent 24rem),
-    linear-gradient(140deg, #040b14 0%, #091528 34%, #0f1d36 65%, #07111e 100%);
+  color: var(--visitor-text);
+  background: var(--visitor-bg);
 }
 
 .page-shell {
@@ -74,7 +73,7 @@
 .surface-tag,
 .card-kicker {
   margin: 0 0 12px;
-  color: #9fd7ff;
+  color: var(--visitor-accent);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.2em;
@@ -84,22 +83,22 @@
 .surface-copy {
   margin: 18px 0 0;
   max-width: 620px;
-  color: rgba(243, 248, 255, 0.74);
+  color: var(--visitor-text-secondary);
   font-size: 18px;
 }
 
 .hero-panel,
 .feature-card {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(8, 18, 29, 0.62);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--visitor-border);
+  background: var(--visitor-surface);
+  box-shadow: var(--visitor-shadow);
   backdrop-filter: blur(16px);
 }
 
 .hero-panel h1,
 .feature-card h2 {
   margin: 0;
-  color: #ffffff;
+  color: var(--visitor-text);
 }
 
 .hero-panel h1 {
@@ -124,16 +123,16 @@
 }
 
 .feature-card button {
-  color: #03111d;
+  color: #ffffff;
   border: 0;
-  background: linear-gradient(135deg, #6fe7ff, #7da2ff 52%, #7cffd2);
-  box-shadow: 0 14px 34px rgba(83, 171, 255, 0.3);
+  background: var(--visitor-accent-strong);
+  box-shadow: var(--visitor-shadow);
 }
 
 .ghost-button {
-  color: #f4f8ff;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--visitor-text);
+  border: 1px solid var(--visitor-border);
+  background: var(--visitor-surface-muted);
 }
 
 .feature-card button:hover,
@@ -148,7 +147,7 @@
 
 .page-heading h1 {
   margin: 0;
-  color: #f8fbff;
+  color: var(--visitor-text);
   font-size: 34px;
 }
 
@@ -176,7 +175,7 @@
 .feature-card p,
 .feature-list {
   margin: 0;
-  color: rgba(243, 248, 255, 0.74);
+  color: var(--visitor-text-secondary);
 }
 
 .tag-group {
@@ -188,9 +187,9 @@
 .info-tag {
   padding: 6px 10px;
   border-radius: 999px;
-  color: #f8fbff;
+  color: var(--visitor-text);
   font-size: 12px;
-  background: rgba(142, 208, 255, 0.18);
+  background: var(--visitor-accent-soft);
 }
 
 .info-tag--warm {
@@ -240,9 +239,9 @@
     grid-template-columns: repeat(5, minmax(0, 1fr));
     height: calc(var(--mobile-nav-height) + var(--safe-bottom));
     padding: 4px 6px var(--safe-bottom);
-    border-top: 1px solid rgba(142, 208, 255, 0.22);
-    background: rgba(4, 13, 24, 0.94);
-    box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.3);
+    border-top: 1px solid var(--visitor-border);
+    background: var(--visitor-overlay);
+    box-shadow: var(--visitor-shadow);
     backdrop-filter: blur(18px);
   }
 
@@ -254,7 +253,7 @@
     justify-content: center;
     flex-direction: column;
     gap: 1px;
-    color: rgba(235, 245, 255, 0.62);
+    color: var(--visitor-text-muted);
     font-size: 11px;
     font-weight: 700;
     text-decoration: none;
@@ -266,7 +265,7 @@
   }
 
   .mobile-bottom-nav__item--active {
-    color: #75e8ff;
+    color: var(--visitor-accent);
   }
 
   .page-shell {

@@ -4,6 +4,11 @@
   gap: 16px;
 }
 
+.travel-tips-page {
+  color: var(--visitor-text);
+  background: var(--visitor-bg);
+}
+
 .tips-category-bar {
   display: flex;
   gap: 8px;
@@ -27,26 +32,26 @@
   padding: 8px 18px;
   font-size: 13px;
   font-weight: 700;
-  color: rgba(214, 237, 255, 0.78);
-  border: 1px solid rgba(166, 211, 255, 0.22);
+  color: var(--visitor-text-secondary);
+  border: 1px solid var(--visitor-border);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--visitor-surface-muted);
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
 }
 
 .tips-category-btn:hover {
-  color: #ffffff;
-  border-color: rgba(111, 231, 255, 0.4);
-  background: rgba(111, 231, 255, 0.08);
+  color: var(--visitor-text);
+  border-color: var(--visitor-border-strong);
+  background: var(--visitor-accent-soft);
 }
 
 .tips-category-btn--active {
-  color: #03111d;
+  color: #ffffff;
   border-color: transparent;
-  background: linear-gradient(135deg, #6fe7ff, #7da2ff 52%, #7cffd2);
-  box-shadow: 0 4px 16px rgba(83, 171, 255, 0.25);
+  background: var(--visitor-accent-strong);
+  box-shadow: var(--visitor-shadow);
 }
 
 .tips-scroll-area {
@@ -82,7 +87,7 @@
   margin: 0;
   font-size: 20px;
   font-weight: 800;
-  color: #ffffff;
+  color: var(--visitor-text);
   letter-spacing: -0.02em;
 }
 
@@ -110,8 +115,8 @@
 .tips-card-category {
   font-size: 12px;
   font-weight: 600;
-  color: rgba(111, 231, 255, 0.8);
-  background: rgba(111, 231, 255, 0.1);
+  color: var(--visitor-accent);
+  background: var(--visitor-accent-soft);
   padding: 2px 10px;
   border-radius: 999px;
 }
@@ -122,19 +127,21 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  border: 1px solid var(--visitor-border);
+  background: var(--visitor-surface);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .tips-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--visitor-shadow);
 }
 
 .tips-card-title {
   margin: 0;
   font-size: 17px;
   font-weight: 800;
-  color: #ffffff;
+  color: var(--visitor-text);
   letter-spacing: -0.01em;
 }
 
@@ -142,7 +149,7 @@
   margin: 0;
   font-size: 14px;
   line-height: 1.7;
-  color: rgba(243, 248, 255, 0.72);
+  color: var(--visitor-text-secondary);
 }
 
 .tips-empty {
