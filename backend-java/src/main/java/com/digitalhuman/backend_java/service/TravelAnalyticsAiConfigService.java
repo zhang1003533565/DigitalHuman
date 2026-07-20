@@ -1,7 +1,9 @@
 package com.digitalhuman.backend_java.service;
 
 import com.digitalhuman.backend_java.model.TravelAnalyticsAiConfig;
+import com.digitalhuman.backend_java.model.TravelAnalyticsSourceState;
 import com.digitalhuman.backend_java.repository.TravelAnalyticsAiConfigRepository;
+import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -17,24 +19,21 @@ public class TravelAnalyticsAiConfigService {
     private static final int DEFAULT_MINIMUM_SAMPLE_SIZE = 10;
 
     private final TravelAnalyticsAiConfigRepository repository;
-    private final TravelAnalyticsMetricCacheInvalidator metricCacheInvalidator;
+    private final TravelAnalyticsSourceStateService sourceStateService;
 
     @Autowired
     public TravelAnalyticsAiConfigService(
             TravelAnalyticsAiConfigRepository repository,
-            TravelAnalyticsMetricCacheInvalidator metricCacheInvalidator) {
+            TravelAnalyticsSourceStateService sourceStateService) {
         this.repository = repository;
-        this.metricCacheInvalidator = metricCacheInvalidator;
-    }
-
-    TravelAnalyticsAiConfigService(TravelAnalyticsAiConfigRepository repository) {
-        this(repository, new TravelAnalyticsMetricCacheInvalidator(new TravelAnalyticsMetricCache()));
+        this.sourceStateService = sourceStateService;
     }
 
     public TravelAnalyticsAiConfig getConfig() {
         return repository.findById(DEFAULT_ID).orElseGet(this::buildDefaultConfig);
     }
 
+    @Transactional
     public TravelAnalyticsAiConfig updateConfig(Boolean publicEnabled, Integer minimumSampleSize) {
         if (publicEnabled == null) {
             throw new ResponseStatusException(BAD_REQUEST, "publicEnabled 不能为空");
@@ -43,13 +42,17 @@ public class TravelAnalyticsAiConfigService {
             throw new ResponseStatusException(BAD_REQUEST, "minimumSampleSize 必须大于 0");
         }
 
+        TravelAnalyticsSourceState state = sourceStateService.lockState();
         TravelAnalyticsAiConfig config = repository.findById(DEFAULT_ID).orElseGet(this::buildDefaultConfig);
+        boolean metricConfigChanged = !minimumSampleSize.equals(config.getMinimumSampleSize());
         config.setId(DEFAULT_ID);
         config.setPublicEnabled(publicEnabled);
         config.setMinimumSampleSize(minimumSampleSize);
         config.setUpdatedAt(LocalDateTime.now());
         TravelAnalyticsAiConfig saved = repository.save(config);
-        metricCacheInvalidator.invalidateAfterCommitOrNow();
+        if (metricConfigChanged) {
+            sourceStateService.markMetricConfigChanged(state);
+        }
         return saved;
     }
 

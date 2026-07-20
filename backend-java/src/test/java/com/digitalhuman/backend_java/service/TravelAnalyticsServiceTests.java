@@ -2,6 +2,7 @@ package com.digitalhuman.backend_java.service;
 
 import com.digitalhuman.backend_java.dto.TravelAnalyticsRecordRequest;
 import com.digitalhuman.backend_java.model.TravelAnalyticsRecord;
+import com.digitalhuman.backend_java.model.TravelAnalyticsSourceState;
 import com.digitalhuman.backend_java.repository.TravelAnalyticsRecordRepository;
 import jakarta.persistence.EntityManager;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -9,8 +10,6 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -20,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -27,57 +27,73 @@ import static org.mockito.Mockito.when;
 class TravelAnalyticsServiceTests {
 
     @Test
-    void createRecordSchedulesMetricCacheInvalidationAfterSuccessfulSave() {
+    void createRecordLocksBeforeWriteAndMarksDataChangedAfterSuccessfulSave() {
         TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
-        TravelAnalyticsMetricCacheInvalidator invalidator = mock(TravelAnalyticsMetricCacheInvalidator.class);
+        TravelAnalyticsSourceStateService sourceStateService = mock(TravelAnalyticsSourceStateService.class);
+        TravelAnalyticsSourceState lockedState = new TravelAnalyticsSourceState();
+        when(sourceStateService.lockState()).thenReturn(lockedState);
         when(repository.findByTourist_idIgnoreCase("visitor-1")).thenReturn(Optional.empty());
         when(repository.save(any(TravelAnalyticsRecord.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        TravelAnalyticsService service = new TravelAnalyticsService(repository, invalidator);
+        TravelAnalyticsService service = new TravelAnalyticsService(repository, sourceStateService);
 
         TravelAnalyticsRecord created = service.createRecord(request("visitor-1"));
 
         assertEquals("visitor-1", created.getTourist_id());
-        verify(invalidator).invalidateAfterCommitOrNow();
+        var order = inOrder(sourceStateService, repository);
+        order.verify(sourceStateService).lockState();
+        order.verify(repository).save(any(TravelAnalyticsRecord.class));
+        order.verify(sourceStateService).markDataChanged(lockedState);
     }
 
     @Test
-    void updateRecordSchedulesMetricCacheInvalidationAfterSuccessfulSave() {
+    void updateRecordLocksBeforeWriteAndMarksDataChangedAfterSuccessfulSave() {
         TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
-        TravelAnalyticsMetricCacheInvalidator invalidator = mock(TravelAnalyticsMetricCacheInvalidator.class);
+        TravelAnalyticsSourceStateService sourceStateService = mock(TravelAnalyticsSourceStateService.class);
+        TravelAnalyticsSourceState lockedState = new TravelAnalyticsSourceState();
+        when(sourceStateService.lockState()).thenReturn(lockedState);
         TravelAnalyticsRecord existing = new TravelAnalyticsRecord();
         existing.setId(9L);
         existing.setTourist_id("visitor-9");
         when(repository.findById(9L)).thenReturn(Optional.of(existing));
         when(repository.findByTourist_idIgnoreCaseAndIdNot("visitor-9", 9L)).thenReturn(Optional.empty());
         when(repository.save(any(TravelAnalyticsRecord.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        TravelAnalyticsService service = new TravelAnalyticsService(repository, invalidator);
+        TravelAnalyticsService service = new TravelAnalyticsService(repository, sourceStateService);
 
         TravelAnalyticsRecord updated = service.updateRecord(9L, request("visitor-9"));
 
         assertEquals("visitor-9", updated.getTourist_id());
-        verify(invalidator).invalidateAfterCommitOrNow();
+        var order = inOrder(sourceStateService, repository);
+        order.verify(sourceStateService).lockState();
+        order.verify(repository).save(existing);
+        order.verify(sourceStateService).markDataChanged(lockedState);
     }
 
     @Test
-    void deleteRecordSchedulesMetricCacheInvalidationAfterSuccessfulDelete() {
+    void deleteRecordLocksBeforeWriteAndMarksDataChangedAfterSuccessfulDelete() {
         TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
-        TravelAnalyticsMetricCacheInvalidator invalidator = mock(TravelAnalyticsMetricCacheInvalidator.class);
+        TravelAnalyticsSourceStateService sourceStateService = mock(TravelAnalyticsSourceStateService.class);
+        TravelAnalyticsSourceState lockedState = new TravelAnalyticsSourceState();
+        when(sourceStateService.lockState()).thenReturn(lockedState);
         when(repository.existsById(11L)).thenReturn(true);
-        TravelAnalyticsService service = new TravelAnalyticsService(repository, invalidator);
+        TravelAnalyticsService service = new TravelAnalyticsService(repository, sourceStateService);
 
         service.deleteRecord(11L);
 
-        verify(repository).deleteById(11L);
-        verify(invalidator).invalidateAfterCommitOrNow();
+        var order = inOrder(sourceStateService, repository);
+        order.verify(sourceStateService).lockState();
+        order.verify(repository).deleteById(11L);
+        order.verify(sourceStateService).markDataChanged(lockedState);
     }
 
     @Test
-    void importSchedulesMetricCacheInvalidationOnceAfterSuccessfulCompletion() throws Exception {
+    void successfulImportLocksBeforeWriteAndMarksDataChangedExactlyOnce() throws Exception {
         TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
-        TravelAnalyticsMetricCacheInvalidator invalidator = mock(TravelAnalyticsMetricCacheInvalidator.class);
+        TravelAnalyticsSourceStateService sourceStateService = mock(TravelAnalyticsSourceStateService.class);
+        TravelAnalyticsSourceState lockedState = new TravelAnalyticsSourceState();
+        when(sourceStateService.lockState()).thenReturn(lockedState);
         EntityManager entityManager = mock(EntityManager.class);
         when(repository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        TravelAnalyticsService service = new TravelAnalyticsService(repository, invalidator);
+        TravelAnalyticsService service = new TravelAnalyticsService(repository, sourceStateService);
         service.setEntityManagerForTests(entityManager);
 
         service.importFromExcel(importFile(), false);
@@ -86,36 +102,44 @@ class TravelAnalyticsServiceTests {
         verify(repository).saveAll(captor.capture());
         verify(repository).flush();
         verify(entityManager).clear();
-        verify(invalidator, times(1)).invalidateAfterCommitOrNow();
+        var order = inOrder(sourceStateService, repository);
+        order.verify(sourceStateService).lockState();
+        order.verify(repository).saveAll(any());
+        order.verify(sourceStateService).markDataChanged(lockedState);
+        verify(sourceStateService, times(1)).markDataChanged(lockedState);
         verify(repository, never()).deleteAllInBatch();
     }
 
     @Test
-    void importSchedulesMetricCacheInvalidationOnlyAfterCommitDuringActiveSynchronization() throws Exception {
+    void failedImportDoesNotMarkDataChanged() throws Exception {
         TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
-        TravelAnalyticsMetricCache cache = mock(TravelAnalyticsMetricCache.class);
+        TravelAnalyticsSourceStateService sourceStateService = mock(TravelAnalyticsSourceStateService.class);
+        TravelAnalyticsSourceState lockedState = new TravelAnalyticsSourceState();
+        when(sourceStateService.lockState()).thenReturn(lockedState);
         EntityManager entityManager = mock(EntityManager.class);
-        when(repository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        TravelAnalyticsService service = new TravelAnalyticsService(
-                repository,
-                new TravelAnalyticsMetricCacheInvalidator(cache));
+        when(repository.saveAll(any())).thenThrow(new IllegalStateException("database unavailable"));
+        TravelAnalyticsService service = new TravelAnalyticsService(repository, sourceStateService);
         service.setEntityManagerForTests(entityManager);
-        TransactionSynchronizationManager.initSynchronization();
 
-        try {
-            service.importFromExcel(importFile(), false);
+        org.junit.jupiter.api.Assertions.assertThrows(
+                org.springframework.web.server.ResponseStatusException.class,
+                () -> service.importFromExcel(importFile(), false));
 
-            verify(cache, never()).invalidateAll();
-            assertEquals(1, TransactionSynchronizationManager.getSynchronizations().size());
+        verify(sourceStateService, never()).markDataChanged(any());
+    }
 
-            TransactionSynchronization synchronization = TransactionSynchronizationManager.getSynchronizations().get(0);
-            synchronization.afterCommit();
-            synchronization.afterCompletion(TransactionSynchronization.STATUS_COMMITTED);
+    @Test
+    void rejectedCreateDoesNotLockOrIncrementVersion() {
+        TravelAnalyticsRecordRepository repository = mock(TravelAnalyticsRecordRepository.class);
+        TravelAnalyticsSourceStateService sourceStateService = mock(TravelAnalyticsSourceStateService.class);
+        TravelAnalyticsService service = new TravelAnalyticsService(repository, sourceStateService);
 
-            verify(cache, times(1)).invalidateAll();
-        } finally {
-            TransactionSynchronizationManager.clearSynchronization();
-        }
+        org.junit.jupiter.api.Assertions.assertThrows(
+                org.springframework.web.server.ResponseStatusException.class,
+                () -> service.createRecord(request(" ")));
+
+        verify(sourceStateService, never()).lockState();
+        verify(sourceStateService, never()).markDataChanged(any());
     }
 
     private TravelAnalyticsRecordRequest request(String touristId) {

@@ -4,6 +4,7 @@ import com.digitalhuman.backend_java.dto.TravelAnalyticsImportIssueDto;
 import com.digitalhuman.backend_java.dto.TravelAnalyticsImportResult;
 import com.digitalhuman.backend_java.dto.TravelAnalyticsRecordRequest;
 import com.digitalhuman.backend_java.model.TravelAnalyticsRecord;
+import com.digitalhuman.backend_java.model.TravelAnalyticsSourceState;
 import com.digitalhuman.backend_java.repository.TravelAnalyticsRecordRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -59,7 +60,7 @@ public class TravelAnalyticsService {
     );
 
     private final TravelAnalyticsRecordRepository recordRepository;
-    private final TravelAnalyticsMetricCacheInvalidator metricCacheInvalidator;
+    private final TravelAnalyticsSourceStateService sourceStateService;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -67,13 +68,9 @@ public class TravelAnalyticsService {
     @Autowired
     public TravelAnalyticsService(
             TravelAnalyticsRecordRepository recordRepository,
-            TravelAnalyticsMetricCacheInvalidator metricCacheInvalidator) {
+            TravelAnalyticsSourceStateService sourceStateService) {
         this.recordRepository = recordRepository;
-        this.metricCacheInvalidator = metricCacheInvalidator;
-    }
-
-    TravelAnalyticsService(TravelAnalyticsRecordRepository recordRepository) {
-        this(recordRepository, new TravelAnalyticsMetricCacheInvalidator(new TravelAnalyticsMetricCache()));
+        this.sourceStateService = sourceStateService;
     }
 
     public List<TravelAnalyticsRecord> listAll() {
@@ -104,10 +101,11 @@ public class TravelAnalyticsService {
         if (recordRepository.findByTourist_idIgnoreCase(touristId).isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "tourist_id 已存在");
         }
+        TravelAnalyticsSourceState state = sourceStateService.lockState();
         TravelAnalyticsRecord entity = new TravelAnalyticsRecord();
         applyRequest(entity, request);
         TravelAnalyticsRecord saved = recordRepository.save(entity);
-        metricCacheInvalidator.invalidateAfterCommitOrNow();
+        sourceStateService.markDataChanged(state);
         return saved;
     }
 
@@ -121,9 +119,10 @@ public class TravelAnalyticsService {
         if (recordRepository.findByTourist_idIgnoreCaseAndIdNot(touristId, id).isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "tourist_id 已存在");
         }
+        TravelAnalyticsSourceState state = sourceStateService.lockState();
         applyRequest(entity, request);
         TravelAnalyticsRecord saved = recordRepository.save(entity);
-        metricCacheInvalidator.invalidateAfterCommitOrNow();
+        sourceStateService.markDataChanged(state);
         return saved;
     }
 
@@ -132,8 +131,9 @@ public class TravelAnalyticsService {
         if (!recordRepository.existsById(id)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "记录不存在");
         }
+        TravelAnalyticsSourceState state = sourceStateService.lockState();
         recordRepository.deleteById(id);
-        metricCacheInvalidator.invalidateAfterCommitOrNow();
+        sourceStateService.markDataChanged(state);
     }
 
     public byte[] buildTemplateFile() {
@@ -168,6 +168,7 @@ public class TravelAnalyticsService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Excel 缺少表头");
             }
             validateHeaders(headerRow);
+            TravelAnalyticsSourceState state = sourceStateService.lockState();
 
             if (replaceAll) {
                 recordRepository.deleteAllInBatch();
@@ -217,7 +218,7 @@ public class TravelAnalyticsService {
             if (!batch.isEmpty()) {
                 importedCount += saveImportBatch(batch);
             }
-            metricCacheInvalidator.invalidateAfterCommitOrNow();
+            sourceStateService.markDataChanged(state);
             return new TravelAnalyticsImportResult(importedCount, skippedEmptyCount, skippedDuplicateCount, issues);
         } catch (IOException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "读取 Excel 失败：" + exception.getMessage());
