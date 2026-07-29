@@ -33,6 +33,7 @@ const expectedItems = [
   ['/home', '首页'],
   ['/modules/digital-human', 'AI 导览'],
   ['/routes', '路线推荐'],
+  ['/live', '数字人直播'],
   ['/map', '景点地图'],
 ]
 

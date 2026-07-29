@@ -601,18 +601,37 @@ export function MapPage() {
       searchMarkersRef.current = pois
         .filter((poi: any) => poi?.location)
         .slice(0, 5)
-        .map((poi: any) => new window.AMap.Marker({
-          position: [poi.location.lng, poi.location.lat],
-          title: poi.name,
-          anchor: 'bottom-center',
-          offset: new window.AMap.Pixel(0, -6),
-          content: buildMarkerContent('search'),
-          label: {
-            content: `<div class="map-search-label">${poi.name}</div>`,
-            direction: 'right',
-            offset: new window.AMap.Pixel(12, -4),
-          },
-        }))
+        .map((poi: any) => {
+          const marker = new window.AMap.Marker({
+            position: [poi.location.lng, poi.location.lat],
+            title: poi.name,
+            anchor: 'bottom-center',
+            offset: new window.AMap.Pixel(0, -6),
+            content: buildMarkerContent('search'),
+            label: {
+              content: `<div class="map-search-label">${poi.name}</div>`,
+              direction: 'right',
+              offset: new window.AMap.Pixel(12, -4),
+            },
+          })
+          const searchFacility: ScenicFacility = {
+            id: poi.id ?? 0,
+            name: poi.name,
+            categoryId: 0,
+            categoryName: poi.type ?? '',
+            longitude: poi.location.lng,
+            latitude: poi.location.lat,
+            openTime: null,
+            closeTime: null,
+            image: null,
+            mapVisible: true,
+          }
+          marker.on('click', () => {
+            searchDerivedSelectionRef.current.clear()
+            setSelectedFacility(searchFacility)
+          })
+          return marker
+        })
 
       if (searchMarkersRef.current.length) {
         map.add?.(searchMarkersRef.current)

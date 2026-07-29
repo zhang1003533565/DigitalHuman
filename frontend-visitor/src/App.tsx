@@ -47,6 +47,13 @@ function ProtectedRoute({ user, onLogout }: { user: SessionUser | null; onLogout
   )
 }
 
+function LiveBroadcastLayout({ user }: { user: SessionUser | null }) {
+  if (!user) {
+    return <Navigate to="/login" replace />
+  }
+  return <LiveBroadcastPage />
+}
+
 function App() {
   const [user, setUser] = useState<SessionUser | null>(() => getStoredUser())
 
@@ -79,7 +86,6 @@ function App() {
             path={DIGITAL_HUMAN_ROUTE}
             element={<DigitalHumanPage />}
           />
-          <Route path="/live" element={<LiveBroadcastPage />} />
           <Route path="/routes" element={<RouteRecommendPage />} />
           <Route path="/map" element={<MapPage />} />
           <Route path="/spot-recommend" element={<SpotRecommendPage />} />
@@ -89,6 +95,7 @@ function App() {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/tips" element={<TravelTipsPage />} />
         </Route>
+        <Route path="/live" element={<LiveBroadcastLayout user={user} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>

@@ -185,8 +185,8 @@ assert.match(tokens, /--safe-bottom:\s*env\(safe-area-inset-bottom/, 'safe-area 
 assert.match(tokens, /--mobile-nav-height:/, 'mobile navigation height token is required')
 assert.match(main, /styles\/tokens\.css/, 'global tokens must be loaded by the app entry')
 assert.match(app, /<MobileBottomNav\s*\/>/, 'authenticated routes must render the mobile bottom navigation JSX')
-assert.match(bottomNav, /首页[\s\S]*AI 导览[\s\S]*路线[\s\S]*地图[\s\S]*我的/, 'bottom navigation exposes five core entries')
-for (const path of ['/home', '/modules/digital-human', '/routes', '/map', '/profile']) {
+assert.match(bottomNav, /首页[\s\S]*AI 导览[\s\S]*直播[\s\S]*路线[\s\S]*地图[\s\S]*我的/, 'bottom navigation exposes six core entries')
+for (const path of ['/home', '/modules/digital-human', '/live', '/routes', '/map', '/profile']) {
   assert.match(bottomNav, new RegExp(`to:\\s*['"]${path}['"]`), `bottom navigation must link to ${path}`)
 }
 assert.match(topNavCss, /@media\s*\([^)]*max-width:\s*768px[^)]*\)[\s\S]*\.visitor-topbar__nav[\s\S]*display:\s*none/, 'desktop navigation is hidden at the mobile breakpoint')
