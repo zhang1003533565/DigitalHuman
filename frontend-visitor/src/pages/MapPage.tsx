@@ -624,7 +624,6 @@ export function MapPage() {
             openTime: null,
             closeTime: null,
             image: null,
-            mapVisible: true,
           }
           marker.on('click', () => {
             searchDerivedSelectionRef.current.clear()
