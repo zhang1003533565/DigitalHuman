@@ -67,6 +67,7 @@
   line-height: 1.14;
   letter-spacing: 0.05em;
   text-shadow: 0 14px 36px rgba(0, 0, 0, 0.32);
+  white-space: nowrap;
 }
 
 .hp-hero h1 span {

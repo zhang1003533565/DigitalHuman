@@ -43,12 +43,22 @@ function normalizeHomeData(data: Partial<HomeData>): HomeData {
   }
 }
 
+function getGreeting(): string {
+  const hour = new Date().getHours()
+  if (hour >= 5 && hour < 11) return '早上好'
+  if (hour >= 11 && hour < 13) return '中午好'
+  if (hour >= 13 && hour < 18) return '下午好'
+  if (hour >= 18 && hour < 22) return '晚上好'
+  return '夜深了'
+}
+
 export function HomePage({ user }: HomePageProps) {
   const navigate = useNavigate()
   const [homeData, setHomeData] = useState<HomeData>(EMPTY_HOME_DATA)
   const [isLoading, setIsLoading] = useState(true)
   const [homeError, setHomeError] = useState<string | null>(null)
   const displayName = user.displayName || user.username
+  const greeting = getGreeting()
 
   useEffect(() => {
     fetch('/api/home')
@@ -72,15 +82,15 @@ export function HomePage({ user }: HomePageProps) {
           {heroImage && <img className="hp-hero__background" src={heroImage} alt={homeData.banners[0].title} />}
           <div className="hp-hero__shade" />
           <div className="hp-hero__content">
-            <p className="hp-hero__greeting">早上好，{displayName}</p>
-            <h1 id="home-hero-title">今天，想怎样<span>游灵山</span>？</h1>
+            <p className="hp-hero__greeting">{greeting}，{displayName}</p>
+            <h1 id="home-hero-title">今天，想怎样游<span>张家口大境门</span>？</h1>
             <TripPlanner onPlanned={(routeId) => navigate(`/routes?plan=${encodeURIComponent(routeId)}`)} />
             <div className="hp-hero__actions">
               <button className="hp-button hp-button--secondary" onClick={() => navigate('/map')}>查看景区地图</button>
             </div>
           </div>
           <div className="hp-guide" aria-label="AI 数字人导游">
-            <p>告诉我同行人和时间，<br />我来安排</p>
+            <p>告诉我你的兴趣和时间，<br />我来安排</p>
             <img src="/home/ai-guide-robot.png" alt="灵山 AI 数字人导游" />
           </div>
         </section>
