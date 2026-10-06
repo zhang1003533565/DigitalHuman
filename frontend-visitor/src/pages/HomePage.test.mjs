@@ -12,7 +12,7 @@ test('home page exposes the selected AI itinerary experience', async () => {
 
   for (const copy of [
     '今天，想怎样',
-    '游灵山',
+    '游大境门',
     '让 AI 规划行程',
     '查看景区地图',
     '今日灵感',

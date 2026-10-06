@@ -73,7 +73,7 @@ export function HomePage({ user }: HomePageProps) {
           <div className="hp-hero__shade" />
           <div className="hp-hero__content">
             <p className="hp-hero__greeting">早上好，{displayName}</p>
-            <h1 id="home-hero-title">今天，想怎样<span>游灵山</span>？</h1>
+            <h1 id="home-hero-title">今天，想怎样<span>游大境门</span>？</h1>
             <TripPlanner onPlanned={(routeId) => navigate(`/routes?plan=${encodeURIComponent(routeId)}`)} />
             <div className="hp-hero__actions">
               <button className="hp-button hp-button--secondary" onClick={() => navigate('/map')}>查看景区地图</button>
@@ -81,7 +81,7 @@ export function HomePage({ user }: HomePageProps) {
           </div>
           <div className="hp-guide" aria-label="AI 数字人导游">
             <p>告诉我同行人和时间，<br />我来安排</p>
-            <img src="/home/ai-guide-robot.png" alt="灵山 AI 数字人导游" />
+            <img src="/home/ai-guide-robot.png" alt="大境门 AI 数字人导游" />
           </div>
         </section>
 

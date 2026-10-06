@@ -23,7 +23,8 @@ type RouteSelectionResolution = {
   cachedRouteId: string
 }
 
-const LINGSHAN_CENTER: [number, number] = [120.1009, 31.4259]
+// AMap uses GCJ-02 coordinates. Center on the Dajingmen gate entrance.
+const DAJINGMEN_CENTER: [number, number] = [114.8920983, 40.8458148]
 const FACILITY_GROUP_CATEGORIES: Record<FacilityGroup, string[]> = {
   food: ['food'],
   wc: ['wc'],
@@ -282,7 +283,7 @@ export function RouteRecommendPage() {
 
     mapInstanceRef.current = mapThemeControllerRef.current.ensureMap((mapStyle) => new amapApi.Map(mapContainerRef.current, {
       zoom: 14,
-      center: LINGSHAN_CENTER,
+      center: DAJINGMEN_CENTER,
       viewMode: '2D',
       mapStyle,
     }))
@@ -311,7 +312,7 @@ export function RouteRecommendPage() {
     }
 
     if (!selectedRoute) {
-      map.setZoomAndCenter?.(14, LINGSHAN_CENTER)
+      map.setZoomAndCenter?.(14, DAJINGMEN_CENTER)
       return
     }
 
@@ -351,7 +352,7 @@ export function RouteRecommendPage() {
     if (path.length > 1) {
       map.setFitView?.(routeOverlaysRef.current, false, [82, 82, 82, 82], 14)
     } else {
-      map.setZoomAndCenter?.(14, LINGSHAN_CENTER)
+      map.setZoomAndCenter?.(14, DAJINGMEN_CENTER)
     }
   }, [amapApi, selectedRoute])
 

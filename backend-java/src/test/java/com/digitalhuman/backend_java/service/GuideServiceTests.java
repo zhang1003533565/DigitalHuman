@@ -113,6 +113,20 @@ class GuideServiceTests {
     }
 
     @Test
+    void greetingUsesAStableWelcomeReplyWithoutKnowledgeLookup() {
+        when(sessionRepository.findById("session-greeting")).thenReturn(Optional.empty());
+        GuideChatRequest request = new GuideChatRequest();
+        request.setSessionId("session-greeting");
+        request.setQuestion("你好");
+
+        GuideChatResponse response = service.chat(request);
+
+        assertEquals("你好呀，欢迎来到大境门！想了解景点、路线还是游玩安排？", response.getAnswerText());
+        verifyNoInteractions(maxKbService);
+        verify(scenicRouteService, never()).recommendRoutes(any());
+    }
+
+    @Test
     void sessionFeedbackIsScopedAndNormalizesLegacyNulls() {
         UserFeedback feedback = new UserFeedback();
         feedback.setSessionId("session-1");

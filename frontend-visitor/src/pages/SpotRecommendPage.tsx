@@ -27,7 +27,7 @@ export function SpotRecommendPage() {
           <div className="spot-page__header">
             <button className="spot-page__back" onClick={() => navigate('/home')}>← 返回首页</button>
             <h1>🏯 今日景点推荐</h1>
-            <p>为您精选的热门景点，感受灵山胜境的独特魅力</p>
+            <p>为您精选的热门景点，感受大境门的独特魅力</p>
           </div>
           <div className="spot-page__grid">
             {spots.map(spot => (

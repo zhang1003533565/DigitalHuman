@@ -27,7 +27,7 @@ export function RouteRecommendListPage() {
           <div className="route-list-page__header">
             <button className="route-list-page__back" onClick={() => navigate('/home')}>← 返回首页</button>
             <h1>🚶 今日路线推荐</h1>
-            <p>为您规划最佳游览路线，轻松畅游灵山胜境</p>
+            <p>为您规划最佳游览路线，轻松畅游大境门</p>
           </div>
           <div className="route-list-page__grid">
             {routes.map(route => (

@@ -24,9 +24,10 @@ import {
 } from '../../api/scenic'
 import { loadMapConfig } from '../../api/mapConfig'
 
-const LINGSHAN_CENTER: [number, number] = [120.1009, 31.4259]
-const LINGSHAN_BOUNDS_SW: [number, number] = [120.0759, 31.4009]
-const LINGSHAN_BOUNDS_NE: [number, number] = [120.1259, 31.4509]
+// AMap uses GCJ-02 coordinates. Keep the editor centered on the Dajingmen gate.
+const DAJINGMEN_CENTER: [number, number] = [114.8920983, 40.8458148]
+const DAJINGMEN_BOUNDS_SW: [number, number] = [114.8721, 40.8258]
+const DAJINGMEN_BOUNDS_NE: [number, number] = [114.9121, 40.8658]
 
 type AMapLngLat = {
   getLng: () => number
@@ -181,8 +182,8 @@ export default function SpotDrawer({
       return
     }
 
-    const longitude = initialData?.longitude ?? LINGSHAN_CENTER[0]
-    const latitude = initialData?.latitude ?? LINGSHAN_CENTER[1]
+    const longitude = initialData?.longitude ?? DAJINGMEN_CENTER[0]
+    const latitude = initialData?.latitude ?? DAJINGMEN_CENTER[1]
     const currentCover = initialData?.image ?? ''
     const currentGallery = initialData?.galleryImages ?? []
 
@@ -248,13 +249,13 @@ export default function SpotDrawer({
           return
         }
 
-        const sw = new AMap.LngLat(LINGSHAN_BOUNDS_SW[0], LINGSHAN_BOUNDS_SW[1])
-        const ne = new AMap.LngLat(LINGSHAN_BOUNDS_NE[0], LINGSHAN_BOUNDS_NE[1])
+        const sw = new AMap.LngLat(DAJINGMEN_BOUNDS_SW[0], DAJINGMEN_BOUNDS_SW[1])
+        const ne = new AMap.LngLat(DAJINGMEN_BOUNDS_NE[0], DAJINGMEN_BOUNDS_NE[1])
         const bounds = new AMap.Bounds(sw, ne)
         boundsRef.current = bounds
 
-        const initialLng = initialData?.longitude ?? LINGSHAN_CENTER[0]
-        const initialLat = initialData?.latitude ?? LINGSHAN_CENTER[1]
+        const initialLng = initialData?.longitude ?? DAJINGMEN_CENTER[0]
+        const initialLat = initialData?.latitude ?? DAJINGMEN_CENTER[1]
         const map = new AMap.Map(mapContainerRef.current, {
           zoom: 15,
           center: [initialLng, initialLat],
@@ -289,7 +290,7 @@ export default function SpotDrawer({
           if (!lngLat) return
           if (boundsRef.current && !boundsRef.current.contains(lngLat)) {
             message.warning('请在景区范围内选点')
-            setMarkerPosition(LINGSHAN_CENTER[0], LINGSHAN_CENTER[1])
+            setMarkerPosition(DAJINGMEN_CENTER[0], DAJINGMEN_CENTER[1])
             return
           }
           updateLocationFields(lngLat.getLng(), lngLat.getLat())
@@ -301,8 +302,8 @@ export default function SpotDrawer({
   }
 
   const handleResetCenter = () => {
-    mapInstanceRef.current?.setZoomAndCenter?.(15, LINGSHAN_CENTER)
-    setMarkerPosition(LINGSHAN_CENTER[0], LINGSHAN_CENTER[1])
+    mapInstanceRef.current?.setZoomAndCenter?.(15, DAJINGMEN_CENTER)
+    setMarkerPosition(DAJINGMEN_CENTER[0], DAJINGMEN_CENTER[1])
   }
 
   const handleSubmit = async () => {

@@ -277,11 +277,11 @@ public class ScenicRouteService {
     }
 
     private double resolveLongitude(ScenicRouteSaveRequest.CoordinateRequest coordinate) {
-        return coordinate == null || coordinate.getLongitude() == null ? 120.1009 : coordinate.getLongitude();
+        return coordinate == null || coordinate.getLongitude() == null ? 114.8920983 : coordinate.getLongitude();
     }
 
     private double resolveLatitude(ScenicRouteSaveRequest.CoordinateRequest coordinate) {
-        return coordinate == null || coordinate.getLatitude() == null ? 31.4259 : coordinate.getLatitude();
+        return coordinate == null || coordinate.getLatitude() == null ? 40.8458148 : coordinate.getLatitude();
     }
 
     private List<String> splitTags(String tagsCsv) {

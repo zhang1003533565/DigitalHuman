@@ -79,7 +79,7 @@ const DEFAULT_DIGITAL_HUMAN_CONFIG: DigitalHumanConfig = {
   rate: 0,
   volume: 0,
   pitch: 0,
-  welcomeText: '您好，欢迎来到灵山胜境，我可以为您介绍景点、路线和活动安排。',
+  welcomeText: '您好，欢迎来到大境门，我可以为您介绍景点、路线和活动安排。',
   guideStyle: 'friendly',
   broadcastStrategy: 'standard',
 };

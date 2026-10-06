@@ -342,12 +342,12 @@ export default function RouteManagementPage() {
                       </Col>
                       <Col span={8}>
                         <Form.Item name={[field.name, 'coordinate', 'longitude']} label="经度">
-                          <InputNumber precision={7} style={{ width: '100%' }} placeholder="120.1009" />
+                          <InputNumber precision={7} style={{ width: '100%' }} placeholder="114.8920983" />
                         </Form.Item>
                       </Col>
                       <Col span={8}>
                         <Form.Item name={[field.name, 'coordinate', 'latitude']} label="纬度">
-                          <InputNumber precision={7} style={{ width: '100%' }} placeholder="31.4259" />
+                          <InputNumber precision={7} style={{ width: '100%' }} placeholder="40.8458148" />
                         </Form.Item>
                       </Col>
                     </Row>
@@ -422,12 +422,12 @@ export default function RouteManagementPage() {
                     <Row gutter={12}>
                       <Col span={12}>
                         <Form.Item name={[field.name, 'coordinate', 'longitude']} label="设施经度">
-                          <InputNumber precision={7} style={{ width: '100%' }} placeholder="120.1009" />
+                          <InputNumber precision={7} style={{ width: '100%' }} placeholder="114.8920983" />
                         </Form.Item>
                       </Col>
                       <Col span={12}>
                         <Form.Item name={[field.name, 'coordinate', 'latitude']} label="设施纬度">
-                          <InputNumber precision={7} style={{ width: '100%' }} placeholder="31.4259" />
+                          <InputNumber precision={7} style={{ width: '100%' }} placeholder="40.8458148" />
                         </Form.Item>
                       </Col>
                     </Row>
