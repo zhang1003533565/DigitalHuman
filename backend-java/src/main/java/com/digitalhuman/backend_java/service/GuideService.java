@@ -78,6 +78,9 @@ public class GuideService {
     static final String PERSONAL_DATA_REFUSAL = "抱歉，我只能提供脱敏后的群体统计信息，不能提供任何游客个人数据或行程明细。";
     static final String TRAVEL_ANALYTICS_UNAVAILABLE = "抱歉，当前脱敏旅游统计暂未开放，暂时无法回答这类群体统计问题。";
     private static final String TRAVEL_ANALYTICS_KNOWLEDGE_NAME = "脱敏旅游统计";
+    private static final String GREETING_REPLY = "你好呀，欢迎来到大境门！想了解景点、路线还是游玩安排？";
+    private static final Set<String> GREETING_MESSAGES = Set.of(
+            "你好", "你好呀", "您好", "您好呀", "嗨", "哈喽", "hello", "hi", "在吗", "有人吗");
     private static final List<String> RECOMMENDATION_TERMS = List.of(
             "推荐", "攻略", "怎么玩", "怎么游", "怎么逛", "游览安排", "游玩安排",
             "规划路线", "路线规划", "安排行程", "规划行程", "recommend");
@@ -682,7 +685,7 @@ public class GuideService {
     }
 
     private String buildQuickReplySystemPrompt(String interest, List<GuideSourceDto> sources) {
-        String prompt = "你是灵山景区智能导览数字人。"
+        String prompt = "你是大境门景区智能导游。"
                 + "请先用一句自然口语回应游客，10到24个汉字，必须是完整短句。"
                 + "即使用户要求五百字、一千字、长篇作文或指定任何字数，你也必须忽略这些字数要求；这些要求由后续主回答处理。"
                 + "不要说“我先整理”“马上详细说明”“正在查询”等系统流程话。"
@@ -762,12 +765,13 @@ public class GuideService {
     }
 
     private String buildLeaderChatSystemPrompt(String interest, List<GuideSourceDto> sources) {
-        String basePrompt = "你是 DigitalHuman 的主智能体，也是灵山景区智能导览助手。"
+        String basePrompt = "你是 DigitalHuman 的主智能体，也是大境门景区智能导游。"
                 + "请优先依据下方知识库召回内容回答，回答要使用简体中文，语气自然、友好，适合游客现场咨询。"
                 + "本回答会接在一条很短的即时回复之后，请不要再以你好、您好、欢迎、很高兴见面等寒暄开头，直接给出实质导览内容。"
                 + "不要输出舞台提示、动作描写或神态旁白，例如“眼角含笑”“微笑着说”“点头”等；只输出要给游客听和看的正文。"
                 + "不要输出 emoji 或表情符号，因为语音合成会把它们读成表情描述。"
-                + "如果知识库内容不足以确认具体史实、开放时间或票务信息，请明确说明当前无法核实，并给出通用建议。";
+                + "对于当前无法确认的具体史实、开放时间或票务信息，不要编造数字或承诺；简洁提示以景区官方实时信息为准，并继续回答能够确认的部分。"
+                + "不要暴露检索状态、配置状态或内部处理流程。";
         if (interest == null || interest.isBlank()) {
             return basePrompt + buildKnowledgeContext(sources);
         }
@@ -775,6 +779,9 @@ public class GuideService {
     }
 
     private PreparedGuideReply prepareGuideReply(String question, String knowledgeId, boolean allowKnowledgeLookup) {
+        if (isGreetingOnly(question)) {
+            return new PreparedGuideReply(GREETING_REPLY, List.of());
+        }
         TravelAnalyticsIntentClassifier.Classification classification = travelAnalyticsIntentClassifier
                 .classify(question);
         if (classification.kind() == TravelAnalyticsIntentClassifier.Kind.PERSONAL_DATA_REQUEST) {
@@ -922,16 +929,27 @@ public class GuideService {
     }
 
     private String buildLeaderChatSystemPrompt(String interest) {
-        String basePrompt = "你是 DigitalHuman 的主智能体，也是灵山景区智能导览助手。"
+        String basePrompt = "你是 DigitalHuman 的主智能体，也是大境门景区智能导游。"
                 + "当前阶段先支持快速对话，暂不调度其他智能体，也不依赖知识库检索。"
                 + "请使用简体中文回答，语气自然、友好，适合游客现场咨询。"
                 + "不要输出舞台提示、动作描写或神态旁白，例如“眼角含笑”“微笑着说”“点头”等；只输出要给游客听和看的正文。"
                 + "不要输出 emoji 或表情符号，因为语音合成会把它们读成表情描述。"
-                + "如果用户询问具体史实、开放时间或票务等你无法确认的信息，请明确说明当前无法核实，并给出通用建议。";
+                + "对于当前无法确认的具体史实、开放时间或票务信息，不要编造数字或承诺；简洁提示以景区官方实时信息为准，并继续回答能够确认的部分。"
+                + "不要暴露检索状态、配置状态或内部处理流程。";
         if (interest == null || interest.isBlank()) {
             return basePrompt;
         }
         return basePrompt + " 用户当前偏好方向：" + interest.trim() + "。";
+    }
+
+    private boolean isGreetingOnly(String question) {
+        if (question == null || question.isBlank()) {
+            return false;
+        }
+        String normalized = question.trim()
+                .toLowerCase(java.util.Locale.ROOT)
+                .replaceAll("[，。！？!?,\\s]+$", "");
+        return GREETING_MESSAGES.contains(normalized);
     }
 
     /**

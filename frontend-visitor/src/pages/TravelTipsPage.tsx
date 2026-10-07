@@ -64,7 +64,7 @@ export function TravelTipsPage() {
         <header className="page-heading">
           <p className="surface-tag">Travel Tips</p>
           <h1>实用游览贴士</h1>
-          <p className="surface-copy">全方位保障你的灵山之旅，出行前必看。</p>
+          <p className="surface-copy">全方位保障你的大境门之旅，出行前必看。</p>
         </header>
 
         <div className="tips-category-bar">

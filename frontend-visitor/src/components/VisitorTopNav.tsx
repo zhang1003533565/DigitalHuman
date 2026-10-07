@@ -149,7 +149,7 @@ export function VisitorTopNav({ onLogout }: VisitorTopNavProps) {
   return (
     <header className="visitor-topbar">
       <div className="visitor-topbar__brand">
-        <Link to="/home">灵山智游</Link>
+        <Link to="/home">大境门智游</Link>
       </div>
       <nav className="visitor-topbar__nav" aria-label="主导航">
         {VISITOR_NAV_ITEMS.map((item) => (

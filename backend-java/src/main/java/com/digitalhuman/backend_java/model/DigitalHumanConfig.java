@@ -16,7 +16,7 @@ public class DigitalHumanConfig {
     private Integer rate = 0;
     private Integer volume = 0;
     private Integer pitch = 0;
-    private String welcomeText = "您好，欢迎来到灵山胜境，我可以为您介绍景点、路线和活动安排。";
+    private String welcomeText = "您好，欢迎来到大境门，我可以为您介绍景点、路线和活动安排。";
     private String guideStyle = "friendly";
     private String broadcastStrategy = "standard";
     private String amapKey = "";

@@ -89,7 +89,7 @@ assert.ok(
 
 assert.match(source, /export function VisitorTopNav/)
 assert.match(source, /type VisitorTopNavProps = \{ onLogout: \(\) => void \}/)
-assert.match(source, /灵山智游/)
+assert.match(source, /大境门智游/)
 assert.match(source, /getStoredUser\(\)/)
 assert.match(source, /<NavLink/)
 assert.match(source, /useLocation/)

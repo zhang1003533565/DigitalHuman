@@ -139,13 +139,13 @@ const DEFAULT_CONFIG: DigitalHumanConfig = {
   rate: DEFAULT_RATE,
   volume: DEFAULT_VOLUME,
   pitch: DEFAULT_PITCH,
-  welcomeText: '您好，欢迎来到灵山胜境，我可以为您介绍景点、路线和活动安排。',
+  welcomeText: '您好，欢迎来到大境门，我可以为您介绍景点、路线和活动安排。',
   guideStyle: 'friendly',
   broadcastStrategy: 'standard',
 }
 
 const FACTORY_OPTIONS = [
-  { id: 'lingshan', name: '灵山官方' },
+  { id: 'lingshan', name: '大境门官方' },
   { id: 'qwen', name: '通义千问' },
   { id: 'deepseek', name: 'DeepSeek' },
   { id: 'volcengine', name: '火山引擎' },
@@ -263,7 +263,7 @@ export function DigitalHumanPage() {
     {
       id: 'welcome',
       sender: 'guide',
-      name: '灵山导览数字人',
+      name: '大境门导览数字人',
       content: DEFAULT_CONFIG.welcomeText,
       time: new Date(),
       status: 'read',
@@ -1078,7 +1078,7 @@ export function DigitalHumanPage() {
       {
         id: assistantMsgId,
         sender: 'guide',
-        name: '灵山导览数字人',
+        name: '大境门导览数字人',
         content: '...',
         time: new Date(),
         status: 'read',
@@ -1337,7 +1337,7 @@ export function DigitalHumanPage() {
           <span>{status}</span>
         </div>
 
-        <section className="digital-human-mobile-live" aria-label="灵山数字人直播导览">
+        <section className="digital-human-mobile-live" aria-label="大境门数字人直播导览">
           <button
             ref={settingsTriggerRef}
             className="digital-mobile-settings-trigger"
@@ -1500,12 +1500,12 @@ export function DigitalHumanPage() {
           </div>
         ) : null}
 
-        <aside className="digital-human-chat" aria-label="灵山景区智能导览助手">
+        <aside className="digital-human-chat" aria-label="大境门景区智能导览助手">
           <header className="digital-chat-header">
             <div className="digital-chat-profile">
-              <span className="digital-chat-avatar" aria-hidden>灵</span>
+              <span className="digital-chat-avatar" aria-hidden>大</span>
               <div className="digital-chat-profile__copy">
-                <h1>灵山景区智能导览助手</h1>
+                <h1>大境门景区智能导览助手</h1>
                 <p>
                   <span className="digital-chat-online-dot" aria-hidden />
                   在线为您服务

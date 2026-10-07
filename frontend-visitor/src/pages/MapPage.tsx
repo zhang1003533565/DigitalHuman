@@ -59,7 +59,9 @@ type CardPosition = {
 type RouteCoordinate = { longitude: number; latitude: number }
 type MapRoute = { id: string; name: string; polyline?: RouteCoordinate[]; nodes?: Array<{ coordinate: RouteCoordinate }> }
 
-const LINGSHAN_CENTER: [number, number] = [120.1009, 31.4259]
+// AMap uses GCJ-02 coordinates. Center on the Dajingmen gate entrance.
+const DAJINGMEN_CENTER: [number, number] = [114.8920983, 40.8458148]
+const DAJINGMEN_BOUNDS = { west: 114.8721, south: 40.8258, east: 114.9121, north: 40.8658 }
 const CARD_WIDTH = 260
 const CARD_HEIGHT = 228
 const CARD_GAP_X = 18
@@ -138,7 +140,16 @@ function buildMarkerContent(kind: 'facility' | 'center' | 'search') {
 }
 
 function toValidFacilities(items: ScenicFacility[]) {
-  return items.filter((item) => Number.isFinite(Number(item.longitude)) && Number.isFinite(Number(item.latitude)))
+  return items.filter((item) => {
+    const longitude = Number(item.longitude)
+    const latitude = Number(item.latitude)
+    return Number.isFinite(longitude)
+      && Number.isFinite(latitude)
+      && longitude >= DAJINGMEN_BOUNDS.west
+      && longitude <= DAJINGMEN_BOUNDS.east
+      && latitude >= DAJINGMEN_BOUNDS.south
+      && latitude <= DAJINGMEN_BOUNDS.north
+  })
 }
 
 function buildFallbackCategories(facilities: ScenicFacility[]): ScenicCategory[] {
@@ -359,8 +370,8 @@ export function MapPage() {
         if (cancelled || !mapContainerRef.current || mapInstanceRef.current) return
 
         const map = mapThemeController.ensureMap((mapStyle) => new AMap.Map(mapContainerRef.current, {
-          zoom: 15,
-          center: LINGSHAN_CENTER,
+          zoom: 16,
+          center: DAJINGMEN_CENTER,
           viewMode: '2D',
           mapStyle,
         }))
@@ -371,7 +382,7 @@ export function MapPage() {
         })
 
         scenicCenterMarkerRef.current = new AMap.Marker({
-          position: LINGSHAN_CENTER,
+          position: DAJINGMEN_CENTER,
           title: '景区中心',
           anchor: 'bottom-center',
           offset: new AMap.Pixel(0, -6),
@@ -469,7 +480,7 @@ export function MapPage() {
       const overlays = scenicCenterMarkerRef.current
         ? [scenicCenterMarkerRef.current, ...facilityMarkersRef.current]
         : [...facilityMarkersRef.current]
-      map.setFitView?.(overlays, false, [72, 72, 72, 72], 15)
+      map.setFitView?.(overlays, false, [72, 72, 72, 72], 16)
       setHasAutoFitFacilities(true)
     }
 
@@ -545,8 +556,8 @@ export function MapPage() {
     }
 
     if (!navigator.geolocation) {
-      map.setCenter?.(LINGSHAN_CENTER)
-      map.setZoom?.(15)
+      map.setCenter?.(DAJINGMEN_CENTER)
+      map.setZoom?.(16)
       return
     }
 
@@ -558,8 +569,8 @@ export function MapPage() {
         map.setZoom?.(16)
       },
       () => {
-        map.setCenter?.(LINGSHAN_CENTER)
-        map.setZoom?.(15)
+        map.setCenter?.(DAJINGMEN_CENTER)
+        map.setZoom?.(16)
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
     )
@@ -829,7 +840,7 @@ export function MapPage() {
               <button type="button" onClick={() => handleZoom(-1)}>
                 缩小
               </button>
-              <button type="button" onClick={() => mapInstanceRef.current?.setCenter?.(LINGSHAN_CENTER)}>
+              <button type="button" onClick={() => mapInstanceRef.current?.setZoomAndCenter?.(16, DAJINGMEN_CENTER)}>
                 景区中心
               </button>
               <button
@@ -841,7 +852,7 @@ export function MapPage() {
             </div>
 
             <div className="map-mobile-context-actions">
-              <button type="button" onClick={() => mapInstanceRef.current?.setCenter?.(LINGSHAN_CENTER)}>景区中心</button>
+              <button type="button" onClick={() => mapInstanceRef.current?.setZoomAndCenter?.(16, DAJINGMEN_CENTER)}>景区中心</button>
               {showClearSearch ? <button type="button" onClick={clearSearchResults}>清除结果</button> : null}
             </div>
 

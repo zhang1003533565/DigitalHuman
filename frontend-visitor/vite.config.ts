@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+// 本地后端地址可用环境变量覆盖，默认仍为 8080，不影响其他开发者。
+const apiTarget = process.env.DH_API_TARGET ?? 'http://localhost:8080'
+
 export default defineConfig({
   envPrefix: ['VITE_'],
   plugins: [react()],
@@ -8,7 +11,7 @@ export default defineConfig({
     port: 30001,
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        target: apiTarget,
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on('proxyRes', (proxyRes, req) => {
