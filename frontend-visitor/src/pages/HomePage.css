@@ -223,14 +223,14 @@
   right: 3.6vw;
   bottom: -18px;
   width: min(360px, 25vw);
-  height: 390px;
+  height: 220px;
   pointer-events: none;
 }
 
 .hp-guide img {
   position: absolute;
   right: -14px;
-  bottom: 0;
+  bottom: 12px;
   width: min(320px, 22vw);
   height: auto;
   filter: drop-shadow(0 24px 28px rgba(0, 0, 0, 0.38));
@@ -239,12 +239,11 @@
 .hp-guide p {
   position: absolute;
   z-index: 2;
-  top: 52px;
-  left: -36px;
+  top: -180px;
+  left: -80px;
   margin: 0;
   padding: 16px 22px;
-  border: 1px solid rgba(180, 211, 244, 0.42);
-  border-radius: 18px 18px 4px 18px;
+  border-radius: 18px 18px 18px 4px;
   color: rgba(255, 255, 255, 0.93);
   background: rgba(17, 45, 80, 0.72);
   box-shadow: 0 16px 32px rgba(0, 0, 0, 0.24);
@@ -529,14 +528,14 @@
     position: relative;
     right: auto;
     bottom: auto;
-    justify-self: end;
+    justify-self: start;
     width: min(240px, 72vw);
-    height: 220px;
+    height: 480px;
     margin-top: -28px;
   }
 
   .hp-guide img {
-    width: 190px;
+    width: 240px;
   }
 
   .hp-inspiration,

@@ -91,7 +91,7 @@ export function HomePage({ user }: HomePageProps) {
           </div>
           <div className="hp-guide" aria-label="AI 数字人导游">
             <p>告诉我你的兴趣和时间，<br />我来安排</p>
-            <img src="/home/ai-guide-robot.png" alt="灵山 AI 数字人导游" />
+            <img src="/home/ai-guide-robot.png?v=2" alt="灵山 AI 数字人导游" />
           </div>
         </section>
 
