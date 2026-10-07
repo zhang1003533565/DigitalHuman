@@ -72,22 +72,22 @@ export function HomePage({ user }: HomePageProps) {
   }, [])
 
   const hasHomeContent = Object.values(homeData).some((items) => items.length > 0)
-  const heroImage = homeData.banners[0]?.imageUrl
+  const heroImage = '/home/hero-dajingmen.png?v=2'
 
   return (
     <main className="page-shell home-page">
 
       <div className="hp-scroll">
         <section className="hp-hero" aria-labelledby="home-hero-title">
-          {heroImage && <img className="hp-hero__background" src={heroImage} alt={homeData.banners[0].title} />}
+          {heroImage && <img className="hp-hero__background" src={heroImage} alt={homeData.banners?.[0]?.title || "张家口大境门"} />}
           <div className="hp-hero__shade" />
           <div className="hp-hero__content">
             <p className="hp-hero__greeting">{greeting}，{displayName}</p>
             <h1 id="home-hero-title">今天，想怎样游<span>张家口大境门</span>？</h1>
-            <TripPlanner onPlanned={(routeId) => navigate(`/routes?plan=${encodeURIComponent(routeId)}`)} />
-            <div className="hp-hero__actions">
-              <button className="hp-button hp-button--secondary" onClick={() => navigate('/map')}>查看景区地图</button>
-            </div>
+            <TripPlanner 
+              onPlanned={(routeId) => navigate(`/routes?plan=${encodeURIComponent(routeId)}`)}
+              onNavigateMap={() => navigate('/map')}
+            />
           </div>
           <div className="hp-guide" aria-label="AI 数字人导游">
             <p>告诉我你的偏好，<br />我来安排</p>

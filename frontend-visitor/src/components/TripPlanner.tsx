@@ -15,7 +15,7 @@ const INITIAL_PLAN: Required<TripPlanRequest> = {
   groupType: 'family',
 }
 
-export function TripPlanner({ onPlanned }: TripPlannerProps) {
+export function TripPlanner({ onPlanned, onNavigateMap }: TripPlannerProps) {
   const [plan, setPlan] = useState(INITIAL_PLAN)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -82,9 +82,16 @@ export function TripPlanner({ onPlanned }: TripPlannerProps) {
           </select>
         </label>
       </div>
-      <button className="hp-button hp-button--primary hp-trip-planner__submit" type="submit" disabled={isSubmitting}>
-        {isSubmitting ? '正在规划…' : error ? '重新规划' : '让 AI 规划行程'}
-      </button>
+      <div className="hp-trip-planner__actions">
+        <button className="hp-button hp-button--primary hp-trip-planner__submit" type="submit" disabled={isSubmitting}>
+          {isSubmitting ? '正在规划…' : error ? '重新规划' : '让 AI 规划行程'}
+        </button>
+        {onNavigateMap && (
+          <button className="hp-button hp-button--secondary" type="button" onClick={onNavigateMap}>
+            查看景区地图
+          </button>
+        )}
+      </div>
       {error && <p className="hp-trip-planner__error" role="alert">{error}</p>}
     </form>
   )
