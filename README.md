@@ -1,6 +1,6 @@
 # DigitalHuman
 
-景区数字人项目，当前由 4 个主要模块组成：
+大境门景区数字人项目，当前由 4 个主要模块组成：
 
 - `frontend-visitor`：游客端，React + Vite + TypeScript
 - `frontend-admin`：管理后台，React + Vite + TypeScript
@@ -154,15 +154,15 @@ curl http://127.0.0.1:6333/healthz
 `ai-service` 是统一入口，启动一次即可，不需要分别启动 `RAG`、`TTS` 等脚本。
 
 ```bash
-cd ai-service
-source .venv/bin/activate
-python -m uvicorn app:app --host 127.0.0.1 --port 18755 --reload
+
+source .venv/bin/actcd ai-serviceivate
+python -m uvicorn app:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 健康检查：
 
 ```bash
-curl http://127.0.0.1:18755/health
+curl http://127.0.0.1:8000/health
 ```
 
 当前统一 AI 服务对外提供的核心接口包括：
@@ -358,3 +358,325 @@ curl -X POST http://127.0.0.1:18755/kb/ingest \
   -H 'Content-Type: application/json' \
   -d '{}'
 ```
+## AI 配置指南
+
+本项目包含两块 AI 能力：
+
+| 能力 | 服务 | 说明 |
+|------|------|------|
+| **AI 文字回复** | backend-java → ai-service → 大模型 API | 让数字人能对话 |
+| **AI 语音合成（TTS）** | 前端 → ai-service `/tts` | 让数字人能说话 |
+
+**⚠️ 重要**：项目本身**不包含**任何 AI API Key。每位使用者需要**自己申请 Key** 并配置。
+
+---
+
+### 一、准备工作
+
+#### 1. 环境变量配置
+
+复制 `ai-service/.env.example` 为 `ai-service/.env`：
+
+```bash
+cd ai-service
+cp .env.example .env
+```
+
+编辑 `.env`，设置 `AI_SERVICE_ADMIN_TOKEN`：
+
+```
+AI_SERVICE_ADMIN_TOKEN=your-random-token-2026
+```
+
+**要求**：
+- 长度至少 20 字符
+- 随便设一个随机字符串，**不需要和别人共享**
+- 例：`digitalhuman-2026-a7b9c4d1e8f2`
+
+**同时**在系统里设置**同名环境变量**（backend-java 也读这个变量）：
+
+**Windows (PowerShell)**：
+```powershell
+[System.Environment]::SetEnvironmentVariable("AI_SERVICE_ADMIN_TOKEN","your-random-token-2026","User")
+```
+
+**macOS / Linux**：
+```bash
+export AI_SERVICE_ADMIN_TOKEN=your-random-token-2026
+```
+
+**⚠️ 两个地方值必须完全一致**，否则后端调 ai-service 会报 401。
+
+#### 2. 申请 AI API Key
+
+推荐使用以下任一平台（都有免费额度或低成本）：
+
+| 平台 | 免费额度 | 申请地址 |
+|------|---------|---------|
+| **智谱 AI** | ✅ 2000 万 Tokens 免费 | https://open.bigmodel.cn |
+| **DeepSeek** | ❌ 需充值（几块钱起） | https://platform.deepseek.com |
+
+**申请后，复制 API Key**（形如 `sk-xxxx` 或 `xxxx.yyyy`），**保存好**，下一步用。
+
+---
+
+### 二、启动服务
+
+按顺序启动 4 个服务：
+
+#### 1. 后端（backend-java）
+
+```bash
+cd backend-java
+mvn spring-boot:run
+```
+
+端口：`8080`
+
+#### 2. AI 服务（ai-service）
+
+```bash
+cd ai-service
+python -m venv .venv
+source .venv/bin/activate     # Windows: .\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python -m uvicorn app:app --host 127.0.0.1 --port 8000 --reload
+```
+
+端口：`8000`
+
+**健康检查**：
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+#### 3. 管理后台（frontend-admin）
+
+```bash
+cd frontend-admin
+npm install
+npm run dev
+```
+
+#### 4. 游客端（frontend-visitor）
+
+```bash
+cd frontend-visitor
+npm install
+npm run dev
+```
+
+---
+
+### 三、配置 AI 文字回复
+
+**方法A:通过管理后台（推荐）**
+
+1. 浏览器打开 `http://localhost:5241/admin/ai-models`
+2. 在「模型配置」里填入：
+   - **服务商**：`DeepSeek` 
+   - **模型名称**：`deepseek-chat` 
+   - **API 地址**：
+     - DeepSeek：`https://api.deepseek.com/v1`
+   - **API Key**：粘贴你自己的 Key
+3. 点「保存配置」
+
+
+
+**方式 B：直接改数据库**
+
+```sql
+USE digitalhuman;
+
+UPDATE admin_provider_config
+SET api_key = '<你的真实 API Key>',
+    base_url = 'https://api.deepseek.com/v1',
+    provider = 'deepseek',
+    protocol = 'openai_compatible'
+WHERE id = 2;
+
+-- 确保 admin_model_config 也一致
+UPDATE admin_model_config
+SET provider = 'deepseek',
+    model_id = 'deepseek-chat'
+WHERE id = 1;
+```
+
+---
+
+### 四、绑定 Agent 到模型
+
+**必须把 agent 绑定到模型**，否则 AI 会返回"智能体不可用"。
+
+**在 `/docs` 里调 `PUT /agents/model-bindings`**：
+
+1. 浏览器打开 `http://localhost:8000/docs`
+2. 找到 `PUT /agents/model-bindings`
+3. 点 `Try it out`
+4. 在 `X-Service-Token` 填入你的 `AI_SERVICE_ADMIN_TOKEN`
+5. `Request body` 填：
+
+```json
+{
+  "items": [
+    {
+      "agent": "guide_script_agent",
+      "category": "chat",
+      "provider": "deepseek",
+      "model": "deepseek-chat",
+      "timeoutSeconds": 90,
+      "enabled": true
+    },
+    {
+      "agent": "scenic_structured_agent",
+      "category": "chat",
+      "provider": "deepseek",
+      "model": "deepseek-chat",
+      "timeoutSeconds": 90,
+      "enabled": true
+    },
+    {
+      "agent": "travel_analytics_agent",
+      "category": "multimodal",
+      "provider": "deepseek",
+      "model": "deepseek-chat",
+      "timeoutSeconds": 90,
+      "enabled": true
+    }
+  ]
+}
+```
+
+6. 点 `Execute`
+### 五、配置 AI 语音（TTS）
+
+**TTS 语音服务由 ai-service 自带**，无需额外启动服务。
+
+**前置条件**：
+- `ai-service` 已启动，监听 `8000`
+- 前端 `frontend-visitor` 的 `vite.config.ts` 里，`/edge-tts` 代理指向 `http://127.0.0.1:8000`
+
+**检查配置**：
+
+打开 `frontend-visitor/vite.config.ts`，确认：
+
+```typescript
+server: {
+  proxy: {
+    '/edge-tts': {
+      target: 'http://127.0.0.1:8000',    // 必须指向 ai-service
+      changeOrigin: true,
+      rewrite: (path) => path.replace(/^\/edge-tts/, ''),
+    }
+  }
+}
+```
+
+**验证 TTS**：
+
+在 `/docs` 里测 `POST /tts`：
+
+- Request body：
+```json
+{
+  "text": "你好，欢迎来到灵山胜境",
+  "voice": "zh-CN-XiaoxiaoNeural"
+}
+```
+
+- 期望返回：`200` + 音频文件（`audio/mpeg`）
+
+---
+
+### 六、验证完整功能
+
+1. 打开游客端：`http://localhost:30001/modules/digital-human`
+2. 在对话框输入"你好"
+3. **验证文字回复**：应该收到真实 AI 回复（不是兜底话术）
+4. **验证语音**：应该听到数字人语音播放（或点击喇叭按钮）
+
+**F12 网络面板**应看到：
+- `POST /agents/leader/chat/stream` → `200`
+- `POST /edge-tts/tts` → `200`
+
+---
+
+### 七、常见问题
+
+#### Q1：提示"当前主智能体暂时不可用"
+
+**原因**：agent bindings 没配，或者 provider 名不匹配。
+
+**解决**：检查第四节的 agent bindings 是否已配好，且 `provider` 与 `admin_provider_config` 表里的 `provider` 名一致（大小写敏感）。
+
+#### Q2：AI 回复"服务暂时繁忙"
+
+**原因**：provider 配置的 API Key 无效或余额不足。
+
+**验证**：用 PowerShell 直接测 Key：
+
+```powershell
+$key = "<你的 API Key>"
+$body = @{
+    model = "deepseek-chat"
+    messages = @(@{role="user"; content="你好"})
+} | ConvertTo-Json -Depth 5
+
+Invoke-RestMethod `
+    -Uri "https://api.deepseek.com/v1/chat/completions" `
+    -Method POST `
+    -Headers @{ "Authorization" = "Bearer $key" } `
+    -ContentType "application/json" `
+    -Body $body
+```
+
+- `200` → key 有效
+- `401` → key 无效
+- `402` → 余额不足（需充值）
+
+#### Q3：语音没声音，F12 看到 `tts 502`
+
+**原因**：前端 `/edge-tts` 代理指向 `18755` 但 ai-service 在 `8000`。
+
+**解决**：改 `frontend-visitor/vite.config.ts` 的 target 为 `http://127.0.0.1:8000`，重启前端。
+
+#### Q4：`/docs` 调用报 401 `service token required`
+
+**原因**：`X-Service-Token` 填错，或 ai-service 没读到 `.env`。
+
+**解决**：
+- 确认 `.env` 里的 `AI_SERVICE_ADMIN_TOKEN`
+- 重启 ai-service
+- 在 `/docs` 的 `X-Service-Token` 填**同一个值**
+
+#### Q5：数据库里 provider 名大小写不一致
+
+**原因**：有的地方写 `DeepSeek`，有的写 `deepseek`。
+
+**解决**：统一成**小写** `deepseek` 或 `zhipu`：
+
+```sql
+UPDATE admin_provider_config SET provider = LOWER(provider);
+UPDATE admin_model_config SET provider = LOWER(provider);
+```
+
+---
+
+### 八、安全提示
+
+**⚠️ 绝对不要做的事**：
+
+1. ❌ 不要把真实 API Key 写进 README、代码、`application.yml`
+2. ❌ 不要把 `.env` 文件提交到 GitHub
+3. ❌ 不要把 Key 截图发到聊天、群里
+4. ❌ 不要在公开仓库用别人的 Key
+
+**✅ 正确做法**：
+
+- API Key 只存在 `.env`、数据库、系统环境变量里
+- `.env` 已在 `.gitignore` 里
+- 上传 GitHub 前跑一次检查：
+  ```bash
+  git grep -i "sk-" 2>$null
+  ```
+  确认没有真 Key 被跟踪

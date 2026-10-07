@@ -23,7 +23,7 @@ export default defineConfig({
         },
       },
       '/edge-tts': {
-        target: 'http://127.0.0.1:18755',
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/edge-tts/, ''),
       },
