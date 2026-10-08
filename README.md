@@ -151,18 +151,26 @@ curl http://127.0.0.1:6333/healthz
 
 ### 2. 启动统一 AI 服务
 
-`ai-service` 是统一入口，启动一次即可，不需要分别启动 `RAG`、`TTS` 等脚本。
+启动 ai-service
+
+ai-service 是统一入口，**启动一次即可**，不需要分别启动 RAG、TTS 等脚本。
+
+#### Linux / macOS
 
 ```bash
+cd ai-service
+source .venv/bin/activate
+python -m uvicorn app:app --host 127.0.0.1 --port 18755 --reload
 
-source .venv/bin/actcd ai-serviceivate
-python -m uvicorn app:app --host 127.0.0.1 --port 8000 --reload
-```
+#### windows
+cd ai-service
+.\.venv\Scripts\Activate.ps1
+py -m uvicorn app:app --host 127.0.0.1 --port 18755 --reload
 
 健康检查：
 
 ```bash
-curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:18755/health
 ```
 
 当前统一 AI 服务对外提供的核心接口包括：
