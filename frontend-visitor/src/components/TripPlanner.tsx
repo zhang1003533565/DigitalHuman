@@ -6,6 +6,7 @@ import { createTripPlanCache } from '../pages/navigationContext'
 
 type TripPlannerProps = {
   onPlanned: (routeId: string) => void
+  onNavigateMap?: () => void
 }
 
 const INITIAL_PLAN: Required<TripPlanRequest> = {

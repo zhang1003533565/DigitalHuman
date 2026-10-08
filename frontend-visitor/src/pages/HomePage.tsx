@@ -97,7 +97,7 @@ export function HomePage({ user }: HomePageProps) {
 
         <AsyncState isLoading={isLoading} error={homeError} isEmpty={!hasHomeContent} emptyMessage="首页推荐内容正在准备中，你仍可使用上方行程规划器生成专属路线。">
           <section className="hp-section" aria-labelledby="inspiration-title">
-            <div className="hp-section__title"><span /><h2 id="inspiration-title">今日灵感</h2></div>
+            <div className="hp-section__title"><span /><h2 id="inspiration-title">大境门下·乡旅新章</h2></div>
             <AsyncState isEmpty={homeData.spotRecommends.length === 0} emptyMessage="今日暂无景点推荐。">
               <div className="hp-inspiration">
                 {homeData.spotRecommends.map((item) => (
