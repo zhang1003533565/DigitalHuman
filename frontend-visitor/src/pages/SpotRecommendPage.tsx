@@ -1,23 +1,46 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import axios from 'axios'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import './SpotRecommendPage.css'
 
-interface SpotItem {
-  id: string
-  title: string
-  imageUrl: string
-  description: string
+interface ScenicSpotCard {
+  id: number
+  scenicName: string
+  spotId: string
+  spotName: string
+  location: string
+  coreFunction: string
+  highlights: string
+  detailedIntroduction: string
 }
+
+const SPOT_CARD_LIMIT = 6
 
 export function SpotRecommendPage() {
   const navigate = useNavigate()
-  const [spots, setSpots] = useState<SpotItem[]>([])
+  const [searchParams] = useSearchParams()
+  const [spots, setSpots] = useState<ScenicSpotCard[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const collectionTitle = searchParams.get('collectionTitle')?.trim()
 
   useEffect(() => {
-    fetch('/api/home')
-      .then(res => res.json())
-      .then(data => setSpots(data.spotRecommends || []))
-      .catch(() => {})
+    let isMounted = true
+
+    axios.get<ScenicSpotCard[]>('/api/user/scenic/spot-cards')
+      .then(({ data }) => {
+        if (isMounted) setSpots(Array.isArray(data) ? data.slice(0, SPOT_CARD_LIMIT) : [])
+      })
+      .catch(() => {
+        if (isMounted) setLoadError(true)
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false)
+      })
+
+    return () => {
+      isMounted = false
+    }
   }, [])
 
   return (
@@ -25,23 +48,49 @@ export function SpotRecommendPage() {
       <section className="page-content">
         <div className="spot-page">
           <div className="spot-page__header">
-            <button className="spot-page__back" onClick={() => navigate('/home')}>← 返回首页</button>
-            <h1>🏯 今日景点推荐</h1>
-            <p>为您精选的热门景点，感受灵山胜境的独特魅力</p>
+            <button className="spot-page__back" onClick={() => navigate('/home')}>
+              <span aria-hidden="true">←</span> 返回首页
+            </button>
+            <p className="spot-page__eyebrow">SCENIC SPOTS</p>
+            <h1>{collectionTitle || '景点导览'}</h1>
+            <p>在这里浏览景区景点介绍。</p>
           </div>
-          <div className="spot-page__grid">
-            {spots.map(spot => (
-              <article key={spot.id} className="spot-page__card">
-                <img src={spot.imageUrl} alt={spot.title} />
-                <div className="spot-page__card-body">
-                  <h3>{spot.title}</h3>
-                  <p>{spot.description}</p>
-                </div>
-              </article>
-            ))}
-          </div>
-          {spots.length === 0 && (
-            <div className="spot-page__empty">暂无景点推荐</div>
+
+          {loading && <div className="spot-page__state" role="status">正在加载景点资料…</div>}
+          {!loading && loadError && (
+            <div className="spot-page__state" role="alert">景点资料暂时无法加载，请稍后重试。</div>
+          )}
+          {!loading && !loadError && spots.length > 0 && (
+            <div className="spot-page__grid">
+              {spots.map((spot, index) => {
+                const description = spot.detailedIntroduction?.trim()
+                  || spot.highlights?.trim()
+                  || spot.coreFunction?.trim()
+                  || '暂无详细介绍。'
+
+                return (
+                  <article key={spot.id} className="spot-page__card">
+                    <div className="spot-page__card-banner">
+                      <span className="spot-page__card-index">景点 {String(index + 1).padStart(2, '0')}</span>
+                      {spot.scenicName && <span className="spot-page__scenic-name">{spot.scenicName}</span>}
+                    </div>
+                    <div className="spot-page__card-body">
+                      <h2>{spot.spotName}</h2>
+                      {spot.location && <p className="spot-page__location">{spot.location}</p>}
+                      <p className="spot-page__description">{description}</p>
+                      {spot.highlights && spot.highlights !== description && (
+                        <p className="spot-page__highlight"><strong>游玩亮点：</strong>{spot.highlights}</p>
+                      )}
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+          )}
+          {!loading && !loadError && spots.length === 0 && (
+            <div className="spot-page__state">
+              暂无景点资料。请在后台“景点资料导入”中新增记录或导入景点资料。
+            </div>
           )}
         </div>
       </section>

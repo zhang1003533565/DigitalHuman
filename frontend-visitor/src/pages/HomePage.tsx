@@ -101,7 +101,18 @@ export function HomePage({ user }: HomePageProps) {
             <AsyncState isEmpty={homeData.spotRecommends.length === 0} emptyMessage="今日暂无景点推荐。">
               <div className="hp-inspiration">
                 {homeData.spotRecommends.map((item) => (
-                  <button key={item.id} className="hp-inspiration__item" onClick={() => navigate(item.linkUrl || '/map')}>
+                  <button
+                    key={item.id}
+                    className="hp-inspiration__item"
+                    onClick={() => {
+                      const configuredLink = item.linkUrl?.trim()
+                      const isMapDestination = configuredLink === '/map' || configuredLink?.startsWith('/map?')
+                      const destination = !configuredLink || isMapDestination
+                        ? `/spot-recommend?collectionTitle=${encodeURIComponent(item.title)}`
+                        : configuredLink
+                      navigate(destination)
+                    }}
+                  >
                     {item.imageUrl && <img src={item.imageUrl} alt={item.title} />}
                     <span>{item.title}</span>
                   </button>
@@ -111,7 +122,7 @@ export function HomePage({ user }: HomePageProps) {
           </section>
 
           <section className="hp-section hp-route-section" aria-labelledby="route-title">
-            <div className="hp-section__title"><span /><h2 id="route-title">为你推荐的路线</h2></div>
+            <div className="hp-section__title"><span /><h2 id="route-title">乡旅小站</h2></div>
             <AsyncState isEmpty={homeData.routeRecommends.length === 0 && homeData.ads.length === 0} emptyMessage="暂无运营路线推荐，可先使用快捷规划。">
               <div className="hp-route-grid">
                 {homeData.routeRecommends.map((item) => (
