@@ -7,14 +7,7 @@
 }
 
 .auth-screen--tourism::before {
-  content: '';
-  position: absolute;
-  inset: 14px;
-  border: 1px solid rgba(59, 163, 255, 0.48);
-  box-shadow:
-    inset 0 0 0 1px rgba(61, 214, 255, 0.18),
-    0 0 36px rgba(18, 116, 255, 0.14);
-  pointer-events: none;
+  content: none;
 }
 
 .page-shell {
@@ -74,6 +67,18 @@
   justify-content: space-between;
   gap: 24px;
   padding: 18px 28px 0;
+  transform: translateY(-14px);
+}
+
+.auth-location-title {
+  position: absolute;
+  top: -24px;
+  left: 28px;
+  width: clamp(260px, 24vw, 380px);
+  max-width: calc(100vw - 56px);
+  height: auto;
+  pointer-events: none;
+  user-select: none;
 }
 
 .auth-brand {
@@ -131,6 +136,7 @@
 .auth-header-meta {
   display: flex;
   align-items: center;
+  margin-left: auto;
   gap: 18px;
   padding-top: 10px;
   color: rgba(229, 239, 255, 0.94);
@@ -205,7 +211,7 @@
   box-shadow: none;
   backdrop-filter: none;
   background: transparent;
-  padding: 112px 0 0 8px;
+  padding: 32px 0 0 44px;
 }
 
 .surface-tag,
@@ -228,7 +234,7 @@
 
 .auth-title-image {
   display: block;
-  width: min(760px, 84%);
+  width: min(570px, 84%);
   max-width: 100%;
   margin: 0 0 18px;
   filter: drop-shadow(0 0 22px rgba(79, 176, 255, 0.28));
@@ -424,16 +430,15 @@
   width: min(100%, 540px);
   min-height: 610px;
   justify-self: end;
-  border: 1px solid rgba(102, 200, 255, 0.52);
-  border-radius: 28px;
+  border: 0;
+  border-radius: 0;
   padding: 62px 48px 40px;
-  background:
-    linear-gradient(180deg, rgba(30, 76, 145, 0.62), rgba(10, 35, 80, 0.84) 22%, rgba(8, 28, 66, 0.9) 100%),
-    rgba(8, 18, 29, 0.62);
-  box-shadow:
-    inset 0 0 0 1px rgba(177, 233, 255, 0.14),
-    inset 0 20px 64px rgba(96, 170, 255, 0.12),
-    0 0 34px rgba(45, 166, 255, 0.22);
+  background-color: transparent;
+  background-position: center;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .auth-card--login-compact {
@@ -442,24 +447,11 @@
 }
 
 .auth-card--tourism::before {
-  content: '';
-  position: absolute;
-  inset: 18px;
-  border-radius: 18px;
-  border: 1px solid rgba(145, 217, 255, 0.1);
-  pointer-events: none;
+  content: none;
 }
 
 .auth-card--tourism::after {
-  content: '';
-  position: absolute;
-  inset: -2px;
-  border-radius: 30px;
-  border: 1px solid rgba(88, 201, 255, 0.34);
-  box-shadow:
-    0 0 14px rgba(88, 201, 255, 0.34),
-    0 0 36px rgba(34, 134, 255, 0.12);
-  pointer-events: none;
+  content: none;
 }
 
 .auth-card-corner {
@@ -872,17 +864,13 @@
 
 .auth-screen--daytime .auth-card--tourism {
   border-color: rgba(198, 234, 255, 0.72);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(214, 236, 255, 0.12) 18%, rgba(101, 157, 215, 0.2) 100%),
-    linear-gradient(180deg, rgba(99, 146, 204, 0.36), rgba(32, 75, 133, 0.54) 40%, rgba(18, 48, 95, 0.66) 100%),
-    rgba(193, 224, 249, 0.22);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.42),
-    inset 0 0 0 1px rgba(224, 245, 255, 0.2),
-    inset 0 24px 72px rgba(203, 232, 255, 0.18),
-    0 24px 56px rgba(42, 92, 150, 0.18),
-    0 0 28px rgba(113, 197, 255, 0.18);
-  backdrop-filter: blur(20px) saturate(135%);
+  background-image: url('../assets/login/bai-login-biaodan.png');
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.auth-screen--nighttime .auth-card--tourism {
+  background-image: url('../assets/login/login-biaodan.png');
 }
 
 .auth-screen--daytime .auth-card--tourism::before {
@@ -975,6 +963,28 @@
 .auth-screen--daytime .auth-bottom-line span {
   background: linear-gradient(90deg, rgba(84, 163, 236, 0.16), rgba(116, 224, 255, 0.94), rgba(84, 163, 236, 0.16));
   box-shadow: 0 0 16px rgba(101, 202, 255, 0.3);
+}
+
+.auth-screen--daytime .auth-header-meta,
+.auth-screen--tourism .panel-label,
+.auth-screen--tourism .auth-form input::placeholder {
+  color: #073c3d;
+  text-shadow: none;
+}
+
+.auth-screen--nighttime .auth-header-meta {
+  color: #ffffff;
+  text-shadow: none;
+}
+
+.auth-screen--tourism .auth-form input::placeholder {
+  opacity: 1;
+}
+
+.auth-screen--tourism .auth-actions--inline > button {
+  color: #ffffff;
+  background: #073c3d;
+  box-shadow: none;
 }
 
 @media (max-width: 960px) {

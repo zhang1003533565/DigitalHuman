@@ -2,10 +2,12 @@ import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from 
 import axios from 'axios'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import './LoginPage.css'
-import loginBgDayImage from '../assets/login/login.png'
-import loginBgNightImage from '../assets/login/login_night.png'
-import loginTitleImage from '../assets/login/Tittle.png'
-import loginSubtitleImage from '../assets/login/fuTittle.png'
+import daytimeLoginBgImage from '../assets/login/bai-loginphoto.png'
+import daytimeLoginTitleImage from '../assets/login/bai-title.png'
+import daytimeLoginLocationTitleImage from '../assets/login/bai-lit-title.png'
+import nighttimeLoginBgImage from '../assets/login/loginphoto.png'
+import nighttimeLoginTitleImage from '../assets/login/title.png'
+import nighttimeLoginLocationTitleImage from '../assets/login/lit-title.png'
 import { DEFAULT_AUTH_REDIRECT, type SessionUser } from '../auth/session'
 import {
   LoginDigitalHumanAssistant,
@@ -254,7 +256,11 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
   }).format(now)
   const currentHour = now.getHours()
   const isDaytime = currentHour >= 6 && currentHour < 18
-  const loginBgImage = isDaytime ? loginBgDayImage : loginBgNightImage
+  const loginBgImage = isDaytime ? daytimeLoginBgImage : nighttimeLoginBgImage
+  const loginTitleImage = isDaytime ? daytimeLoginTitleImage : nighttimeLoginTitleImage
+  const loginLocationTitleImage = isDaytime
+    ? daytimeLoginLocationTitleImage
+    : nighttimeLoginLocationTitleImage
   const handleSuffixKeyDown = (event: KeyboardEvent<HTMLSpanElement>, onToggle: () => void) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
@@ -267,30 +273,16 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
       ref={authScreenRef}
       className={`auth-screen auth-screen--tourism ${isDaytime ? 'auth-screen--daytime' : 'auth-screen--nighttime'}`}
       style={{
-        backgroundImage: isDaytime
-          ? `linear-gradient(180deg, rgba(199, 231, 255, 0.18), rgba(103, 171, 224, 0.22) 42%, rgba(7, 24, 49, 0.42)), url(${loginBgImage})`
-          : `linear-gradient(180deg, rgba(3, 13, 31, 0.18), rgba(2, 8, 22, 0.6)), url(${loginBgImage})`,
+        backgroundImage: `url(${loginBgImage})`,
       }}
     >
       <div className="auth-frame">
-        <div className="auth-top-trim">
-          <span className="auth-top-trim__left"></span>
-          <span className="auth-top-trim__center"></span>
-          <span className="auth-top-trim__right"></span>
-        </div>
-
         <header className="auth-header">
-          <div className="auth-brand">
-            <span className="auth-brand-mark">
-              <span className="auth-brand-mark__moon"></span>
-              <span className="auth-brand-mark__mountain"></span>
-            </span>
-            <div className="auth-brand-copy">
-              <strong>智游山水</strong>
-              <p className="auth-brand-tagline">智慧旅行 · 畅游山水</p>
-            </div>
-          </div>
-
+          <img
+            src={loginLocationTitleImage}
+            alt="中国·张家口·大境门景区"
+            className="auth-location-title"
+          />
           <div className="auth-header-meta">
             <span>{formattedDate}</span>
             <span>{formattedTime}</span>
@@ -303,16 +295,17 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
 
         <section className="auth-stage">
           <section className="auth-copy auth-copy--tourism">
-            <img src={loginTitleImage} alt="智游山水" className="auth-title-image" />
-            <img src={loginSubtitleImage} alt="智享旅程，沉浸山水之美" className="auth-subtitle-image" />
+            <img
+              src={loginTitleImage}
+              alt="大境门数字人旅游导览服务平台"
+              className="auth-title-image"
+            />
             <LoginDigitalHumanAssistant ref={assistantRef} />
           </section>
 
-          <section className={`auth-card auth-card--tourism ${mode === 'login' ? 'auth-card--login-compact' : ''}`}>
-            <span className="auth-card-corner auth-card-corner--lt"></span>
-            <span className="auth-card-corner auth-card-corner--rt"></span>
-            <span className="auth-card-corner auth-card-corner--lb"></span>
-            <span className="auth-card-corner auth-card-corner--rb"></span>
+          <section
+            className={`auth-card auth-card--tourism ${mode === 'login' ? 'auth-card--login-compact' : ''}`}
+          >
             <div className="auth-card-top">
               <div className="auth-card-title-line">
                 <span></span>
@@ -449,11 +442,6 @@ export function LoginPage({ user, onLogin }: LoginPageProps) {
           </section>
         </section>
 
-        <div className="auth-bottom-line">
-          <span className="auth-bottom-line__left"></span>
-          <span className="auth-bottom-line__center"></span>
-          <span className="auth-bottom-line__right"></span>
-        </div>
       </div>
     </main>
   )
