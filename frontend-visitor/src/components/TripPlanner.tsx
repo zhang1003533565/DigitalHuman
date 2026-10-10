@@ -6,6 +6,7 @@ import { createTripPlanCache } from '../pages/navigationContext'
 
 type TripPlannerProps = {
   onPlanned: (routeId: string) => void
+  onNavigateMap?: () => void
 }
 
 const INITIAL_PLAN: Required<TripPlanRequest> = {
@@ -15,7 +16,7 @@ const INITIAL_PLAN: Required<TripPlanRequest> = {
   groupType: 'family',
 }
 
-export function TripPlanner({ onPlanned }: TripPlannerProps) {
+export function TripPlanner({ onPlanned, onNavigateMap }: TripPlannerProps) {
   const [plan, setPlan] = useState(INITIAL_PLAN)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -43,31 +44,33 @@ export function TripPlanner({ onPlanned }: TripPlannerProps) {
     <form className="hp-trip-planner" onSubmit={submitPlan} aria-label="快捷行程规划">
       <div className="hp-trip-planner__heading">
         <strong>快捷行程规划</strong>
-        <span>告诉我们你的偏好，即刻匹配官方路线</span>
+        <span>选择游览方式，开启你的大境门之行</span>
       </div>
       <div className="hp-trip-planner__fields">
         <label>
           游览兴趣
           <select value={plan.interest} onChange={(event) => setPlan({ ...plan, interest: event.target.value })}>
-            <option value="文化祈福">文化祈福</option>
-            <option value="自然风光">自然风光</option>
-            <option value="亲子互动">亲子互动</option>
+            <option value="长城文化">长城文化</option>
+            <option value="非遗手作">非遗手作</option>
+            <option value="农家美食">农家美食</option>
+            <option value="民俗风情">民俗风情</option>
           </select>
         </label>
         <label>
           游玩时长
           <select value={plan.durationHours} onChange={(event) => setPlan({ ...plan, durationHours: Number(event.target.value) })}>
+            <option value={2}>2 小时</option>
             <option value={3}>3 小时</option>
-            <option value={5}>5 小时</option>
+            <option value={5}>半天</option>
             <option value={8}>一整天</option>
           </select>
         </label>
         <label>
           游览强度
           <select value={plan.intensity} onChange={(event) => setPlan({ ...plan, intensity: event.target.value })}>
-            <option value="轻松少走">轻松少走</option>
-            <option value="舒缓步行">舒缓步行</option>
-            <option value="深度游览">深度游览</option>
+            <option value="城门漫游">城门漫游</option>
+            <option value="古道寻踪">古道寻踪</option>
+            <option value="长城登临">长城登临</option>
           </select>
         </label>
         <label>
@@ -80,9 +83,16 @@ export function TripPlanner({ onPlanned }: TripPlannerProps) {
           </select>
         </label>
       </div>
-      <button className="hp-button hp-button--primary hp-trip-planner__submit" type="submit" disabled={isSubmitting}>
-        {isSubmitting ? '正在规划…' : error ? '重新规划' : '让 AI 规划行程'}
-      </button>
+      <div className="hp-trip-planner__actions">
+        <button className="hp-button hp-button--primary hp-trip-planner__submit" type="submit" disabled={isSubmitting}>
+          {isSubmitting ? '正在规划…' : error ? '重新规划' : '让 AI 规划行程'}
+        </button>
+        {onNavigateMap && (
+          <button className="hp-button hp-button--secondary" type="button" onClick={onNavigateMap}>
+            查看景区地图
+          </button>
+        )}
+      </div>
       {error && <p className="hp-trip-planner__error" role="alert">{error}</p>}
     </form>
   )

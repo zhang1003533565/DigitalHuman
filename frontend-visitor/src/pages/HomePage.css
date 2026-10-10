@@ -1,6 +1,6 @@
 .page-shell.home-page {
   --home-gold: #e3b354;
-  --home-gold-soft: #f3cf84;
+  --home-gold-soft: #f8a900;
   --home-ink: #06111f;
   --home-panel: rgba(11, 28, 47, 0.88);
   padding: 0;
@@ -40,19 +40,17 @@
 
 .hp-hero__shade {
   z-index: -2;
-  background:
-    linear-gradient(90deg, rgba(4, 14, 27, 0.93) 0%, rgba(4, 14, 27, 0.62) 32%, rgba(4, 14, 27, 0.08) 63%, rgba(4, 14, 27, 0.28) 100%),
-    linear-gradient(0deg, #06111f 0%, transparent 26%, transparent 82%, rgba(4, 13, 25, 0.32) 100%);
+  background: transparent;
 }
 
 .hp-hero__content {
   width: min(820px, 64vw);
-  padding: 58px 0 50px 4.2vw;
+  padding: 58px 0 50px 9vw;
 }
 
 .hp-hero__greeting {
   margin: 0 0 18px;
-  color: rgba(255, 255, 255, 0.94);
+  color: rgba(11, 10, 10, 0.94);
   font-size: clamp(20px, 2vw, 30px);
   font-weight: 400;
   letter-spacing: 0.04em;
@@ -60,13 +58,14 @@
 
 .hp-hero h1 {
   margin: 0;
-  color: #fff;
+  color: #030303;
   font-family: "Songti SC", "STSong", "SimSun", serif;
   font-size: clamp(43px, 4vw, 66px);
   font-weight: 500;
   line-height: 1.14;
   letter-spacing: 0.05em;
   text-shadow: 0 14px 36px rgba(0, 0, 0, 0.32);
+  white-space: nowrap;
 }
 
 .hp-hero h1 span {
@@ -75,7 +74,7 @@
 
 .hp-hero__actions {
   display: flex;
-  gap: 16px;
+  gap: 12px;
   margin-top: 28px;
 }
 
@@ -84,9 +83,9 @@
   gap: 14px;
   margin-top: 28px;
   padding: 20px;
-  border: 1px solid var(--visitor-border-strong);
+  border: 1px solid rgba(255, 255, 255, 0.5);
   border-radius: 16px;
-  background: var(--visitor-surface);
+  background: rgba(255, 255, 255, 0.632);
   box-shadow: var(--visitor-shadow);
   backdrop-filter: blur(16px);
 }
@@ -103,7 +102,7 @@
 }
 
 .hp-trip-planner__heading span {
-  color: var(--visitor-text-secondary);
+  color: #082343;;
   font-size: 13px;
 }
 
@@ -116,7 +115,7 @@
 .hp-trip-planner label {
   display: grid;
   gap: 7px;
-  color: var(--visitor-text-secondary);
+  color: #082343;
   font-size: 13px;
 }
 
@@ -135,6 +134,12 @@
 .hp-trip-planner__submit {
   justify-self: start;
   min-height: 46px;
+}
+
+.hp-trip-planner__actions {
+  display: flex;
+  gap: 16px;
+  align-items: center;
 }
 
 .hp-trip-planner__submit:disabled {
@@ -189,8 +194,9 @@
 }
 
 .hp-button--secondary {
-  border: 1px solid var(--visitor-border-strong);
-  background: var(--visitor-surface-muted);
+  border: 1px solid #efc875;
+  background: linear-gradient(135deg, #f0c66e, #d89a31);
+  color: #142030;
   backdrop-filter: blur(12px);
 }
 
@@ -219,17 +225,17 @@
 
 .hp-guide {
   position: absolute;
-  right: 3.6vw;
+  right: 0.5vw;
   bottom: -18px;
   width: min(360px, 25vw);
-  height: 390px;
+  height: 220px;
   pointer-events: none;
 }
 
 .hp-guide img {
   position: absolute;
-  right: -14px;
-  bottom: 0;
+  right: -10px;
+  bottom: 12px;
   width: min(320px, 22vw);
   height: auto;
   filter: drop-shadow(0 24px 28px rgba(0, 0, 0, 0.38));
@@ -238,12 +244,11 @@
 .hp-guide p {
   position: absolute;
   z-index: 2;
-  top: 52px;
-  left: -36px;
+  top: -180px;
+  left: -60px;
   margin: 0;
   padding: 16px 22px;
-  border: 1px solid rgba(180, 211, 244, 0.42);
-  border-radius: 18px 18px 4px 18px;
+  border-radius: 4px 18px 18px 18px;
   color: rgba(255, 255, 255, 0.93);
   background: rgba(17, 45, 80, 0.72);
   box-shadow: 0 16px 32px rgba(0, 0, 0, 0.24);
@@ -327,7 +332,7 @@
 
 .hp-route-grid {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+  grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
 
@@ -528,14 +533,14 @@
     position: relative;
     right: auto;
     bottom: auto;
-    justify-self: end;
+    justify-self: start;
     width: min(240px, 72vw);
-    height: 220px;
+    height: 480px;
     margin-top: -28px;
   }
 
   .hp-guide img {
-    width: 190px;
+    width: 240px;
   }
 
   .hp-inspiration,

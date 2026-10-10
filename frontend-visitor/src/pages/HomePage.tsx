@@ -43,12 +43,22 @@ function normalizeHomeData(data: Partial<HomeData>): HomeData {
   }
 }
 
+function getGreeting(): string {
+  const hour = new Date().getHours()
+  if (hour >= 5 && hour < 11) return '早上好'
+  if (hour >= 11 && hour < 13) return '中午好'
+  if (hour >= 13 && hour < 18) return '下午好'
+  if (hour >= 18 && hour < 22) return '晚上好'
+  return '夜深了'
+}
+
 export function HomePage({ user }: HomePageProps) {
   const navigate = useNavigate()
   const [homeData, setHomeData] = useState<HomeData>(EMPTY_HOME_DATA)
   const [isLoading, setIsLoading] = useState(true)
   const [homeError, setHomeError] = useState<string | null>(null)
   const displayName = user.displayName || user.username
+  const greeting = getGreeting()
 
   useEffect(() => {
     fetch('/api/home')
@@ -62,36 +72,47 @@ export function HomePage({ user }: HomePageProps) {
   }, [])
 
   const hasHomeContent = Object.values(homeData).some((items) => items.length > 0)
-  const heroImage = homeData.banners[0]?.imageUrl
+  const heroImage = '/home/hero-dajingmen.png?v=2'
 
   return (
     <main className="page-shell home-page">
 
       <div className="hp-scroll">
         <section className="hp-hero" aria-labelledby="home-hero-title">
-          {heroImage && <img className="hp-hero__background" src={heroImage} alt={homeData.banners[0].title} />}
+          {heroImage && <img className="hp-hero__background" src={heroImage} alt={homeData.banners?.[0]?.title || "张家口大境门"} />}
           <div className="hp-hero__shade" />
           <div className="hp-hero__content">
-            <p className="hp-hero__greeting">早上好，{displayName}</p>
-            <h1 id="home-hero-title">今天，想怎样<span>游大境门</span>？</h1>
-            <TripPlanner onPlanned={(routeId) => navigate(`/routes?plan=${encodeURIComponent(routeId)}`)} />
-            <div className="hp-hero__actions">
-              <button className="hp-button hp-button--secondary" onClick={() => navigate('/map')}>查看景区地图</button>
-            </div>
+            <p className="hp-hero__greeting">{greeting}，{displayName}</p>
+            <h1 id="home-hero-title">今天，想怎样游<span>张家口大境门</span>？</h1>
+            <TripPlanner 
+              onPlanned={(routeId) => navigate(`/routes?plan=${encodeURIComponent(routeId)}`)}
+              onNavigateMap={() => navigate('/map')}
+            />
           </div>
           <div className="hp-guide" aria-label="AI 数字人导游">
-            <p>告诉我同行人和时间，<br />我来安排</p>
-            <img src="/home/ai-guide-robot.png" alt="大境门 AI 数字人导游" />
+            <p>告诉我你的偏好，<br />我来安排</p>
+            <img src="/home/ai-guide-robot.png?v=2" alt="灵山 AI 数字人导游" />
           </div>
         </section>
 
         <AsyncState isLoading={isLoading} error={homeError} isEmpty={!hasHomeContent} emptyMessage="首页推荐内容正在准备中，你仍可使用上方行程规划器生成专属路线。">
           <section className="hp-section" aria-labelledby="inspiration-title">
-            <div className="hp-section__title"><span /><h2 id="inspiration-title">今日灵感</h2></div>
+            <div className="hp-section__title"><span /><h2 id="inspiration-title">大境门下·乡旅新章</h2></div>
             <AsyncState isEmpty={homeData.spotRecommends.length === 0} emptyMessage="今日暂无景点推荐。">
               <div className="hp-inspiration">
                 {homeData.spotRecommends.map((item) => (
-                  <button key={item.id} className="hp-inspiration__item" onClick={() => navigate(item.linkUrl || '/map')}>
+                  <button
+                    key={item.id}
+                    className="hp-inspiration__item"
+                    onClick={() => {
+                      const configuredLink = item.linkUrl?.trim()
+                      const isMapDestination = configuredLink === '/map' || configuredLink?.startsWith('/map?')
+                      const destination = !configuredLink || isMapDestination
+                        ? `/spot-recommend?collectionTitle=${encodeURIComponent(item.title)}`
+                        : configuredLink
+                      navigate(destination)
+                    }}
+                  >
                     {item.imageUrl && <img src={item.imageUrl} alt={item.title} />}
                     <span>{item.title}</span>
                   </button>
@@ -101,7 +122,7 @@ export function HomePage({ user }: HomePageProps) {
           </section>
 
           <section className="hp-section hp-route-section" aria-labelledby="route-title">
-            <div className="hp-section__title"><span /><h2 id="route-title">为你推荐的路线</h2></div>
+            <div className="hp-section__title"><span /><h2 id="route-title">乡旅小站</h2></div>
             <AsyncState isEmpty={homeData.routeRecommends.length === 0 && homeData.ads.length === 0} emptyMessage="暂无运营路线推荐，可先使用快捷规划。">
               <div className="hp-route-grid">
                 {homeData.routeRecommends.map((item) => (
