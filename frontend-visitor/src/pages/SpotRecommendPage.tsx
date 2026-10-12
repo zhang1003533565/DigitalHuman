@@ -17,7 +17,7 @@ const SPOTS: ScenicSpotCard[] = [
     id: 1,
     spotName: '📍 大境门长城',
     location: '河北省张家口市桥西区大境门景区（张家口市北环路附近，长城文化旅游带核心区域）',
-    images: ['/home/dajingmengchangcheng1.png', '/home/dajingmengchangcheng2.jpg', '/home/dajingmenchangcheng3.jpg'],
+    images: ['/home/dajingmengchangcheng1.jpg', '/home/dajingmenchangcheng3.jpg', '/home/dajingmenchangcheng2.png', '/home/dajingmenchangcheng4.jpg'],
     detailedIntroduction: '作为张家口城市象征，门楣“大好河山”气势雄浑，既是明清长城重要关隘、昔日张库大道的商贸起点，也见证了察哈尔地区近代革命风云；从这里出发，可沿古道深入周边村落，开启长城文化与红色乡土交织的乡野旅程',
     highlights: ['万里长城第一门', '张库大道起点','红色研学原点'],
     scenicName: ''
@@ -25,19 +25,37 @@ const SPOTS: ScenicSpotCard[] = [
   {
     id: 2,
     spotName: '📍 来远堡遗址公园',
-    location: '张家口市乡村旅游体验区',
-    images: ['/home/great_wall_village.jpg', '/home/hero-dajingmen.png', '/home/dajingmen_hongyun.jpg'],
-    detailedIntroduction: '走进村落与田园，体验当地的乡村风貌、农事生活和特色物产。沿途可以欣赏自然景观，了解村庄文化，感受乡村休闲旅行的轻松氛围。',
-    highlights: ['欣赏田园风光，体验乡村生活，发现当地特色农产品。'],
+    location: '河北省张家口市桥西区大境门街道大境门景区西南角',
+    images: ['/home/laiyuanbu1.jpg', '/home/laiyuanbu3.jpg', '/home/laiyuanbu2.jpg'],
+    detailedIntroduction: '紧邻大境门，是明代与大境门配套的商贸军堡，保留夯土城墙、古车辙遗迹；曾经是草原与中原物资互通的枢纽，如今活化成为长城文化研学节点，串联起通往周边乡村的徒步路线，带动近郊文旅发展。',
+    highlights: ['明清互市古堡', '关城配套遗址', '历史徒步点'],
     scenicName: ''
   },
   {
     id: 3,
-    spotName: '古关新韵·长城记忆',
-    location: '大境门长城文化旅游带',
-    images: ['/home/dajingmen_hongyun.jpg', '/home/hero-dajingmen.png', '/home/great_wall_village.jpg'],
-    detailedIntroduction: '以长城和古关为线索，了解张家口的边塞历史与城市记忆。古老建筑与周边街区相映成景，适合慢慢游览、拍照和感受地方文化。',
-    highlights: ['近距离感受长城遗迹', '了解边关故事', '拍摄古关与街巷风貌'],
+    spotName: '📍张家口堡',
+    location: '河北省张家口市桥西区堡子里街道鼓楼西街16号',
+    images: ['/home/zjkb1.jpg', '/home/zjkb3.jpg', '/home/zjkb2.jpg'],
+    detailedIntroduction: '有着“明清建筑博物馆”之称，完整保留古街巷、文昌阁、抡才书院；街巷深处藏有多处晋察冀时期革命旧址，在老院落与市井烟火之中，可以触摸长城脚下厚重的历史与红色记忆，也是本地非遗手作的聚集地。',
+    highlights: ['六百年军堡', '老城烟火', '革命旧址集群'],
+    scenicName: ''
+  },
+  {
+    id: 4,
+    spotName: '📍安家沟生态旅游区',
+    location: '河北省张家口市桥西区东窑子镇石匠窑村',
+    images: ['/home/anjiaoguotongxue1.jpg', '/home/anjiaoguotongxue3.jpg', '/home/anjiaoguotongxue2.jpg'],
+    detailedIntroduction: '坐落于石匠窑村内，峡谷溪流、山林清幽；村内留存察哈尔抗日活动旧址与地道遗迹，现已打造红色研学徒步线路；同时发展山地采摘、农家餐饮，以文旅流量带动村民增收，是长城脚下农旅融合的典型乡村样板。',
+    highlights: ['峡谷溪流', '山林清幽', '红色研学徒步', '山地采摘', '农家餐饮'],
+    scenicName: ''
+  },
+  {
+    id: 5,
+    spotName: '📍清河影视城',
+    location: '河北省张家口市桥西区东窑子镇清河村',
+    images: ['/home/qingheyingyuan1.jpg', '/home/qingheyingyuan3.jpg', '/home/qingheyingyuan2.jpg'],
+    detailedIntroduction: '依托清河村古村落改造，复原民国时期张家口街巷风貌；园区配套智慧农场、海棠采摘园、红色主题影视研学活动；以影视文旅引流，带动返乡创业、农产品外销，探索古村落活化振兴的新路径。',
+    highlights: ['老张家口复刻街区', '智慧农场', '红色影视研学'],
     scenicName: ''
   },
 ]
