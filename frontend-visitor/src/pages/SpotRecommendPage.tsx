@@ -17,7 +17,7 @@ const SPOTS: ScenicSpotCard[] = [
     id: 1,
     spotName: '📍 大境门长城',
     location: '河北省张家口市桥西区大境门景区（张家口市北环路附近，长城文化旅游带核心区域）',
-    images: ['/home/hero-dajingmen.png', '/home/great_wall_village.jpg', '/home/dajingmen_hongyun.jpg'],
+    images: ['/home/dajingmengchangcheng1.png', '/home/dajingmengchangcheng2.jpg', '/home/dajingmenchangcheng3.jpg'],
     detailedIntroduction: '作为张家口城市象征，门楣“大好河山”气势雄浑，既是明清长城重要关隘、昔日张库大道的商贸起点，也见证了察哈尔地区近代革命风云；从这里出发，可沿古道深入周边村落，开启长城文化与红色乡土交织的乡野旅程',
     highlights: ['万里长城第一门', '张库大道起点','红色研学原点'],
     scenicName: ''
