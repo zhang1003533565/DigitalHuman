@@ -1131,3 +1131,10 @@
     transition: none;
   }
 }
+.digital-danmu-wrapper {
+  position: relative;
+  z-index: 10;
+  padding: 12px 0;
+  /* 用和 live2d-page 一样的深蓝背景 */
+  background: linear-gradient(180deg, #0a1a3d 0%, #0d2255 100%);
+}

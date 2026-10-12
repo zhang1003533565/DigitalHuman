@@ -1,0 +1,97 @@
+.action-buttons {
+  position: absolute;     /* 改为绝对定位 */
+  left: 16px;            /* 靠左 */
+  bottom: 80px;          /* 离底部 80px */
+  display: flex;
+  gap: 12px;
+  z-index: 100;
+  padding: 0;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 24px;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  user-select: none;
+  pointer-events: auto;
+}
+
+.action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+
+.action-btn:active {
+  transform: scale(0.9);
+}
+
+.like-btn {
+  background: linear-gradient(135deg, #FF7D00, #FFB800);
+  color: #fff;
+}
+
+.heart-btn {
+  background: linear-gradient(135deg, #C8102E, #FF4D6D);
+  color: #fff;
+}
+
+.action-icon {
+  font-size: 20px;
+}
+
+.action-count {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ================= 漂浮层 ================= */
+
+.floating-layer {
+  position: absolute;
+  left: -100px;
+  right: -100px;
+  bottom: 50px;
+  height: 320px;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 200;
+}
+
+.floating-emoji {
+  position: absolute;
+  bottom: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  animation: float-up ease-out forwards;
+  will-change: transform, opacity;
+  /* 3D 心形的柔和阴影 */
+  filter: drop-shadow(0 4px 12px rgba(240, 61, 92, 0.6))
+          drop-shadow(0 0 8px rgba(255, 126, 151, 0.4));
+}
+
+@keyframes float-up {
+  0% {
+    transform: translateY(0) scale(0.3) rotate(0deg);
+    opacity: 1;
+  }
+  15% {
+    transform: translateY(-30px) scale(1.2) rotate(0deg);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(-180px) scale(1.1) rotate(8deg);
+    opacity: 0.95;
+  }
+  100% {
+    transform: translateY(-420px) scale(0.7) rotate(-8deg);
+    opacity: 0;
+  }
+}

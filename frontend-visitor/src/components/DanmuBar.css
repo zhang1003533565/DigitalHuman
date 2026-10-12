@@ -1,0 +1,74 @@
+.danmu-bar {
+  position: relative;
+  height: 80px;
+  overflow: hidden;
+  margin: 0;
+  background: rgba(10, 20, 45, 0.35);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 12px;
+  /* 金色边框 */
+  border: 1px solid rgba(200, 196, 187, 0.85);
+  /* 金色发光（内外双层） */
+  box-shadow:
+    0 0 15px rgba(255, 200, 60, 0.6),
+    0 0 30px rgba(227, 207, 169, 0.35),
+    inset 0 0 20px rgba(255, 215, 100, 0.15);
+  animation: danmu-glow 3s ease-in-out infinite;
+}
+
+@keyframes danmu-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 15px rgba(255, 200, 60, 0.6),
+      0 0 30px rgba(255, 175, 30, 0.35),
+      inset 0 0 20px rgba(255, 215, 100, 0.15);
+    border-color: rgba(255, 200, 60, 0.85);
+  }
+  50% {
+    box-shadow:
+      0 0 25px rgba(255, 220, 100, 0.9),
+      0 0 50px rgba(255, 180, 40, 0.55),
+      inset 0 0 30px rgba(255, 220, 120, 0.25);
+    border-color: rgba(255, 230, 130, 1);
+  }
+}
+
+/* ================= 弹幕气泡（蓝色科技风） ================= */
+.danmu-item {
+  position: absolute;
+  right: -300px;
+  white-space: nowrap;
+  padding: 5px 14px;
+  background: rgba(0, 40, 80, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 16px;
+  font-size: 14px;
+  color: #E0F7FF;
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  animation: danmu-fly linear forwards;
+  pointer-events: none;
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+}
+
+.danmu-user {
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.7), rgba(0, 100, 200, 0.7));
+  border: 1px solid rgba(0, 255, 255, 0.6);
+  box-shadow: 0 0 15px rgba(0, 212, 255, 0.6);
+}
+
+.danmu-user-name {
+  color: #7FF8FF;
+  font-weight: 600;
+}
+
+.danmu-content {
+  color: #E0F7FF;
+}
+
+/* ================= 弹幕飘过动画 ================= */
+@keyframes danmu-fly {
+  from { transform: translateX(0); }
+  to   { transform: translateX(calc(-100vw - 400px)); }
+}

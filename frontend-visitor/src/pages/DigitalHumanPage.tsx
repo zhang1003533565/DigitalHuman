@@ -29,7 +29,8 @@ import { GuideResultCards } from '../components/GuideResultCards'
 import { hasGuideRecommendations, normalizeGuideChatResult, type GuideChatResult } from '../api/contracts'
 import { getMobileLiveComments } from '../digitalHuman/mobileLive'
 import { invalidateSpeechRecognition } from '../digitalHuman/speechRecognitionLifecycle'
-
+import DanmuBar from '../components/DanmuBar'
+import ActionButtons from '../components/ActionButtons'
 type DigitalHumanConfig = {
   modelId: string
   costumeId?: string
@@ -446,7 +447,7 @@ export function DigitalHumanPage() {
         return
       }
       if (event.key === 'Tab' && panel) {
-        const focusable = [...panel.querySelectorAll<HTMLElement>(MOBILE_DIALOG_FOCUSABLE_SELECTOR)]
+        const focusable = Array.from(panel.querySelectorAll<HTMLElement>(MOBILE_DIALOG_FOCUSABLE_SELECTOR))
         const first = focusable[0]
         const last = focusable[focusable.length - 1]
         if (event.shiftKey && document.activeElement === first) {
@@ -986,7 +987,19 @@ export function DigitalHumanPage() {
     event?.preventDefault()
     void sendQuestion(draft)
   }
-
+ const handleDanmuReply = useCallback(async (text: string) => {
+  if (!isReady) return
+  try {
+    // 不调 AI，直接用现有 TTS 函数合成语音
+    const audioUrl = await synthesizeSpeechSegment(text, speechRunIdRef.current)
+    if (audioUrl) {
+      const audio = new Audio(audioUrl)
+      audio.play().catch((e) => console.warn('弹幕音频播放失败', e))
+    }
+  } catch (e) {
+    console.warn('弹幕 TTS 失败', e)
+  }
+}, [isReady])
   function startVoiceQuestion() {
     const SpeechRecognition = (window as typeof window & {
       SpeechRecognition?: SpeechRecognitionConstructor
@@ -1043,7 +1056,7 @@ export function DigitalHumanPage() {
     }
   }
 
-  async function sendQuestion(questionInput: string) {
+  async function sendQuestion(questionInput: string, silent = false) {
     invalidateSpeechRecognition(recognitionRef, recognitionGenerationRef)
     const question = questionInput.trim()
     if (!question) return
@@ -1058,7 +1071,9 @@ export function DigitalHumanPage() {
       status: 'sent',
     }
 
-    setMessages((current) => [...current, userMessage])
+    if (!silent) {
+      setMessages((current) => [...current, userMessage])
+}
     setDraft('')
     setMobileLiveAnnouncement('已发送问题，灵灵正在回复。')
     setRuntimeState('thinking')
@@ -1072,7 +1087,7 @@ export function DigitalHumanPage() {
     void triggerConfiguredAction({ text: question })
 
     const assistantMsgId = `guide-${Date.now()}`
-
+    if (!silent) {
     setMessages((current) => [
       ...current,
       {
@@ -1084,6 +1099,7 @@ export function DigitalHumanPage() {
         status: 'read',
       },
     ])
+  }
 
     try {
       const authHeader = axios.defaults.headers.common.Authorization as string | undefined
@@ -1189,9 +1205,11 @@ export function DigitalHumanPage() {
                 suggestions: parsed.suggestions,
                 sources: parsed.sources,
               })
-              setMessages((current) => current.map((msg) => (
-                msg.id === assistantMsgId ? { ...msg, result: guideResult } : msg
+              if (!silent) {
+                setMessages((current) => current.map((msg) => (
+                  msg.id === assistantMsgId ? { ...msg, result: guideResult } : msg
               )))
+}
             }
 
             if (Number.isSafeInteger(parsed.messageId)) {
@@ -1328,10 +1346,16 @@ export function DigitalHumanPage() {
 
   return (
     <main className="module-screen">
+      {/* 顶部弹幕条 */}
+    <div className="digital-danmu-wrapper">
+     <DanmuBar onAISpeak={handleDanmuReply} />
+    </div>
 
       <section ref={livePageRef} className="live2d-page live2d-page--presentation">
         <canvas ref={canvasRef} className="live2d-canvas" />
         <div className="digital-human-stage-glow" aria-hidden />
+        {/* 点赞/爱心按钮 */}
+        <ActionButtons />
         <div className="digital-human-status" data-runtime-state={runtimeState} aria-live="polite">
           <span className={isReady ? 'digital-human-status__dot digital-human-status__dot--ready' : 'digital-human-status__dot'} />
           <span>{status}</span>
