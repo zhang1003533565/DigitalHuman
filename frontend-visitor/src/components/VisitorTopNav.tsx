@@ -10,7 +10,7 @@ type VisitorTopNavProps = { onLogout: () => void }
 
 const VISITOR_NAV_ITEMS = [
   { to: '/home', label: '首页', activeFor: ['/home'] },
-  { to: DIGITAL_HUMAN_ROUTE, label: 'AI 导览', activeFor: [DIGITAL_HUMAN_ROUTE] },
+  { to: DIGITAL_HUMAN_ROUTE, label: 'AI 导览直播间', activeFor: [DIGITAL_HUMAN_ROUTE] },
   { to: '/routes', label: '路线推荐', activeFor: ['/routes', '/route-recommend'] },
   { to: '/map', label: '景点地图', activeFor: ['/map', '/spot-recommend'] },
   { to: '/mall', label: '景区商城', activeFor: ['/mall'] },

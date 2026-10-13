@@ -34,7 +34,7 @@ const routedPages = [
 
 const expectedItems = [
   ['/home', '首页'],
-  ['/modules/digital-human', 'AI 导览'],
+  ['/modules/digital-human', 'AI 导览直播间'],
   ['/routes', '路线推荐'],
   ['/map', '景点地图'],
   ['/mall', '景区商城'],
