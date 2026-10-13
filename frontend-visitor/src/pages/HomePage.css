@@ -122,7 +122,7 @@
 .hp-trip-planner select {
   width: 100%;
   min-width: 0;
-  height: 42px;
+  height: 40px;
   padding: 0 10px;
   border: 1px solid var(--visitor-border);
   border-radius: 8px;
@@ -228,7 +228,7 @@
   right: 0.5vw;
   bottom: -18px;
   width: min(360px, 25vw);
-  height: 220px;
+  height: 240px;
   pointer-events: none;
 }
 
@@ -258,7 +258,7 @@
 }
 
 .hp-section {
-  margin-top: 20px;
+  margin-top: 40px;
 }
 
 .hp-section__title {
@@ -270,7 +270,7 @@
 
 .hp-section__title > span {
   width: 13px;
-  height: 2px;
+  height: 13px;
   border-radius: 2px;
   background: var(--home-gold);
 }
@@ -286,12 +286,19 @@
 .hp-inspiration {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: 16px;
+  margin-bottom: 40px;
+}
+
+.hp-inspiration__card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .hp-inspiration__item {
   position: relative;
-  height: 148px;
+  height: 220px;
   padding: 0;
   overflow: hidden;
   border: 1px solid var(--visitor-border);
@@ -311,7 +318,7 @@
 
 .hp-inspiration__item img {
   width: 100%;
-  height: 148px;
+  height: 220px;
   object-fit: cover;
   transition: transform 420ms ease;
 }
@@ -320,14 +327,84 @@
   transform: scale(1.035);
 }
 
-.hp-inspiration__item span {
+.hp-inspiration__item > span:first-of-type {
   position: absolute;
   z-index: 1;
   left: 20px;
   bottom: 16px;
   font-size: 17px;
-  font-weight: 650;
+  font-weight: 500;
   letter-spacing: 0.06em;
+}
+
+.hp-inspiration__detail-btn {
+  position: absolute;
+  z-index: 1;
+  right: 16px;
+  bottom: 16px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  transition: background 180ms ease;
+}
+
+.hp-inspiration__item:hover .hp-inspiration__detail-btn {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.hp-inspiration__child {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid var(--visitor-border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--visitor-surface);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 180ms ease, transform 180ms ease;
+}
+
+.hp-inspiration__child:hover {
+  transform: translateY(-2px);
+  border-color: rgba(231, 187, 94, 0.48);
+}
+
+.hp-inspiration__child img {
+  width: 300px;
+  height: 300px;
+  object-fit: cover;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.hp-inspiration__child-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  justify-content: center;
+  min-width: 0;
+}
+
+.hp-inspiration__child-info strong {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--visitor-text);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hp-inspiration__child-info small {
+  font-size: 12px;
+  color: var(--visitor-text-secondary);
+  line-height: 1.4;
 }
 
 .hp-route-grid {
@@ -549,11 +626,11 @@
   }
 
   .hp-inspiration__item {
-    height: 170px;
+    height: 240px;
   }
 
   .hp-inspiration__item img {
-    height: 170px;
+    height: 240px;
   }
 
   .hp-route-card__stops {
@@ -590,7 +667,7 @@
     scrollbar-width: thin;
   }
 
-  .hp-inspiration__item,
+  .hp-inspiration__card,
   .hp-route-card,
   .hp-show-card {
     min-width: min(82vw, 330px);

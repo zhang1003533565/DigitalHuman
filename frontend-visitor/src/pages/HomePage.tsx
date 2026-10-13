@@ -34,6 +34,30 @@ const EMPTY_HOME_DATA: HomeData = {
   routeRecommends: [],
 }
 
+const FIRST_SPOT_MAP: Record<string, { title: string; imageUrl: string; description: string; address: string; tags: string[] }> = {
+  '镜门寻迹·红韵乡途': {
+    title: '大境门长城',
+    imageUrl: '/home/dajingmengchangcheng1.jpg',
+    description: '作为张家口城市象征，门楣"大好河山"气势雄浑，既是明清长城重要关隘，也见证了察哈尔地区近代革命风云',
+    address: '河北省张家口市桥西区大境门景区',
+    tags: ['万里长城第一门', '张库大道起点'],
+  },
+  '张垣风物·助农优品': {
+    title: '口蘑干',
+    imageUrl: '/home/koumogan1.jpg',
+    description: '张家口坝上草原特产口蘑干，肉质厚实鲜香，自古便是塞外名珍。当地打造标准化采摘、烘干加工产业链，依托文旅电商拓宽销路，带动农户增收。',
+    address: '张家口市坝上地区',
+    tags: ['有机认证', '助农产品'],
+  },
+  '长城栖居·乡居慢享': {
+    title: '大境门古堡民宿',
+    imageUrl: '/home/fuluju1.jpg',
+    description: '充满怀旧乡土气息的农家院落，店内保留老北方土炕包间，木桌花布，氛围感浓厚。食材大多取自本地菜园，主打坝上农家菜，烤羊排、莜面系列都是招牌。',
+    address: '张家口市大境门附近',
+    tags: ['古堡民宿', '长城日出'],
+  },
+}
+
 function normalizeHomeData(data: Partial<HomeData>): HomeData {
   return {
     banners: data.banners ?? [],
@@ -100,23 +124,40 @@ export function HomePage({ user }: HomePageProps) {
             <div className="hp-section__title"><span /><h2 id="inspiration-title">大境门下·乡旅新章</h2></div>
             <AsyncState isEmpty={homeData.spotRecommends.length === 0} emptyMessage="今日暂无景点推荐。">
               <div className="hp-inspiration">
-                {homeData.spotRecommends.map((item) => (
-                  <button
-                    key={item.id}
-                    className="hp-inspiration__item"
-                    onClick={() => {
-                      const configuredLink = item.linkUrl?.trim()
-                      const isMapDestination = configuredLink === '/map' || configuredLink?.startsWith('/map?')
-                      const destination = !configuredLink || isMapDestination
-                        ? `/spot-recommend?collectionTitle=${encodeURIComponent(item.title)}`
-                        : configuredLink
-                      navigate(destination)
-                    }}
-                  >
-                    {item.imageUrl && <img src={item.imageUrl} alt={item.title} />}
-                    <span>{item.title}</span>
-                  </button>
-                ))}
+                {homeData.spotRecommends.map((item) => {
+                  const firstSpot = FIRST_SPOT_MAP[item.title]
+                  return (
+                    <div key={item.id} className="hp-inspiration__card">
+                      <button
+                        className="hp-inspiration__item"
+                        onClick={() => {
+                          const configuredLink = item.linkUrl?.trim()
+                          const isMapDestination = configuredLink === '/map' || configuredLink?.startsWith('/map?')
+                          const destination = !configuredLink || isMapDestination
+                            ? `/spot-recommend?collectionTitle=${encodeURIComponent(item.title)}`
+                            : configuredLink
+                          navigate(destination)
+                        }}
+                      >
+                        {item.imageUrl && <img src={item.imageUrl} alt={item.title} />}
+                        <span>{item.title}</span>
+                        <span className="hp-inspiration__detail-btn">查看详情</span>
+                      </button>
+                      {firstSpot && (
+                        <button
+                          className="hp-inspiration__child"
+                          onClick={() => navigate(`/spot-recommend?collectionTitle=${encodeURIComponent(item.title)}`)}
+                        >
+                          {firstSpot.imageUrl && <img src={firstSpot.imageUrl} alt={firstSpot.title} />}
+                          <div className="hp-inspiration__child-info">
+                            <strong>{firstSpot.title}</strong>
+                            {firstSpot.description && <small>{firstSpot.description}</small>}
+                          </div>
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </AsyncState>
           </section>
