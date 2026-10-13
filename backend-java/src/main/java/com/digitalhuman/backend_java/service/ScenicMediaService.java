@@ -18,6 +18,7 @@ import java.util.UUID;
 public class ScenicMediaService {
 
     private static final Set<String> VIDEO_EXTENSIONS = Set.of(".mp4", ".webm", ".mov", ".m4v");
+    private static final Set<String> IMAGE_EXTENSIONS = Set.of(".png", ".jpg", ".jpeg", ".webp");
     private final Path mediaRoot;
 
     public ScenicMediaService(@Value("${scenic.media-dir:}") String mediaDir) {
@@ -54,18 +55,39 @@ public class ScenicMediaService {
         if (contentType != null && !contentType.isBlank() && !contentType.toLowerCase(Locale.ROOT).startsWith("video/")) {
             throw badRequest("上传文件不是有效的视频类型");
         }
+        return store(file, extension, "保存直播视频失败");
+    }
 
+    /**
+     * 商城商品图片上传，复用同一媒体目录与 /api/scenic-media/** 静态映射。
+     */
+    public ScenicMediaUploadResponse uploadImage(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw badRequest("上传图片不能为空");
+        }
+        String extension = extensionOf(file.getOriginalFilename());
+        if (!IMAGE_EXTENSIONS.contains(extension)) {
+            throw badRequest("仅支持 PNG、JPG、JPEG 或 WebP 图片");
+        }
+        String contentType = file.getContentType();
+        if (contentType != null && !contentType.isBlank() && !contentType.toLowerCase(Locale.ROOT).startsWith("image/")) {
+            throw badRequest("上传文件不是有效的图片类型");
+        }
+        return store(file, extension, "保存商品图片失败");
+    }
+
+    private ScenicMediaUploadResponse store(MultipartFile file, String extension, String failureMessage) {
         String fileName = UUID.randomUUID() + extension;
         Path target = mediaRoot.resolve(fileName).normalize();
         if (!target.startsWith(mediaRoot)) {
-            throw badRequest("视频文件名不合法");
+            throw badRequest("文件名不合法");
         }
         try {
             Files.createDirectories(mediaRoot);
             file.transferTo(target);
             return new ScenicMediaUploadResponse(fileName, "/api/scenic-media/" + fileName);
         } catch (IOException exception) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "保存直播视频失败", exception);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, failureMessage, exception);
         }
     }
 

@@ -3,6 +3,7 @@ export type AdminPageKey =
   | 'routes' | 'travel-tips' | 'avatar' | 'model-emotion' | 'settings'
   | 'travel-analytics' | 'scenic-structured' | 'voice-scripts' | 'feedback'
   | 'live-broadcast' | 'qa' | 'ai-models' | 'knowledge' | 'map-config'
+  | 'mall-products' | 'mall-orders'
 
 export type AdminPageMeta = { title: string; eyebrow: string; description: string }
 
@@ -25,6 +26,8 @@ export const adminPageMeta: Record<AdminPageKey, AdminPageMeta> = {
   'ai-models': { title: 'AI 模型管理', eyebrow: 'MODEL CONTROL', description: '统一管理模型目录、供应商连接、绑定关系和健康测试' },
   knowledge: { title: '知识库对接站', eyebrow: 'KNOWLEDGE HUB', description: '管理知识目录、文档分段与第三方知识服务连接' },
   'map-config': { title: '地图配置', eyebrow: 'AMAP SETTINGS', description: '维护高德地图 Web Key 与安全密钥，供游客端和管理端地图运行时读取' },
+  'mall-products': { title: '商品管理', eyebrow: 'MALL CATALOG', description: '维护农产品与周边产品的价格、库存、图片与上下架状态' },
+  'mall-orders': { title: '订单管理', eyebrow: 'MALL ORDERS', description: '查看游客下单记录、收货信息与订单流转状态' },
   settings: { title: '系统设置', eyebrow: 'SYSTEM SETTINGS', description: '配置模型能力、服务参数与智能体编排策略' },
 }
 

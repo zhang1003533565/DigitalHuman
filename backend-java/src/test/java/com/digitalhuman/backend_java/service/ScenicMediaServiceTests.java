@@ -80,4 +80,94 @@ class ScenicMediaServiceTests {
 
         assertEquals(configured, resolved);
     }
+
+    @Test
+    void uploadsProductImageWithRandomizedPublicPath() throws Exception {
+        ScenicMediaService service = new ScenicMediaService(tempDir.toString());
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "noodle.png",
+                "image/png",
+                new byte[]{9, 8, 7}
+        );
+
+        ScenicMediaUploadResponse response = service.uploadImage(file);
+
+        assertTrue(response.fileName().endsWith(".png"));
+        assertEquals("/api/scenic-media/" + response.fileName(), response.url());
+        assertTrue(Files.exists(tempDir.resolve(response.fileName())));
+    }
+
+    @Test
+    void acceptsJpegWebpAndJpgForProductImages() throws Exception {
+        ScenicMediaService service = new ScenicMediaService(tempDir.toString());
+
+        for (String name : new String[]{"a.jpg", "b.jpeg", "c.webp"}) {
+            MockMultipartFile file = new MockMultipartFile("file", name, "image/jpeg", new byte[]{1});
+            ScenicMediaUploadResponse response = service.uploadImage(file);
+            assertTrue(response.fileName().endsWith(name.substring(name.lastIndexOf('.'))));
+        }
+    }
+
+    @Test
+    void rejectsNonImageExtensionForProductImages() {
+        ScenicMediaService service = new ScenicMediaService(tempDir.toString());
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "clip.mp4",
+                "video/mp4",
+                new byte[]{1}
+        );
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.uploadImage(file)
+        );
+
+        assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
+    }
+
+    @Test
+    void rejectsImageExtensionWithNonImageContentType() {
+        ScenicMediaService service = new ScenicMediaService(tempDir.toString());
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "fake.png",
+                "application/octet-stream",
+                new byte[]{1}
+        );
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.uploadImage(file)
+        );
+
+        assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
+    }
+
+    @Test
+    void rejectsEmptyImageUpload() {
+        ScenicMediaService service = new ScenicMediaService(tempDir.toString());
+        MockMultipartFile file = new MockMultipartFile("file", "empty.png", "image/png", new byte[0]);
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.uploadImage(file)
+        );
+
+        assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
+    }
+
+    @Test
+    void videoUploadStillRejectsImagesAfterImageSupportWasAdded() {
+        ScenicMediaService service = new ScenicMediaService(tempDir.toString());
+        MockMultipartFile file = new MockMultipartFile("file", "photo.png", "image/png", new byte[]{1});
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.uploadVideo(file)
+        );
+
+        assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
+    }
 }

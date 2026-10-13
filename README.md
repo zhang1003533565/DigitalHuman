@@ -311,6 +311,139 @@ curl -X POST http://127.0.0.1:18755/kb/ingest \
   -d '{"recreate_collection":true}'
 ```
 
+## 景区商城（农产品 + 周边产品）
+
+游客端可以浏览景区商城、加购物车并提交订单；管理后台可以维护商品与管理订单。当前范围为
+**商品浏览 + 购物车 + 下单**，只生成订单记录，**不接入真实支付渠道**。
+
+### 商品分类
+
+| 分类标识 | 中文名 | 示例 |
+|---------|--------|------|
+| `farm` | 农产品 | 坝上莜面、口蘑干货、黄米糕、张垣熏肉 |
+| `souvenir` | 周边产品 | 大境门文创冰箱贴、长城主题书签、主题明信片、帆布袋 |
+
+商品库不再写入任何示例商品：启动时不会自动往 `mall_product` 表里塞数据，
+商品一律由管理后台（`frontend-admin` 的商品管理页）录入维护。表为空时游客端商城
+显示空状态，这是预期行为。
+
+### 游客端接口
+
+需要 `USER` 角色（`Authorization: Bearer <token>`）：
+
+- `GET /api/user/mall/products?category=&keyword=`
+  - `category` 省略或传 `all` 表示全部；支持 `farm` / `souvenir`
+- `GET /api/user/mall/products/{id}`
+  - 已下架商品返回 404
+- `POST /api/user/mall/orders`
+  - 下单，请求体只包含 `productId` 与 `quantity`，**金额由服务端按库中当前价计算**
+- `GET /api/user/mall/orders`
+  - 只返回当前登录用户自己的订单
+- `GET /api/user/mall/orders/{id}`
+- `POST /api/user/mall/orders/{id}/cancel`
+  - 仅 `PENDING` 状态可取消，取消后自动回滚库存
+
+下单请求示例：
+
+```json
+{
+  "receiverName": "小明",
+  "receiverPhone": "13800000000",
+  "receiverAddress": "张家口市桥西区大境门景区",
+  "remark": "请尽快发货",
+  "items": [
+    { "productId": "mall-p-1", "quantity": 2 },
+    { "productId": "mall-p-5", "quantity": 1 }
+  ]
+}
+```
+
+### 管理后台接口
+
+需要 `ADMIN` 角色（`OBSERVER` 只能执行 GET）：
+
+- `GET /api/admin/mall/products`
+- `GET /api/admin/mall/products/{id}`
+- `POST /api/admin/mall/products`
+- `PUT /api/admin/mall/products/{id}`
+- `DELETE /api/admin/mall/products/{id}`
+- `POST /api/admin/mall/products/image`
+  - `multipart/form-data`，字段名 `file`，支持 PNG / JPG / JPEG / WebP
+  - 复用 `/api/scenic-media/**` 静态映射返回可访问 URL
+- `GET /api/admin/mall/orders`
+- `GET /api/admin/mall/orders/{id}`
+- `PUT /api/admin/mall/orders/{id}/status`
+
+订单状态取值：`PENDING`（待处理）、`CONFIRMED`（已确认）、`COMPLETED`（已完成）、`CANCELLED`（已取消）。
+`COMPLETED` 与 `CANCELLED` 为终态，不可再变更；取消操作幂等，库存只回滚一次。
+
+### 数据表
+
+三张表由 JPA `ddl-auto: update` 自动创建，无需手工执行建表脚本：
+
+- `mall_product`：商品（价格、划线价、库存、单位、图片、详情、标签、排序、上下架）
+- `mall_order`：订单（订单号、用户、状态、金额、收货信息、备注、取消原因）
+- `mall_order_item`：订单明细（下单时的商品快照，商品改价或删除不影响历史订单）
+
+### 关键行为约束
+
+- **订单归属只认登录会话**：`userId` 取自服务端 `AuthSession`，请求体传 `userId` 无效。
+- **金额服务端重算**：客户端提交的价格字段会被完全忽略，防止篡改金额。
+- **整单成败**：先全量校验商品是否上架、库存是否足够，全部通过后才扣减库存，因此不会出现部分扣减。
+- **并发不超卖**：库存扣减走原子条件 UPDATE（`deductStock`），判断与扣减在同一条 SQL 内完成：
+
+  ```sql
+  update mall_product set stock = stock - ?
+   where id = ? and stock >= ? and enabled = true
+  ```
+
+  受影响行数为 0 即表示库存不足，整单回滚。**不要改回"先 select 再 setStock"的写法**——
+  Hibernate 对已在一级缓存中的实体会直接返回缓存对象而不发 SQL，加锁查询会被跳过：
+  实测 40 并发抢 10 件库存时，该写法会让 40 单全部成功、库存变成 -30。
+  回归测试见 `MallConcurrentOrderTests`。
+- **库存保护**：同一商品重复提交多行会先合并数量再校验；下单数量上限 99 件（按**合并后**总量计）。
+- **越权隔离**：查询他人订单返回 404（不区分"不存在"与"非本人"），避免订单号枚举。
+- **购物车只存在浏览器本地**（`localStorage` 键 `digitalhuman.mall.cart`），不落服务端。
+  - 进入商城时用最新商品数据刷新购物车快照（价格、库存、数量上限），减少下单时才失败的情况。
+  - 刷新遇到下架/售罄商品时会移出购物车，但**不会**因为搜索或分类筛选把未出现在列表里的商品删掉。
+- **错误响应统一带 message**：见下方"统一错误响应"。
+
+### 统一错误响应
+
+新增 `ApiExceptionHandler`（`@RestControllerAdvice`），把业务异常与参数校验异常统一成：
+
+```json
+{ "code": "NOT_FOUND", "message": "商品不存在或已下架", "traceId": "..." }
+```
+
+**背景**：项目原先依赖 `server.error.include-message: always` 让 Spring Boot 的 `/error` 端点回显
+`ResponseStatusException` 的 reason，但实测响应体里只有 `timestamp/status/error/path`，**没有 message 字段**。
+游客端 `getApiProblem` 只读 `payload.message` 与 `payload.detail`，因此所有业务提示（如"库存不足：坝上莜面（剩余 5）"、
+"请输入 11 位手机号"）都会退化成通用兜底文案。现在由 advice 显式返回 message 与 traceId，不再依赖该配置项。
+
+该修复对所有模块生效（例如既有登录、景点、反馈等接口的报错文案也会一并恢复可读）。
+
+### 页面入口
+
+- 游客端：顶部导航「景区商城」→ `/mall`，商品详情 `/mall/products/:id`；用户菜单「我的订单」→ `/orders`
+- 管理后台：侧边栏「景区商城」→ 商品管理 `/admin/mall/products`、订单管理 `/admin/mall/orders`
+
+### 相关测试
+
+```bash
+# 后端（含商城服务、控制器、持久化、并发不超卖与图片上传）
+cd backend-java && ./mvnw test
+
+# 只跑商城相关测试
+cd backend-java && ./mvnw test -Dtest='Mall*Tests,ApiExceptionHandlerTests'
+
+# 游客端商城页面与购物车契约
+cd frontend-visitor && node src/mall/cartStore.test.mjs && node src/pages/mallPageContract.test.mjs
+
+# 管理后台商城接口与菜单契约
+cd frontend-admin && node src/api/mall.test.mjs && node src/pages/mallContract.test.mjs
+```
+
 ## 管理后台页面
 
 当前管理后台知识库页已经接好：

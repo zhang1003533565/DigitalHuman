@@ -1,0 +1,312 @@
+.floating-ai {
+  position: fixed;
+  z-index: 1100;
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.floating-ai > * { pointer-events: auto; }
+
+/* ---------- pet stage ---------- */
+
+.floating-ai__pet-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  /* The pet's visual box is larger than the hit target so bounces never clip. */
+  padding: 26px 14px 18px;
+  margin: -26px -14px -18px;
+}
+
+.floating-ai__pet {
+  /* Facing is written at runtime by the component's inline style (1 = right,
+     -1 = mirrored). Declared here so the initial value is visible to CSS
+     tooling and the pet never renders unflipped before hydration. */
+  --pet-facing: 1;
+  position: relative;
+  width: 78px;
+  height: 78px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: grab;
+  transition: transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform: scaleX(var(--pet-facing, 1));
+  transform-origin: 50% 88%;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  /* Promote to its own layer so the drop shadow and squash animations
+     composite cleanly instead of leaving a translucent square. */
+  will-change: transform;
+  isolation: isolate;
+}
+
+.floating-ai__pet:active { cursor: grabbing; }
+.floating-ai__pet:focus-visible { outline: 2px solid var(--visitor-focus); outline-offset: 4px; border-radius: 50%; }
+
+.floating-ai__pet-body {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 88%;
+  animation: petFloat 3.2s ease-in-out infinite;
+  /* Safe now that the artwork is a true-alpha PNG: the shadow hugs the
+     silhouette rather than painting a square. */
+  filter: drop-shadow(0 10px 12px rgba(3, 16, 34, 0.3));
+}
+
+.floating-ai__pet-body img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* Ground shadow that breathes with the float, so the pet feels anchored.
+   It is an ellipse rather than a filter: a drop-shadow filter on an animated
+   element rasterises into a visible translucent square while squashing. */
+.floating-ai__pet-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: -2px;
+  width: 46px;
+  height: 10px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(3, 16, 34, 0.4), rgba(3, 16, 34, 0));
+  transform: translateX(-50%);
+  animation: petShadow 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ---------- sparkles ---------- */
+
+.floating-ai__sparkles {
+  position: absolute;
+  inset: -12% -18%;
+  pointer-events: none;
+}
+
+.floating-ai__sparkles i {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  background: #ffe9a8;
+  clip-path: polygon(50% 0%, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0% 50%, 39% 39%);
+  opacity: 0;
+  transform: scale(0.4);
+}
+
+.floating-ai__sparkles i:nth-child(1) { top: 8%; left: 4%; }
+.floating-ai__sparkles i:nth-child(2) { top: 2%; right: 6%; animation-delay: 120ms; }
+.floating-ai__sparkles i:nth-child(3) { bottom: 12%; right: 0; animation-delay: 240ms; }
+
+/* ---------- speech bubble ---------- */
+
+.floating-ai__bubble {
+  position: absolute;
+  right: 58px;
+  top: -6px;
+  z-index: 3;
+  width: max-content;
+  max-width: 216px;
+  padding: 9px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 14px 14px 4px 14px;
+  color: #17314a;
+  background: #fff8e8;
+  box-shadow: 0 10px 24px rgba(8, 30, 50, 0.2);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+  white-space: normal;
+  transform-origin: 100% 100%;
+  animation: petBubbleIn 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes petBubbleIn {
+  from { opacity: 0; transform: translateY(6px) scale(0.7); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.floating-ai__hint {
+  position: absolute;
+  right: 58px;
+  top: 0;
+  z-index: 2;
+  width: max-content;
+  padding: 7px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 12px 12px 3px 12px;
+  color: #17314a;
+  background: #fff8e8;
+  box-shadow: 0 8px 20px rgba(8, 30, 50, 0.16);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  animation: petHintIn 320ms ease-out;
+}
+
+@keyframes petHintIn { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: translateX(0); } }
+
+/* ---------- idle / ambient moods ---------- */
+
+@keyframes petFloat {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-7px) rotate(-1.5deg); }
+}
+
+@keyframes petShadow {
+  0%, 100% { opacity: 0.7; transform: translateX(-50%) scaleX(1); }
+  50% { opacity: 0.45; transform: translateX(-50%) scaleX(0.84); }
+}
+
+/* attention: perk up, lean toward the cursor */
+.floating-ai__pet-stage--attention .floating-ai__pet-body { animation: petPerk 620ms ease-out infinite alternate; }
+.floating-ai__pet-stage--attention .floating-ai__pet { transform: scaleX(var(--pet-facing, 1)) scale(1.08); }
+
+@keyframes petPerk {
+  from { transform: translateY(0) rotate(-3deg); }
+  to { transform: translateY(-4px) rotate(3deg); }
+}
+
+/* listening: gentle sway while the chat is open */
+.floating-ai__pet-stage--listening .floating-ai__pet-body { animation: petSway 2.4s ease-in-out infinite; }
+
+@keyframes petSway {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-6px) rotate(2deg); }
+}
+
+/* ---------- pet: being petted ---------- */
+
+.floating-ai__pet-stage--pet .floating-ai__pet { transform: scaleX(var(--pet-facing, 1)) scale(1.14, 0.9); }
+.floating-ai__pet-stage--pet .floating-ai__pet-body { animation: petSquish 460ms ease-out 2; }
+
+@keyframes petSquish {
+  0%, 100% { transform: scale(1, 1) rotate(0deg); }
+  35% { transform: scale(1.1, 0.88) rotate(-4deg); }
+  70% { transform: scale(0.95, 1.07) rotate(4deg); }
+}
+
+/* ---------- drag: carried by the cursor ---------- */
+
+.floating-ai__pet-stage--drag .floating-ai__pet-body { animation: petDangle 900ms ease-in-out infinite; }
+.floating-ai__pet-stage--drag .floating-ai__pet-shadow { animation: petShadowFar 900ms ease-in-out infinite; }
+
+@keyframes petDangle {
+  0%, 100% { transform: rotate(-7deg) translateY(0) scale(1.04); }
+  50% { transform: rotate(7deg) translateY(-3px) scale(1.04); }
+}
+
+@keyframes petShadowFar {
+  0%, 100% { opacity: 0.22; transform: translateX(-50%) scaleX(0.6); }
+  50% { opacity: 0.34; transform: translateX(-50%) scaleX(0.72); }
+}
+
+/* ---------- happy: sparkle burst after a drop ---------- */
+
+.floating-ai__pet-stage--happy .floating-ai__pet-body { animation: petHop 520ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+.floating-ai__pet-stage--happy .floating-ai__sparkles i { animation: petSparkle 900ms ease-out; }
+
+@keyframes petHop {
+  0% { transform: translateY(0) scale(1, 1); }
+  30% { transform: translateY(-18px) scale(0.92, 1.12); }
+  60% { transform: translateY(2px) scale(1.12, 0.88); }
+  100% { transform: translateY(0) scale(1, 1); }
+}
+
+@keyframes petSparkle {
+  0% { opacity: 0; transform: scale(0.3) rotate(0deg); }
+  40% { opacity: 1; transform: scale(1.15) rotate(90deg); }
+  100% { opacity: 0; transform: scale(0.5) rotate(180deg) translateY(-14px); }
+}
+
+/* ---------- thinking: while the answer streams ---------- */
+
+.floating-ai__pet-stage--thinking .floating-ai__pet-body { animation: petThink 1.15s ease-in-out infinite; }
+.floating-ai__pet-stage--thinking .floating-ai__sparkles i { animation: petSparkle 1.4s ease-out infinite; }
+
+@keyframes petThink {
+  0%, 100% { transform: translateY(0) rotate(-3deg) scale(1); }
+  50% { transform: translateY(-4px) rotate(3deg) scale(1.03); }
+}
+
+/* ---------- panel (unchanged behaviour) ---------- */
+
+.floating-ai__panel {
+  display: flex;
+  width: min(360px, calc(100vw - 32px));
+  height: min(520px, calc(100dvh - 132px));
+  min-height: 360px;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--visitor-border-strong);
+  border-radius: 20px;
+  background: var(--visitor-overlay);
+  box-shadow: 0 22px 58px rgba(2, 15, 30, 0.34), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+  backdrop-filter: blur(22px);
+  animation: floatingAiPanelIn 180ms ease-out;
+}
+
+@keyframes floatingAiPanelIn { from { opacity: 0; transform: translateY(12px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+.floating-ai__header { display: flex; align-items: center; justify-content: space-between; padding: 13px 14px 11px; border-bottom: 1px solid var(--visitor-border); }
+.floating-ai__identity { display: flex; align-items: center; gap: 9px; min-width: 0; }
+
+.floating-ai__avatar { display: block; width: 42px; height: 42px; flex: 0 0 auto; }
+.floating-ai__avatar img { display: block; width: 100%; height: 100%; object-fit: contain; animation: petFloat 3.2s ease-in-out infinite; }
+.floating-ai__avatar--thinking img { animation: petThink 1.15s ease-in-out infinite; }
+.floating-ai__avatar--pet img { animation: petSquish 460ms ease-out 2; }
+.floating-ai__avatar--happy img { animation: petHop 520ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+.floating-ai__identity div { display: grid; gap: 2px; }
+.floating-ai__identity strong { color: var(--visitor-text); font-size: 14px; }
+.floating-ai__identity span { color: var(--visitor-text-muted); font-size: 11px; }
+.floating-ai__icon-button { width: 32px; height: 32px; border: 0; border-radius: 50%; color: var(--visitor-text-secondary); background: var(--visitor-surface-muted); cursor: pointer; font-size: 24px; line-height: 1; }
+.floating-ai__icon-button:hover { color: var(--visitor-text); background: var(--visitor-accent-soft); }
+
+.floating-ai__messages { display: grid; gap: 10px; flex: 1; min-height: 0; overflow: auto; padding: 15px 13px 8px; overscroll-behavior: contain; }
+.floating-ai__message { display: flex; max-width: 88%; }
+.floating-ai__message--user { justify-self: end; }
+.floating-ai__message p { margin: 0; padding: 9px 11px; border-radius: 13px 13px 13px 3px; color: var(--visitor-text); background: var(--visitor-surface-strong); font-size: 13px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.floating-ai__message--user p { border-radius: 13px 13px 3px 13px; color: #fff; background: var(--visitor-accent-strong); }
+.floating-ai__typing { display: inline-block; margin-left: 3px; letter-spacing: 2px; animation: floatingAiTyping 1s infinite; }
+@keyframes floatingAiTyping { 50% { opacity: 0.3; } }
+
+.floating-ai__quick-questions { display: flex; gap: 6px; overflow-x: auto; padding: 7px 13px; scrollbar-width: none; }
+.floating-ai__quick-questions::-webkit-scrollbar { display: none; }
+.floating-ai__quick-questions button { flex: 0 0 auto; padding: 6px 9px; border: 1px solid var(--visitor-border); border-radius: 999px; color: var(--visitor-text-secondary); background: var(--visitor-surface-muted); cursor: pointer; font: inherit; font-size: 11px; white-space: nowrap; }
+.floating-ai__quick-questions button:hover:not(:disabled) { color: var(--visitor-accent); border-color: var(--visitor-border-strong); }
+.floating-ai__quick-questions button:disabled { cursor: wait; opacity: 0.5; }
+.floating-ai__composer { display: flex; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--visitor-border); }
+.floating-ai__composer input { min-width: 0; flex: 1; height: 40px; padding: 0 12px; border: 1px solid var(--visitor-border); border-radius: 10px; color: var(--visitor-text); background: var(--visitor-surface-muted); font: inherit; font-size: 13px; }
+.floating-ai__composer input::placeholder { color: var(--visitor-text-muted); }
+.floating-ai__composer input:focus { border-color: var(--visitor-border-strong); outline: 2px solid var(--visitor-focus); outline-offset: 1px; }
+.floating-ai__composer button { width: 40px; height: 40px; border: 0; border-radius: 10px; color: #fff; background: var(--visitor-accent-strong); cursor: pointer; font-size: 20px; font-weight: 700; }
+.floating-ai__composer button:disabled { cursor: not-allowed; opacity: 0.42; }
+
+@media (max-width: 768px) {
+  .floating-ai { right: max(14px, env(safe-area-inset-right)) !important; bottom: calc(var(--mobile-nav-height) + var(--safe-bottom) + 14px) !important; }
+  .floating-ai--open { right: 16px !important; left: 16px; align-items: flex-end; flex-direction: column; justify-content: flex-end; }
+  .floating-ai__panel { width: min(100%, 380px); height: min(62dvh, 500px); min-height: 340px; }
+  .floating-ai__hint { display: none; }
+  .floating-ai__pet { width: 68px; height: 68px; }
+  /* Touch devices have no cursor to follow, so the ambient perk-up is skipped. */
+  .floating-ai__pet-stage--attention .floating-ai__pet { transform: scaleX(var(--pet-facing, 1)); }
+  .floating-ai__pet-stage--attention .floating-ai__pet-body { animation: petFloat 3.2s ease-in-out infinite; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floating-ai__panel { animation: none; }
+  .floating-ai__pet,
+  .floating-ai__pet-body,
+  .floating-ai__pet-shadow,
+  .floating-ai__avatar img { animation: none !important; transition: none !important; }
+  .floating-ai__sparkles { display: none; }
+  .floating-ai__bubble { animation: none; }
+}

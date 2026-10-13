@@ -13,6 +13,7 @@ const VISITOR_NAV_ITEMS = [
   { to: DIGITAL_HUMAN_ROUTE, label: 'AI 导览', activeFor: [DIGITAL_HUMAN_ROUTE] },
   { to: '/routes', label: '路线推荐', activeFor: ['/routes', '/route-recommend'] },
   { to: '/map', label: '景点地图', activeFor: ['/map', '/spot-recommend'] },
+  { to: '/mall', label: '景区商城', activeFor: ['/mall'] },
 ]
 
 const USER_NAV_ITEMS = [
@@ -37,6 +38,14 @@ const USER_NAV_ITEMS = [
         <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
         <path d="M3 3v5h5" />
         <path d="M12 7v5l3 2" />
+      </svg>
+    ),
+  },
+  { to: '/orders', label: '我的订单', icon: (
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+        <path d="M3 6h18" />
+        <path d="M16 10a4 4 0 0 1-8 0" />
       </svg>
     ),
   },

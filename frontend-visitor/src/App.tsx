@@ -10,6 +10,7 @@ import {
 } from './auth/session'
 import { DIGITAL_HUMAN_ROUTE } from './digitalHuman/shared'
 import { MobileBottomNav } from './components/MobileBottomNav'
+import { FloatingAiAssistant } from './components/FloatingAiAssistant'
 import { VisitorTopNav } from './components/VisitorTopNav'
 import { VisitorThemeProvider } from './theme/VisitorThemeProvider'
 
@@ -25,6 +26,9 @@ const TravelTipsPage = lazy(() => import('./pages/TravelTipsPage').then((module)
 const SpotRecommendPage = lazy(() => import('./pages/SpotRecommendPage').then((module) => ({ default: module.SpotRecommendPage })))
 const RouteRecommendListPage = lazy(() => import('./pages/RouteRecommendListPage').then((module) => ({ default: module.RouteRecommendListPage })))
 const LiveBroadcastPage = lazy(() => import('./pages/LiveBroadcastPage').then((module) => ({ default: module.LiveBroadcastPage })))
+const MallPage = lazy(() => import('./pages/MallPage').then((module) => ({ default: module.MallPage })))
+const MallProductDetailPage = lazy(() => import('./pages/MallProductDetailPage').then((module) => ({ default: module.MallProductDetailPage })))
+const MyOrdersPage = lazy(() => import('./pages/MyOrdersPage').then((module) => ({ default: module.MyOrdersPage })))
 
 function ProtectedRoute({ user, onLogout }: { user: SessionUser | null; onLogout: () => void }) {
   const location = useLocation()
@@ -42,6 +46,7 @@ function ProtectedRoute({ user, onLogout }: { user: SessionUser | null; onLogout
           <Outlet />
         </div>
         <MobileBottomNav />
+        <FloatingAiAssistant />
       </div>
     </VisitorThemeProvider>
   )
@@ -94,6 +99,9 @@ function App() {
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/tips" element={<TravelTipsPage />} />
+          <Route path="/mall" element={<MallPage />} />
+          <Route path="/mall/products/:id" element={<MallProductDetailPage />} />
+          <Route path="/orders" element={<MyOrdersPage />} />
         </Route>
         <Route path="/live" element={<LiveBroadcastLayout user={user} />} />
         <Route path="*" element={<Navigate to="/" replace />} />

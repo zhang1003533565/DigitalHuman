@@ -40,6 +40,8 @@ import ScenicStructuredPage from './scenic/ScenicStructuredPage'
 import VoiceScriptPage from './scenic/VoiceScriptPage'
 import RouteManagementPage from './scenic/RouteManagementPage'
 import TravelTipManagementPage from './travel-tips/TravelTipManagementPage'
+import MallProductManagementPage from './mall/MallProductManagementPage'
+import MallOrderManagementPage from './mall/MallOrderManagementPage'
 import ModelEmotionPage from './ModelEmotionPage'
 import HomeConfigPage from './HomeConfigPage'
 import AiModelManagementPage from './AiModelManagementPage'
@@ -114,6 +116,8 @@ const menuPathByKey: Record<AdminPageKey, string> = {
   'ai-models': '/admin/ai-models',
   knowledge: '/admin/knowledge',
   'map-config': '/admin/map-config',
+  'mall-products': '/admin/mall/products',
+  'mall-orders': '/admin/mall/orders',
 }
 
 const menuKeyByPath = new Map<string, AdminPageKey>(
@@ -1124,6 +1128,10 @@ function renderPanel(activeKey: AdminPageKey) {
       return <KnowledgeOpenApiPage />
     case 'map-config':
       return <MapConfigPanel />
+    case 'mall-products':
+      return <MallProductManagementPage />
+    case 'mall-orders':
+      return <MallOrderManagementPage />
     case 'dashboard':
     default:
       return <OperationsDashboardPage />

@@ -44,6 +44,7 @@ public class DataInitializer implements CommandLineRunner {
         scenicRouteService.seedDefaultsIfMissing();
         travelTipService.seedDefaultsIfMissing();
         homeConfigService.seedDefaultsIfMissing();
+        // 商品库不再写入示例商品：商城商品一律由管理后台维护，避免演示数据混进真实库存
 
         for (AuthProperties.SeedUser seedUser : authProperties.getSeedUsers()) {
             appUserRepository.findByUsername(seedUser.getUsername()).orElseGet(() -> {

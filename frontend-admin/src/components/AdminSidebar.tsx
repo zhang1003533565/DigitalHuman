@@ -1,4 +1,4 @@
-﻿import {
+import {
   ApiOutlined,
   BarChartOutlined,
   BookOutlined,
@@ -9,6 +9,7 @@
   RobotOutlined,
   SearchOutlined,
   SettingOutlined,
+  ShopOutlined,
   UserOutlined,
   LogoutOutlined,
   MenuOutlined,
@@ -30,7 +31,7 @@ type AdminSidebarProps = {
 
 const { Sider } = Layout
 
-const PARENT_MENU_KEYS = new Set(['spots', 'avatar-group'])
+const PARENT_MENU_KEYS = new Set(['spots', 'avatar-group', 'mall'])
 const MOBILE_NAV_QUERY = '(max-width: 768px)'
 
 function useMobileNavigation() {
@@ -61,6 +62,15 @@ const menuItems: NonNullable<MenuProps['items']> = [
     ],
   },
   { key: 'travel-tips', icon: <BulbOutlined />, label: '游览贴士' },
+  {
+    key: 'mall',
+    icon: <ShopOutlined />,
+    label: '景区商城',
+    children: [
+      { key: 'mall-products', label: '商品管理' },
+      { key: 'mall-orders', label: '订单管理' },
+    ],
+  },
   {
     key: 'avatar-group',
     icon: <RobotOutlined />,

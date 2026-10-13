@@ -27,20 +27,24 @@ const routedPages = [
   '../pages/SpotRecommendPage.tsx',
   '../pages/RouteRecommendListPage.tsx',
   '../pages/LiveBroadcastPage.tsx',
+  '../pages/MallPage.tsx',
+  '../pages/MallProductDetailPage.tsx',
+  '../pages/MyOrdersPage.tsx',
 ]
 
 const expectedItems = [
   ['/home', '首页'],
   ['/modules/digital-human', 'AI 导览'],
   ['/routes', '路线推荐'],
-  ['/live', '数字人直播'],
   ['/map', '景点地图'],
+  ['/mall', '景区商城'],
 ]
 
 const expectedUserItems = [
   ['/tips', '游览贴士'],
   ['/feedback', '反馈记录'],
   ['/history', '会话历史'],
+  ['/orders', '我的订单'],
 ]
 
 const navItemsBlock = source.match(/const VISITOR_NAV_ITEMS = \[(.*?)\n\]/s)?.[1]
@@ -95,6 +99,7 @@ assert.match(source, /<NavLink/)
 assert.match(source, /useLocation/)
 assert.match(source, /activeFor:\s*\['\/routes', '\/route-recommend'\]/)
 assert.match(source, /activeFor:\s*\['\/map', '\/spot-recommend'\]/)
+assert.match(source, /activeFor:\s*\['\/mall'\]/)
 assert.match(source, /item\.activeFor\.includes\(location\.pathname\)/)
 
 assert.match(source, /<VisitorThemeSwitch placement="header" \/>/)
