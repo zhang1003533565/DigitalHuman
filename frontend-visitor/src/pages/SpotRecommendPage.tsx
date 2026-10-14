@@ -18,7 +18,7 @@ const ALL_SPOTS: ScenicSpotCard[] = [
   {
     id: 1,
     collection: '镜门寻迹·红韵乡途',
-    spotName: '📍 大境门长城',
+    spotName: '大境门长城',
     location: '河北省张家口市桥西区大境门景区（张家口市北环路附近，长城文化旅游带核心区域）',
     images: ['/home/dajingmengchangcheng1.jpg', '/home/dajingmenchangcheng3.jpg', '/home/dajingmenchangcheng2.png', '/home/dajingmenchangcheng4.jpg'],
     detailedIntroduction: '作为张家口城市象征，门楣"大好河山"气势雄浑，既是明清长城重要关隘、昔日张库大道的商贸起点，也见证了察哈尔地区近代革命风云；从这里出发，可沿古道深入周边村落，开启长城文化与红色乡土交织的乡野旅程',
@@ -28,7 +28,7 @@ const ALL_SPOTS: ScenicSpotCard[] = [
   {
     id: 2,
     collection: '镜门寻迹·红韵乡途',
-    spotName: '📍 来远堡遗址公园',
+    spotName: '来远堡遗址公园',
     location: '河北省张家口市桥西区大境门街道大境门景区西南角',
     images: ['/home/laiyuanbu1.jpg', '/home/laiyuanbu3.jpg', '/home/laiyuanbu2.jpg'],
     detailedIntroduction: '紧邻大境门，是明代与大境门配套的商贸军堡，保留夯土城墙、古车辙遗迹；曾经是草原与中原物资互通的枢纽，如今活化成为长城文化研学节点，串联起通往周边乡村的徒步路线，带动近郊文旅发展。',
@@ -38,7 +38,7 @@ const ALL_SPOTS: ScenicSpotCard[] = [
   {
     id: 3,
     collection: '镜门寻迹·红韵乡途',
-    spotName: '📍张家口堡',
+    spotName: '张家口堡',
     location: '河北省张家口市桥西区堡子里街道鼓楼西街16号',
     images: ['/home/zjkb1.jpg', '/home/zjkb3.jpg', '/home/zjkb2.jpg'],
     detailedIntroduction: '有着"明清建筑博物馆"之称，完整保留古街巷、文昌阁、抡才书院；街巷深处藏有多处晋察冀时期革命旧址，在老院落与市井烟火之中，可以触摸长城脚下厚重的历史与红色记忆，也是本地非遗手作的聚集地。',
@@ -48,7 +48,7 @@ const ALL_SPOTS: ScenicSpotCard[] = [
   {
     id: 4,
     collection: '镜门寻迹·红韵乡途',
-    spotName: '📍安家沟生态旅游区',
+    spotName: '安家沟生态旅游区',
     location: '河北省张家口市桥西区东窑子镇石匠窑村',
     images: ['/home/anjiaoguotongxue1.jpg', '/home/anjiaoguotongxue3.jpg', '/home/anjiaoguotongxue2.jpg'],
     detailedIntroduction: '坐落于石匠窑村内，峡谷溪流、山林清幽；村内留存察哈尔抗日活动旧址与地道遗迹，现已打造红色研学徒步线路；同时发展山地采摘、农家餐饮，以文旅流量带动村民增收，是长城脚下农旅融合的典型乡村样板。',
@@ -58,7 +58,7 @@ const ALL_SPOTS: ScenicSpotCard[] = [
   {
     id: 5,
     collection: '镜门寻迹·红韵乡途',
-    spotName: '📍清河影视城',
+    spotName: '清河影视城',
     location: '河北省张家口市桥西区东窑子镇清河村',
     images: ['/home/qingheyingyuan1.jpg', '/home/qingheyingyuan3.jpg', '/home/qingheyingyuan2.jpg'],
     detailedIntroduction: '依托清河村古村落改造，复原民国时期张家口街巷风貌；园区配套智慧农场、海棠采摘园、红色主题影视研学活动；以影视文旅引流，带动返乡创业、农产品外销，探索古村落活化振兴的新路径。',
@@ -69,7 +69,7 @@ const ALL_SPOTS: ScenicSpotCard[] = [
   {
     id: 1,
     collection: '张垣风物·助农优品',
-    spotName: '口蘑干 ',
+    spotName: '口蘑干',
     location: '张北坝上草原',
     images: ['/home/koumogan1.jpg','/home/koumogan2.jpg','/home/koumogan3.jpg'],
     detailedIntroduction: '张家口坝上草原特产口蘑干，肉质厚实鲜香，自古便是塞外名珍。当地打造标准化采摘、烘干加工产业链，依托文旅电商拓宽销路，带动农户增收。小小的山珍走出乡村，将坝上生态资源转化为经济收益，助力乡村特色产业振兴。',
@@ -79,7 +79,7 @@ const ALL_SPOTS: ScenicSpotCard[] = [
   {
     id: 2,
     collection: '张垣风物·助农优品',
-    spotName: '小米 ',
+    spotName: '小米',
     location: '蔚县',
     images: ['/home/xiaomi1.jpg','/home/xiaomi2.jpg'],
     detailedIntroduction: '蔚县小米古时为贡米，坝下充足光照造就金黄饱满米粒，熬粥香浓醇厚。当地发展谷子规模化种植，打造“蔚州贡米”区域品牌，延伸加工、线上销售链条，把杂粮资源变成富民产业，以特色杂粮产业助推乡村振兴。',
@@ -89,7 +89,7 @@ const ALL_SPOTS: ScenicSpotCard[] = [
   {
     id: 3,
     collection: '张垣风物·助农优品',
-    spotName: ' 莜面',
+    spotName: '莜面',
     location: '康保/张北坝上',
     images: ['/home/youmian1.jpg', '/home/youmian2.jpg','/home/youmian3.jpg'],
     detailedIntroduction: '坝上高寒地区盛产莜麦，制成莜面，是塞外传统主食，有“口外第一宝”的美誉。传承非遗“三生三熟”工艺，开发莜面窝窝、速食产品。依托乡村旅游展销，拓宽销路，带动坝上种植户稳定增收，以特色杂粮产业赋能乡村振兴。',
@@ -99,7 +99,7 @@ const ALL_SPOTS: ScenicSpotCard[] = [
   {
     id: 4,
     collection: '张垣风物·助农优品',
-    spotName: ' 熏肉',
+    spotName: '熏肉',
     location: '怀安县柴沟堡',
     images: ['/home/xunrou1.jpg', '/home/xunrou2.jpg'],
     detailedIntroduction: '柴沟堡熏肉是张家口非遗美食，经老汤卤制、柏木熏制，皮烂肉嫩、醇香不腻。当地扶持传统作坊标准化生产，结合文旅平台推广，传承古法技艺的同时拓展线上订单，让老字号美食带动村民就业，以特色美食产业助力乡村振兴。',
@@ -109,7 +109,7 @@ const ALL_SPOTS: ScenicSpotCard[] = [
   {
     id: 5,
     collection: '张垣风物·助农优品',
-    spotName: ' 山杏干',
+    spotName: '山杏干',
     location: '怀来县',
     images: ['/home/shanxiang1.jpg', '/home/shanxiang2.jpg','/home/shanxiang3.jpg'],
     detailedIntroduction: '张家口山区广泛种植山杏，自然晾晒制成山杏干，果肉厚实、酸甜原味，无过多添加。大力发展林果产业，就地加工果干产品，依托乡村旅游与电商对外销售，盘活荒山资源，让山野林果成为农户稳定收入来源，推动林果产业振兴。',
@@ -119,7 +119,7 @@ const ALL_SPOTS: ScenicSpotCard[] = [
   {
     id: 6,
     collection: '张垣风物·助农优品',
-    spotName: '土豆 ',
+    spotName: '土豆',
     location: '张北县',
     images: ['/home/tudou1.jpg', '/home/tudou2.jpg','/home/tudou3.jpg'],
     detailedIntroduction: '坝上冷凉气候孕育优质土豆，口感绵密。张家口是国内马铃薯良种基地，构建育种、种植、仓储、深加工完整产业链，打造“金豆豆”富民产业。通过电商、文旅展销扩大销量，带动大量农户就业，是坝上乡村振兴的支柱产业。',
@@ -233,9 +233,9 @@ export function SpotRecommendPage() {
   }
 
   const descMap: Record<string, string> = {
-    '镜门寻迹·红韵乡途': '在这里浏览景区景点介绍。',
-    '张垣风物·助农优品': '在这里发现张家口特色农产品与助农优品。',
-    '长城栖居·乡居慢享': '在这里体验长城脚下的乡居慢生活。',
+    '镜门寻迹·红韵乡途': '寻访镜门文脉，共赏红韵乡光。',
+    '张垣风物·助农优品': '挖掘张垣好物，助力乡村振兴',
+    '长城栖居·乡居慢享': '乡居不只是生活，更是一种向往',
   }
 
   return (
@@ -257,7 +257,7 @@ export function SpotRecommendPage() {
                 <ImageCarousel images={spot.images} alt={spot.spotName} />
                 <div className="spot-page__card-body">
                   <p className="spot-page__scenic-name">{spot.scenicName}</p>
-                  <h2>{spot.spotName}</h2>
+                  <h2>📍 {spot.spotName.replace(' ', '')}</h2>
                   {spot.location && <p className="spot-page__location">{spot.location}</p>}
                   {spot.detailedIntroduction && <p className="spot-page__description">{spot.detailedIntroduction}</p>}
                   {spot.highlights.length > 0 && (
