@@ -35,9 +35,26 @@ type DashboardAMapInstance = {
   remove: (overlay: DashboardAMapOverlay | DashboardAMapOverlay[]) => void
   destroy: () => void
   setFitView: (overlays?: DashboardAMapOverlay[], immediate?: boolean, padding?: number[]) => void
+  setZoomAndCenter?: (zoom: number, center: [number, number]) => void
 }
 
 type DashboardAMapOverlay = unknown
+
+// AMap uses GCJ-02 coordinates. Keep the cockpit map anchored on the Dajingmen gate entrance.
+const DAJINGMEN_CENTER: [number, number] = [114.8920983, 40.8458148]
+const DAJINGMEN_ZOOM = 18
+// Roughly the scenic-area viewport around the gate, used to decide whether markers are already in view.
+const DAJINGMEN_VIEW_BOUNDS = { west: 114.8721, south: 40.8258, east: 114.9121, north: 40.8658 }
+
+function allMarkersNearDajingmen(markers: MapMarker[]) {
+  if (markers.length === 0) return true
+  return markers.every((marker) => (
+    marker.longitude >= DAJINGMEN_VIEW_BOUNDS.west
+    && marker.longitude <= DAJINGMEN_VIEW_BOUNDS.east
+    && marker.latitude >= DAJINGMEN_VIEW_BOUNDS.south
+    && marker.latitude <= DAJINGMEN_VIEW_BOUNDS.north
+  ))
+}
 
 let amapLoaderPromise: Promise<DashboardAMapApi> | null = null
 
@@ -156,8 +173,8 @@ function TwinMap({ region }: { region: OverviewRegionState }) {
         if (cancelled || !mapRef.current) return
         if (!mapInstanceRef.current) {
           mapInstanceRef.current = new AMap.Map(mapRef.current, {
-            zoom: 16,
-            center: [data.mapMarkers[0].longitude, data.mapMarkers[0].latitude],
+            zoom: DAJINGMEN_ZOOM,
+            center: DAJINGMEN_CENTER,
             viewMode: '2D',
             mapStyle: 'amap://styles/normal',
           })
@@ -181,7 +198,9 @@ function TwinMap({ region }: { region: OverviewRegionState }) {
           }))
         overlaysRef.current = [...routes, ...markers]
         map.add(overlaysRef.current)
+        // Keep the cockpit anchored on Dajingmen; only zoom out when markers fall outside the current view.
         map.setFitView(overlaysRef.current, false, [56, 56, 56, 56])
+        if (!allMarkersNearDajingmen(data.mapMarkers)) map.setZoomAndCenter?.(DAJINGMEN_ZOOM, DAJINGMEN_CENTER)
         setMapError('')
       })
       .catch((loadError) => {
