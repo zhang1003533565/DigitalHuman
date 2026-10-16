@@ -199,6 +199,7 @@ export function HomePage({ user }: HomePageProps) {
               </div>
             </AsyncState>
           </section>
+        </AsyncState>
 
           <section className="hp-section hp-products-section">
             <div className="hp-products-grid">
@@ -280,7 +281,6 @@ export function HomePage({ user }: HomePageProps) {
               </div>
             </div>
           </section>
-        </AsyncState>
       </div>
     </main>
   )
