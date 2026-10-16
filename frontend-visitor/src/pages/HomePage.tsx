@@ -58,6 +58,25 @@ const FIRST_SPOT_MAP: Record<string, { title: string; imageUrl: string; descript
   },
 }
 
+/** 首页"大境门下·乡旅新章"三个分类卡片 —— 前端硬编码，不依赖数据库 */
+const HARDCODED_COLLECTIONS = [
+  {
+    id: 'collection-1',
+    title: '镜门寻迹·红韵乡途',
+    imageUrl: '/home/dajingmen_hongyun.jpg',
+  },
+  {
+    id: 'collection-2',
+    title: '张垣风物·助农优品',
+    imageUrl: '/home/farm_harvest.jpg',
+  },
+  {
+    id: 'collection-3',
+    title: '长城栖居·乡居慢享',
+    imageUrl: '/home/great_wall_village.jpg',
+  },
+]
+
 function normalizeHomeData(data: Partial<HomeData>): HomeData {
   return {
     banners: data.banners ?? [],
@@ -119,67 +138,57 @@ export function HomePage({ user }: HomePageProps) {
           </div>
         </section>
 
-        <AsyncState isLoading={isLoading} error={homeError} isEmpty={!hasHomeContent} emptyMessage="首页推荐内容正在准备中，你仍可使用上方行程规划器生成专属路线。">
-          <section className="hp-section" aria-labelledby="inspiration-title">
+        <section className="hp-section" aria-labelledby="inspiration-title">
             <div className="hp-section__title"><span /><h2 id="inspiration-title">大境门下·乡旅新章</h2></div>
-            <AsyncState isEmpty={homeData.spotRecommends.length === 0} emptyMessage="今日暂无景点推荐。">
-              <div className="hp-inspiration">
-                {homeData.spotRecommends.map((item) => {
-                  const firstSpot = FIRST_SPOT_MAP[item.title]
-                  return (
-                    <div key={item.id} className="hp-inspiration__card">
+            <div className="hp-inspiration">
+              {HARDCODED_COLLECTIONS.map((item) => {
+                const firstSpot = FIRST_SPOT_MAP[item.title]
+                return (
+                  <div key={item.id} className="hp-inspiration__card">
+                    <button
+                      className="hp-inspiration__item"
+                      onClick={() => navigate(`/spot-recommend?collectionTitle=${encodeURIComponent(item.title)}`)}
+                    >
+                      {item.imageUrl && <img src={item.imageUrl} alt={item.title} />}
+                      <span>{item.title}</span>
+                      <span className="hp-inspiration__detail-btn">查看详情</span>
+                    </button>
+                    {firstSpot && (
                       <button
-                        className="hp-inspiration__item"
-                        onClick={() => {
-                          const configuredLink = item.linkUrl?.trim()
-                          const isMapDestination = configuredLink === '/map' || configuredLink?.startsWith('/map?')
-                          const destination = !configuredLink || isMapDestination
-                            ? `/spot-recommend?collectionTitle=${encodeURIComponent(item.title)}`
-                            : configuredLink
-                          navigate(destination)
-                        }}
+                        className="hp-inspiration__child"
+                        onClick={() => navigate(`/spot-recommend?collectionTitle=${encodeURIComponent(item.title)}`)}
                       >
-                        {item.imageUrl && <img src={item.imageUrl} alt={item.title} />}
-                        <span>{item.title}</span>
-                        <span className="hp-inspiration__detail-btn">查看详情</span>
+                        <div className="hp-inspiration__child-info">
+                          <strong>{firstSpot.title}</strong>
+                          {firstSpot.imageUrl && <img src={firstSpot.imageUrl} alt={firstSpot.title} />}
+                          {firstSpot.description && (
+                            <small>
+                              {(() => {
+                                const firstPeriod = firstSpot.description.indexOf('。')
+                                if (firstPeriod > 0) {
+                                  return (
+                                    <>
+                                      <span className="hp-product-card__lead">{firstSpot.description.slice(0, firstPeriod + 1)}</span>
+                                      {firstSpot.description.slice(firstPeriod + 1)}
+                                    </>
+                                  )
+                                }
+                                return firstSpot.description
+                              })()}
+                            </small>
+                          )}
+                        </div>
                       </button>
-                      {firstSpot && (
-                        <button
-                          className="hp-inspiration__child"
-                          onClick={() => navigate(`/spot-recommend?collectionTitle=${encodeURIComponent(item.title)}`)}
-                        >
-                          <div className="hp-inspiration__child-info">
-                            <strong>{firstSpot.title}</strong>
-                            {firstSpot.imageUrl && <img src={firstSpot.imageUrl} alt={firstSpot.title} />}
-                            {firstSpot.description && (
-                              <small>
-                                {(() => {
-                                  const firstPeriod = firstSpot.description.indexOf('。')
-                                  if (firstPeriod > 0) {
-                                    return (
-                                      <>
-                                        <span className="hp-product-card__lead">{firstSpot.description.slice(0, firstPeriod + 1)}</span>
-                                        {firstSpot.description.slice(firstPeriod + 1)}
-                                      </>
-                                    )
-                                  }
-                                  return firstSpot.description
-                                })()}
-                              </small>
-                            )}
-                          </div>
-                        </button>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </AsyncState>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </section>
 
           <section className="hp-section hp-route-section" aria-labelledby="route-title">
             <div className="hp-section__title"><span /><h2 id="route-title">乡旅小站</h2></div>
-            <AsyncState isEmpty={homeData.routeRecommends.length === 0 && homeData.ads.length === 0} emptyMessage="暂无运营路线推荐，可先使用快捷规划。">
+            <AsyncState isLoading={isLoading} error={homeError} isEmpty={homeData.routeRecommends.length === 0 && homeData.ads.length === 0} emptyMessage="暂无运营路线推荐，可先使用快捷规划。">
               <div className="hp-route-grid">
                 {homeData.routeRecommends.map((item) => (
                   <button key={item.id} className="hp-route-card" onClick={() => navigate(item.linkUrl || '/routes')}>
@@ -199,7 +208,6 @@ export function HomePage({ user }: HomePageProps) {
               </div>
             </AsyncState>
           </section>
-        </AsyncState>
 
           <section className="hp-section hp-products-section">
             <div className="hp-products-grid">
