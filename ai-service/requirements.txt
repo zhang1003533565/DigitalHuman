@@ -13,6 +13,8 @@ faiss-cpu==1.14.2
 PyMuPDF==1.27.2.3
 pdfplumber==0.11.9
 python-docx==1.2.0
-edge-tts==7.2.8
+# 7.3.0 起改用 generate_sec_ms_gec_v2（微软新 GEC 算法）。
+# 7.2.x 的旧 token 会被 speech.platform.bing.com 拒绝为 403，导致 TTS 全线失败。
+edge-tts==7.3.1
 numpy==2.4.6
 python-dotenv==1.2.2
