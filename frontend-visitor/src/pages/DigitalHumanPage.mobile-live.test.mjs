@@ -32,7 +32,7 @@ assert.match(page, /recognition\.onend = \(\) =>/)
 assert.match(page, /recognitionRef\.current !== recognition/)
 assert.match(
   page,
-  /async function sendQuestion\(questionInput: string\) \{\s*invalidateSpeechRecognition\(recognitionRef, recognitionGenerationRef\)/,
+  /async function sendQuestion\(questionInput: string(?:, silent = false)?\) \{\s*invalidateSpeechRecognition\(recognitionRef, recognitionGenerationRef\)/,
   'every send path must invalidate an active speech recognition before changing question state',
 )
 assert.match(page, /recognition\.onerror = \(\) => \{[\s\S]*hadRecognitionError = true[\s\S]*setRuntimeState\('error'\)/)
@@ -72,4 +72,38 @@ assert.doesNotMatch(styles, /-webkit-line-clamp/)
 assert.match(styles, /\.digital-mobile-comment-feed\s*\{[^}]*overflow-x:\s*hidden;[^}]*overflow-y:\s*auto;/s)
 assert.match(styles, /\.digital-mobile-comment > span\s*\{[^}]*white-space:\s*normal;[^}]*overflow-wrap:\s*anywhere;/s)
 assert.doesNotMatch(styles, /\.digital-mobile-comment:nth-of-type\(-n\+2\)/)
+
+// 弹幕语音与用户问答互斥：用户提问优先，同一时刻只允许一条语音在播。
+const danmuBar = readFileSync(join(root, '../components/DanmuBar.tsx'), 'utf8')
+assert.match(
+  page,
+  /const beginUserAnswerHold = useCallback\(\(\) => \{\s*isUserAnswerActiveRef\.current = true\s*cancelDanmuSpeech\(\)/,
+  'starting a user question must mute the danmaku speech channel',
+)
+assert.match(page, /beginUserAnswerHold\(\)/, 'sendQuestion must hold danmaku speech')
+assert.match(
+  page,
+  /if \(!isReady \|\| isUserAnswerActiveRef\.current\) return/,
+  'danmaku replies stay silent while a user answer is active',
+)
+assert.match(
+  page,
+  /if \(isUserAnswerActiveRef\.current \|\| danmuRunId !== danmuRunIdRef\.current\) \{\s*URL\.revokeObjectURL\(audioUrl\)\s*return/,
+  'a danmaku reply synthesized during a user question is dropped, never queued up',
+)
+assert.match(
+  page,
+  /isAnswerStreamingRef\.current\) \{\s*\/\/ 用户这条回答已经说完，恢复弹幕语音。\s*endUserAnswerHold\(\)/,
+  'danmaku speech resumes only after the user answer finishes playing',
+)
+assert.match(
+  page,
+  /useEffect\(\(\) => \(\) => cancelDanmuSpeech\(\), \[cancelDanmuSpeech\]\)/,
+  'leaving the page must stop any danmaku audio',
+)
+assert.match(
+  danmuBar,
+  /window\.clearTimeout\(replyTimerRef\.current\)/,
+  'unmount must clear the pending danmaku reply timer',
+)
 console.log('mobile digital-human live interaction contract passed')

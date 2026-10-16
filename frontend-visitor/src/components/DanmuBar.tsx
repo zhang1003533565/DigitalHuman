@@ -18,6 +18,15 @@ export default function DanmuBar({ userQuestion, onAISpeak }: Props) {
   const indexRef = useRef(0)
   const containerRef = useRef<HTMLDivElement>(null)
   const [height, setHeight] = useState(60)
+  const nextSendTimerRef = useRef<number | null>(null)
+  const replyTimerRef = useRef<number | null>(null)
+  // 用 ref 保存回调：父组件每次渲染都会换一个新函数，
+  // 直接放进依赖会让弹幕节奏被无谓地重置。
+  const onAISpeakRef = useRef(onAISpeak)
+
+  useEffect(() => {
+    onAISpeakRef.current = onAISpeak
+  }, [onAISpeak])
 
   useEffect(() => {
     if (containerRef.current) {
@@ -41,32 +50,49 @@ export default function DanmuBar({ userQuestion, onAISpeak }: Props) {
 
       setDanmus((prev) => [...prev, newDanmu])
 
-      if (onAISpeak) {
-        const reply = getAIReply(mock.content)
-        setTimeout(() => onAISpeak(reply), 1500)
-      }
+      replyTimerRef.current = window.setTimeout(() => {
+        replyTimerRef.current = null
+        onAISpeakRef.current?.(getAIReply(mock.content))
+      }, 1500)
 
-      setTimeout(sendDanmu, 30000 + Math.random() * 10000)
+      nextSendTimerRef.current = window.setTimeout(sendDanmu, 30000 + Math.random() * 10000)
     }
 
-    const timer = setTimeout(sendDanmu, 2000)
-    return () => clearTimeout(timer)
-  }, [height, onAISpeak])
+    nextSendTimerRef.current = window.setTimeout(sendDanmu, 2000)
+    return () => {
+      if (nextSendTimerRef.current !== null) {
+        window.clearTimeout(nextSendTimerRef.current)
+        nextSendTimerRef.current = null
+      }
+      // 卸载后不再触发弹幕语音，避免离开页面后数字人还在自问自答。
+      if (replyTimerRef.current !== null) {
+        window.clearTimeout(replyTimerRef.current)
+        replyTimerRef.current = null
+      }
+    }
+  }, [height])
 
-  useEffect(() => {
+  // 用户自己的提问也飘一条弹幕。用 React 的“props 变化时在渲染期调整 state”写法，
+  // 而不是在 effect 里 setState —— 后者会触发级联渲染，也会在容器高度变化时重复飘同一句。
+  // 初值取 undefined：即使父组件在挂载时就传入提问，也照旧飘一条。
+  const [prevUserQuestion, setPrevUserQuestion] = useState<string | undefined>(undefined)
+  if (userQuestion !== prevUserQuestion) {
+    setPrevUserQuestion(userQuestion)
     if (userQuestion) {
-      const newDanmu: FlyingDanmu = {
-        id: Date.now(),
-        userName: '我',
-        content: userQuestion,
-        isUser: true,
-        top: Math.random() * (height - 30),
-        duration: 12,
-        key: Date.now(),
-      }
-      setDanmus((prev) => [...prev, newDanmu])
+      setDanmus((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          userName: '我',
+          content: userQuestion,
+          isUser: true,
+          top: Math.random() * (height - 30),
+          duration: 12,
+          key: Date.now() + Math.random(),
+        },
+      ])
     }
-  }, [userQuestion, height])
+  }
 
   useEffect(() => {
     const timer = setInterval(() => {

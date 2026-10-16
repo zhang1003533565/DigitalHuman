@@ -246,6 +246,11 @@ export function DigitalHumanPage() {
   const settingsPanelRef = useRef<HTMLElement | null>(null)
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
   const recognitionGenerationRef = useRef(0)
+  // 弹幕语音走独立通道：用户提问/回答期间必须静音，否则两条回答会同时播报。
+  const danmuAudioRef = useRef<HTMLAudioElement | null>(null)
+  const danmuAudioUrlRef = useRef<string | null>(null)
+  const danmuRunIdRef = useRef(0)
+  const isUserAnswerActiveRef = useRef(false)
   const [config, setConfig] = useState<DigitalHumanConfig>(DEFAULT_CONFIG)
   const [selectedModelId, setSelectedModelId] = useState(() => getStoredSelectedModelId() ?? DEFAULT_CONFIG.modelId)
   const [runtimeModels, setRuntimeModels] = useState<RuntimeDigitalHumanModel[]>([])
@@ -349,6 +354,39 @@ export function DigitalHumanPage() {
   useEffect(() => {
     markInteraction()
   }, [markInteraction])
+
+  // 只停当前正在播放的弹幕语音，不影响在飞的合成请求。
+  const stopDanmuAudio = useCallback(() => {
+    const audio = danmuAudioRef.current
+    danmuAudioRef.current = null
+    if (audio) {
+      audio.pause()
+      audio.removeAttribute('src')
+      audio.load()
+    }
+    if (danmuAudioUrlRef.current) {
+      URL.revokeObjectURL(danmuAudioUrlRef.current)
+      danmuAudioUrlRef.current = null
+    }
+  }, [])
+
+  // 停掉当前弹幕语音，并作废还在合成中的弹幕请求。
+  const cancelDanmuSpeech = useCallback(() => {
+    danmuRunIdRef.current += 1
+    stopDanmuAudio()
+  }, [stopDanmuAudio])
+
+  // 用户提问优先：进入回答流程时静音弹幕，等这条回答播完再让弹幕恢复发声。
+  const beginUserAnswerHold = useCallback(() => {
+    isUserAnswerActiveRef.current = true
+    cancelDanmuSpeech()
+  }, [cancelDanmuSpeech])
+
+  const endUserAnswerHold = useCallback(() => {
+    isUserAnswerActiveRef.current = false
+  }, [])
+
+  useEffect(() => () => cancelDanmuSpeech(), [cancelDanmuSpeech])
 
   useEffect(() => {
     async function loadConfig() {
@@ -893,6 +931,8 @@ export function DigitalHumanPage() {
     if (!nextItem) {
       isAudioStartingRef.current = false
       if (!isAnswerStreamingRef.current) {
+        // 用户这条回答已经说完，恢复弹幕语音。
+        endUserAnswerHold()
         const outcome = speechOutcomeRef.current
         setRuntimeState(outcome.state === 'error' ? 'error' : 'idle')
         setStatus(outcome.status)
@@ -987,19 +1027,53 @@ export function DigitalHumanPage() {
     event?.preventDefault()
     void sendQuestion(draft)
   }
- const handleDanmuReply = useCallback(async (text: string) => {
-  if (!isReady) return
-  try {
-    // 不调 AI，直接用现有 TTS 函数合成语音
-    const audioUrl = await synthesizeSpeechSegment(text, speechRunIdRef.current)
-    if (audioUrl) {
-      const audio = new Audio(audioUrl)
-      audio.play().catch((e) => console.warn('弹幕音频播放失败', e))
+
+  // 弹幕回答只走这一条独立通道：不占用用户问答的语音队列，也不驱动数字人口型。
+  // 用户提问或回答期间一律不发声，保证同一时刻只有一条语音。
+  async function handleDanmuReply(text: string) {
+    if (!isReady || isUserAnswerActiveRef.current) return
+
+    const danmuRunId = danmuRunIdRef.current
+    let audioUrl: string | null = null
+    try {
+      // 复用现有 TTS 能力；speechRunId 变化（用户重新提问）时合成结果会自然作废。
+      audioUrl = await synthesizeSpeechSegment(text, speechRunIdRef.current)
+    } catch (error) {
+      console.warn('弹幕 TTS 失败', error)
+      return
     }
-  } catch (e) {
-    console.warn('弹幕 TTS 失败', e)
+
+    if (!audioUrl) return
+    // 合成期间用户开始提问，或这条弹幕已被取消：直接丢弃，不延后补播，
+    // 否则数字人会在几十秒后突然回答一条已经过时的弹幕。
+    if (isUserAnswerActiveRef.current || danmuRunId !== danmuRunIdRef.current) {
+      URL.revokeObjectURL(audioUrl)
+      return
+    }
+
+    stopDanmuAudio()
+    const audio = new Audio(audioUrl)
+    danmuAudioRef.current = audio
+    danmuAudioUrlRef.current = audioUrl
+
+    const releaseDanmuAudio = () => {
+      if (danmuAudioRef.current === audio) {
+        danmuAudioRef.current = null
+      }
+      if (danmuAudioUrlRef.current === audioUrl) {
+        URL.revokeObjectURL(audioUrl)
+        danmuAudioUrlRef.current = null
+      }
+    }
+
+    audio.addEventListener('ended', releaseDanmuAudio, { once: true })
+    audio.addEventListener('error', releaseDanmuAudio, { once: true })
+    audio.play().catch((error) => {
+      console.warn('弹幕音频播放失败', error)
+      releaseDanmuAudio()
+    })
   }
-}, [isReady])
+
   function startVoiceQuestion() {
     const SpeechRecognition = (window as typeof window & {
       SpeechRecognition?: SpeechRecognitionConstructor
@@ -1061,6 +1135,8 @@ export function DigitalHumanPage() {
     const question = questionInput.trim()
     if (!question) return
     markInteraction()
+    // 用户提问优先：立刻停掉正在播的弹幕语音，本次回答播完前弹幕不再发声。
+    beginUserAnswerHold()
 
     const userMessage: DigitalChatMessage = {
       id: `user-${Date.now()}`,
